@@ -381,7 +381,8 @@ body {
   <i data-lucide="home" style="width: 12px; height: 12px;"></i>
   <a href="#">Dashen Bank</a>
   <i data-lucide="chevron-right" style="width: 12px; height: 12px; opacity: 0.5;"></i>
-  <a href="{{GRAFANA_URL}}" target="_blank">ATM Monitoring</a>
+  <a id="grafana-link" href="#" target="_blank">ATM Monitoring</a>
+<script>document.getElementById('grafana-link').href='http://'+window.location.hostname+':3002';</script>
   <i data-lucide="chevron-right" style="width: 12px; height: 12px; opacity: 0.5;"></i>
   <span style="color: var(--text-primary); font-weight: 500;">Report Centre</span>
 </div>
