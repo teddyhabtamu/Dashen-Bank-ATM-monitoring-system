@@ -1,0 +1,12 @@
+/* Branding: Dashen Bank */
+.login-page, [data-testid="login-background"], .theme-dark {
+    background-color: #012169 !important;
+}
+[data-testid="login-box"] {
+    background-color: #ffffff !important;
+    border-top: 5px solid #FDD79A !important;
+}
+/* This hides the default logo without breaking the container */
+svg[data-testid="grafana-logo"] {
+    display: none !important;
+}

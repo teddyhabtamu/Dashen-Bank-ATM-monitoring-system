@@ -1,0 +1,358 @@
+version: '3.8'
+services:
+
+  postgres:
+    image: postgres:15
+    container_name: zabbix-db
+    environment:
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix_pass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  zabbix-server:
+    image: zabbix/zabbix-server-pgsql:ubuntu-6.4-latest
+    container_name: zabbix-server
+    environment:
+      DB_SERVER_HOST: postgres
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix_pass
+    ports:
+      - "10051:10051"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-pgsql:ubuntu-6.4-latest
+    container_name: zabbix-web
+    environment:
+      DB_SERVER_HOST: postgres
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix_pass
+      ZBX_SERVER_HOST: zabbix-server
+      PHP_TZ: Africa/Addis_Ababa
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - zabbix-server
+    restart: unless-stopped
+
+  # --- ADDED SERVICE START ---
+  zabbix-agent:
+    image: zabbix/zabbix-agent2:ubuntu-6.4-latest
+    container_name: zabbix-agent
+    network_mode: "host" # Allows direct scanning of active host interfaces like eth0
+    privileged: true     # Ensures the agent has permissions to read local hardware state
+    environment:
+      ZBX_HOSTNAME: "ATM-001-Addis-Branch" # Must exactly match the Host name field in Zabbix
+      ZBX_SERVER_HOST: "127.0.0.1"        # Since it runs on host network mode alongside forwarded ports
+    restart: unless-stopped
+    depends_on:
+      - zabbix-server
+  # --- ADDED SERVICE END ---
+
+  grafana:
+    image: grafana/grafana:10.2.6
+    container_name: grafana
+    user: "root"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: dashen2024
+      GF_INSTALL_PLUGINS: alexanderzobnin-zabbix-app 4.4.5
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: alexanderzobnin-zabbix-datasource,alexanderzobnin-zabbix-app
+      GF_PANELS_DISABLE_SANITIZE_HTML: "true"
+      GF_RENDERING_SERVER_URL: http://grafana-renderer:8081/render
+      GF_RENDERING_CALLBACK_URL: http://grafana:3000/
+      GF_LOG_FILTERS: rendering:debug
+    ports:
+      - "3002:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./index.html:/usr/share/grafana/public/views/index.html:ro
+      - ./logo.png:/usr/share/grafana/public/img/dashen-logo.png:ro
+      - ./entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["sh", "/entrypoint.sh"]
+    depends_on:
+      - zabbix-web
+    restart: unless-stopped
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.0
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.13.0
+    container_name: filebeat
+    user: root
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./ej-logs:/var/log/atm-ej:ro
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
+  mariadb:
+    image: mariadb:10.11
+    container_name: glpi-db
+    environment:
+      MYSQL_ROOT_PASSWORD: glpi_root_pass
+      MYSQL_DATABASE: glpi
+      MYSQL_USER: glpi
+      MYSQL_PASSWORD: glpi_pass
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    restart: unless-stopped
+
+  glpi:
+    image: diouxx/glpi:latest
+    container_name: glpi
+    environment:
+      TZ: Africa/Addis_Ababa
+      VERSION_GLPI: "10.0.15"
+      MARIADB_HOST: mariadb
+      MARIADB_DATABASE: glpi
+      MARIADB_USER: glpi
+      MARIADB_PASSWORD: glpi_pass
+    ports:
+      - "8082:80"
+    volumes:
+      - glpi-root:/var/www/html/glpi
+    depends_on:
+      - mariadb
+    restart: unless-stopped
+
+  grafana-renderer:
+    image: grafana/grafana-image-renderer:latest
+    container_name: grafana-renderer
+    environment:
+      ENABLE_METRICS: "true"
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+
+  report-portal:
+    build:
+      context: ./report-portal
+      dockerfile: Dockerfile
+    container_name: report-portal
+    environment:
+      DB_HOST: postgres
+      DB_NAME: zabbix
+      DB_USER: zabbix
+      DB_PASS: zabbix_pass
+    volumes:
+      - ./report-portal:/app:rw
+    ports:
+      - "8888:8888"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+  
+
+  # ─── ATM SIMULATORS ───────────────────────────────────────────
+  # Each block = one real ATM in production
+  # To connect real ATM: remove simulator, add real ATM IP to Zabbix
+
+  atm-sim-001:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: atm-sim-001
+    command: python3 atm_snmp_simulator.py
+    environment:
+      ATM_ID: "ATM-001"
+      ATM_TERMINAL_ID: "TID001"
+      ATM_BRANCH: "Addis Ababa Main Branch"
+      SNMP_PORT: "1161"
+    ports:
+      - "1161:1161"
+    restart: unless-stopped
+
+  atm-sim-002:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: atm-sim-002
+    command: python3 atm_snmp_simulator.py
+    environment:
+      ATM_ID: "ATM-002"
+      ATM_TERMINAL_ID: "TID002"
+      ATM_BRANCH: "Bole International Branch"
+      SNMP_PORT: "1162"
+    ports:
+      - "1162:1162"
+    restart: unless-stopped
+
+  atm-sim-003:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: atm-sim-003
+    command: python3 atm_snmp_simulator.py
+    environment:
+      ATM_ID: "ATM-003"
+      ATM_TERMINAL_ID: "TID003"
+      ATM_BRANCH: "Merkato Branch"
+      SNMP_PORT: "1163"
+    ports:
+      - "1163:1163"
+    restart: unless-stopped
+
+  atm-sim-004:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: atm-sim-004
+    command: python3 atm_snmp_simulator.py
+    environment:
+      ATM_ID: "ATM-004"
+      ATM_TERMINAL_ID: "TID004"
+      ATM_BRANCH: "Hawassa Branch"
+      SNMP_PORT: "1164"
+    ports:
+      - "1164:1164"
+    restart: unless-stopped
+
+  atm-sim-005:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: atm-sim-005
+    command: python3 atm_snmp_simulator.py
+    environment:
+      ATM_ID: "ATM-005"
+      ATM_TERMINAL_ID: "TID005"
+      ATM_BRANCH: "Dire Dawa Branch"
+      SNMP_PORT: "1165"
+    ports:
+      - "1165:1165"
+    restart: unless-stopped
+
+  txn-feed-001:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: txn-feed-001
+    command: python3 transaction_feed.py
+    environment:
+      ATM_ID: "ATM-001"
+      ATM_TERMINAL_ID: "TID001"
+      ATM_BRANCH: "Addis Ababa Main Branch"
+      DB_HOST: "postgres"
+      DB_NAME: "zabbix"
+      DB_USER: "zabbix"
+      DB_PASS: "zabbix_pass"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  txn-feed-002:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: txn-feed-002
+    command: python3 transaction_feed.py
+    environment:
+      ATM_ID: "ATM-002"
+      ATM_TERMINAL_ID: "TID002"
+      ATM_BRANCH: "Bole International Branch"
+      DB_HOST: "postgres"
+      DB_NAME: "zabbix"
+      DB_USER: "zabbix"
+      DB_PASS: "zabbix_pass"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  txn-feed-003:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: txn-feed-003
+    command: python3 transaction_feed.py
+    environment:
+      ATM_ID: "ATM-003"
+      ATM_TERMINAL_ID: "TID003"
+      ATM_BRANCH: "Merkato Branch"
+      DB_HOST: "postgres"
+      DB_NAME: "zabbix"
+      DB_USER: "zabbix"
+      DB_PASS: "zabbix_pass"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  txn-feed-004:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: txn-feed-004
+    command: python3 transaction_feed.py
+    environment:
+      ATM_ID: "ATM-004"
+      ATM_TERMINAL_ID: "TID004"
+      ATM_BRANCH: "Hawassa Branch"
+      DB_HOST: "postgres"
+      DB_NAME: "zabbix"
+      DB_USER: "zabbix"
+      DB_PASS: "zabbix_pass"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  txn-feed-005:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: txn-feed-005
+    command: python3 transaction_feed.py
+    environment:
+      ATM_ID: "ATM-005"
+      ATM_TERMINAL_ID: "TID005"
+      ATM_BRANCH: "Dire Dawa Branch"
+      DB_HOST: "postgres"
+      DB_NAME: "zabbix"
+      DB_USER: "zabbix"
+      DB_PASS: "zabbix_pass"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+
+volumes:
+  pgdata:
+  grafana-data:
+  esdata:
+  kibanadata:
+  mariadb-data:
+  glpi-root:
+

@@ -1,0 +1,20 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/atm-ej/ATM-*.log
+    fields:
+      log_type: atm_ej
+    fields_under_root: true
+    multiline.pattern: '^\d{4}-\d{2}-\d{2}'
+    multiline.negate: true
+    multiline.match: after
+
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+  index: "atm-ej-live-%{+yyyy.MM.dd}"
+  pipeline: "atm_ej_parser"
+
+setup.ilm.enabled: false
+setup.template.name: "atm-ej-live"
+setup.template.pattern: "atm-ej-live-*"
