@@ -1,0 +1,9 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN pip install psycopg2-binary
+
+COPY iso8583_gateway.py .
+
+CMD ["python3", "iso8583_gateway.py"]

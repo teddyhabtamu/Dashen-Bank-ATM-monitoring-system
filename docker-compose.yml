@@ -169,10 +169,34 @@ services:
       DB_NAME: zabbix
       DB_USER: zabbix
       DB_PASS: ${DB_PASS}
+      GRAFANA_URL: ${GRAFANA_URL}
+      REPORT_PORTAL_PORT: ${REPORT_PORTAL_PORT}
     volumes:
       - ./report-portal:/app:rw
     ports:
       - "8888:8888"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  iso8583-gateway:
+    build:
+      context: ./camel
+      dockerfile: Dockerfile.gateway
+    container_name: iso8583-gateway
+    environment:
+      MODE: simulation
+      DB_HOST: postgres
+      DB_NAME: zabbix
+      DB_USER: zabbix
+      DB_PASS: ${DB_PASS}
+      INTERVAL: "10"
+      # Production settings (uncomment when real switch available):
+      # MODE: tcp
+      # SWITCH_HOST: 0.0.0.0
+      # SWITCH_PORT: "9876"
+    ports:
+      - "9876:9876"
     depends_on:
       - postgres
     restart: unless-stopped

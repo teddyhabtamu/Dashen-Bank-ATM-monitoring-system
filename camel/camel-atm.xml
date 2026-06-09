@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<routes xmlns="http://camel.apache.org/schema/spring">
+
+  <!--
+    ATM ISO 8583 Transaction Parser
+    Integration-ready route for Dashen Bank ATM Switch
+
+    In production:
+    - Replace "timer" source with real ATM switch TCP endpoint
+    - Change from:  from("netty:tcp://0.0.0.0:9876?...")
+    - The database write stays identical
+
+    Current mode: Simulation (generates test ISO 8583 messages)
+    Production mode: Listen on TCP port for real switch messages
+  -->
+
+  <!-- Route 1: Receive ISO 8583 messages from ATM switch -->
+  <route id="iso8583-receiver">
+    <from uri="timer://iso8583?period=15000"/>
+    <setBody>
+      <groovy>
+        import groovy.json.JsonOutput
+        import java.time.LocalDateTime
+        import java.time.format.DateTimeFormatter
+
+        def random = new Random()
+        def atms = [
+          [id:'ATM-001', tid:'TID001',
+           branch:'Addis Ababa Main Branch'],
+          [id:'ATM-002', tid:'TID002',
+           branch:'Bole International Branch'],
+          [id:'ATM-003', tid:'TID003',
+           branch:'Merkato Branch'],
+          [id:'ATM-004', tid:'TID004',
+           branch:'Hawassa Branch'],
+          [id:'ATM-005', tid:'TID005',
+           branch:'Dire Dawa Branch']
+        ]
+        def atm = atms[random.nextInt(atms.size())]
+
+        def mtis = ['0200','0210','0400','0420']
+        def mti = mtis[random.nextInt(mtis.size())]
+
+        def processingCodes = [
+          '012000':'WITHDRAWAL',
+          '310000':'BALANCE_INQ',
+          '400000':'TRANSFER',
+          '050000':'MINI_STATEMENT'
+        ]
+        def pcEntry = processingCodes
+          .entrySet().toList()
+        def pc = pcEntry[
+          random.nextInt(pcEntry.size())]
+
+        def amounts = [
+          100,200,500,1000,2000,5000,10000]
+        def amount = amounts[
+          random.nextInt(amounts.size())]
+
+        def cards = [
+          '4000000000001234',
+          '4000000000005678',
+          '5200000000009012',
+          '4000000000003456',
+          '5200000000007890'
+        ]
+        def card = cards[
+          random.nextInt(cards.size())]
+        def maskedCard = card.take(4) +
+          '************' +
+          card.takeLast(4)
+
+        def responseCodes = [
+          '00':'APPROVED',
+          '51':'DECLINED',
+          '05':'DECLINED',
+          '54':'DECLINED',
+          '91':'TIMEOUT',
+          '96':'ERROR'
+        ]
+        def weights = [
+          '00','00','00','00',
+          '00','00','00','00','00',
+          '51','05','54','91','96']
+        def rcKey = weights[
+          random.nextInt(weights.size())]
+        def rcVal = responseCodes[rcKey]
+
+        def now = LocalDateTime.now()
+        def fmt = DateTimeFormatter
+          .ofPattern('yyyy-MM-dd HH:mm:ss')
+
+        def msg = [
+          iso_mti: mti,
+          iso_processing_code: pc.key,
+          iso_stan: String.format(
+            '%06d', random.nextInt(999999)),
+          atm_id: atm.id,
+          terminal_id: atm.tid,
+          branch: atm.branch,
+          txn_type: pc.value,
+          card_pan: card,
+          card_masked: maskedCard,
+          amount: (pc.value == 'WITHDRAWAL' ||
+            pc.value == 'TRANSFER') ?
+            amount : null,
+          currency: 'ETB',
+          response_code: rcKey,
+          status: rcVal,
+          auth_code: rcVal == 'APPROVED' ?
+            String.format('%06d',
+              random.nextInt(999999)) : null,
+          timestamp: now.format(fmt),
+          source: 'ISO8583'
+        ]
+
+        JsonOutput.toJson(msg)
+      </groovy>
+    </setBody>
+    <log message="ISO8583 message: ${body}"/>
+    <to uri="direct:parse-and-store"/>
+  </route>
+
+  <!-- Route 2: Parse ISO 8583 and store to PostgreSQL -->
+  <route id="iso8583-parser">
+    <from uri="direct:parse-and-store"/>
+    <unmarshal>
+      <json library="Gson"/>
+    </unmarshal>
+    <to uri="direct:store-transaction"/>
+  </route>
+
+  <!-- Route 3: Write to PostgreSQL -->
+  <route id="store-transaction">
+    <from uri="direct:store-transaction"/>
+    <setHeader name="CamelSqlQuery">
+      <constant>
+        INSERT INTO atm_transactions
+        (atm_id, terminal_id, branch,
+         txn_type, card_masked, amount,
+         currency, status, auth_code,
+         seq_number, iso_mti,
+         iso_processing_code, iso_stan,
+         source)
+        VALUES
+        (:#atm_id, :#terminal_id, :#branch,
+         :#txn_type, :#card_masked, :#amount,
+         :#currency, :#status, :#auth_code,
+         :#iso_stan, :#iso_mti,
+         :#iso_processing_code, :#iso_stan,
+         :#source)
+      </constant>
+    </setHeader>
+    <to uri="sql:INSERT INTO atm_transactions
+      (atm_id, terminal_id, branch,
+       txn_type, card_masked, amount,
+       currency, status, auth_code,
+       seq_number, iso_mti,
+       iso_processing_code, iso_stan,
+       source)
+      VALUES
+      (:#atm_id, :#terminal_id, :#branch,
+       :#txn_type, :#card_masked, :#amount,
+       :#currency, :#status, :#auth_code,
+       :#iso_stan, :#iso_mti,
+       :#iso_processing_code, :#iso_stan,
+       :#source)"/>
+    <log message="Stored transaction for
+      ${body[atm_id]}: ${body[txn_type]}
+      ${body[status]}"/>
+  </route>
+
+</routes>

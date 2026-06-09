@@ -381,7 +381,7 @@ body {
   <i data-lucide="home" style="width: 12px; height: 12px;"></i>
   <a href="#">Dashen Bank</a>
   <i data-lucide="chevron-right" style="width: 12px; height: 12px; opacity: 0.5;"></i>
-  <a href="http://192.168.0.159:3002">ATM Monitoring</a>
+  <a href="{{GRAFANA_URL}}" target="_blank">ATM Monitoring</a>
   <i data-lucide="chevron-right" style="width: 12px; height: 12px; opacity: 0.5;"></i>
   <span style="color: var(--text-primary); font-weight: 500;">Report Centre</span>
 </div>
