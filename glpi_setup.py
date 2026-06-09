@@ -9,7 +9,7 @@ import json
 GLPI_URL = "http://localhost:8082/apirest.php"
 APP_TOKEN = "XuApka4zrjQ9GFFEgGFHBlkpdmcPuY32q4DtsmmQ"
 USER = "glpi"
-PASS = "DashenGLPI2024"
+PASS = os.environ.get('GLPI_API_PASSWORD', '')
 
 headers = {
     "Content-Type": "application/json",

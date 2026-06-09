@@ -11,7 +11,7 @@ ATM_BRANCH = os.environ.get('ATM_BRANCH', 'Addis Ababa Main Branch')
 DB_HOST = os.environ.get('DB_HOST', 'postgres')
 DB_NAME = os.environ.get('DB_NAME', 'zabbix')
 DB_USER = os.environ.get('DB_USER', 'zabbix')
-DB_PASS = os.environ.get('DB_PASS', 'zabbix_pass')
+DB_PASS = os.environ.get('DB_PASS', '')
 
 CARD_POOL = [
     '************1234', '************5678', '************9012',

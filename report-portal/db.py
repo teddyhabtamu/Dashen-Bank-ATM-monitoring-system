@@ -4,7 +4,7 @@ import psycopg2
 DB_HOST = os.environ.get('DB_HOST', 'postgres')
 DB_NAME = os.environ.get('DB_NAME', 'zabbix')
 DB_USER = os.environ.get('DB_USER', 'zabbix')
-DB_PASS = os.environ.get('DB_PASS', 'zabbix_pass')
+DB_PASS = os.environ.get('DB_PASS', '')
 
 
 def get_db():
@@ -16,7 +16,7 @@ import psycopg2
 DB_HOST = os.environ.get('DB_HOST', 'postgres')
 DB_NAME = os.environ.get('DB_NAME', 'zabbix')
 DB_USER = os.environ.get('DB_USER', 'zabbix')
-DB_PASS = os.environ.get('DB_PASS', 'zabbix_pass')
+DB_PASS = os.environ.get('DB_PASS', '')
 
 
 def get_db():
