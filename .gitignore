@@ -1,0 +1,20 @@
+# Environments
+.env
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs and Backups
+ej-logs/
+*.log
+glpi_backup/
+
+# OS and Artifacts
+*.deb
+*.pdf
+*.xlsx
+*.csv
+.DS_Store
