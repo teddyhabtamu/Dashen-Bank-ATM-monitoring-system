@@ -14,8 +14,8 @@ from reportlab.lib.enums import TA_CENTER
 
 LOGO_PATH = os.path.join(os.path.dirname(__file__), 'static', 'logo.png')
 
-DASHEN_BLUE  = '0F2557'
-DASHEN_GOLD  = 'FFCC00'
+DASHEN_BLUE  = '273274'
+DASHEN_GOLD  = 'FDD79A'
 ALT_ROW      = 'F8FAFC'
 BORDER_COLOR = 'E2E8F0'
 

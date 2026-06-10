@@ -993,21 +993,14 @@ function gen(type, fmt, daysId, atmId) {
   const days = document.getElementById(daysId).value;
   const atm  = atmId ? document.getElementById(atmId).value : 'all';
   const lw = document.getElementById('lw-'+type);
+  const url = `/report/${type}/${fmt}?days=${days}&atm=${atm}`;
   lw.classList.add('active');
 
-  fetch(`/report/${type}/${fmt}?days=${days}&atm=${atm}`)
-    .then(r => { if(!r.ok) throw new Error('Failed'); return r.blob(); })
-    .then(blob => {
-      const ext = fmt==='excel'?'xlsx': fmt==='pdf'?'pdf':'csv';
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `Dashen_ATM_${type}_${new Date().toISOString().slice(0,10)}.${ext}`;
-      a.click();
-    })
-    .catch(e => alert('Report generation failed: ' + e.message))
-    .finally(() => {
-      lw.classList.remove('active');
-    });
+  const a = document.createElement('a');
+  a.href = url;
+  a.click();
+
+  setTimeout(() => lw.classList.remove('active'), 4000);
 }
 
 loadKPIs();
