@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install pysnmp psycopg2-binary
+RUN pip install pysnmp psycopg2-binary requests
 
 COPY atm_snmp_simulator.py .
 COPY ej_log_generator.py .

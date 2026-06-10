@@ -200,6 +200,57 @@ services:
     depends_on:
       - postgres
     restart: unless-stopped
+
+  # ───  Anomaly Detector ────────────────────────────────
+  anomaly-detector:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: anomaly-detector
+    command: python3 /app/anomaly_detector.py
+    environment:
+      DB_HOST: postgres
+      DB_NAME: zabbix
+      DB_USER: zabbix
+      DB_PASS: zabbix_pass
+      CHECK_INTERVAL: "60"
+      VELOCITY_WINDOW: "10"
+      VELOCITY_LIMIT: "3"
+      LARGE_TXN_ETB: "8000"
+      RAPID_WINDOW: "5"
+      RAPID_LIMIT: "5"
+      FAILURE_WINDOW: "15"
+      FAILURE_THRESHOLD: "0.4"
+    volumes:
+      - ./anomaly_detector.py:/app/anomaly_detector.py:ro
+      - /tmp:/tmp
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # ─── Network Correlator ──────────────────────────────
+  network-correlator:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: network-correlator
+    command: python3 /app/network_correlator.py
+    environment:
+      DB_HOST: postgres
+      DB_NAME: zabbix
+      DB_USER: zabbix
+      DB_PASS: zabbix_pass
+      ZABBIX_URL: http://zabbix-web:8080/api_jsonrpc.php
+      ZABBIX_USER: Admin
+      ZABBIX_PASS: zabbix
+      CHECK_INTERVAL: "120"
+      LATENCY_THRESHOLD: "200"
+      LOSS_THRESHOLD: "10"
+    volumes:
+      - ./network_correlator.py:/app/network_correlator.py:ro
+    depends_on:
+      - postgres
+    restart: unless-stopped
   
 
   # ─── ATM SIMULATORS ───────────────────────────────────────────
