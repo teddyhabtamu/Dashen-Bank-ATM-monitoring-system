@@ -16,6 +16,17 @@ from reportlab.lib.enums import TA_CENTER
 bp = Blueprint('report', __name__)
 
 
+@bp.route('/api/atms')
+def api_atms():
+    try:
+        conn = get_db(); cur = conn.cursor()
+        cur.execute("SELECT DISTINCT atm_id, branch FROM atm_transactions ORDER BY atm_id")
+        rows = cur.fetchall(); cur.close(); conn.close()
+        return jsonify([{'id': r[0], 'branch': r[1]} for r in rows])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @bp.route('/api/stats')
 def api_stats():
     try:
@@ -24,12 +35,13 @@ def api_stats():
             SELECT COUNT(*),
                 ROUND(100.0*SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),1),
                 COALESCE(SUM(CASE WHEN status='APPROVED' AND txn_type='WITHDRAWAL'
-                    AND recorded_at>=CURRENT_DATE THEN amount ELSE 0 END),0)
+                    AND recorded_at>=CURRENT_DATE THEN amount ELSE 0 END),0),
+                (SELECT COUNT(DISTINCT atm_id) FROM atm_transactions)
             FROM atm_transactions
             WHERE recorded_at >= NOW() - INTERVAL '7 days'
         """)
         r = cur.fetchone(); cur.close(); conn.close()
-        return jsonify({'total_txns': int(r[0]), 'success_rate': float(r[1]), 'cash_today': float(r[2])})
+        return jsonify({'total_txns': int(r[0]), 'success_rate': float(r[1]), 'cash_today': float(r[2]), 'atm_count': int(r[3])})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
