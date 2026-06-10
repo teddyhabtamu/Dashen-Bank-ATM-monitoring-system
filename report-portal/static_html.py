@@ -833,11 +833,51 @@ body {
       </div>
     </div>
 
+    <!-- ATM Availability Report -->
+    <div class="report-card">
+      <div class="card-accent"></div>
+      <div class="card-content">
+        <div class="card-header">
+          <div class="card-icon"><i data-lucide="gauge"></i></div>
+          <h3>ATM Availability Report</h3>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Period</label>
+            <div class="custom-select">
+              <select id="avail-days">
+                <option value="1">Today</option>
+                <option value="7" selected>Last 7 Days</option>
+                <option value="30">Last 30 Days</option>
+                <option value="90">Last 90 Days</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Branch</label>
+            <div class="custom-select">
+              <select id="avail-atm">
+                <option value="all" selected>All Branches</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card-actions">
+        <button class="btn btn-outline" onclick="gen('availability','excel','avail-days','avail-atm')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+        <button class="btn btn-outline" onclick="gen('availability','pdf','avail-days','avail-atm')"><i data-lucide="file-text"></i> PDF</button>
+        <button class="btn btn-outline" onclick="gen('availability','csv','avail-days','avail-atm')"><i data-lucide="file"></i> CSV</button>
+        <div class="loading-wrapper" id="lw-availability">
+          <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </main>
 
 <footer class="footer">
-  Dashen Bank &middot; ATM Report Portal &middot; <a href="#">Support</a>
+  Dashen Bank &middot; ATM Report Portal &middot; <a href="https://dashenbanksc.com/frequently-asked-questions/#:~:text=Our%20Customer%20Service%20Team%20is,via%206333%20for%20any%20support." target="_blank">Support</a>
 </footer>
 
 <script>
@@ -935,56 +975,61 @@ async function loadKPIs() {
   } catch(e){}
 }
 
+function populateATMSelect(selectId, atms) {
+  const sel = document.getElementById(selectId);
+  while (sel.options.length > 1) sel.remove(1);
+  atms.forEach(a => {
+    sel.add(new Option(a.id + ' \u2014 ' + a.branch, a.id));
+  });
+  const container = sel.closest('.custom-select');
+  container.querySelector('.select-selected')?.remove();
+  container.querySelector('.select-items')?.remove();
+  const a = document.createElement('DIV');
+  a.setAttribute('class', 'select-selected');
+  a.innerHTML = sel.options[0].innerHTML;
+  container.appendChild(a);
+  const b = document.createElement('DIV');
+  b.setAttribute('class', 'select-items select-hide');
+  for (let j = 0; j < sel.length; j++) {
+    const c = document.createElement('DIV');
+    c.innerHTML = sel.options[j].innerHTML;
+    c.setAttribute('data-value', sel.options[j].value);
+    if (j === 0) c.setAttribute('class', 'same-as-selected');
+    c.addEventListener('click', function(e) {
+      var y, i, k, s, h, sl, yl;
+      s = this.parentNode.parentNode.getElementsByTagName('select')[0];
+      sl = s.length;
+      h = this.parentNode.previousSibling;
+      for (i = 0; i < sl; i++) {
+        if (s.options[i].innerHTML == this.innerHTML) {
+          s.selectedIndex = i;
+          h.innerHTML = this.innerHTML;
+          y = this.parentNode.getElementsByClassName('same-as-selected');
+          yl = y.length;
+          for (k = 0; k < yl; k++) y[k].removeAttribute('class');
+          this.setAttribute('class', 'same-as-selected');
+          s.dispatchEvent(new Event('change'));
+          break;
+        }
+      }
+      h.click();
+    });
+    b.appendChild(c);
+  }
+  container.appendChild(b);
+  a.addEventListener('click', function(e) {
+    e.stopPropagation();
+    closeAllSelect(this);
+    this.nextSibling.classList.toggle('select-hide');
+    this.classList.toggle('select-arrow-active');
+  });
+}
+
 async function loadATMs() {
   try {
     const atms = await fetch('/api/atms').then(r=>r.json());
-    const sel = document.getElementById('txn-atm');
-    while (sel.options.length > 1) sel.remove(1);
-    atms.forEach(a => {
-      sel.add(new Option(a.id + ' \u2014 ' + a.branch, a.id));
-    });
-    const container = sel.closest('.custom-select');
-    container.querySelector('.select-selected')?.remove();
-    container.querySelector('.select-items')?.remove();
-    const a = document.createElement('DIV');
-    a.setAttribute('class', 'select-selected');
-    a.innerHTML = sel.options[0].innerHTML;
-    container.appendChild(a);
-    const b = document.createElement('DIV');
-    b.setAttribute('class', 'select-items select-hide');
-    for (let j = 0; j < sel.length; j++) {
-      const c = document.createElement('DIV');
-      c.innerHTML = sel.options[j].innerHTML;
-      c.setAttribute('data-value', sel.options[j].value);
-      if (j === 0) c.setAttribute('class', 'same-as-selected');
-      c.addEventListener('click', function(e) {
-        var y, i, k, s, h, sl, yl;
-        s = this.parentNode.parentNode.getElementsByTagName('select')[0];
-        sl = s.length;
-        h = this.parentNode.previousSibling;
-        for (i = 0; i < sl; i++) {
-          if (s.options[i].innerHTML == this.innerHTML) {
-            s.selectedIndex = i;
-            h.innerHTML = this.innerHTML;
-            y = this.parentNode.getElementsByClassName('same-as-selected');
-            yl = y.length;
-            for (k = 0; k < yl; k++) y[k].removeAttribute('class');
-            this.setAttribute('class', 'same-as-selected');
-            s.dispatchEvent(new Event('change'));
-            break;
-          }
-        }
-        h.click();
-      });
-      b.appendChild(c);
-    }
-    container.appendChild(b);
-    a.addEventListener('click', function(e) {
-      e.stopPropagation();
-      closeAllSelect(this);
-      this.nextSibling.classList.toggle('select-hide');
-      this.classList.toggle('select-arrow-active');
-    });
+    populateATMSelect('txn-atm', atms);
+    populateATMSelect('avail-atm', atms);
     document.getElementById('kpi-atm-count').textContent = atms.length;
   } catch(e){}
 }

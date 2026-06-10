@@ -63,7 +63,7 @@ def report_transaction(fmt):
             SUM(CASE WHEN status='DECLINED' THEN 1 ELSE 0 END)           AS "Declined",
             SUM(CASE WHEN status='ERROR'    THEN 1 ELSE 0 END)           AS "Errors",
             ROUND(100.0*SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)
-                /NULLIF(COUNT(*),0),2)                                    AS "Success Rate %",
+                /NULLIF(COUNT(*),0),2)                                    AS "Success Rate",
             COALESCE(SUM(CASE WHEN status='APPROVED' AND txn_type='WITHDRAWAL'
                 THEN amount ELSE 0 END),0)                               AS "Cash Dispensed ETB"
         FROM atm_transactions
@@ -200,7 +200,7 @@ def report_performance(fmt):
         )
         SELECT s.atm_id AS "ATM", s.branch AS "Branch",
             s.total AS "Total Transactions",
-            s.rate  AS "Success Rate %",
+            s.rate  AS "Success Rate",
             s.daily AS "Avg Daily Txns",
             CONCAT(p.hr::int,':00-',(p.hr::int+1),':00') AS "Peak Hour",
             RANK() OVER (ORDER BY s.total DESC) AS "Rank"
@@ -221,6 +221,90 @@ def report_performance(fmt):
         return pdf_send(title, headers, rows, days, 'all', 'Performance')
     else:
         return csv_send(headers, rows, 'Performance', title=title, days=days, atm='all')
+
+
+# ─── ATM AVAILABILITY ───────────────────────────────────────────────────────────
+
+@bp.route('/report/availability/<fmt>')
+def report_availability(fmt):
+    days = int(request.args.get('days', 7))
+    atm  = request.args.get('atm', 'all')
+    conn = get_db(); cur = conn.cursor()
+
+    sql = """
+        WITH hourly AS (
+            SELECT
+                t.atm_id,
+                l.branch,
+                DATE_TRUNC('hour', recorded_at) as hour,
+                COUNT(*) as txn_count
+            FROM atm_transactions t
+            JOIN atm_locations l ON t.atm_id = l.atm_id
+            WHERE recorded_at >= NOW() - INTERVAL %s
+            GROUP BY t.atm_id, l.branch, DATE_TRUNC('hour', recorded_at)
+        ),
+        total_hours AS (
+            SELECT %s * 24 as expected_hours
+        ),
+        uptime AS (
+            SELECT
+                atm_id,
+                branch,
+                COUNT(*) as active_hours,
+                (SELECT expected_hours FROM total_hours) as expected_hours,
+                ROUND(100.0 * COUNT(*) / (SELECT expected_hours FROM total_hours), 2) as uptime_pct
+            FROM hourly
+            GROUP BY atm_id, branch
+        )
+        SELECT
+            atm_id as "ATM ID",
+            branch as "Branch",
+            active_hours as "Active Hours",
+            expected_hours as "Expected Hours",
+            (expected_hours - active_hours) as "Downtime Hours",
+            uptime_pct as "Uptime",
+            CASE
+                WHEN uptime_pct >= 99.9 THEN 'Excellent'
+                WHEN uptime_pct >= 99.0 THEN 'Good'
+                WHEN uptime_pct >= 95.0 THEN 'Acceptable'
+                ELSE 'Below Target'
+            END as "SLA Status"
+        FROM uptime
+        ORDER BY uptime_pct DESC
+    """
+    cur.execute(sql, (f"{days} days", days))
+    rows = cur.fetchall()
+    headers = [d[0] for d in cur.description]
+    cur.close(); conn.close()
+
+    title = 'ATM Availability Report'
+    if fmt == 'excel':
+        wb = openpyxl.Workbook(); wb.remove(wb.active)
+        ws = wb.create_sheet('Availability')
+        xl_header(ws, title, days, atm)
+        ws.append(headers)
+        xl_style_row(ws, ws.max_row, len(headers))
+        data_start = ws.max_row + 1
+        for row in rows:
+            ws.append(list(row))
+        xl_style_data_rows(ws, data_start, len(headers))
+        colors_map = {
+            'Excellent': 'C6EFCE',
+            'Good': 'C6EFCE',
+            'Acceptable': 'FFEB9C',
+            'Below Target': 'FFC7CE'
+        }
+        for idx, row in enumerate(rows):
+            sla_val = str(row[-1] or '') if row else ''
+            fill_color = colors_map.get(sla_val, 'FFFFFF')
+            cell = ws.cell(row=data_start + idx, column=len(headers))
+            cell.fill = openpyxl.styles.PatternFill('solid', fgColor=fill_color)
+        xl_autosize(ws)
+        return xl_send(wb, 'Availability')
+    elif fmt == 'pdf':
+        return pdf_send(title, headers, rows, days, atm, 'Availability')
+    else:
+        return csv_send(headers, rows, 'Availability', title=title, days=days, atm=atm)
 
 
 # ─── COMPLETE MANAGEMENT REPORT ─────────────────────────────────────────────────
