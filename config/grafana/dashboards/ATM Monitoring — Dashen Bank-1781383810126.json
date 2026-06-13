@@ -1,4 +1,59 @@
 {
+  "__inputs": [
+    {
+      "name": "DS_ZABBIX-ATM",
+      "label": "Zabbix-ATM",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "alexanderzobnin-zabbix-datasource",
+      "pluginName": "Zabbix"
+    }
+  ],
+  "__elements": {},
+  "__requires": [
+    {
+      "type": "datasource",
+      "id": "alexanderzobnin-zabbix-datasource",
+      "name": "Zabbix",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "alexanderzobnin-zabbix-triggers-panel",
+      "name": "Zabbix Problems",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "bargauge",
+      "name": "Bar gauge",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "gauge",
+      "name": "Gauge",
+      "version": ""
+    },
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "10.2.6"
+    },
+    {
+      "type": "panel",
+      "id": "text",
+      "name": "Text",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    }
+  ],
   "annotations": {
     "list": [
       {
@@ -18,14 +73,14 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 1,
+  "id": null,
   "links": [],
   "liveNow": false,
   "panels": [
     {
       "datasource": {
         "type": "alexanderzobnin-zabbix-datasource",
-        "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+        "uid": "${DS_ZABBIX-ATM}"
       },
       "gridPos": {
         "h": 3,
@@ -52,7 +107,7 @@
           "countTriggersBy": "",
           "datasource": {
             "type": "alexanderzobnin-zabbix-datasource",
-            "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+            "uid": "${DS_ZABBIX-ATM}"
           },
           "evaltype": "0",
           "functions": [],
@@ -103,7 +158,7 @@
     {
       "datasource": {
         "type": "alexanderzobnin-zabbix-datasource",
-        "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+        "uid": "${DS_ZABBIX-ATM}"
       },
       "gridPos": {
         "h": 9,
@@ -188,7 +243,7 @@
           "countTriggersBy": "",
           "datasource": {
             "type": "alexanderzobnin-zabbix-datasource",
-            "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+            "uid": "${DS_ZABBIX-ATM}"
           },
           "evaltype": "0",
           "functions": [],
@@ -248,7 +303,7 @@
     {
       "datasource": {
         "type": "alexanderzobnin-zabbix-datasource",
-        "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+        "uid": "${DS_ZABBIX-ATM}"
       },
       "fieldConfig": {
         "defaults": {
@@ -312,7 +367,7 @@
           "countTriggersBy": "",
           "datasource": {
             "type": "alexanderzobnin-zabbix-datasource",
-            "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+            "uid": "${DS_ZABBIX-ATM}"
           },
           "evaltype": "0",
           "functions": [],
@@ -364,7 +419,7 @@
     {
       "datasource": {
         "type": "alexanderzobnin-zabbix-datasource",
-        "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+        "uid": "${DS_ZABBIX-ATM}"
       },
       "fieldConfig": {
         "defaults": {
@@ -450,7 +505,7 @@
           "countTriggersBy": "",
           "datasource": {
             "type": "alexanderzobnin-zabbix-datasource",
-            "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+            "uid": "${DS_ZABBIX-ATM}"
           },
           "evaltype": "0",
           "functions": [],
@@ -502,7 +557,7 @@
     {
       "datasource": {
         "type": "alexanderzobnin-zabbix-datasource",
-        "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+        "uid": "${DS_ZABBIX-ATM}"
       },
       "fieldConfig": {
         "defaults": {
@@ -595,7 +650,7 @@
           "countTriggersBy": "",
           "datasource": {
             "type": "alexanderzobnin-zabbix-datasource",
-            "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+            "uid": "${DS_ZABBIX-ATM}"
           },
           "evaltype": "0",
           "functions": [],
@@ -647,7 +702,7 @@
     {
       "datasource": {
         "type": "alexanderzobnin-zabbix-datasource",
-        "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+        "uid": "${DS_ZABBIX-ATM}"
       },
       "fieldConfig": {
         "defaults": {
@@ -715,7 +770,7 @@
           "countTriggersBy": "",
           "datasource": {
             "type": "alexanderzobnin-zabbix-datasource",
-            "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+            "uid": "${DS_ZABBIX-ATM}"
           },
           "evaltype": "0",
           "functions": [],
@@ -767,7 +822,7 @@
     {
       "datasource": {
         "type": "alexanderzobnin-zabbix-datasource",
-        "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+        "uid": "${DS_ZABBIX-ATM}"
       },
       "fieldConfig": {
         "defaults": {
@@ -849,7 +904,7 @@
           "countTriggersBy": "",
           "datasource": {
             "type": "alexanderzobnin-zabbix-datasource",
-            "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+            "uid": "${DS_ZABBIX-ATM}"
           },
           "evaltype": "0",
           "functions": [],
