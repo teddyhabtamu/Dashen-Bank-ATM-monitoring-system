@@ -1,0 +1,3156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>6.4</version>
+    <host_groups>
+        <host_group>
+            <uuid>dc579cd7a1a34222933f24f52a68bcd8</uuid>
+            <name>Linux servers</name>
+        </host_group>
+    </host_groups>
+    <hosts>
+        <host>
+            <host>ATM-001-Addis-Branch</host>
+            <name>ATM-001 | NCR | Addis Ababa Main Branch</name>
+            <templates>
+                <template>
+                    <name>Dashen Bank ATM Hardware</name>
+                </template>
+            </templates>
+            <groups>
+                <group>
+                    <name>Linux servers</name>
+                </group>
+            </groups>
+            <interfaces>
+                <interface>
+                    <useip>NO</useip>
+                    <ip>0.0.0.0</ip>
+                    <dns>host.docker.internal</dns>
+                    <interface_ref>if1</interface_ref>
+                </interface>
+            </interfaces>
+            <items>
+                <item>
+                    <name>Linux: Host name of Zabbix agent running</name>
+                    <key>agent.hostname</key>
+                    <delay>1h</delay>
+                    <history>7d</history>
+                    <value_type>CHAR</value_type>
+                    <trends>0</trends>
+                    <preprocessing>
+                        <step>
+                            <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                            <parameters>
+                                <parameter>1d</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>system</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: Zabbix agent ping</name>
+                    <key>agent.ping</key>
+                    <history>7d</history>
+                    <description>The agent always returns 1 for this item. It could be used in combination with nodata() for availability check.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>system</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: Version of Zabbix agent running</name>
+                    <key>agent.version</key>
+                    <delay>1h</delay>
+                    <history>7d</history>
+                    <value_type>CHAR</value_type>
+                    <trends>0</trends>
+                    <preprocessing>
+                        <step>
+                            <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                            <parameters>
+                                <parameter>1d</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>application</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>ATM Fleet — Unacknowledged Anomalies</name>
+                    <key>dashen.atm.anomalies.total</key>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>last(/ATM-001-Addis-Branch/dashen.atm.anomalies.total)&gt;0</expression>
+                            <name>ATM suspicious transaction anomalies detected</name>
+                            <priority>HIGH</priority>
+                            <description>{ITEM.VALUE} unacknowledged anomalies detected in the last 60 minutes. Check Grafana ATM Transaction dashboard for details.</description>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Linux: Maximum number of open file descriptors</name>
+                    <key>kernel.maxfiles</key>
+                    <delay>1h</delay>
+                    <history>7d</history>
+                    <description>May be increased by using the `sysctl` utility or modifying the file `/etc/sysctl.conf`.</description>
+                    <preprocessing>
+                        <step>
+                            <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                            <parameters>
+                                <parameter>1d</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>system</value>
+                        </tag>
+                    </tags>
+                    <triggers>
+                        <trigger>
+                            <expression>last(/ATM-001-Addis-Branch/kernel.maxfiles)&lt;{$KERNEL.MAXFILES.MIN}</expression>
+                            <name>Linux: Configured max number of open filedescriptors is too low</name>
+                            <event_name>Linux: Configured max number of open filedescriptors is too low (&lt; {$KERNEL.MAXFILES.MIN})</event_name>
+                            <priority>INFO</priority>
+                            <tags>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>performance</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Linux: Maximum number of processes</name>
+                    <key>kernel.maxproc</key>
+                    <delay>1h</delay>
+                    <history>7d</history>
+                    <description>May be increased by using the `sysctl` utility or modifying the file `/etc/sysctl.conf`.</description>
+                    <preprocessing>
+                        <step>
+                            <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                            <parameters>
+                                <parameter>1d</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>system</value>
+                        </tag>
+                    </tags>
+                    <triggers>
+                        <trigger>
+                            <expression>last(/ATM-001-Addis-Branch/kernel.maxproc)&lt;{$KERNEL.MAXPROC.MIN}</expression>
+                            <name>Linux: Configured max number of processes is too low</name>
+                            <event_name>Linux: Configured max number of processes is too low (&lt; {$KERNEL.MAXPROC.MIN})</event_name>
+                            <priority>INFO</priority>
+                            <dependencies>
+                                <dependency>
+                                    <name>Linux: Getting closer to process limit</name>
+                                    <expression>last(/ATM-001-Addis-Branch/proc.num)/last(/ATM-001-Addis-Branch/kernel.maxproc)*100&gt;80</expression>
+                                </dependency>
+                            </dependencies>
+                            <tags>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>performance</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Network in</name>
+                    <key>net.if.in[eth0]</key>
+                    <units>bps</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>last(/ATM-001-Addis-Branch/net.if.in[eth0])=0</expression>
+                            <name>Network interface down on {HOST.NAME}</name>
+                            <priority>HIGH</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Linux: Number of processes</name>
+                    <key>proc.num</key>
+                    <history>7d</history>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>system</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: Number of running processes</name>
+                    <key>proc.num[,,run]</key>
+                    <history>7d</history>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>system</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: System boot time</name>
+                    <key>system.boottime</key>
+                    <delay>15m</delay>
+                    <history>7d</history>
+                    <units>unixtime</units>
+                    <preprocessing>
+                        <step>
+                            <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                            <parameters>
+                                <parameter>1h</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>system</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: Interrupts per second</name>
+                    <key>system.cpu.intr</key>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <description>Number of interrupts processed.</description>
+                    <preprocessing>
+                        <step>
+                            <type>CHANGE_PER_SECOND</type>
+                            <parameters>
+                                <parameter/>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>cpu</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>CPU load</name>
+                    <key>system.cpu.load[all,avg1]</key>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>avg(/ATM-001-Addis-Branch/system.cpu.load[all,avg1],5m)&gt;80</expression>
+                            <name>CPU overloaded on {HOST.NAME}</name>
+                            <priority>WARNING</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Linux: Load average (5m avg)</name>
+                    <key>system.cpu.load[all,avg5]</key>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <description>Calculated as the system CPU load divided by the number of CPU cores.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>cpu</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: Load average (15m avg)</name>
+                    <key>system.cpu.load[all,avg15]</key>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <description>Calculated as the system CPU load divided by the number of CPU cores.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>cpu</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: Number of CPUs</name>
+                    <key>system.cpu.num</key>
+                    <history>7d</history>
+                    <preprocessing>
+                        <step>
+                            <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                            <parameters>
+                                <parameter>1d</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>cpu</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: Context switches per second</name>
+                    <key>system.cpu.switches</key>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <description>The combined rate at which all processors on the computer are switched from one thread to another.</description>
+                    <preprocessing>
+                        <step>
+                            <type>CHANGE_PER_SECOND</type>
+                            <parameters>
+                                <parameter/>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>cpu</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: CPU utilization</name>
+                    <type>DEPENDENT</type>
+                    <key>system.cpu.util</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <description>CPU utilization expressed in %.</description>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <parameters>
+                                <parameter>return (100 - value)</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <master_item>
+                        <key>system.cpu.util[,idle]</key>
+                    </master_item>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>cpu</value>
+                        </tag>
+                    </tags>
+                    <triggers>
+                        <trigger>
+                            <expression>min(/ATM-001-Addis-Branch/system.cpu.util,5m)&gt;{$CPU.UTIL.CRIT}</expression>
+                            <name>Linux: High CPU utilization</name>
+                            <event_name>Linux: High CPU utilization (over {$CPU.UTIL.CRIT}% for 5m)</event_name>
+                            <opdata>Current utilization: {ITEM.LASTVALUE1}</opdata>
+                            <priority>WARNING</priority>
+                            <description>CPU utilization is too high. The system might be slow to respond.</description>
+                            <dependencies>
+                                <dependency>
+                                    <name>Linux: Load average is too high</name>
+                                    <expression>min(/ATM-001-Addis-Branch/system.cpu.load[all,avg1],5m)/last(/ATM-001-Addis-Branch/system.cpu.num)&gt;{$LOAD_AVG_PER_CPU.MAX.WARN}
+and last(/ATM-001-Addis-Branch/system.cpu.load[all,avg5])&gt;0
+and last(/ATM-001-Addis-Branch/system.cpu.load[all,avg15])&gt;0</expression>
+                                </dependency>
+                            </dependencies>
+                            <tags>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>performance</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Linux: CPU guest time</name>
+                    <key>system.cpu.util[,guest]</key>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <description>Time spent on running a virtual CPU for a guest operating system.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>cpu</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: CPU guest nice time</name>
+                    <key>system.cpu.util[,guest_nice]</key>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <description>Time spent on running a niced guest (a virtual CPU for guest operating systems under the control of the Linux kernel).</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>cpu</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: CPU idle time</name>
+                    <key>system.cpu.util[,idle]</key>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <description>Time the CPU has spent doing nothing.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>cpu</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: CPU interrupt time</name>
+                    <key>system.cpu.util[,interrupt]</key>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <description>Time the CPU has spent servicing hardware interrupts.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>cpu</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: CPU iowait time</name>
+                    <key>system.cpu.util[,iowait]</key>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <description>Time the CPU has been waiting for I/O to complete.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>cpu</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: CPU nice time</name>
+                    <key>system.cpu.util[,nice]</key>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <description>Time the CPU has spent running users' processes that have been niced.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>cpu</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: CPU softirq time</name>
+                    <key>system.cpu.util[,softirq]</key>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <description>Time the CPU has been servicing software interrupts.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>cpu</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: CPU steal time</name>
+                    <key>system.cpu.util[,steal]</key>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <description>The amount of &quot;stolen&quot; CPU from this virtual machine by the hypervisor for other tasks, such as running another virtual machine.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>cpu</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: CPU system time</name>
+                    <key>system.cpu.util[,system]</key>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <description>Time the CPU has spent running the kernel and its processes.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>cpu</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: CPU user time</name>
+                    <key>system.cpu.util[,user]</key>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <description>Time the CPU has spent running users' processes that are not niced.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>cpu</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: System name</name>
+                    <key>system.hostname</key>
+                    <delay>1h</delay>
+                    <history>7d</history>
+                    <value_type>CHAR</value_type>
+                    <trends>0</trends>
+                    <description>The host name of the system.</description>
+                    <inventory_link>NAME</inventory_link>
+                    <preprocessing>
+                        <step>
+                            <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                            <parameters>
+                                <parameter>12h</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>system</value>
+                        </tag>
+                    </tags>
+                    <triggers>
+                        <trigger>
+                            <expression>change(/ATM-001-Addis-Branch/system.hostname) and length(last(/ATM-001-Addis-Branch/system.hostname))&gt;0</expression>
+                            <name>Linux: System name has changed</name>
+                            <event_name>Linux: System name has changed (new name: {ITEM.VALUE})</event_name>
+                            <priority>INFO</priority>
+                            <description>The name of the system has changed. Acknowledge to close the problem manually.</description>
+                            <manual_close>YES</manual_close>
+                            <tags>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>notice</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>security</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Linux: System local time</name>
+                    <key>system.localtime</key>
+                    <history>7d</history>
+                    <units>unixtime</units>
+                    <description>The local system time of the host.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>system</value>
+                        </tag>
+                    </tags>
+                    <triggers>
+                        <trigger>
+                            <expression>fuzzytime(/ATM-001-Addis-Branch/system.localtime,{$SYSTEM.FUZZYTIME.MAX})=0</expression>
+                            <recovery_mode>RECOVERY_EXPRESSION</recovery_mode>
+                            <recovery_expression>fuzzytime(/ATM-001-Addis-Branch/system.localtime,{$SYSTEM.FUZZYTIME.MIN})=1</recovery_expression>
+                            <name>Linux: System time is out of sync</name>
+                            <event_name>Linux: System time is out of sync (diff with Zabbix server &gt; {$SYSTEM.FUZZYTIME.MAX})</event_name>
+                            <priority>WARNING</priority>
+                            <description>The host's system time is different from Zabbix server time.</description>
+                            <manual_close>YES</manual_close>
+                            <tags>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>availability</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>performance</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Linux: Operating system architecture</name>
+                    <key>system.sw.arch</key>
+                    <delay>1h</delay>
+                    <history>7d</history>
+                    <value_type>CHAR</value_type>
+                    <trends>0</trends>
+                    <description>The architecture of the operating system.</description>
+                    <preprocessing>
+                        <step>
+                            <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                            <parameters>
+                                <parameter>1d</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>os</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: Operating system</name>
+                    <key>system.sw.os</key>
+                    <delay>1h</delay>
+                    <history>7d</history>
+                    <value_type>CHAR</value_type>
+                    <trends>0</trends>
+                    <inventory_link>OS</inventory_link>
+                    <preprocessing>
+                        <step>
+                            <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                            <parameters>
+                                <parameter>1d</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>os</value>
+                        </tag>
+                    </tags>
+                    <triggers>
+                        <trigger>
+                            <expression>change(/ATM-001-Addis-Branch/system.sw.os) and length(last(/ATM-001-Addis-Branch/system.sw.os))&gt;0</expression>
+                            <name>Linux: Operating system description has changed</name>
+                            <priority>INFO</priority>
+                            <description>The description of the operating system has changed. Possible reasons are that the system has been updated or replaced. Acknowledge to close the problem manually.</description>
+                            <manual_close>YES</manual_close>
+                            <dependencies>
+                                <dependency>
+                                    <name>Linux: System name has changed</name>
+                                    <expression>change(/ATM-001-Addis-Branch/system.hostname) and length(last(/ATM-001-Addis-Branch/system.hostname))&gt;0</expression>
+                                </dependency>
+                            </dependencies>
+                            <tags>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>notice</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Linux: Number of installed packages</name>
+                    <key>system.sw.packages.get</key>
+                    <delay>1h</delay>
+                    <history>7d</history>
+                    <preprocessing>
+                        <step>
+                            <type>JSONPATH</type>
+                            <parameters>
+                                <parameter>$.length()</parameter>
+                            </parameters>
+                        </step>
+                        <step>
+                            <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                            <parameters>
+                                <parameter>12h</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>os</value>
+                        </tag>
+                    </tags>
+                    <triggers>
+                        <trigger>
+                            <expression>change(/ATM-001-Addis-Branch/system.sw.packages.get)&lt;&gt;0</expression>
+                            <name>Linux: Number of installed packages has been changed</name>
+                            <priority>WARNING</priority>
+                            <manual_close>YES</manual_close>
+                            <tags>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>notice</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Linux: Free swap space</name>
+                    <key>system.swap.size[,free]</key>
+                    <history>7d</history>
+                    <units>B</units>
+                    <description>The free space of the swap volume/file expressed in bytes.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>memory</value>
+                        </tag>
+                        <tag>
+                            <tag>component</tag>
+                            <value>storage</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: Free swap space in %</name>
+                    <key>system.swap.size[,pfree]</key>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <description>The free space of the swap volume/file expressed in %.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>memory</value>
+                        </tag>
+                        <tag>
+                            <tag>component</tag>
+                            <value>storage</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: Total swap space</name>
+                    <key>system.swap.size[,total]</key>
+                    <history>7d</history>
+                    <units>B</units>
+                    <description>The total space of the swap volume/file expressed in bytes.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>memory</value>
+                        </tag>
+                        <tag>
+                            <tag>component</tag>
+                            <value>storage</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: System description</name>
+                    <key>system.uname</key>
+                    <delay>15m</delay>
+                    <history>7d</history>
+                    <value_type>CHAR</value_type>
+                    <trends>0</trends>
+                    <description>The information as normally returned by `uname -a`.</description>
+                    <preprocessing>
+                        <step>
+                            <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                            <parameters>
+                                <parameter>12h</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>system</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>ATM uptime</name>
+                    <key>system.uptime</key>
+                    <units>uptime</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>nodata(/ATM-001-Addis-Branch/system.uptime,180)=1</expression>
+                            <name>ATM {HOST.NAME} is unreachable</name>
+                            <priority>DISASTER</priority>
+                        </trigger>
+                        <trigger>
+                            <expression>last(/ATM-001-Addis-Branch/system.uptime)&lt;10m</expression>
+                            <name>Linux: {HOST.NAME} has been restarted</name>
+                            <event_name>Linux: {HOST.NAME} has been restarted (uptime &lt; 10m)</event_name>
+                            <priority>WARNING</priority>
+                            <description>The host uptime is less than 10 minutes.</description>
+                            <manual_close>YES</manual_close>
+                            <tags>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>notice</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Linux: Number of logged in users</name>
+                    <key>system.users.num</key>
+                    <history>7d</history>
+                    <description>The number of users who are currently logged in.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>environment</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: Checksum of /etc/passwd</name>
+                    <key>vfs.file.cksum[/etc/passwd,sha256]</key>
+                    <delay>15m</delay>
+                    <history>7d</history>
+                    <value_type>CHAR</value_type>
+                    <trends>0</trends>
+                    <preprocessing>
+                        <step>
+                            <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                            <parameters>
+                                <parameter>1h</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>security</value>
+                        </tag>
+                    </tags>
+                    <triggers>
+                        <trigger>
+                            <expression>last(/ATM-001-Addis-Branch/vfs.file.cksum[/etc/passwd,sha256],#1)&lt;&gt;last(/ATM-001-Addis-Branch/vfs.file.cksum[/etc/passwd,sha256],#2)</expression>
+                            <name>Linux: /etc/passwd has been changed</name>
+                            <priority>INFO</priority>
+                            <manual_close>YES</manual_close>
+                            <dependencies>
+                                <dependency>
+                                    <name>Linux: Operating system description has changed</name>
+                                    <expression>change(/ATM-001-Addis-Branch/system.sw.os) and length(last(/ATM-001-Addis-Branch/system.sw.os))&gt;0</expression>
+                                </dependency>
+                                <dependency>
+                                    <name>Linux: System name has changed</name>
+                                    <expression>change(/ATM-001-Addis-Branch/system.hostname) and length(last(/ATM-001-Addis-Branch/system.hostname))&gt;0</expression>
+                                </dependency>
+                            </dependencies>
+                            <tags>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>security</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Linux: Get filesystems</name>
+                    <key>vfs.fs.get</key>
+                    <history>0</history>
+                    <value_type>TEXT</value_type>
+                    <trends>0</trends>
+                    <description>The `vfs.fs.get` key acquires raw information set about the filesystems. Later to be extracted by preprocessing in dependent items.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>raw</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Disk free (cash cassette)</name>
+                    <key>vfs.fs.size[/,free]</key>
+                    <delay>5m</delay>
+                    <units>B</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>last(/ATM-001-Addis-Branch/vfs.fs.size[/,free])&lt;5368709120</expression>
+                            <name>Cash level critically low on {HOST.NAME}</name>
+                            <priority>HIGH</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Available memory</name>
+                    <key>vm.memory.size[available]</key>
+                    <units>B</units>
+                    <interface_ref>if1</interface_ref>
+                </item>
+                <item>
+                    <name>Linux: Available memory in %</name>
+                    <key>vm.memory.size[pavailable]</key>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <description>The available memory as percentage of the total. See also Appendixes in Zabbix Documentation about parameters of the `vm.memory.size` item.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>memory</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: Total memory</name>
+                    <key>vm.memory.size[total]</key>
+                    <history>7d</history>
+                    <units>B</units>
+                    <description>Total memory expressed in bytes.</description>
+                    <interface_ref>if1</interface_ref>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>memory</value>
+                        </tag>
+                    </tags>
+                </item>
+                <item>
+                    <name>Linux: Memory utilization</name>
+                    <type>DEPENDENT</type>
+                    <key>vm.memory.utilization</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <description>The percentage of used memory is calculated as `100-pavailable`.</description>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <parameters>
+                                <parameter>return (100-value);</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <master_item>
+                        <key>vm.memory.size[pavailable]</key>
+                    </master_item>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>memory</value>
+                        </tag>
+                    </tags>
+                    <triggers>
+                        <trigger>
+                            <expression>min(/ATM-001-Addis-Branch/vm.memory.utilization,5m)&gt;{$MEMORY.UTIL.MAX}</expression>
+                            <name>Linux: High memory utilization</name>
+                            <event_name>Linux: High memory utilization (&gt;{$MEMORY.UTIL.MAX}% for 5m)</event_name>
+                            <priority>AVERAGE</priority>
+                            <description>The system is running out of free memory.</description>
+                            <dependencies>
+                                <dependency>
+                                    <name>Linux: Lack of available memory</name>
+                                    <expression>max(/ATM-001-Addis-Branch/vm.memory.size[available],5m)&lt;{$MEMORY.AVAILABLE.MIN} and last(/ATM-001-Addis-Branch/vm.memory.size[total])&gt;0</expression>
+                                </dependency>
+                            </dependencies>
+                            <tags>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>capacity</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>performance</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Linux: Zabbix agent availability</name>
+                    <type>INTERNAL</type>
+                    <key>zabbix[host,agent,available]</key>
+                    <history>7d</history>
+                    <description>Monitoring the availability status of the agent.</description>
+                    <tags>
+                        <tag>
+                            <tag>component</tag>
+                            <value>system</value>
+                        </tag>
+                    </tags>
+                    <triggers>
+                        <trigger>
+                            <expression>max(/ATM-001-Addis-Branch/zabbix[host,agent,available],{$AGENT.TIMEOUT})=0</expression>
+                            <name>Linux: Zabbix agent is not available</name>
+                            <event_name>Linux: Zabbix agent is not available (for {$AGENT.TIMEOUT})</event_name>
+                            <priority>AVERAGE</priority>
+                            <description>For passive only agents, host availability is used with {$AGENT.TIMEOUT} as time threshold.</description>
+                            <manual_close>YES</manual_close>
+                            <tags>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>availability</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                    </triggers>
+                </item>
+            </items>
+            <discovery_rules>
+                <discovery_rule>
+                    <name>Network interface discovery</name>
+                    <key>net.if.discovery</key>
+                    <delay>1h</delay>
+                    <filter>
+                        <evaltype>AND</evaltype>
+                        <conditions>
+                            <condition>
+                                <macro>{#IFNAME}</macro>
+                                <value>{$NET.IF.IFNAME.MATCHES}</value>
+                                <formulaid>A</formulaid>
+                            </condition>
+                            <condition>
+                                <macro>{#IFNAME}</macro>
+                                <value>{$NET.IF.IFNAME.NOT_MATCHES}</value>
+                                <operator>NOT_MATCHES_REGEX</operator>
+                                <formulaid>B</formulaid>
+                            </condition>
+                        </conditions>
+                    </filter>
+                    <description>The discovery of network interfaces.</description>
+                    <interface_ref>if1</interface_ref>
+                    <item_prototypes>
+                        <item_prototype>
+                            <name>Interface {#IFNAME}: Inbound packets discarded</name>
+                            <key>net.if.in[&quot;{#IFNAME}&quot;,dropped]</key>
+                            <delay>3m</delay>
+                            <history>7d</history>
+                            <preprocessing>
+                                <step>
+                                    <type>CHANGE_PER_SECOND</type>
+                                    <parameters>
+                                        <parameter/>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <interface_ref>if1</interface_ref>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>network</value>
+                                </tag>
+                                <tag>
+                                    <tag>interface</tag>
+                                    <value>{#IFNAME}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>Interface {#IFNAME}: Inbound packets with errors</name>
+                            <key>net.if.in[&quot;{#IFNAME}&quot;,errors]</key>
+                            <delay>3m</delay>
+                            <history>7d</history>
+                            <preprocessing>
+                                <step>
+                                    <type>CHANGE_PER_SECOND</type>
+                                    <parameters>
+                                        <parameter/>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <interface_ref>if1</interface_ref>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>network</value>
+                                </tag>
+                                <tag>
+                                    <tag>interface</tag>
+                                    <value>{#IFNAME}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>Interface {#IFNAME}: Bits received</name>
+                            <key>net.if.in[&quot;{#IFNAME}&quot;]</key>
+                            <delay>3m</delay>
+                            <history>7d</history>
+                            <units>bps</units>
+                            <preprocessing>
+                                <step>
+                                    <type>CHANGE_PER_SECOND</type>
+                                    <parameters>
+                                        <parameter/>
+                                    </parameters>
+                                </step>
+                                <step>
+                                    <type>MULTIPLIER</type>
+                                    <parameters>
+                                        <parameter>8</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <interface_ref>if1</interface_ref>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>network</value>
+                                </tag>
+                                <tag>
+                                    <tag>interface</tag>
+                                    <value>{#IFNAME}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>Interface {#IFNAME}: Outbound packets discarded</name>
+                            <key>net.if.out[&quot;{#IFNAME}&quot;,dropped]</key>
+                            <delay>3m</delay>
+                            <history>7d</history>
+                            <preprocessing>
+                                <step>
+                                    <type>CHANGE_PER_SECOND</type>
+                                    <parameters>
+                                        <parameter/>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <interface_ref>if1</interface_ref>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>network</value>
+                                </tag>
+                                <tag>
+                                    <tag>interface</tag>
+                                    <value>{#IFNAME}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>Interface {#IFNAME}: Outbound packets with errors</name>
+                            <key>net.if.out[&quot;{#IFNAME}&quot;,errors]</key>
+                            <delay>3m</delay>
+                            <history>7d</history>
+                            <preprocessing>
+                                <step>
+                                    <type>CHANGE_PER_SECOND</type>
+                                    <parameters>
+                                        <parameter/>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <interface_ref>if1</interface_ref>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>network</value>
+                                </tag>
+                                <tag>
+                                    <tag>interface</tag>
+                                    <value>{#IFNAME}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>Interface {#IFNAME}: Bits sent</name>
+                            <key>net.if.out[&quot;{#IFNAME}&quot;]</key>
+                            <delay>3m</delay>
+                            <history>7d</history>
+                            <units>bps</units>
+                            <preprocessing>
+                                <step>
+                                    <type>CHANGE_PER_SECOND</type>
+                                    <parameters>
+                                        <parameter/>
+                                    </parameters>
+                                </step>
+                                <step>
+                                    <type>MULTIPLIER</type>
+                                    <parameters>
+                                        <parameter>8</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <interface_ref>if1</interface_ref>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>network</value>
+                                </tag>
+                                <tag>
+                                    <tag>interface</tag>
+                                    <value>{#IFNAME}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>Interface {#IFNAME}: Operational status</name>
+                            <key>vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;]</key>
+                            <history>7d</history>
+                            <trends>0</trends>
+                            <description>Reference: https://www.kernel.org/doc/Documentation/networking/operstates.txt</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JAVASCRIPT</type>
+                                    <parameters>
+                                        <parameter>var newvalue;
+switch(value) {
+  case &quot;unknown&quot;:
+	newvalue = 0;
+	break;
+  case &quot;notpresent&quot;:
+	newvalue = 1;
+	break;
+  case &quot;down&quot;:
+	newvalue = 2;
+	break;
+  case &quot;lowerlayerdown&quot;:
+	newvalue = 3;
+	break;
+  case &quot;testing&quot;:
+	newvalue = 4;
+	break;
+  case &quot;dormant&quot;:
+	newvalue = 5;
+	break;
+  case &quot;up&quot;:
+	newvalue = 6;
+	break;  default:
+	newvalue = &quot;Problem parsing interface operstate in JS&quot;;
+}
+return newvalue;</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <interface_ref>if1</interface_ref>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>network</value>
+                                </tag>
+                                <tag>
+                                    <tag>interface</tag>
+                                    <value>{#IFNAME}</value>
+                                </tag>
+                            </tags>
+                            <trigger_prototypes>
+                                <trigger_prototype>
+                                    <expression>{$IFCONTROL:&quot;{#IFNAME}&quot;}=1 and last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;])=2 and (last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;],#1)&lt;&gt;last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;],#2))</expression>
+                                    <recovery_mode>RECOVERY_EXPRESSION</recovery_mode>
+                                    <recovery_expression>last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;])&lt;&gt;2 or {$IFCONTROL:&quot;{#IFNAME}&quot;}=0</recovery_expression>
+                                    <name>Interface {#IFNAME}: Link down</name>
+                                    <opdata>Current state: {ITEM.LASTVALUE1}</opdata>
+                                    <priority>AVERAGE</priority>
+                                    <description>This trigger expression works as follows:
+1. It can be triggered if the operations status is down.
+2. `{$IFCONTROL:&quot;{#IFNAME}&quot;}=1` - a user can redefine the context macro to &quot;0&quot;, marking this interface as not important. No new trigger will be fired if this interface is down.
+3. `last(/TEMPLATE_NAME/METRIC,#1)&lt;&gt;last(/TEMPLATE_NAME/METRIC,#2)` - the trigger fires only if the operational status was up to (1) sometime before (so, does not fire for &quot;eternal off&quot; interfaces.)
+
+WARNING: if closed manually - it will not fire again on the next poll, because of .diff.</description>
+                                    <manual_close>YES</manual_close>
+                                    <tags>
+                                        <tag>
+                                            <tag>scope</tag>
+                                            <value>availability</value>
+                                        </tag>
+                                    </tags>
+                                </trigger_prototype>
+                            </trigger_prototypes>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>Interface {#IFNAME}: Speed</name>
+                            <key>vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/speed&quot;]</key>
+                            <delay>5m</delay>
+                            <history>7d</history>
+                            <trends>0</trends>
+                            <units>bps</units>
+                            <description>It indicates the latest or current speed value of the interface. The value is an integer representing the link speed expressed in bits/sec.
+This attribute is only valid for the interfaces that implement the ethtool `get_link_ksettings` method (mostly Ethernet).
+
+Reference: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-net</description>
+                            <preprocessing>
+                                <step>
+                                    <type>MULTIPLIER</type>
+                                    <parameters>
+                                        <parameter>1000000</parameter>
+                                    </parameters>
+                                </step>
+                                <step>
+                                    <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                                    <parameters>
+                                        <parameter>1h</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <interface_ref>if1</interface_ref>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>network</value>
+                                </tag>
+                                <tag>
+                                    <tag>interface</tag>
+                                    <value>{#IFNAME}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>Interface {#IFNAME}: Interface type</name>
+                            <key>vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/type&quot;]</key>
+                            <delay>1h</delay>
+                            <history>7d</history>
+                            <trends>0</trends>
+                            <description>It indicates the interface protocol type as a decimal value.
+See `include/uapi/linux/if_arp.h` for all possible values.
+Reference: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-net</description>
+                            <preprocessing>
+                                <step>
+                                    <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                                    <parameters>
+                                        <parameter>1d</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <interface_ref>if1</interface_ref>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>network</value>
+                                </tag>
+                                <tag>
+                                    <tag>interface</tag>
+                                    <value>{#IFNAME}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                    </item_prototypes>
+                    <trigger_prototypes>
+                        <trigger_prototype>
+                            <expression>change(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/speed&quot;])&lt;0 and last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/speed&quot;])&gt;0
+and
+(last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/type&quot;])=6 or last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/type&quot;])=1)
+and
+(last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;])&lt;&gt;2)</expression>
+                            <recovery_mode>RECOVERY_EXPRESSION</recovery_mode>
+                            <recovery_expression>(change(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/speed&quot;])&gt;0 and last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/speed&quot;],#2)&gt;0) or
+(last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;])=2)</recovery_expression>
+                            <name>Interface {#IFNAME}: Ethernet has changed to lower speed than it was before</name>
+                            <opdata>Current reported speed: {ITEM.LASTVALUE1}</opdata>
+                            <priority>INFO</priority>
+                            <description>This Ethernet connection has transitioned down from its known maximum speed. This might be a sign of autonegotiation issues. Acknowledge to close the problem manually.</description>
+                            <manual_close>YES</manual_close>
+                            <dependencies>
+                                <dependency>
+                                    <name>Interface {#IFNAME}: Link down</name>
+                                    <expression>{$IFCONTROL:&quot;{#IFNAME}&quot;}=1 and last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;])=2 and (last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;],#1)&lt;&gt;last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;],#2))</expression>
+                                    <recovery_expression>last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;])&lt;&gt;2 or {$IFCONTROL:&quot;{#IFNAME}&quot;}=0</recovery_expression>
+                                </dependency>
+                            </dependencies>
+                            <tags>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>performance</value>
+                                </tag>
+                            </tags>
+                        </trigger_prototype>
+                        <trigger_prototype>
+                            <expression>(avg(/ATM-001-Addis-Branch/net.if.in[&quot;{#IFNAME}&quot;],15m)&gt;({$IF.UTIL.MAX:&quot;{#IFNAME}&quot;}/100)*last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/speed&quot;]) or
+avg(/ATM-001-Addis-Branch/net.if.out[&quot;{#IFNAME}&quot;],15m)&gt;({$IF.UTIL.MAX:&quot;{#IFNAME}&quot;}/100)*last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/speed&quot;])) and
+last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/speed&quot;])&gt;0</expression>
+                            <recovery_mode>RECOVERY_EXPRESSION</recovery_mode>
+                            <recovery_expression>avg(/ATM-001-Addis-Branch/net.if.in[&quot;{#IFNAME}&quot;],15m)&lt;(({$IF.UTIL.MAX:&quot;{#IFNAME}&quot;}-3)/100)*last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/speed&quot;]) and
+avg(/ATM-001-Addis-Branch/net.if.out[&quot;{#IFNAME}&quot;],15m)&lt;(({$IF.UTIL.MAX:&quot;{#IFNAME}&quot;}-3)/100)*last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/speed&quot;])</recovery_expression>
+                            <name>Interface {#IFNAME}: High bandwidth usage</name>
+                            <event_name>Interface {#IFNAME}: High bandwidth usage (&gt;{$IF.UTIL.MAX:&quot;{#IFNAME}&quot;}%)</event_name>
+                            <opdata>In: {ITEM.LASTVALUE1}, out: {ITEM.LASTVALUE3}, speed: {ITEM.LASTVALUE2}</opdata>
+                            <priority>WARNING</priority>
+                            <description>The utilization of the network interface is close to its estimated maximum bandwidth.</description>
+                            <manual_close>YES</manual_close>
+                            <dependencies>
+                                <dependency>
+                                    <name>Interface {#IFNAME}: Link down</name>
+                                    <expression>{$IFCONTROL:&quot;{#IFNAME}&quot;}=1 and last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;])=2 and (last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;],#1)&lt;&gt;last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;],#2))</expression>
+                                    <recovery_expression>last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;])&lt;&gt;2 or {$IFCONTROL:&quot;{#IFNAME}&quot;}=0</recovery_expression>
+                                </dependency>
+                            </dependencies>
+                            <tags>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>performance</value>
+                                </tag>
+                            </tags>
+                        </trigger_prototype>
+                        <trigger_prototype>
+                            <expression>min(/ATM-001-Addis-Branch/net.if.in[&quot;{#IFNAME}&quot;,errors],5m)&gt;{$IF.ERRORS.WARN:&quot;{#IFNAME}&quot;}
+or min(/ATM-001-Addis-Branch/net.if.out[&quot;{#IFNAME}&quot;,errors],5m)&gt;{$IF.ERRORS.WARN:&quot;{#IFNAME}&quot;}</expression>
+                            <recovery_mode>RECOVERY_EXPRESSION</recovery_mode>
+                            <recovery_expression>max(/ATM-001-Addis-Branch/net.if.in[&quot;{#IFNAME}&quot;,errors],5m)&lt;{$IF.ERRORS.WARN:&quot;{#IFNAME}&quot;}*0.8
+and max(/ATM-001-Addis-Branch/net.if.out[&quot;{#IFNAME}&quot;,errors],5m)&lt;{$IF.ERRORS.WARN:&quot;{#IFNAME}&quot;}*0.8</recovery_expression>
+                            <name>Interface {#IFNAME}: High error rate</name>
+                            <event_name>Interface {#IFNAME}: High error rate (&gt;{$IF.ERRORS.WARN:&quot;{#IFNAME}&quot;} for 5m)</event_name>
+                            <opdata>errors in: {ITEM.LASTVALUE1}, errors out: {ITEM.LASTVALUE2}</opdata>
+                            <priority>WARNING</priority>
+                            <description>It recovers when it is below 80% of the `{$IF.ERRORS.WARN:&quot;{#IFNAME}&quot;}` threshold.</description>
+                            <manual_close>YES</manual_close>
+                            <dependencies>
+                                <dependency>
+                                    <name>Interface {#IFNAME}: Link down</name>
+                                    <expression>{$IFCONTROL:&quot;{#IFNAME}&quot;}=1 and last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;])=2 and (last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;],#1)&lt;&gt;last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;],#2))</expression>
+                                    <recovery_expression>last(/ATM-001-Addis-Branch/vfs.file.contents[&quot;/sys/class/net/{#IFNAME}/operstate&quot;])&lt;&gt;2 or {$IFCONTROL:&quot;{#IFNAME}&quot;}=0</recovery_expression>
+                                </dependency>
+                            </dependencies>
+                            <tags>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>availability</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>performance</value>
+                                </tag>
+                            </tags>
+                        </trigger_prototype>
+                    </trigger_prototypes>
+                    <graph_prototypes>
+                        <graph_prototype>
+                            <name>Interface {#IFNAME}: Network traffic</name>
+                            <graph_items>
+                                <graph_item>
+                                    <drawtype>GRADIENT_LINE</drawtype>
+                                    <color>199C0D</color>
+                                    <item>
+                                        <host>ATM-001-Addis-Branch</host>
+                                        <key>net.if.in[&quot;{#IFNAME}&quot;]</key>
+                                    </item>
+                                </graph_item>
+                                <graph_item>
+                                    <sortorder>1</sortorder>
+                                    <drawtype>BOLD_LINE</drawtype>
+                                    <color>F63100</color>
+                                    <item>
+                                        <host>ATM-001-Addis-Branch</host>
+                                        <key>net.if.out[&quot;{#IFNAME}&quot;]</key>
+                                    </item>
+                                </graph_item>
+                                <graph_item>
+                                    <sortorder>2</sortorder>
+                                    <color>00611C</color>
+                                    <yaxisside>RIGHT</yaxisside>
+                                    <item>
+                                        <host>ATM-001-Addis-Branch</host>
+                                        <key>net.if.out[&quot;{#IFNAME}&quot;,errors]</key>
+                                    </item>
+                                </graph_item>
+                                <graph_item>
+                                    <sortorder>3</sortorder>
+                                    <color>F7941D</color>
+                                    <yaxisside>RIGHT</yaxisside>
+                                    <item>
+                                        <host>ATM-001-Addis-Branch</host>
+                                        <key>net.if.in[&quot;{#IFNAME}&quot;,errors]</key>
+                                    </item>
+                                </graph_item>
+                                <graph_item>
+                                    <sortorder>4</sortorder>
+                                    <color>FC6EA3</color>
+                                    <yaxisside>RIGHT</yaxisside>
+                                    <item>
+                                        <host>ATM-001-Addis-Branch</host>
+                                        <key>net.if.out[&quot;{#IFNAME}&quot;,dropped]</key>
+                                    </item>
+                                </graph_item>
+                                <graph_item>
+                                    <sortorder>5</sortorder>
+                                    <color>6C59DC</color>
+                                    <yaxisside>RIGHT</yaxisside>
+                                    <item>
+                                        <host>ATM-001-Addis-Branch</host>
+                                        <key>net.if.in[&quot;{#IFNAME}&quot;,dropped]</key>
+                                    </item>
+                                </graph_item>
+                            </graph_items>
+                        </graph_prototype>
+                    </graph_prototypes>
+                </discovery_rule>
+                <discovery_rule>
+                    <name>Block devices discovery</name>
+                    <key>vfs.dev.discovery</key>
+                    <delay>1h</delay>
+                    <filter>
+                        <evaltype>AND</evaltype>
+                        <conditions>
+                            <condition>
+                                <macro>{#DEVNAME}</macro>
+                                <value>{$VFS.DEV.DEVNAME.MATCHES}</value>
+                                <formulaid>A</formulaid>
+                            </condition>
+                            <condition>
+                                <macro>{#DEVNAME}</macro>
+                                <value>{$VFS.DEV.DEVNAME.NOT_MATCHES}</value>
+                                <operator>NOT_MATCHES_REGEX</operator>
+                                <formulaid>B</formulaid>
+                            </condition>
+                            <condition>
+                                <macro>{#DEVTYPE}</macro>
+                                <value>disk</value>
+                                <formulaid>C</formulaid>
+                            </condition>
+                        </conditions>
+                    </filter>
+                    <interface_ref>if1</interface_ref>
+                    <item_prototypes>
+                        <item_prototype>
+                            <name>{#DEVNAME}: Disk average queue size (avgqu-sz)</name>
+                            <type>DEPENDENT</type>
+                            <key>vfs.dev.queue_size[{#DEVNAME}]</key>
+                            <delay>0</delay>
+                            <history>7d</history>
+                            <value_type>FLOAT</value_type>
+                            <description>The current average disk queue; the number of requests outstanding on the disk while the performance data is being collected.</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$[10]</parameter>
+                                    </parameters>
+                                </step>
+                                <step>
+                                    <type>CHANGE_PER_SECOND</type>
+                                    <parameters>
+                                        <parameter/>
+                                    </parameters>
+                                </step>
+                                <step>
+                                    <type>MULTIPLIER</type>
+                                    <parameters>
+                                        <parameter>0.001</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>vfs.file.contents[/sys/block/{#DEVNAME}/stat]</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>storage</value>
+                                </tag>
+                                <tag>
+                                    <tag>disk</tag>
+                                    <value>{#DEVNAME}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#DEVNAME}: Disk read request avg waiting time (r_await)</name>
+                            <type>CALCULATED</type>
+                            <key>vfs.dev.read.await[{#DEVNAME}]</key>
+                            <history>7d</history>
+                            <value_type>FLOAT</value_type>
+                            <units>!ms</units>
+                            <params>(last(//vfs.dev.read.time.rate[{#DEVNAME}])/(last(//vfs.dev.read.rate[{#DEVNAME}])+(last(//vfs.dev.read.rate[{#DEVNAME}])=0)))*1000*(last(//vfs.dev.read.rate[{#DEVNAME}]) &gt; 0)</params>
+                            <description>This formula contains two Boolean expressions that evaluate to 1 or 0 in order to set the calculated metric to zero and to avoid the exception - division by zero.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>storage</value>
+                                </tag>
+                                <tag>
+                                    <tag>disk</tag>
+                                    <value>{#DEVNAME}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#DEVNAME}: Disk read rate</name>
+                            <type>DEPENDENT</type>
+                            <key>vfs.dev.read.rate[{#DEVNAME}]</key>
+                            <delay>0</delay>
+                            <history>7d</history>
+                            <value_type>FLOAT</value_type>
+                            <units>!r/s</units>
+                            <description>r/s (read operations per second) - the number (after merges) of read requests completed per second for the device.</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$[0]</parameter>
+                                    </parameters>
+                                </step>
+                                <step>
+                                    <type>CHANGE_PER_SECOND</type>
+                                    <parameters>
+                                        <parameter/>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>vfs.file.contents[/sys/block/{#DEVNAME}/stat]</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>storage</value>
+                                </tag>
+                                <tag>
+                                    <tag>disk</tag>
+                                    <value>{#DEVNAME}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#DEVNAME}: Disk read time (rate)</name>
+                            <type>DEPENDENT</type>
+                            <key>vfs.dev.read.time.rate[{#DEVNAME}]</key>
+                            <delay>0</delay>
+                            <history>7d</history>
+                            <value_type>FLOAT</value_type>
+                            <description>The rate of total read time counter; used in `r_await` calculation.</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$[3]</parameter>
+                                    </parameters>
+                                </step>
+                                <step>
+                                    <type>CHANGE_PER_SECOND</type>
+                                    <parameters>
+                                        <parameter/>
+                                    </parameters>
+                                </step>
+                                <step>
+                                    <type>MULTIPLIER</type>
+                                    <parameters>
+                                        <parameter>0.001</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>vfs.file.contents[/sys/block/{#DEVNAME}/stat]</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>storage</value>
+                                </tag>
+                                <tag>
+                                    <tag>disk</tag>
+                                    <value>{#DEVNAME}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#DEVNAME}: Disk utilization</name>
+                            <type>DEPENDENT</type>
+                            <key>vfs.dev.util[{#DEVNAME}]</key>
+                            <delay>0</delay>
+                            <history>7d</history>
+                            <value_type>FLOAT</value_type>
+                            <units>%</units>
+                            <description>The percentage of elapsed time during which the selected disk drive was busy while servicing read or write requests.</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$[9]</parameter>
+                                    </parameters>
+                                </step>
+                                <step>
+                                    <type>CHANGE_PER_SECOND</type>
+                                    <parameters>
+                                        <parameter/>
+                                    </parameters>
+                                </step>
+                                <step>
+                                    <type>MULTIPLIER</type>
+                                    <parameters>
+                                        <parameter>0.1</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>vfs.file.contents[/sys/block/{#DEVNAME}/stat]</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>storage</value>
+                                </tag>
+                                <tag>
+                                    <tag>disk</tag>
+                                    <value>{#DEVNAME}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#DEVNAME}: Disk write request avg waiting time (w_await)</name>
+                            <type>CALCULATED</type>
+                            <key>vfs.dev.write.await[{#DEVNAME}]</key>
+                            <history>7d</history>
+                            <value_type>FLOAT</value_type>
+                            <units>!ms</units>
+                            <params>(last(//vfs.dev.write.time.rate[{#DEVNAME}])/(last(//vfs.dev.write.rate[{#DEVNAME}])+(last(//vfs.dev.write.rate[{#DEVNAME}])=0)))*1000*(last(//vfs.dev.write.rate[{#DEVNAME}]) &gt; 0)</params>
+                            <description>This formula contains two Boolean expressions that evaluate to 1 or 0 in order to set the calculated metric to zero and to avoid the exception - division by zero.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>storage</value>
+                                </tag>
+                                <tag>
+                                    <tag>disk</tag>
+                                    <value>{#DEVNAME}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#DEVNAME}: Disk write rate</name>
+                            <type>DEPENDENT</type>
+                            <key>vfs.dev.write.rate[{#DEVNAME}]</key>
+                            <delay>0</delay>
+                            <history>7d</history>
+                            <value_type>FLOAT</value_type>
+                            <units>!w/s</units>
+                            <description>w/s (write operations per second) - the number (after merges) of write requests completed per second for the device.</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$[4]</parameter>
+                                    </parameters>
+                                </step>
+                                <step>
+                                    <type>CHANGE_PER_SECOND</type>
+                                    <parameters>
+                                        <parameter/>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>vfs.file.contents[/sys/block/{#DEVNAME}/stat]</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>storage</value>
+                                </tag>
+                                <tag>
+                                    <tag>disk</tag>
+                                    <value>{#DEVNAME}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#DEVNAME}: Disk write time (rate)</name>
+                            <type>DEPENDENT</type>
+                            <key>vfs.dev.write.time.rate[{#DEVNAME}]</key>
+                            <delay>0</delay>
+                            <history>7d</history>
+                            <value_type>FLOAT</value_type>
+                            <description>The rate of total write time counter; used in `w_await` calculation.</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$[7]</parameter>
+                                    </parameters>
+                                </step>
+                                <step>
+                                    <type>CHANGE_PER_SECOND</type>
+                                    <parameters>
+                                        <parameter/>
+                                    </parameters>
+                                </step>
+                                <step>
+                                    <type>MULTIPLIER</type>
+                                    <parameters>
+                                        <parameter>0.001</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>vfs.file.contents[/sys/block/{#DEVNAME}/stat]</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>storage</value>
+                                </tag>
+                                <tag>
+                                    <tag>disk</tag>
+                                    <value>{#DEVNAME}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#DEVNAME}: Get stats</name>
+                            <key>vfs.file.contents[/sys/block/{#DEVNAME}/stat]</key>
+                            <history>0</history>
+                            <value_type>TEXT</value_type>
+                            <trends>0</trends>
+                            <description>The contents of get `/sys/block/{#DEVNAME}/stat` to get the disk statistics.</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JAVASCRIPT</type>
+                                    <parameters>
+                                        <parameter>return JSON.stringify(value.trim().split(/ +/));</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <interface_ref>if1</interface_ref>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>raw</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                    </item_prototypes>
+                    <trigger_prototypes>
+                        <trigger_prototype>
+                            <expression>min(/ATM-001-Addis-Branch/vfs.dev.read.await[{#DEVNAME}],15m) &gt; {$VFS.DEV.READ.AWAIT.WARN:&quot;{#DEVNAME}&quot;} or min(/ATM-001-Addis-Branch/vfs.dev.write.await[{#DEVNAME}],15m) &gt; {$VFS.DEV.WRITE.AWAIT.WARN:&quot;{#DEVNAME}&quot;}</expression>
+                            <name>{#DEVNAME}: Disk read/write request responses are too high</name>
+                            <event_name>{#DEVNAME}: Disk read/write request responses are too high (read &gt; {$VFS.DEV.READ.AWAIT.WARN:&quot;{#DEVNAME}&quot;} ms for 15m or write &gt; {$VFS.DEV.WRITE.AWAIT.WARN:&quot;{#DEVNAME}&quot;} ms for 15m)</event_name>
+                            <priority>WARNING</priority>
+                            <description>This trigger might indicate the disk `{#DEVNAME}` saturation.</description>
+                            <manual_close>YES</manual_close>
+                            <tags>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>performance</value>
+                                </tag>
+                            </tags>
+                        </trigger_prototype>
+                    </trigger_prototypes>
+                    <graph_prototypes>
+                        <graph_prototype>
+                            <name>{#DEVNAME}: Disk average waiting time</name>
+                            <graph_items>
+                                <graph_item>
+                                    <color>199C0D</color>
+                                    <item>
+                                        <host>ATM-001-Addis-Branch</host>
+                                        <key>vfs.dev.read.await[{#DEVNAME}]</key>
+                                    </item>
+                                </graph_item>
+                                <graph_item>
+                                    <sortorder>1</sortorder>
+                                    <drawtype>GRADIENT_LINE</drawtype>
+                                    <color>F63100</color>
+                                    <item>
+                                        <host>ATM-001-Addis-Branch</host>
+                                        <key>vfs.dev.write.await[{#DEVNAME}]</key>
+                                    </item>
+                                </graph_item>
+                            </graph_items>
+                        </graph_prototype>
+                        <graph_prototype>
+                            <name>{#DEVNAME}: Disk read/write rates</name>
+                            <graph_items>
+                                <graph_item>
+                                    <color>199C0D</color>
+                                    <item>
+                                        <host>ATM-001-Addis-Branch</host>
+                                        <key>vfs.dev.read.rate[{#DEVNAME}]</key>
+                                    </item>
+                                </graph_item>
+                                <graph_item>
+                                    <sortorder>1</sortorder>
+                                    <drawtype>GRADIENT_LINE</drawtype>
+                                    <color>F63100</color>
+                                    <item>
+                                        <host>ATM-001-Addis-Branch</host>
+                                        <key>vfs.dev.write.rate[{#DEVNAME}]</key>
+                                    </item>
+                                </graph_item>
+                            </graph_items>
+                        </graph_prototype>
+                        <graph_prototype>
+                            <name>{#DEVNAME}: Disk utilization and queue</name>
+                            <graph_items>
+                                <graph_item>
+                                    <color>199C0D</color>
+                                    <yaxisside>RIGHT</yaxisside>
+                                    <item>
+                                        <host>ATM-001-Addis-Branch</host>
+                                        <key>vfs.dev.queue_size[{#DEVNAME}]</key>
+                                    </item>
+                                </graph_item>
+                                <graph_item>
+                                    <sortorder>1</sortorder>
+                                    <drawtype>GRADIENT_LINE</drawtype>
+                                    <color>F63100</color>
+                                    <item>
+                                        <host>ATM-001-Addis-Branch</host>
+                                        <key>vfs.dev.util[{#DEVNAME}]</key>
+                                    </item>
+                                </graph_item>
+                            </graph_items>
+                        </graph_prototype>
+                    </graph_prototypes>
+                    <preprocessing>
+                        <step>
+                            <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                            <parameters>
+                                <parameter>1h</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                </discovery_rule>
+                <discovery_rule>
+                    <name>Mounted filesystem discovery</name>
+                    <type>DEPENDENT</type>
+                    <key>vfs.fs.dependent.discovery</key>
+                    <delay>0</delay>
+                    <filter>
+                        <evaltype>AND</evaltype>
+                        <conditions>
+                            <condition>
+                                <macro>{#FSNAME}</macro>
+                                <value>{$VFS.FS.FSNAME.MATCHES}</value>
+                                <formulaid>A</formulaid>
+                            </condition>
+                            <condition>
+                                <macro>{#FSNAME}</macro>
+                                <value>{$VFS.FS.FSNAME.NOT_MATCHES}</value>
+                                <operator>NOT_MATCHES_REGEX</operator>
+                                <formulaid>B</formulaid>
+                            </condition>
+                            <condition>
+                                <macro>{#FSTYPE}</macro>
+                                <value>{$VFS.FS.FSTYPE.MATCHES}</value>
+                                <formulaid>C</formulaid>
+                            </condition>
+                            <condition>
+                                <macro>{#FSTYPE}</macro>
+                                <value>{$VFS.FS.FSTYPE.NOT_MATCHES}</value>
+                                <operator>NOT_MATCHES_REGEX</operator>
+                                <formulaid>D</formulaid>
+                            </condition>
+                        </conditions>
+                    </filter>
+                    <description>The discovery of mounted filesystems with different types.</description>
+                    <item_prototypes>
+                        <item_prototype>
+                            <name>FS [{#FSNAME}]: Inodes: Free, in %</name>
+                            <type>DEPENDENT</type>
+                            <key>vfs.fs.dependent.inode[{#FSNAME},pfree]</key>
+                            <delay>0</delay>
+                            <history>7d</history>
+                            <value_type>FLOAT</value_type>
+                            <units>%</units>
+                            <description>Free metadata space expressed in %.</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$.inodes.pfree</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>vfs.fs.dependent[{#FSNAME},data]</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>storage</value>
+                                </tag>
+                                <tag>
+                                    <tag>filesystem</tag>
+                                    <value>{#FSNAME}</value>
+                                </tag>
+                                <tag>
+                                    <tag>fstype</tag>
+                                    <value>{#FSTYPE}</value>
+                                </tag>
+                            </tags>
+                            <trigger_prototypes>
+                                <trigger_prototype>
+                                    <expression>min(/ATM-001-Addis-Branch/vfs.fs.dependent.inode[{#FSNAME},pfree],5m)&lt;{$VFS.FS.INODE.PFREE.MIN.CRIT:&quot;{#FSNAME}&quot;}</expression>
+                                    <name>FS [{#FSNAME}]: Running out of free inodes</name>
+                                    <event_name>{#FSNAME}: Running out of free inodes (free &lt; {$VFS.FS.INODE.PFREE.MIN.CRIT:&quot;{#FSNAME}&quot;}%)</event_name>
+                                    <opdata>Free inodes: {ITEM.LASTVALUE1}</opdata>
+                                    <priority>AVERAGE</priority>
+                                    <description>Disk writing may fail if index nodes are exhausted, leading to error messages like &quot;No space left on device&quot; or &quot;Disk is full&quot;, despite available free space.</description>
+                                    <tags>
+                                        <tag>
+                                            <tag>scope</tag>
+                                            <value>capacity</value>
+                                        </tag>
+                                        <tag>
+                                            <tag>scope</tag>
+                                            <value>performance</value>
+                                        </tag>
+                                    </tags>
+                                </trigger_prototype>
+                                <trigger_prototype>
+                                    <expression>min(/ATM-001-Addis-Branch/vfs.fs.dependent.inode[{#FSNAME},pfree],5m)&lt;{$VFS.FS.INODE.PFREE.MIN.WARN:&quot;{#FSNAME}&quot;}</expression>
+                                    <name>FS [{#FSNAME}]: Running out of free inodes</name>
+                                    <event_name>FS [{#FSNAME}]: Running out of free inodes (free &lt; {$VFS.FS.INODE.PFREE.MIN.WARN:&quot;{#FSNAME}&quot;}%)</event_name>
+                                    <opdata>Free inodes: {ITEM.LASTVALUE1}</opdata>
+                                    <priority>WARNING</priority>
+                                    <description>Disk writing may fail if index nodes are exhausted, leading to error messages like &quot;No space left on device&quot; or &quot;Disk is full&quot;, despite available free space.</description>
+                                    <dependencies>
+                                        <dependency>
+                                            <name>FS [{#FSNAME}]: Running out of free inodes</name>
+                                            <expression>min(/ATM-001-Addis-Branch/vfs.fs.dependent.inode[{#FSNAME},pfree],5m)&lt;{$VFS.FS.INODE.PFREE.MIN.CRIT:&quot;{#FSNAME}&quot;}</expression>
+                                        </dependency>
+                                    </dependencies>
+                                    <tags>
+                                        <tag>
+                                            <tag>scope</tag>
+                                            <value>capacity</value>
+                                        </tag>
+                                        <tag>
+                                            <tag>scope</tag>
+                                            <value>performance</value>
+                                        </tag>
+                                    </tags>
+                                </trigger_prototype>
+                            </trigger_prototypes>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>FS [{#FSNAME}]: Space: Available</name>
+                            <type>DEPENDENT</type>
+                            <key>vfs.fs.dependent.size[{#FSNAME},free]</key>
+                            <delay>0</delay>
+                            <history>7d</history>
+                            <units>B</units>
+                            <description>Available storage space expressed in bytes.</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$.bytes.free</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>vfs.fs.dependent[{#FSNAME},data]</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>storage</value>
+                                </tag>
+                                <tag>
+                                    <tag>filesystem</tag>
+                                    <value>{#FSNAME}</value>
+                                </tag>
+                                <tag>
+                                    <tag>fstype</tag>
+                                    <value>{#FSTYPE}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>FS [{#FSNAME}]: Space: Used, in %</name>
+                            <type>DEPENDENT</type>
+                            <key>vfs.fs.dependent.size[{#FSNAME},pused]</key>
+                            <delay>0</delay>
+                            <history>7d</history>
+                            <value_type>FLOAT</value_type>
+                            <units>%</units>
+                            <description>Calculated as the percentage of currently used space compared to the maximum available space.</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$.bytes.pused</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>vfs.fs.dependent[{#FSNAME},data]</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>storage</value>
+                                </tag>
+                                <tag>
+                                    <tag>filesystem</tag>
+                                    <value>{#FSNAME}</value>
+                                </tag>
+                                <tag>
+                                    <tag>fstype</tag>
+                                    <value>{#FSTYPE}</value>
+                                </tag>
+                            </tags>
+                            <trigger_prototypes>
+                                <trigger_prototype>
+                                    <expression>min(/ATM-001-Addis-Branch/vfs.fs.dependent.size[{#FSNAME},pused],5m)&gt;{$VFS.FS.PUSED.MAX.CRIT:&quot;{#FSNAME}&quot;}</expression>
+                                    <name>FS [{#FSNAME}]: Space is critically low</name>
+                                    <event_name>FS [{#FSNAME}]: Space is critically low (used &gt; {$VFS.FS.PUSED.MAX.CRIT:&quot;{#FSNAME}&quot;}%, total {{?last(//vfs.fs.dependent.size[{#FSNAME},total])/1024/1024/1024}.fmtnum(1)}GB)</event_name>
+                                    <opdata>Space used: {{ITEM.LASTVALUE1}.fmtnum(1)}%</opdata>
+                                    <priority>AVERAGE</priority>
+                                    <description>The volume's space usage exceeds the `{$VFS.FS.PUSED.MAX.CRIT:&quot;{#FSNAME}&quot;}%` limit.
+The trigger expression is based on the current used and maximum available spaces.
+Event name represents the total volume space, which can differ from the maximum available space, depending on the filesystem type.</description>
+                                    <manual_close>YES</manual_close>
+                                    <tags>
+                                        <tag>
+                                            <tag>scope</tag>
+                                            <value>availability</value>
+                                        </tag>
+                                        <tag>
+                                            <tag>scope</tag>
+                                            <value>capacity</value>
+                                        </tag>
+                                    </tags>
+                                </trigger_prototype>
+                                <trigger_prototype>
+                                    <expression>min(/ATM-001-Addis-Branch/vfs.fs.dependent.size[{#FSNAME},pused],5m)&gt;{$VFS.FS.PUSED.MAX.WARN:&quot;{#FSNAME}&quot;}</expression>
+                                    <name>FS [{#FSNAME}]: Space is low</name>
+                                    <event_name>FS [{#FSNAME}]: Space is low (used &gt; {$VFS.FS.PUSED.MAX.WARN:&quot;{#FSNAME}&quot;}%, total {{?last(//vfs.fs.dependent.size[{#FSNAME},total])/1024/1024/1024}.fmtnum(1)}GB)</event_name>
+                                    <opdata>Space used: {{ITEM.LASTVALUE1}.fmtnum(1)}%</opdata>
+                                    <priority>WARNING</priority>
+                                    <description>The volume's space usage exceeds the `{$VFS.FS.PUSED.MAX.WARN:&quot;{#FSNAME}&quot;}%` limit.
+The trigger expression is based on the current used and maximum available spaces.
+Event name represents the total volume space, which can differ from the maximum available space, depending on the filesystem type.</description>
+                                    <manual_close>YES</manual_close>
+                                    <dependencies>
+                                        <dependency>
+                                            <name>FS [{#FSNAME}]: Space is critically low</name>
+                                            <expression>min(/ATM-001-Addis-Branch/vfs.fs.dependent.size[{#FSNAME},pused],5m)&gt;{$VFS.FS.PUSED.MAX.CRIT:&quot;{#FSNAME}&quot;}</expression>
+                                        </dependency>
+                                    </dependencies>
+                                    <tags>
+                                        <tag>
+                                            <tag>scope</tag>
+                                            <value>availability</value>
+                                        </tag>
+                                        <tag>
+                                            <tag>scope</tag>
+                                            <value>capacity</value>
+                                        </tag>
+                                    </tags>
+                                </trigger_prototype>
+                            </trigger_prototypes>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>FS [{#FSNAME}]: Space: Total</name>
+                            <type>DEPENDENT</type>
+                            <key>vfs.fs.dependent.size[{#FSNAME},total]</key>
+                            <delay>0</delay>
+                            <history>7d</history>
+                            <units>B</units>
+                            <description>Total space expressed in bytes.</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$.bytes.total</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>vfs.fs.dependent[{#FSNAME},data]</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>storage</value>
+                                </tag>
+                                <tag>
+                                    <tag>filesystem</tag>
+                                    <value>{#FSNAME}</value>
+                                </tag>
+                                <tag>
+                                    <tag>fstype</tag>
+                                    <value>{#FSTYPE}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>FS [{#FSNAME}]: Space: Used</name>
+                            <type>DEPENDENT</type>
+                            <key>vfs.fs.dependent.size[{#FSNAME},used]</key>
+                            <delay>0</delay>
+                            <history>7d</history>
+                            <units>B</units>
+                            <description>Used storage expressed in bytes.</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$.bytes.used</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>vfs.fs.dependent[{#FSNAME},data]</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>storage</value>
+                                </tag>
+                                <tag>
+                                    <tag>filesystem</tag>
+                                    <value>{#FSNAME}</value>
+                                </tag>
+                                <tag>
+                                    <tag>fstype</tag>
+                                    <value>{#FSTYPE}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>FS [{#FSNAME}]: Get data</name>
+                            <type>DEPENDENT</type>
+                            <key>vfs.fs.dependent[{#FSNAME},data]</key>
+                            <delay>0</delay>
+                            <history>1h</history>
+                            <value_type>TEXT</value_type>
+                            <trends>0</trends>
+                            <description>Intermediate data of `{#FSNAME}` filesystem.</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$.[?(@.fsname=='{#FSNAME}')].first()</parameter>
+                                    </parameters>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>vfs.fs.get</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>raw</value>
+                                </tag>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>storage</value>
+                                </tag>
+                                <tag>
+                                    <tag>filesystem</tag>
+                                    <value>{#FSNAME}</value>
+                                </tag>
+                                <tag>
+                                    <tag>fstype</tag>
+                                    <value>{#FSTYPE}</value>
+                                </tag>
+                            </tags>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>FS [{#FSNAME}]: Option: Read-only</name>
+                            <type>DEPENDENT</type>
+                            <key>vfs.fs.dependent[{#FSNAME},readonly]</key>
+                            <delay>0</delay>
+                            <history>7d</history>
+                            <description>The filesystem is mounted as read-only. It is available only for Zabbix agents 6.4 and higher.</description>
+                            <preprocessing>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <parameters>
+                                        <parameter>$.options</parameter>
+                                    </parameters>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>REGEX</type>
+                                    <parameters>
+                                        <parameter>(?:^|,)ro\b</parameter>
+                                        <parameter>1</parameter>
+                                    </parameters>
+                                    <error_handler>CUSTOM_VALUE</error_handler>
+                                    <error_handler_params>0</error_handler_params>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>vfs.fs.dependent[{#FSNAME},data]</key>
+                            </master_item>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>storage</value>
+                                </tag>
+                                <tag>
+                                    <tag>filesystem</tag>
+                                    <value>{#FSNAME}</value>
+                                </tag>
+                                <tag>
+                                    <tag>fstype</tag>
+                                    <value>{#FSTYPE}</value>
+                                </tag>
+                            </tags>
+                            <trigger_prototypes>
+                                <trigger_prototype>
+                                    <expression>last(/ATM-001-Addis-Branch/vfs.fs.dependent[{#FSNAME},readonly],#2)=0 and last(/ATM-001-Addis-Branch/vfs.fs.dependent[{#FSNAME},readonly])=1</expression>
+                                    <recovery_mode>RECOVERY_EXPRESSION</recovery_mode>
+                                    <recovery_expression>last(/ATM-001-Addis-Branch/vfs.fs.dependent[{#FSNAME},readonly])=0</recovery_expression>
+                                    <name>FS [{#FSNAME}]: Filesystem has become read-only</name>
+                                    <priority>AVERAGE</priority>
+                                    <description>The filesystem has become read-only, possibly due to an I/O error. Available only for Zabbix agents 6.4 and higher.</description>
+                                    <manual_close>YES</manual_close>
+                                    <tags>
+                                        <tag>
+                                            <tag>scope</tag>
+                                            <value>availability</value>
+                                        </tag>
+                                        <tag>
+                                            <tag>scope</tag>
+                                            <value>performance</value>
+                                        </tag>
+                                    </tags>
+                                </trigger_prototype>
+                            </trigger_prototypes>
+                        </item_prototype>
+                    </item_prototypes>
+                    <graph_prototypes>
+                        <graph_prototype>
+                            <name>FS [{#FSTYPE}({#FSNAME})]: Space usage graph, in % (relative to max available)</name>
+                            <width>600</width>
+                            <height>340</height>
+                            <ymin_type_1>FIXED</ymin_type_1>
+                            <ymax_type_1>FIXED</ymax_type_1>
+                            <graph_items>
+                                <graph_item>
+                                    <drawtype>FILLED_REGION</drawtype>
+                                    <color>F63100</color>
+                                    <calc_fnc>LAST</calc_fnc>
+                                    <item>
+                                        <host>ATM-001-Addis-Branch</host>
+                                        <key>vfs.fs.dependent.size[{#FSNAME},pused]</key>
+                                    </item>
+                                </graph_item>
+                            </graph_items>
+                        </graph_prototype>
+                        <graph_prototype>
+                            <name>FS [{#FSTYPE}({#FSNAME})]: Space utilization chart (relative to total)</name>
+                            <width>600</width>
+                            <height>340</height>
+                            <type>PIE</type>
+                            <show_3d>YES</show_3d>
+                            <graph_items>
+                                <graph_item>
+                                    <color>787878</color>
+                                    <calc_fnc>LAST</calc_fnc>
+                                    <type>GRAPH_SUM</type>
+                                    <item>
+                                        <host>ATM-001-Addis-Branch</host>
+                                        <key>vfs.fs.dependent.size[{#FSNAME},total]</key>
+                                    </item>
+                                </graph_item>
+                                <graph_item>
+                                    <sortorder>1</sortorder>
+                                    <color>F63100</color>
+                                    <calc_fnc>LAST</calc_fnc>
+                                    <item>
+                                        <host>ATM-001-Addis-Branch</host>
+                                        <key>vfs.fs.dependent.size[{#FSNAME},used]</key>
+                                    </item>
+                                </graph_item>
+                                <graph_item>
+                                    <sortorder>2</sortorder>
+                                    <color>199C09</color>
+                                    <calc_fnc>LAST</calc_fnc>
+                                    <item>
+                                        <host>ATM-001-Addis-Branch</host>
+                                        <key>vfs.fs.dependent.size[{#FSNAME},free]</key>
+                                    </item>
+                                </graph_item>
+                            </graph_items>
+                        </graph_prototype>
+                    </graph_prototypes>
+                    <master_item>
+                        <key>vfs.fs.get</key>
+                    </master_item>
+                    <lld_macro_paths>
+                        <lld_macro_path>
+                            <lld_macro>{#FSNAME}</lld_macro>
+                            <path>$.fsname</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#FSTYPE}</lld_macro>
+                            <path>$.fstype</path>
+                        </lld_macro_path>
+                    </lld_macro_paths>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <parameters>
+                                <parameter>var filesystems = JSON.parse(value);
+
+result = filesystems.map(function (filesystem) {
+	return {
+		'fsname': filesystem.fsname,
+		'fstype': filesystem.fstype
+	};
+});
+
+return JSON.stringify(result);</parameter>
+                            </parameters>
+                        </step>
+                        <step>
+                            <type>DISCARD_UNCHANGED_HEARTBEAT</type>
+                            <parameters>
+                                <parameter>1h</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                    <overrides>
+                        <override>
+                            <name>Skip metadata collection for dynamic FS</name>
+                            <step>1</step>
+                            <filter>
+                                <conditions>
+                                    <condition>
+                                        <macro>{#FSTYPE}</macro>
+                                        <value>^(btrfs|zfs)$</value>
+                                        <formulaid>A</formulaid>
+                                    </condition>
+                                </conditions>
+                            </filter>
+                            <operations>
+                                <operation>
+                                    <operationobject>ITEM_PROTOTYPE</operationobject>
+                                    <operator>LIKE</operator>
+                                    <value>Inodes</value>
+                                    <discover>NO_DISCOVER</discover>
+                                </operation>
+                            </operations>
+                        </override>
+                    </overrides>
+                </discovery_rule>
+            </discovery_rules>
+            <macros>
+                <macro>
+                    <macro>{$ATM_PORT}</macro>
+                    <value>1161</value>
+                    <description>ATM simulator metrics port</description>
+                </macro>
+            </macros>
+            <inventory_mode>DISABLED</inventory_mode>
+        </host>
+        <host>
+            <host>ATM-002-Bole-Branch</host>
+            <name>ATM-002 | NCR | Bole International Branch</name>
+            <templates>
+                <template>
+                    <name>Dashen Bank ATM Hardware</name>
+                </template>
+            </templates>
+            <groups>
+                <group>
+                    <name>Linux servers</name>
+                </group>
+            </groups>
+            <interfaces>
+                <interface>
+                    <useip>NO</useip>
+                    <ip/>
+                    <dns>host.docker.internal</dns>
+                    <interface_ref>if1</interface_ref>
+                </interface>
+            </interfaces>
+            <items>
+                <item>
+                    <name>Network in</name>
+                    <key>net.if.in[eth0]</key>
+                    <units>bps</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>last(/ATM-002-Bole-Branch/net.if.in[eth0])=0</expression>
+                            <name>Network interface down on {HOST.NAME}</name>
+                            <priority>HIGH</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>CPU load</name>
+                    <key>system.cpu.load[all,avg1]</key>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>avg(/ATM-002-Bole-Branch/system.cpu.load[all,avg1],5m)&gt;80</expression>
+                            <name>CPU overloaded on {HOST.NAME}</name>
+                            <priority>WARNING</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>ATM uptime</name>
+                    <key>system.uptime</key>
+                    <units>uptime</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>nodata(/ATM-002-Bole-Branch/system.uptime,180)=1</expression>
+                            <name>ATM {HOST.NAME} is unreachable</name>
+                            <priority>DISASTER</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Disk free (cash cassette)</name>
+                    <key>vfs.fs.size[/,free]</key>
+                    <delay>5m</delay>
+                    <units>B</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>last(/ATM-002-Bole-Branch/vfs.fs.size[/,free])&lt;5368709120</expression>
+                            <name>Cash level critically low on {HOST.NAME}</name>
+                            <priority>HIGH</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Available memory</name>
+                    <key>vm.memory.size[available]</key>
+                    <units>B</units>
+                    <interface_ref>if1</interface_ref>
+                </item>
+            </items>
+            <macros>
+                <macro>
+                    <macro>{$ATM_PORT}</macro>
+                    <value>1162</value>
+                </macro>
+            </macros>
+            <inventory_mode>DISABLED</inventory_mode>
+        </host>
+        <host>
+            <host>ATM-003-Merkato-Branch</host>
+            <name>ATM-003 | NCR | Merkato Branch</name>
+            <templates>
+                <template>
+                    <name>Dashen Bank ATM Hardware</name>
+                </template>
+            </templates>
+            <groups>
+                <group>
+                    <name>Linux servers</name>
+                </group>
+            </groups>
+            <interfaces>
+                <interface>
+                    <useip>NO</useip>
+                    <ip>172.17.0.1</ip>
+                    <dns>host.docker.internal</dns>
+                    <interface_ref>if1</interface_ref>
+                </interface>
+            </interfaces>
+            <items>
+                <item>
+                    <name>Network in</name>
+                    <key>net.if.in[eth0]</key>
+                    <units>bps</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>last(/ATM-003-Merkato-Branch/net.if.in[eth0])=0</expression>
+                            <name>Network interface down on {HOST.NAME}</name>
+                            <priority>HIGH</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>CPU load</name>
+                    <key>system.cpu.load[all,avg1]</key>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>avg(/ATM-003-Merkato-Branch/system.cpu.load[all,avg1],5m)&gt;80</expression>
+                            <name>CPU overloaded on {HOST.NAME}</name>
+                            <priority>WARNING</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>ATM uptime</name>
+                    <key>system.uptime</key>
+                    <units>uptime</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>nodata(/ATM-003-Merkato-Branch/system.uptime,180)=1</expression>
+                            <name>ATM {HOST.NAME} is unreachable</name>
+                            <priority>DISASTER</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Disk free (cash cassette)</name>
+                    <key>vfs.fs.size[/,free]</key>
+                    <delay>5m</delay>
+                    <units>B</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>last(/ATM-003-Merkato-Branch/vfs.fs.size[/,free])&lt;5368709120</expression>
+                            <name>Cash level critically low on {HOST.NAME}</name>
+                            <priority>HIGH</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Available memory</name>
+                    <key>vm.memory.size[available]</key>
+                    <units>B</units>
+                    <interface_ref>if1</interface_ref>
+                </item>
+            </items>
+            <macros>
+                <macro>
+                    <macro>{$ATM_PORT}</macro>
+                    <value>1163</value>
+                </macro>
+            </macros>
+            <inventory_mode>DISABLED</inventory_mode>
+        </host>
+        <host>
+            <host>ATM-004-Hawassa-Branch</host>
+            <name>ATM-004 | NCR | Hawassa Branch</name>
+            <templates>
+                <template>
+                    <name>Dashen Bank ATM Hardware</name>
+                </template>
+            </templates>
+            <groups>
+                <group>
+                    <name>Linux servers</name>
+                </group>
+            </groups>
+            <interfaces>
+                <interface>
+                    <useip>NO</useip>
+                    <dns>host.docker.internal</dns>
+                    <interface_ref>if1</interface_ref>
+                </interface>
+            </interfaces>
+            <items>
+                <item>
+                    <name>Network in</name>
+                    <key>net.if.in[eth0]</key>
+                    <units>bps</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>last(/ATM-004-Hawassa-Branch/net.if.in[eth0])=0</expression>
+                            <name>Network interface down on {HOST.NAME}</name>
+                            <priority>HIGH</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>CPU load</name>
+                    <key>system.cpu.load[all,avg1]</key>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>avg(/ATM-004-Hawassa-Branch/system.cpu.load[all,avg1],5m)&gt;80</expression>
+                            <name>CPU overloaded on {HOST.NAME}</name>
+                            <priority>WARNING</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>ATM uptime</name>
+                    <key>system.uptime</key>
+                    <units>uptime</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>nodata(/ATM-004-Hawassa-Branch/system.uptime,180)=1</expression>
+                            <name>ATM {HOST.NAME} is unreachable</name>
+                            <priority>DISASTER</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Disk free (cash cassette)</name>
+                    <key>vfs.fs.size[/,free]</key>
+                    <delay>5m</delay>
+                    <units>B</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>last(/ATM-004-Hawassa-Branch/vfs.fs.size[/,free])&lt;5368709120</expression>
+                            <name>Cash level critically low on {HOST.NAME}</name>
+                            <priority>HIGH</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Available memory</name>
+                    <key>vm.memory.size[available]</key>
+                    <units>B</units>
+                    <interface_ref>if1</interface_ref>
+                </item>
+            </items>
+            <macros>
+                <macro>
+                    <macro>{$ATM_PORT}</macro>
+                    <value>1164</value>
+                </macro>
+            </macros>
+            <inventory_mode>DISABLED</inventory_mode>
+        </host>
+        <host>
+            <host>ATM-005-DireDawa-Branch</host>
+            <name>ATM-005 | NCR | Dire Dawa Branch</name>
+            <templates>
+                <template>
+                    <name>Dashen Bank ATM Hardware</name>
+                </template>
+            </templates>
+            <groups>
+                <group>
+                    <name>Linux servers</name>
+                </group>
+            </groups>
+            <interfaces>
+                <interface>
+                    <useip>NO</useip>
+                    <dns>host.docker.internal</dns>
+                    <interface_ref>if1</interface_ref>
+                </interface>
+            </interfaces>
+            <items>
+                <item>
+                    <name>Network in</name>
+                    <key>net.if.in[eth0]</key>
+                    <units>bps</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>last(/ATM-005-DireDawa-Branch/net.if.in[eth0])=0</expression>
+                            <name>Network interface down on {HOST.NAME}</name>
+                            <priority>HIGH</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>CPU load</name>
+                    <key>system.cpu.load[all,avg1]</key>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>avg(/ATM-005-DireDawa-Branch/system.cpu.load[all,avg1],5m)&gt;80</expression>
+                            <name>CPU overloaded on {HOST.NAME}</name>
+                            <priority>WARNING</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>ATM uptime</name>
+                    <key>system.uptime</key>
+                    <units>uptime</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>nodata(/ATM-005-DireDawa-Branch/system.uptime,180)=1</expression>
+                            <name>ATM {HOST.NAME} is unreachable</name>
+                            <priority>DISASTER</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Disk free (cash cassette)</name>
+                    <key>vfs.fs.size[/,free]</key>
+                    <delay>5m</delay>
+                    <units>B</units>
+                    <interface_ref>if1</interface_ref>
+                    <triggers>
+                        <trigger>
+                            <expression>last(/ATM-005-DireDawa-Branch/vfs.fs.size[/,free])&lt;5368709120</expression>
+                            <name>Cash level critically low on {HOST.NAME}</name>
+                            <priority>HIGH</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Available memory</name>
+                    <key>vm.memory.size[available]</key>
+                    <units>B</units>
+                    <interface_ref>if1</interface_ref>
+                </item>
+            </items>
+            <macros>
+                <macro>
+                    <macro>{$ATM_PORT}</macro>
+                    <value>1165</value>
+                </macro>
+            </macros>
+            <inventory_mode>DISABLED</inventory_mode>
+        </host>
+    </hosts>
+    <triggers>
+        <trigger>
+            <expression>last(/ATM-001-Addis-Branch/proc.num)/last(/ATM-001-Addis-Branch/kernel.maxproc)*100&gt;80</expression>
+            <name>Linux: Getting closer to process limit</name>
+            <event_name>Linux: Getting closer to process limit (over 80% used)</event_name>
+            <opdata>{ITEM.LASTVALUE1} active, {ITEM.LASTVALUE2} limit.</opdata>
+            <priority>WARNING</priority>
+            <tags>
+                <tag>
+                    <tag>scope</tag>
+                    <value>performance</value>
+                </tag>
+            </tags>
+        </trigger>
+        <trigger>
+            <expression>max(/ATM-001-Addis-Branch/system.swap.size[,pfree],5m)&lt;{$SWAP.PFREE.MIN.WARN} and last(/ATM-001-Addis-Branch/system.swap.size[,total])&gt;0</expression>
+            <name>Linux: High swap space usage</name>
+            <event_name>Linux: High swap space usage (less than {$SWAP.PFREE.MIN.WARN}% free)</event_name>
+            <opdata>Free: {ITEM.LASTVALUE1}, total: {ITEM.LASTVALUE2}</opdata>
+            <priority>WARNING</priority>
+            <description>If there is no swap configured, this trigger is ignored.</description>
+            <dependencies>
+                <dependency>
+                    <name>Linux: High memory utilization</name>
+                    <expression>min(/ATM-001-Addis-Branch/vm.memory.utilization,5m)&gt;{$MEMORY.UTIL.MAX}</expression>
+                </dependency>
+                <dependency>
+                    <name>Linux: Lack of available memory</name>
+                    <expression>max(/ATM-001-Addis-Branch/vm.memory.size[available],5m)&lt;{$MEMORY.AVAILABLE.MIN} and last(/ATM-001-Addis-Branch/vm.memory.size[total])&gt;0</expression>
+                </dependency>
+            </dependencies>
+            <tags>
+                <tag>
+                    <tag>scope</tag>
+                    <value>capacity</value>
+                </tag>
+            </tags>
+        </trigger>
+        <trigger>
+            <expression>max(/ATM-001-Addis-Branch/vm.memory.size[available],5m)&lt;{$MEMORY.AVAILABLE.MIN} and last(/ATM-001-Addis-Branch/vm.memory.size[total])&gt;0</expression>
+            <name>Linux: Lack of available memory</name>
+            <event_name>Linux: Lack of available memory (&lt;{$MEMORY.AVAILABLE.MIN} of {ITEM.VALUE2})</event_name>
+            <opdata>Available: {ITEM.LASTVALUE1}, total: {ITEM.LASTVALUE2}</opdata>
+            <priority>AVERAGE</priority>
+            <description>The system is running out of memory.</description>
+            <tags>
+                <tag>
+                    <tag>scope</tag>
+                    <value>capacity</value>
+                </tag>
+                <tag>
+                    <tag>scope</tag>
+                    <value>performance</value>
+                </tag>
+            </tags>
+        </trigger>
+        <trigger>
+            <expression>min(/ATM-001-Addis-Branch/system.cpu.load[all,avg1],5m)/last(/ATM-001-Addis-Branch/system.cpu.num)&gt;{$LOAD_AVG_PER_CPU.MAX.WARN}
+and last(/ATM-001-Addis-Branch/system.cpu.load[all,avg5])&gt;0
+and last(/ATM-001-Addis-Branch/system.cpu.load[all,avg15])&gt;0</expression>
+            <name>Linux: Load average is too high</name>
+            <event_name>Linux: Load average is too high (per CPU load over {$LOAD_AVG_PER_CPU.MAX.WARN} for 5m)</event_name>
+            <opdata>Load averages(1m 5m 15m): ({ITEM.LASTVALUE1} {ITEM.LASTVALUE3} {ITEM.LASTVALUE4}), # of CPUs: {ITEM.LASTVALUE2}</opdata>
+            <priority>AVERAGE</priority>
+            <description>The load average per CPU is too high. The system may be slow to respond.</description>
+            <tags>
+                <tag>
+                    <tag>scope</tag>
+                    <value>capacity</value>
+                </tag>
+                <tag>
+                    <tag>scope</tag>
+                    <value>performance</value>
+                </tag>
+            </tags>
+        </trigger>
+    </triggers>
+    <graphs>
+        <graph>
+            <name>Linux: CPU jumps</name>
+            <graph_items>
+                <graph_item>
+                    <color>199C0D</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.cpu.switches</key>
+                    </item>
+                </graph_item>
+                <graph_item>
+                    <sortorder>1</sortorder>
+                    <color>F63100</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.cpu.intr</key>
+                    </item>
+                </graph_item>
+            </graph_items>
+        </graph>
+        <graph>
+            <name>Linux: CPU usage</name>
+            <type>STACKED</type>
+            <ymin_type_1>FIXED</ymin_type_1>
+            <ymax_type_1>FIXED</ymax_type_1>
+            <graph_items>
+                <graph_item>
+                    <color>199C0D</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.cpu.util[,system]</key>
+                    </item>
+                </graph_item>
+                <graph_item>
+                    <sortorder>1</sortorder>
+                    <color>F63100</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.cpu.util[,user]</key>
+                    </item>
+                </graph_item>
+                <graph_item>
+                    <sortorder>2</sortorder>
+                    <color>00611C</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.cpu.util[,nice]</key>
+                    </item>
+                </graph_item>
+                <graph_item>
+                    <sortorder>3</sortorder>
+                    <color>F7941D</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.cpu.util[,iowait]</key>
+                    </item>
+                </graph_item>
+                <graph_item>
+                    <sortorder>4</sortorder>
+                    <color>FC6EA3</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.cpu.util[,steal]</key>
+                    </item>
+                </graph_item>
+                <graph_item>
+                    <sortorder>5</sortorder>
+                    <color>6C59DC</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.cpu.util[,interrupt]</key>
+                    </item>
+                </graph_item>
+                <graph_item>
+                    <sortorder>6</sortorder>
+                    <color>C7A72D</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.cpu.util[,softirq]</key>
+                    </item>
+                </graph_item>
+                <graph_item>
+                    <sortorder>7</sortorder>
+                    <color>BA2A5D</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.cpu.util[,guest]</key>
+                    </item>
+                </graph_item>
+                <graph_item>
+                    <sortorder>8</sortorder>
+                    <color>F230E0</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.cpu.util[,guest_nice]</key>
+                    </item>
+                </graph_item>
+            </graph_items>
+        </graph>
+        <graph>
+            <name>Linux: CPU utilization</name>
+            <ymin_type_1>FIXED</ymin_type_1>
+            <ymax_type_1>FIXED</ymax_type_1>
+            <graph_items>
+                <graph_item>
+                    <drawtype>GRADIENT_LINE</drawtype>
+                    <color>199C0D</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.cpu.util</key>
+                    </item>
+                </graph_item>
+            </graph_items>
+        </graph>
+        <graph>
+            <name>Linux: Memory usage</name>
+            <ymin_type_1>FIXED</ymin_type_1>
+            <graph_items>
+                <graph_item>
+                    <drawtype>BOLD_LINE</drawtype>
+                    <color>199C0D</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>vm.memory.size[total]</key>
+                    </item>
+                </graph_item>
+                <graph_item>
+                    <sortorder>1</sortorder>
+                    <drawtype>GRADIENT_LINE</drawtype>
+                    <color>F63100</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>vm.memory.size[available]</key>
+                    </item>
+                </graph_item>
+            </graph_items>
+        </graph>
+        <graph>
+            <name>Linux: Memory utilization</name>
+            <ymin_type_1>FIXED</ymin_type_1>
+            <ymax_type_1>FIXED</ymax_type_1>
+            <graph_items>
+                <graph_item>
+                    <drawtype>GRADIENT_LINE</drawtype>
+                    <color>199C0D</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>vm.memory.utilization</key>
+                    </item>
+                </graph_item>
+            </graph_items>
+        </graph>
+        <graph>
+            <name>Linux: Processes</name>
+            <graph_items>
+                <graph_item>
+                    <color>199C0D</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>proc.num</key>
+                    </item>
+                </graph_item>
+                <graph_item>
+                    <sortorder>1</sortorder>
+                    <color>F63100</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>proc.num[,,run]</key>
+                    </item>
+                </graph_item>
+            </graph_items>
+        </graph>
+        <graph>
+            <name>Linux: Swap usage</name>
+            <graph_items>
+                <graph_item>
+                    <color>199C0D</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.swap.size[,free]</key>
+                    </item>
+                </graph_item>
+                <graph_item>
+                    <sortorder>1</sortorder>
+                    <color>F63100</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.swap.size[,total]</key>
+                    </item>
+                </graph_item>
+            </graph_items>
+        </graph>
+        <graph>
+            <name>Linux: System load</name>
+            <ymin_type_1>FIXED</ymin_type_1>
+            <graph_items>
+                <graph_item>
+                    <color>199C0D</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.cpu.load[all,avg1]</key>
+                    </item>
+                </graph_item>
+                <graph_item>
+                    <sortorder>1</sortorder>
+                    <color>F63100</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.cpu.load[all,avg5]</key>
+                    </item>
+                </graph_item>
+                <graph_item>
+                    <sortorder>2</sortorder>
+                    <color>00611C</color>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.cpu.load[all,avg15]</key>
+                    </item>
+                </graph_item>
+                <graph_item>
+                    <sortorder>3</sortorder>
+                    <color>F7941D</color>
+                    <yaxisside>RIGHT</yaxisside>
+                    <item>
+                        <host>ATM-001-Addis-Branch</host>
+                        <key>system.cpu.num</key>
+                    </item>
+                </graph_item>
+            </graph_items>
+        </graph>
+    </graphs>
+</zabbix_export>

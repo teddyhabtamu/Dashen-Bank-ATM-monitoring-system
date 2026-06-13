@@ -1,0 +1,918 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 1,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "alexanderzobnin-zabbix-datasource",
+        "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 7,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<style>\n  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap');\n\n  * { margin: 0; padding: 0; box-sizing: border-box; }\n\n  body {\n    background: transparent;\n    font-family: 'Source Sans 3', sans-serif;\n    overflow: hidden;\n  }\n\n  .header {\n    width: 100%;\n    height: 72px;\n    background: linear-gradient(135deg, #0a1628 0%, #0d2144 40%, #0a1f3d 70%, #061020 100%);\n    display: flex;\n    align-items: center;\n    justify-content: space-between;\n    padding: 0 20px;\n    position: relative;\n    overflow: hidden;\n    border-bottom: 1px solid rgba(0, 180, 120, 0.25);\n  }\n\n  .header::before {\n    content: '';\n    position: absolute;\n    inset: 0;\n    background-image:\n      linear-gradient(rgba(0,180,120,0.04) 1px, transparent 1px),\n      linear-gradient(90deg, rgba(0,180,120,0.04) 1px, transparent 1px);\n    background-size: 32px 32px;\n    animation: gridShift 20s linear infinite;\n  }\n\n  @keyframes gridShift {\n    0% { background-position: 0 0; }\n    100% { background-position: 32px 32px; }\n  }\n\n  .header::after {\n    content: '';\n    position: absolute;\n    top: 0; left: 0; right: 0;\n    height: 2px;\n    background: linear-gradient(90deg, transparent, #00c878, #00e8a0, #00c878, transparent);\n    animation: glowSweep 4s ease-in-out infinite;\n  }\n\n  @keyframes glowSweep {\n    0%, 100% { opacity: 0.6; }\n    50% { opacity: 1; }\n  }\n\n  /* ── LEFT ── */\n  .left {\n    display: flex;\n    align-items: center;\n    gap: 10px;\n    z-index: 1;\n    flex-shrink: 0;\n  }\n\n  .logo-wrap {\n    width: 40px;\n    height: 40px;\n    border-radius: 8px;\n    background: rgba(255,255,255,0.06);\n    border: 1px solid rgba(0,200,120,0.2);\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    overflow: hidden;\n    flex-shrink: 0;\n  }\n\n  .logo-wrap img {\n    width: 30px;\n    height: 30px;\n    object-fit: contain;\n  }\n\n  .bank-name { display: flex; flex-direction: column; gap: 1px; }\n\n  .bank-name .name {\n    font-family: 'Rajdhani', sans-serif;\n    font-size: 16px;\n    font-weight: 700;\n    color: #ffffff;\n    letter-spacing: 0.08em;\n    text-transform: uppercase;\n    line-height: 1;\n    white-space: nowrap;\n  }\n\n  .bank-name .sub {\n    font-size: 9px;\n    font-weight: 300;\n    color: rgba(255,255,255,0.4);\n    letter-spacing: 0.18em;\n    text-transform: uppercase;\n    white-space: nowrap;\n  }\n\n  /* ── CENTER ── */\n  .center {\n    position: absolute;\n    left: 50%;\n    transform: translateX(-50%);\n    display: flex;\n    flex-direction: column;\n    align-items: center;\n    gap: 3px;\n    z-index: 1;\n    pointer-events: none;\n  }\n\n  .dash-title {\n    font-family: 'Rajdhani', sans-serif;\n    font-weight: 700;\n    color: #ffffff;\n    letter-spacing: 0.1em;\n    text-transform: uppercase;\n    text-shadow: 0 0 30px rgba(0, 200, 120, 0.4);\n    white-space: nowrap;\n    font-size: clamp(13px, 2.2vw, 22px);\n  }\n\n  .dash-subtitle {\n    display: flex;\n    align-items: center;\n    gap: 6px;\n  }\n\n  .dash-subtitle .dot {\n    width: 6px;\n    height: 6px;\n    border-radius: 50%;\n    background: #00e090;\n    animation: pulse 2s ease-in-out infinite;\n    flex-shrink: 0;\n  }\n\n  @keyframes pulse {\n    0%, 100% { box-shadow: 0 0 0 0 rgba(0, 224, 144, 0.6); opacity: 1; }\n    50% { box-shadow: 0 0 0 5px rgba(0, 224, 144, 0); opacity: 0.8; }\n  }\n\n  .dash-subtitle span {\n    font-size: clamp(8px, 1.1vw, 10px);\n    font-weight: 600;\n    color: #00e090;\n    letter-spacing: 0.2em;\n    text-transform: uppercase;\n    white-space: nowrap;\n  }\n\n  /* ── RIGHT ── */\n  .right {\n    display: flex;\n    align-items: center;\n    gap: 16px;\n    z-index: 1;\n    flex-shrink: 0;\n  }\n\n  .stat {\n    display: flex;\n    flex-direction: column;\n    align-items: flex-end;\n    gap: 1px;\n  }\n\n  .stat .label {\n    font-size: 8px;\n    font-weight: 600;\n    color: rgba(255,255,255,0.35);\n    letter-spacing: 0.15em;\n    text-transform: uppercase;\n    white-space: nowrap;\n  }\n\n  .stat .value {\n    font-family: 'Rajdhani', sans-serif;\n    font-size: 14px;\n    font-weight: 600;\n    color: #00e090;\n    letter-spacing: 0.04em;\n    white-space: nowrap;\n  }\n\n  .divider {\n    width: 1px;\n    height: 26px;\n    background: rgba(255,255,255,0.1);\n    flex-shrink: 0;\n  }\n\n  #clock {\n    font-family: 'Rajdhani', sans-serif;\n    font-size: 14px;\n    font-weight: 600;\n    color: rgba(255,255,255,0.7);\n    letter-spacing: 0.04em;\n  }\n\n  /* ── GENERATE REPORT BUTTON ── */\n  .generate-report-btn {\n    display: inline-flex;\n    align-items: center;\n    gap: 8px;\n    padding: 8px 16px;\n    border: none;\n    border-radius: 6px;\n    background: linear-gradient(135deg, #2563eb, #1d4ed8);\n    color: #ffffff;\n    font-size: 12.5px;\n    font-weight: 600;\n    font-family: inherit;\n    cursor: pointer;\n    transition: all 0.2s ease;\n    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);\n    white-space: nowrap;\n  }\n\n  .generate-report-btn:hover {\n    transform: translateY(-1px);\n    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);\n    background: linear-gradient(135deg, #3b82f6, #1d4ed8);\n  }\n\n  .generate-report-btn:active {\n    transform: translateY(0);\n  }\n\n  .generate-report-btn svg {\n    flex-shrink: 0;\n  }\n\n  /* Corner accents */\n  .corner { position: absolute; width: 14px; height: 14px; z-index: 2; }\n  .corner.tl { top: 5px; left: 5px; border-top: 1.5px solid rgba(0,200,120,0.5); border-left: 1.5px solid rgba(0,200,120,0.5); }\n  .corner.tr { top: 5px; right: 5px; border-top: 1.5px solid rgba(0,200,120,0.5); border-right: 1.5px solid rgba(0,200,120,0.5); }\n  .corner.bl { bottom: 5px; left: 5px; border-bottom: 1.5px solid rgba(0,200,120,0.5); border-left: 1.5px solid rgba(0,200,120,0.5); }\n  .corner.br { bottom: 5px; right: 5px; border-bottom: 1.5px solid rgba(0,200,120,0.5); border-right: 1.5px solid rgba(0,200,120,0.5); }\n\n  /* ── RESPONSIVE BREAKPOINTS ── */\n\n  /* Tablet: shrink button and hide one stat */\n  @media (max-width: 820px) {\n    .header { padding: 0 14px; }\n    .bank-name .sub { display: none; }\n    .stat:first-child { display: none; }\n    .divider { display: none; }\n    .logo-wrap { width: 36px; height: 36px; }\n    .logo-wrap img { width: 26px; height: 26px; }\n  }\n\n  /* Mobile: dynamic spacing adjustments */\n  @media (max-width: 600px) {\n    .generate-report-btn span { display: none; } /* Only display icon to preserve room */\n    .generate-report-btn { padding: 8px 10px; }\n  }\n\n  @media (max-width: 480px) {\n    .header {\n      height: auto;\n      min-height: 65px;\n      flex-wrap: wrap;\n      padding: 8px 12px;\n      gap: 4px;\n    }\n\n    .center {\n      position: static;\n      transform: none;\n      order: 3;\n      width: 100%;\n      align-items: flex-start;\n      padding: 4px 0 2px;\n      border-top: 1px solid rgba(0,200,120,0.1);\n      margin-top: 4px;\n      gap: 2px;\n    }\n\n    .dash-title { font-size: 13px; letter-spacing: 0.06em; }\n    .dash-subtitle span { font-size: 8px; }\n\n    .bank-name .name { font-size: 13px; }\n    .logo-wrap { width: 32px; height: 32px; }\n    .logo-wrap img { width: 22px; height: 22px; }\n\n    .right { gap: 10px; }\n    #clock { font-size: 13px; }\n    .stat .label { display: none; }\n    .generate-report-btn span { display: inline; } /* Bring back text inside stacked configuration */\n    .generate-report-btn { padding: 6px 12px; font-size: 11px; }\n\n    .corner { display: none; }\n  }\n\n  /* Very small viewports */\n  @media (max-width: 360px) {\n    .dash-subtitle span { display: none; }\n    .right .stat { display: none; }\n  }\n</style>\n</head>\n<body>\n<div class=\"header\">\n  <div class=\"corner tl\"></div>\n  <div class=\"corner tr\"></div>\n  <div class=\"corner bl\"></div>\n  <div class=\"corner br\"></div>\n\n  <div class=\"left\">\n    <div class=\"logo-wrap\">\n      <img src=\"https://cdn.brandfetch.io/idNZ7JoLsG/w/150/h/149/theme/dark/logo.png?c=1dxbfHSJFAPEGdCLU4o5B\" alt=\"Dashen Bank\" onerror=\"this.style.display='none'\">\n    </div>\n    <div class=\"bank-name\">\n      <span class=\"name\">Dashen Bank</span>\n      <span class=\"sub\">S.C. — Est. 1995</span>\n    </div>\n  </div>\n\n  <div class=\"center\">\n    <div class=\"dash-title\">ATM Health Monitoring</div>\n    <div class=\"dash-subtitle\">\n      <span class=\"dot\"></span>\n      <span>Live System Status</span>\n    </div>\n  </div>\n\n  <div class=\"right\">\n    <button onclick=\"window.open('http://' + window.location.hostname + ':8888', '_blank')\" class=\"generate-report-btn\">\n      <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\">\n        <path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path>\n        <path d=\"M14 2v6h6\"></path>\n        <path d=\"M16 13H8\"></path>\n        <path d=\"M16 17H8\"></path>\n        <path d=\"M10 9H8\"></path>\n      </svg>\n      <span>Generate Report</span>\n    </button>\n\n    <div class=\"divider\"></div>\n\n    <div class=\"stat\">\n      <span class=\"label\">ATMs Online</span>\n      <span class=\"value\">5 / 5</span>\n    </div>\n    \n    <div class=\"divider\"></div>\n    \n    <div class=\"stat\">\n      <span class=\"label\">Local Time</span>\n      <span class=\"value\" id=\"clock\">--:--:--</span>\n    </div>\n  </div>\n</div>\n\n<script>\n  function updateClock() {\n    const now = new Date();\n    document.getElementById('clock').textContent =\n      now.toLocaleTimeString('en-ET', { hour12: false });\n  }\n  updateClock();\n  setInterval(updateClock, 1000);\n</script>\n</body>\n</html>",
+        "mode": "html"
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "application": {
+            "filter": ""
+          },
+          "countTriggersBy": "",
+          "datasource": {
+            "type": "alexanderzobnin-zabbix-datasource",
+            "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+          },
+          "evaltype": "0",
+          "functions": [],
+          "group": {
+            "filter": ""
+          },
+          "host": {
+            "filter": ""
+          },
+          "item": {
+            "filter": ""
+          },
+          "itemTag": {
+            "filter": ""
+          },
+          "macro": {
+            "filter": ""
+          },
+          "options": {
+            "count": false,
+            "disableDataAlignment": false,
+            "showDisabledItems": false,
+            "skipEmptyValues": false,
+            "useTrends": "default",
+            "useZabbixValueMapping": false
+          },
+          "proxy": {
+            "filter": ""
+          },
+          "queryType": "0",
+          "refId": "A",
+          "resultFormat": "time_series",
+          "schema": 12,
+          "table": {
+            "skipEmptyValues": false
+          },
+          "tags": {
+            "filter": ""
+          },
+          "textFilter": "",
+          "trigger": {
+            "filter": ""
+          }
+        }
+      ],
+      "type": "text"
+    },
+    {
+      "datasource": {
+        "type": "alexanderzobnin-zabbix-datasource",
+        "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 3
+      },
+      "id": 1,
+      "options": {
+        "ackEventColor": "rgb(56, 219, 156)",
+        "ackField": true,
+        "ageField": false,
+        "allowDangerousHTML": false,
+        "customLastChangeFormat": false,
+        "descriptionAtNewLine": false,
+        "descriptionField": true,
+        "fontSize": "100%",
+        "highlightBackground": false,
+        "highlightNewEvents": false,
+        "highlightNewerThan": "1h",
+        "hostField": true,
+        "hostGroups": false,
+        "hostProxy": false,
+        "hostTechNameField": false,
+        "lastChangeFormat": "",
+        "layout": "table",
+        "markAckEvents": false,
+        "okEventColor": "rgb(56, 189, 113)",
+        "opdataField": false,
+        "pageSize": 10,
+        "problemTimeline": true,
+        "severityField": true,
+        "showTags": true,
+        "sortProblems": "lastchange",
+        "statusField": true,
+        "statusIcon": false,
+        "triggerSeverity": [
+          {
+            "color": "rgb(108, 108, 108)",
+            "priority": 0,
+            "severity": "Not classified",
+            "show": true
+          },
+          {
+            "color": "rgb(120, 158, 183)",
+            "priority": 1,
+            "severity": "Information",
+            "show": true
+          },
+          {
+            "color": "rgb(175, 180, 36)",
+            "priority": 2,
+            "severity": "Warning",
+            "show": true
+          },
+          {
+            "color": "rgb(255, 137, 30)",
+            "priority": 3,
+            "severity": "Average",
+            "show": true
+          },
+          {
+            "color": "rgb(255, 101, 72)",
+            "priority": 4,
+            "severity": "High",
+            "show": true
+          },
+          {
+            "color": "rgb(215, 0, 0)",
+            "priority": 5,
+            "severity": "Disaster",
+            "show": true
+          }
+        ]
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "application": {
+            "filter": ""
+          },
+          "countTriggersBy": "",
+          "datasource": {
+            "type": "alexanderzobnin-zabbix-datasource",
+            "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+          },
+          "evaltype": "0",
+          "functions": [],
+          "group": {
+            "filter": "Linux servers"
+          },
+          "host": {
+            "filter": "/.*/"
+          },
+          "item": {
+            "filter": ""
+          },
+          "itemTag": {
+            "filter": ""
+          },
+          "macro": {
+            "filter": ""
+          },
+          "options": {
+            "acknowledged": 2,
+            "count": false,
+            "disableDataAlignment": false,
+            "hostProxy": false,
+            "hostsInMaintenance": false,
+            "limit": 1001,
+            "minSeverity": 0,
+            "showDisabledItems": false,
+            "skipEmptyValues": false,
+            "sortProblems": "default",
+            "useTimeRange": false,
+            "useTrends": "default",
+            "useZabbixValueMapping": false
+          },
+          "proxy": {
+            "filter": ""
+          },
+          "queryType": "5",
+          "refId": "A",
+          "resultFormat": "time_series",
+          "schema": 12,
+          "showProblems": "problems",
+          "table": {
+            "skipEmptyValues": false
+          },
+          "tags": {
+            "filter": ""
+          },
+          "textFilter": "",
+          "trigger": {
+            "filter": ""
+          }
+        }
+      ],
+      "title": "ATM Status Overview",
+      "type": "alexanderzobnin-zabbix-triggers-panel"
+    },
+    {
+      "datasource": {
+        "type": "alexanderzobnin-zabbix-datasource",
+        "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "#EAB839",
+                "value": 500000000
+              },
+              {
+                "color": "green",
+                "value": 1000000000
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "id": 4,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "application": {
+            "filter": ""
+          },
+          "countTriggersBy": "",
+          "datasource": {
+            "type": "alexanderzobnin-zabbix-datasource",
+            "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+          },
+          "evaltype": "0",
+          "functions": [],
+          "group": {
+            "filter": "Linux servers"
+          },
+          "host": {
+            "filter": "/.*/"
+          },
+          "item": {
+            "filter": "Available memory"
+          },
+          "itemTag": {
+            "filter": ""
+          },
+          "macro": {
+            "filter": ""
+          },
+          "options": {
+            "count": false,
+            "disableDataAlignment": false,
+            "showDisabledItems": false,
+            "skipEmptyValues": false,
+            "useTrends": "default",
+            "useZabbixValueMapping": false
+          },
+          "proxy": {
+            "filter": ""
+          },
+          "queryType": "0",
+          "refId": "A",
+          "resultFormat": "time_series",
+          "schema": 12,
+          "table": {
+            "skipEmptyValues": false
+          },
+          "tags": {
+            "filter": ""
+          },
+          "textFilter": "",
+          "trigger": {
+            "filter": ""
+          }
+        }
+      ],
+      "title": "Memory Available — ATM-001",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "alexanderzobnin-zabbix-datasource",
+        "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "application": {
+            "filter": ""
+          },
+          "countTriggersBy": "",
+          "datasource": {
+            "type": "alexanderzobnin-zabbix-datasource",
+            "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+          },
+          "evaltype": "0",
+          "functions": [],
+          "group": {
+            "filter": "Linux servers"
+          },
+          "host": {
+            "filter": "/.*/"
+          },
+          "item": {
+            "filter": "ATM uptime"
+          },
+          "itemTag": {
+            "filter": ""
+          },
+          "macro": {
+            "filter": ""
+          },
+          "options": {
+            "count": false,
+            "disableDataAlignment": false,
+            "showDisabledItems": false,
+            "skipEmptyValues": false,
+            "useTrends": "default",
+            "useZabbixValueMapping": false
+          },
+          "proxy": {
+            "filter": ""
+          },
+          "queryType": "0",
+          "refId": "A",
+          "resultFormat": "time_series",
+          "schema": 12,
+          "table": {
+            "skipEmptyValues": false
+          },
+          "tags": {
+            "filter": ""
+          },
+          "textFilter": "",
+          "trigger": {
+            "filter": ""
+          }
+        }
+      ],
+      "title": "ATMs Uptime",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "alexanderzobnin-zabbix-datasource",
+        "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "application": {
+            "filter": ""
+          },
+          "countTriggersBy": "",
+          "datasource": {
+            "type": "alexanderzobnin-zabbix-datasource",
+            "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+          },
+          "evaltype": "0",
+          "functions": [],
+          "group": {
+            "filter": "Linux servers"
+          },
+          "host": {
+            "filter": "/.*/"
+          },
+          "item": {
+            "filter": "CPU load"
+          },
+          "itemTag": {
+            "filter": ""
+          },
+          "macro": {
+            "filter": ""
+          },
+          "options": {
+            "count": false,
+            "disableDataAlignment": false,
+            "showDisabledItems": false,
+            "skipEmptyValues": false,
+            "useTrends": "default",
+            "useZabbixValueMapping": false
+          },
+          "proxy": {
+            "filter": ""
+          },
+          "queryType": "0",
+          "refId": "A",
+          "resultFormat": "time_series",
+          "schema": 12,
+          "table": {
+            "skipEmptyValues": false
+          },
+          "tags": {
+            "filter": ""
+          },
+          "textFilter": "",
+          "trigger": {
+            "filter": ""
+          }
+        }
+      ],
+      "title": "CPU Load — ATM-001",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "alexanderzobnin-zabbix-datasource",
+        "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": 107374182400,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 10737418240
+              },
+              {
+                "color": "green",
+                "value": 32212254720
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "id": 5,
+      "options": {
+        "displayMode": "lcd",
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "application": {
+            "filter": ""
+          },
+          "countTriggersBy": "",
+          "datasource": {
+            "type": "alexanderzobnin-zabbix-datasource",
+            "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+          },
+          "evaltype": "0",
+          "functions": [],
+          "group": {
+            "filter": "Linux servers"
+          },
+          "host": {
+            "filter": "/.*/"
+          },
+          "item": {
+            "filter": "Disk free (cash cassette)"
+          },
+          "itemTag": {
+            "filter": ""
+          },
+          "macro": {
+            "filter": ""
+          },
+          "options": {
+            "count": false,
+            "disableDataAlignment": false,
+            "showDisabledItems": false,
+            "skipEmptyValues": false,
+            "useTrends": "default",
+            "useZabbixValueMapping": false
+          },
+          "proxy": {
+            "filter": ""
+          },
+          "queryType": "0",
+          "refId": "A",
+          "resultFormat": "time_series",
+          "schema": 12,
+          "table": {
+            "skipEmptyValues": false
+          },
+          "tags": {
+            "filter": ""
+          },
+          "textFilter": "",
+          "trigger": {
+            "filter": ""
+          }
+        }
+      ],
+      "title": "Cash Level — ATM-001",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "alexanderzobnin-zabbix-datasource",
+        "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "application": {
+            "filter": ""
+          },
+          "countTriggersBy": "",
+          "datasource": {
+            "type": "alexanderzobnin-zabbix-datasource",
+            "uid": "a6a71b9c-9ab4-4a2d-9185-b00adc24dc3c"
+          },
+          "evaltype": "0",
+          "functions": [],
+          "group": {
+            "filter": "Linux servers"
+          },
+          "host": {
+            "filter": "/.*/"
+          },
+          "item": {
+            "filter": "Network in"
+          },
+          "itemTag": {
+            "filter": ""
+          },
+          "macro": {
+            "filter": ""
+          },
+          "options": {
+            "count": false,
+            "disableDataAlignment": false,
+            "showDisabledItems": false,
+            "skipEmptyValues": false,
+            "useTrends": "default",
+            "useZabbixValueMapping": false
+          },
+          "proxy": {
+            "filter": ""
+          },
+          "queryType": "0",
+          "refId": "A",
+          "resultFormat": "time_series",
+          "schema": 12,
+          "table": {
+            "skipEmptyValues": false
+          },
+          "tags": {
+            "filter": ""
+          },
+          "textFilter": "",
+          "trigger": {
+            "filter": ""
+          }
+        }
+      ],
+      "title": "ATM Network",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "ATM Monitoring — Dashen Bank",
+  "uid": "dfd9042c-7754-400b-88df-556e2b0c6e9f",
+  "version": 18,
+  "weekStart": ""
+}

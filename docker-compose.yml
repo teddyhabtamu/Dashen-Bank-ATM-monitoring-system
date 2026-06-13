@@ -77,6 +77,8 @@ services:
       - ./index.html:/usr/share/grafana/public/views/index.html:ro
       - ./logo.png:/usr/share/grafana/public/img/dashen-logo.png:ro
       - ./entrypoint.sh:/entrypoint.sh:ro
+      - ./config/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
     entrypoint: ["sh", "/entrypoint.sh"]
     depends_on:
       - zabbix-web
@@ -199,6 +201,16 @@ services:
       - "9876:9876"
     depends_on:
       - postgres
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@dashenbank.com
+      PGADMIN_DEFAULT_PASSWORD: dashen2024
+    ports:
+      - "5050:80"
     restart: unless-stopped
 
   # ───  Anomaly Detector ────────────────────────────────

@@ -165,6 +165,52 @@ def csv_send(headers, rows, name, title='', days=0, atm='all'):
 
 # ─── PDF HELPERS ───────────────────────────────────────────────────────────────
 
+def _pdf_kpi_block(story, kpis):
+    """Append a KPI summary card section to the story."""
+    P = lambda txt, **kw: Paragraph(txt, ParagraphStyle('kpi', **kw))
+
+    story.append(Spacer(1, 0.5 * cm))
+    story.append(P('<font color="#0F2557" size="13"><b>Performance Summary</b></font>',
+                    spaceBefore=4, spaceAfter=12))
+
+    ncols = min(len(kpis), 4)
+    page_w = landscape(A4)[0] - 3 * cm
+    cw = page_w / ncols
+
+    labels_row = []
+    values_row = []
+    for label, value in kpis:
+        labels_row.append(
+            P(f'<font size="8" color="#64748B">{label}</font>', alignment=TA_CENTER))
+        values_row.append(
+            P(f'<font size="20" color="#0F2557"><b>{value}</b></font>', alignment=TA_CENTER))
+
+    while len(labels_row) < ncols:
+        labels_row.append(P(''))
+        values_row.append(P(''))
+
+    t = Table([labels_row, values_row], colWidths=[cw] * ncols)
+    accent_colors = ['#0F2557', '#059669', '#D97706', '#DC2626']
+    style_cmds = [
+        ('ALIGN',       (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN',      (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTNAME',    (0, 0), (-1,  0), 'Helvetica'),
+        ('FONTNAME',    (0, 1), (-1,  1), 'Helvetica-Bold'),
+        ('GRID',        (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+        ('BACKGROUND',  (0, 0), (-1, -1), colors.white),
+        ('TOPPADDING',  (0, 0), (-1,  0), 14),
+        ('BOTTOMPADDING', (0, 0), (-1,  0), 6),
+        ('TOPPADDING',  (0, 1), (-1,  1), 6),
+        ('BOTTOMPADDING', (0, 1), (-1,  1), 14),
+    ]
+    for i in range(ncols):
+        style_cmds.append(
+            ('LINEABOVE', (i, 0), (i, 1), 3, colors.HexColor(accent_colors[i % 4])))
+    t.setStyle(TableStyle(style_cmds))
+    story.append(t)
+    story.append(Spacer(1, 1 * cm))
+
+
 def _pdf_header_block(story, title, days, atm):
     """Shared PDF header: logo + title + gold rule."""
     P = lambda txt, **kw: Paragraph(txt, ParagraphStyle('_h', **kw))
@@ -186,8 +232,8 @@ def _pdf_header_block(story, title, days, atm):
     ]
 
 
-def pdf_send(title, headers, rows, days, atm, name):
-    """Generate a single-section branded PDF report."""
+def pdf_send(title, headers, rows, days, atm, name, kpis=None):
+    """Generate a single-section branded PDF report with optional KPI summary page."""
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
                             rightMargin=1.5 * cm, leftMargin=1.5 * cm,
@@ -196,6 +242,13 @@ def pdf_send(title, headers, rows, days, atm, name):
 
     story = []
     _pdf_header_block(story, title, days, atm)
+
+    if kpis:
+        _pdf_kpi_block(story, kpis)
+        story.append(PageBreak())
+        # Re-use same header on the data page
+        _pdf_header_block(story, title, days, atm)
+
     story.append(mktable(headers, rows))
     story.append(Spacer(1, 0.5 * cm))
     story.append(P(

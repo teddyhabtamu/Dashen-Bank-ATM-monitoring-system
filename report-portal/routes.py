@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, send_file
 import openpyxl, io, os, csv
+from collections import Counter
 from db import get_db
 from helpers import (xl_header, xl_style_row, xl_style_data_rows, xl_autosize,
                      xl_send, xl_build_sheet, xl_append_section, csv_send, pdf_send, mktable,
@@ -85,7 +86,19 @@ def report_transaction(fmt):
         xl_build_sheet(wb, 'Transactions', title, days, atm, headers, rows)
         return xl_send(wb, 'Transactions')
     elif fmt == 'pdf':
-        return pdf_send(title, headers, rows, days, atm, 'Transactions')
+        total = sum(r[2] for r in rows)
+        approved = sum(r[3] for r in rows)
+        declined = sum(r[4] for r in rows)
+        errors_cnt = sum(r[5] for r in rows)
+        cash = sum(r[7] for r in rows)
+        rate = round(approved / total * 100, 1) if total else 0
+        kpis = [
+            ('Total Transactions', f'{total:,}'),
+            ('Success Rate', f'{rate}%'),
+            ('Declined / Errors', f'{declined + errors_cnt:,}'),
+            ('Cash Dispensed', f'ETB {cash:,.0f}'),
+        ]
+        return pdf_send(title, headers, rows, days, atm, 'Transactions', kpis=kpis)
     else:
         return csv_send(headers, rows, 'Transactions', title=title, days=days, atm=atm)
 
@@ -126,10 +139,29 @@ def report_cash(fmt):
         xl_build_sheet(wb, 'Cash', title, days, atm, headers, rows)
         return xl_send(wb, 'Cash')
     elif fmt == 'pdf':
-        return pdf_send(title, headers, rows, days, atm, 'Cash')
+        total_dispensed = sum(r[2] for r in rows)
+        total_withdrawals = sum(r[4] for r in rows)
+        avg_withdrawal = round(total_dispensed / total_withdrawals, 0) if total_withdrawals else 0
+        largest = max((r[5] for r in rows), default=0)
+        kpis = [
+            ('Total Dispensed', f'ETB {total_dispensed:,.0f}'),
+            ('Total Withdrawals', f'{total_withdrawals:,}'),
+            ('Avg Withdrawal', f'ETB {avg_withdrawal:,.0f}'),
+            ('Largest Withdrawal', f'ETB {largest:,.0f}'),
+        ]
+        return pdf_send(title, headers, rows, days, atm, 'Cash', kpis=kpis)
     else:
         return csv_send(headers, rows, 'Cash', title=title, days=days, atm=atm)
 
+
+ERROR_DESCRIPTIONS = {
+    '3A7F': 'Cash Jam',
+    'B2C1': 'Card Read Error',
+    '44AA': 'Network Timeout',
+}
+
+def _describe_error(code):
+    return ERROR_DESCRIPTIONS.get(code, 'Unknown')
 
 # ─── ERROR & INCIDENT ────────────────────────────────────────────────────────────
 
@@ -161,13 +193,31 @@ def report_error(fmt):
     rows = cur.fetchall(); headers = [d[0] for d in cur.description]
     cur.close(); conn.close()
 
+    # Augment rows with error-code description
+    desc_ndx = headers.index('Error Code') + 1
+    headers.insert(desc_ndx, 'Description')
+    rows = [list(r) for r in rows]
+    for r in rows:
+        r.insert(desc_ndx, _describe_error(r[desc_ndx - 1] if desc_ndx - 1 < len(r) else ''))
+
     title = 'Error & Incident Report'
     if fmt == 'excel':
         wb = openpyxl.Workbook(); wb.remove(wb.active)
         xl_build_sheet(wb, 'Errors', title, days, atm, headers, rows)
         return xl_send(wb, 'Errors')
     elif fmt == 'pdf':
-        return pdf_send(title, headers, rows, days, atm, 'Errors')
+        total_occ = sum(r[4] for r in rows)
+        unique_codes = len({r[2] for r in rows})
+        unique_atms = len({r[0] for r in rows})
+        code_counts = Counter(r[2] for r in rows)
+        most_common = code_counts.most_common(1)[0][0] if code_counts else 'N/A'
+        kpis = [
+            ('Total Errors', f'{total_occ:,}'),
+            ('Unique Error Codes', str(unique_codes)),
+            ('ATMs Affected', str(unique_atms)),
+            ('Most Common', most_common),
+        ]
+        return pdf_send(title, headers, rows, days, atm, 'Errors', kpis=kpis)
     else:
         return csv_send(headers, rows, 'Errors', title=title, days=days, atm=atm)
 
@@ -218,7 +268,17 @@ def report_performance(fmt):
         xl_build_sheet(wb, 'Performance', title, days, 'all', headers, rows)
         return xl_send(wb, 'Performance')
     elif fmt == 'pdf':
-        return pdf_send(title, headers, rows, days, 'all', 'Performance')
+        total_txns = sum(r[2] for r in rows)
+        avg_rate = round(sum(r[3] for r in rows) / len(rows), 1) if rows else 0
+        top_atm = rows[0][0] if rows else 'N/A'
+        atm_count = len(rows)
+        kpis = [
+            ('Total Transactions', f'{total_txns:,}'),
+            ('Avg Success Rate', f'{avg_rate}%'),
+            ('ATMs Ranked', str(atm_count)),
+            ('Top Performer', str(top_atm)),
+        ]
+        return pdf_send(title, headers, rows, days, 'all', 'Performance', kpis=kpis)
     else:
         return csv_send(headers, rows, 'Performance', title=title, days=days, atm='all')
 
@@ -241,6 +301,7 @@ def report_availability(fmt):
             FROM atm_transactions t
             JOIN atm_locations l ON t.atm_id = l.atm_id
             WHERE recorded_at >= NOW() - INTERVAL %s
+        """ + (" AND t.atm_id = %s" if atm != 'all' else "") + """
             GROUP BY t.atm_id, l.branch, DATE_TRUNC('hour', recorded_at)
         ),
         total_hours AS (
@@ -272,7 +333,11 @@ def report_availability(fmt):
         FROM uptime
         ORDER BY uptime_pct DESC
     """
-    cur.execute(sql, (f"{days} days", days))
+    params = [f"{days} days"]
+    if atm != 'all':
+        params.append(atm)
+    params.append(days)
+    cur.execute(sql, tuple(params))
     rows = cur.fetchall()
     headers = [d[0] for d in cur.description]
     cur.close(); conn.close()
@@ -302,7 +367,16 @@ def report_availability(fmt):
         xl_autosize(ws)
         return xl_send(wb, 'Availability')
     elif fmt == 'pdf':
-        return pdf_send(title, headers, rows, days, atm, 'Availability')
+        avg_uptime = round(sum(r[5] for r in rows) / len(rows), 2) if rows else 0
+        excellent = sum(1 for r in rows if r[6] == 'Excellent')
+        below_target = sum(1 for r in rows if r[6] == 'Below Target')
+        kpis = [
+            ('Avg Uptime', f'{avg_uptime}%'),
+            ('Excellent SLA', str(excellent)),
+            ('Below Target', str(below_target)),
+            ('ATMs Monitored', str(len(rows))),
+        ]
+        return pdf_send(title, headers, rows, days, atm, 'Availability', kpis=kpis)
     else:
         return csv_send(headers, rows, 'Availability', title=title, days=days, atm=atm)
 
@@ -369,8 +443,12 @@ def report_full(fmt):
         if atm != 'all': sql3 += " AND atm_id = %s"; p3.append(atm)
         sql3 += " GROUP BY atm_id, branch, error_code ORDER BY 4 DESC"
         cur.execute(sql3, p3)
-        h3 = ['ATM', 'Branch', 'Error Code', 'Occurrences', 'First Seen', 'Last Seen']
-        xl_append_section(ws, '3. Error & Incident Log', h3, cur.fetchall())
+        rows3 = cur.fetchall()
+        h3 = ['ATM', 'Branch', 'Error Code', 'Description', 'Occurrences', 'First Seen', 'Last Seen']
+        rows3_desc = [list(r) for r in rows3]
+        for r in rows3_desc:
+            r.insert(3, _describe_error(r[2]))
+        xl_append_section(ws, '3. Error & Incident Log', h3, rows3_desc)
         cur.close()
 
         # 4. Performance
@@ -434,6 +512,12 @@ def report_full(fmt):
             cur.execute(sql, params)
             rows = cur.fetchall()
             cur.close()
+            # Augment error section rows with code descriptions
+            if 'ERROR' in sec_title:
+                headers = headers[:3] + ['Description'] + headers[3:]
+                rows = [list(r) for r in rows]
+                for r in rows:
+                    r.insert(3, _describe_error(r[2]))
             w.writerow([sec_title])
             w.writerow(headers)
             w.writerows([[str(v) if v is not None else '—' for v in r] for r in rows])
@@ -516,8 +600,11 @@ def report_full(fmt):
         cur.execute(s3_sql, [interval_str])
         res3 = cur.fetchall()
         if res3:
+            res3_desc = [list(r) for r in res3]
+            for r in res3_desc:
+                r.insert(3, _describe_error(r[2]))
             story += [P('<font color="#0F2557" size="12"><b>3. Error & Incident Log</b></font>', spaceBefore=12, spaceAfter=8),
-                      mktable(['ATM', 'Branch', 'Error Code', 'Occurrences', 'First Seen', 'Last Seen'], res3),
+                      mktable(['ATM', 'Branch', 'Error Code', 'Description', 'Occurrences', 'First Seen', 'Last Seen'], res3_desc),
                       Spacer(1, 0.8 * cm)]
 
         # 4. Performance Metrics

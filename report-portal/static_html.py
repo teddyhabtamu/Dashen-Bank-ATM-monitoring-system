@@ -1038,14 +1038,20 @@ function gen(type, fmt, daysId, atmId) {
   const days = document.getElementById(daysId).value;
   const atm  = atmId ? document.getElementById(atmId).value : 'all';
   const lw = document.getElementById('lw-'+type);
-  const url = `/report/${type}/${fmt}?days=${days}&atm=${atm}`;
+  const ts  = Date.now();
+  const url = `/report/${type}/${fmt}?days=${days}&atm=${atm}&_t=${ts}`;
   lw.classList.add('active');
 
-  const a = document.createElement('a');
-  a.href = url;
-  a.click();
+  // Use a hidden iframe for reliable download with correct query params
+  const iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  iframe.src = url;
+  document.body.appendChild(iframe);
 
-  setTimeout(() => lw.classList.remove('active'), 4000);
+  setTimeout(() => {
+    lw.classList.remove('active');
+    if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+  }, 4000);
 }
 
 loadKPIs();

@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>6.4</version>
+    <media_types>
+        <media_type>
+            <name>Email</name>
+            <type>EMAIL</type>
+            <smtp_server>smtp.gmail.com</smtp_server>
+            <smtp_port>587</smtp_port>
+            <smtp_helo>GMAIL.com</smtp_helo>
+            <smtp_email>zabbix@example.com</smtp_email>
+            <smtp_security>STARTTLS</smtp_security>
+            <smtp_authentication>PASSWORD</smtp_authentication>
+            <username>tewodroshabtamu29@gmail.com</username>
+            <password>fpyq iaqd skto amaz</password>
+            <content_type>TEXT</content_type>
+            <message_templates>
+                <message_template>
+                    <event_source>TRIGGERS</event_source>
+                    <operation_mode>PROBLEM</operation_mode>
+                    <subject>Problem: {EVENT.NAME}</subject>
+                    <message>Problem started at {EVENT.TIME} on {EVENT.DATE}
+Problem name: {EVENT.NAME}
+Host: {HOST.NAME}
+Severity: {EVENT.SEVERITY}
+Operational data: {EVENT.OPDATA}
+Original problem ID: {EVENT.ID}
+{TRIGGER.URL}</message>
+                </message_template>
+                <message_template>
+                    <event_source>TRIGGERS</event_source>
+                    <operation_mode>RECOVERY</operation_mode>
+                    <subject>Resolved in {EVENT.DURATION}: {EVENT.NAME}</subject>
+                    <message>Problem has been resolved at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
+Problem name: {EVENT.NAME}
+Problem duration: {EVENT.DURATION}
+Host: {HOST.NAME}
+Severity: {EVENT.SEVERITY}
+Original problem ID: {EVENT.ID}
+{TRIGGER.URL}</message>
+                </message_template>
+                <message_template>
+                    <event_source>TRIGGERS</event_source>
+                    <operation_mode>UPDATE</operation_mode>
+                    <subject>Updated problem in {EVENT.AGE}: {EVENT.NAME}</subject>
+                    <message>{USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.
+{EVENT.UPDATE.MESSAGE}
+
+Current problem status is {EVENT.STATUS}, age is {EVENT.AGE}, acknowledged: {EVENT.ACK.STATUS}.</message>
+                </message_template>
+                <message_template>
+                    <event_source>DISCOVERY</event_source>
+                    <operation_mode>PROBLEM</operation_mode>
+                    <subject>Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}</subject>
+                    <message>Discovery rule: {DISCOVERY.RULE.NAME}
+
+Device IP: {DISCOVERY.DEVICE.IPADDRESS}
+Device DNS: {DISCOVERY.DEVICE.DNS}
+Device status: {DISCOVERY.DEVICE.STATUS}
+Device uptime: {DISCOVERY.DEVICE.UPTIME}
+
+Device service name: {DISCOVERY.SERVICE.NAME}
+Device service port: {DISCOVERY.SERVICE.PORT}
+Device service status: {DISCOVERY.SERVICE.STATUS}
+Device service uptime: {DISCOVERY.SERVICE.UPTIME}</message>
+                </message_template>
+                <message_template>
+                    <event_source>AUTOREGISTRATION</event_source>
+                    <operation_mode>PROBLEM</operation_mode>
+                    <subject>Autoregistration: {HOST.HOST}</subject>
+                    <message>Host name: {HOST.HOST}
+Host IP: {HOST.IP}
+Agent port: {HOST.PORT}</message>
+                </message_template>
+            </message_templates>
+        </media_type>
+        <media_type>
+            <name>GLPI Ticket</name>
+            <type>WEBHOOK</type>
+            <parameters>
+                <parameter>
+                    <name>app_token</name>
+                    <value>XuApka4zrjQ9GFFEgGFHBlkpdmcPuY32q4DtsmmQ</value>
+                </parameter>
+                <parameter>
+                    <name>event_date</name>
+                    <value>{EVENT.DATE} {EVENT.TIME}</value>
+                </parameter>
+                <parameter>
+                    <name>event_id</name>
+                    <value>{EVENT.ID}</value>
+                </parameter>
+                <parameter>
+                    <name>glpi_password</name>
+                    <value>DashenGLPI2024</value>
+                </parameter>
+                <parameter>
+                    <name>glpi_url</name>
+                    <value>http://glpi:80/apirest.php</value>
+                </parameter>
+                <parameter>
+                    <name>glpi_user</name>
+                    <value>glpi</value>
+                </parameter>
+                <parameter>
+                    <name>host</name>
+                    <value>{HOST.NAME}</value>
+                </parameter>
+                <parameter>
+                    <name>severity</name>
+                    <value>{TRIGGER.NSEVERITY}</value>
+                </parameter>
+                <parameter>
+                    <name>subject</name>
+                    <value>{TRIGGER.NAME}</value>
+                </parameter>
+            </parameters>
+            <script>var params = JSON.parse(value);
+
+var glpi_url = params.glpi_url;
+var app_token = params.app_token;
+var glpi_user = params.glpi_user;
+var glpi_password = params.glpi_password;
+var subject = params.subject;
+var host = params.host;
+var severity = params.severity;
+var event_date = params.event_date;
+var event_id = params.event_id;
+
+var severity_labels = {
+    '0': 'Not classified', '1': 'Information', '2': 'Warning',
+    '3': 'Average', '4': 'High', '5': 'Disaster'
+};
+var urgency_map    = { '0':1,'1':1,'2':2,'3':3,'4':4,'5':5 };
+var sla_map        = { '5':1,'4':2,'3':2,'2':3,'1':3,'0':3 };
+var category_map   = { '5':5,'4':8,'3':9,'2':6,'1':5,'0':5 };
+var group_map      = { '5':2,'4':1,'3':1,'2':3,'1':2,'0':2 };
+
+var init_req = new HttpRequest();
+init_req.addHeader('Authorization: Basic ' + btoa(glpi_user + ':' + glpi_password));
+init_req.addHeader('App-Token: ' + app_token);
+
+var session_resp = init_req.get(glpi_url + '/initSession');
+var session_data = JSON.parse(session_resp);
+var session_token = session_data.session_token;
+
+if (!session_token) {
+    throw 'Failed to get session. Response: ' + session_resp;
+}
+
+var ticket_req = new HttpRequest();
+ticket_req.addHeader('Content-Type: application/json');
+ticket_req.addHeader('Session-Token: ' + session_token);
+ticket_req.addHeader('App-Token: ' + app_token);
+
+var urgency     = urgency_map[severity]  || 3;
+var sla_id      = sla_map[severity]      || 3;
+var category_id = category_map[severity] || 5;
+var group_id    = group_map[severity]    || 2;
+
+var ticket_body = {
+    input: {
+        name: '[ZABBIX] ' + subject,
+        content: 'Host: ' + host +
+                 '\nProblem: ' + subject +
+                 '\nSeverity: ' + (severity_labels[severity] || 'Unknown') +
+                 '\nTime: ' + event_date +
+                 '\nEvent ID: ' + event_id,
+        urgency:           urgency,
+        impact:            urgency,
+        priority:          urgency,
+        type:              1,
+        status:            1,
+        itilcategories_id: category_id,
+        slas_id_ttr:       sla_id,
+        _groups_id_assign: group_id
+    }
+};
+
+var create_resp = ticket_req.post(
+    glpi_url + '/Ticket',
+    JSON.stringify(ticket_body)
+);
+
+var ticket_result = JSON.parse(create_resp);
+
+var kill_req = new HttpRequest();
+kill_req.addHeader('Session-Token: ' + session_token);
+kill_req.addHeader('App-Token: ' + app_token);
+kill_req.get(glpi_url + '/killSession');
+
+if (ticket_result.id) {
+    return 'Ticket #' + ticket_result.id + ' created | SLA: ' + sla_id + ' | Group: ' + group_id;
+} else {
+    throw 'Ticket creation failed: ' + create_resp;
+}</script>
+            <message_templates>
+                <message_template>
+                    <event_source>TRIGGERS</event_source>
+                    <operation_mode>PROBLEM</operation_mode>
+                    <subject>ATM Alert: {TRIGGER.NAME} on {HOST.NAME}</subject>
+                    <message>{
+  &quot;subject&quot;: &quot;{TRIGGER.NAME}&quot;,
+  &quot;host&quot;: &quot;{HOST.NAME}&quot;,
+  &quot;severity&quot;: &quot;{TRIGGER.NSEVERITY}&quot;,
+  &quot;event_date&quot;: &quot;{EVENT.DATE} {EVENT.TIME}&quot;,
+  &quot;event_id&quot;: &quot;{EVENT.ID}&quot;,
+  &quot;glpi_url&quot;: &quot;http://glpi:80/apirest.php&quot;,
+  &quot;app_token&quot;: &quot;W8xhdcEKO984RGfM6GNcomjREIJ7FXfUVERqovDn&quot;,
+  &quot;glpi_user&quot;: &quot;glpi&quot;,
+  &quot;glpi_password&quot;: &quot;DashenGLPI2024&quot;
+}</message>
+                </message_template>
+            </message_templates>
+        </media_type>
+    </media_types>
+</zabbix_export>
