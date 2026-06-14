@@ -435,6 +435,82 @@ services:
     restart: unless-stopped
 
 
+  atm-ej-001:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: atm-ej-001
+    command: python3 ej_log_generator.py
+    environment:
+      ATM_ID: "ATM-001"
+      ATM_TERMINAL_ID: "TID001"
+      ATM_BRANCH: "Addis Ababa Main Branch"
+      EJ_LOG_PATH: "/var/log/atm-ej/ATM-001.log"
+    volumes:
+      - ./ej-logs:/var/log/atm-ej
+    restart: unless-stopped
+
+  atm-ej-002:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: atm-ej-002
+    command: python3 ej_log_generator.py
+    environment:
+      ATM_ID: "ATM-002"
+      ATM_TERMINAL_ID: "TID002"
+      ATM_BRANCH: "Bole International Branch"
+      EJ_LOG_PATH: "/var/log/atm-ej/ATM-002.log"
+    volumes:
+      - ./ej-logs:/var/log/atm-ej
+    restart: unless-stopped
+
+  atm-ej-003:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: atm-ej-003
+    command: python3 ej_log_generator.py
+    environment:
+      ATM_ID: "ATM-003"
+      ATM_TERMINAL_ID: "TID003"
+      ATM_BRANCH: "Merkato Branch"
+      EJ_LOG_PATH: "/var/log/atm-ej/ATM-003.log"
+    volumes:
+      - ./ej-logs:/var/log/atm-ej
+    restart: unless-stopped
+
+  atm-ej-004:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: atm-ej-004
+    command: python3 ej_log_generator.py
+    environment:
+      ATM_ID: "ATM-004"
+      ATM_TERMINAL_ID: "TID004"
+      ATM_BRANCH: "Hawassa Branch"
+      EJ_LOG_PATH: "/var/log/atm-ej/ATM-004.log"
+    volumes:
+      - ./ej-logs:/var/log/atm-ej
+    restart: unless-stopped
+
+  atm-ej-005:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: atm-ej-005
+    command: python3 ej_log_generator.py
+    environment:
+      ATM_ID: "ATM-005"
+      ATM_TERMINAL_ID: "TID005"
+      ATM_BRANCH: "Dire Dawa Branch"
+      EJ_LOG_PATH: "/var/log/atm-ej/ATM-005.log"
+    volumes:
+      - ./ej-logs:/var/log/atm-ej
+    restart: unless-stopped
+
+
 volumes:
   pgdata:
   grafana-data:
