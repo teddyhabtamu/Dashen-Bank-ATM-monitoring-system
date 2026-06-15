@@ -180,14 +180,20 @@ A successful response returns `1`.
 
 ---
 
-## Step 9 — Verify ELK Stack and Electronic Journal (EJ) log search
+## Step 8 — Verify ELK Stack and Electronic Journal (EJ) log search
 
 The EJ generator containers (`atm-ej-001` through `atm-ej-005`) write
 transaction-style log files that Filebeat ships to Elasticsearch for
 search in Kibana. These are **separate** from `atm-sim-00X`
 (hardware metrics) and `txn-feed-00X` (PostgreSQL transactions).
 
-### 9.1 — Fix `ej-logs/` directory ownership
+> **Confirmed issue:** on a fresh clone, the `atm-ej-00X` services
+> are **not present** in `docker-compose.yml` (only `atm-sim-00X`
+> and `txn-feed-00X` are). They must be added manually once — see
+> 8.3 below. This is now fixed in the repo going forward; if your
+> clone predates the fix, follow 8.1–8.5.
+
+### 8.1 — Fix `ej-logs/` directory ownership
 
 After cloning on a new machine this directory is often created as
 `root:root` by Docker, which blocks the EJ generator containers
@@ -198,7 +204,7 @@ sudo chown -R $USER:$USER ej-logs/
 chmod 755 ej-logs/
 ```
 
-### 9.2 — Fix Filebeat config file permissions
+### 8.2 — Fix Filebeat config file permissions
 
 Filebeat refuses to start if `filebeat.yml` is not owned by root:
 
@@ -208,23 +214,101 @@ sudo chmod 644 filebeat.yml
 docker compose restart filebeat
 ```
 
-### 9.3 — Confirm EJ generator services exist and are running
+### 8.3 — Add the EJ generator services (if missing)
 
+Check first:
 ```bash
-docker ps --format "table {{.Names}}\t{{.Status}}" \
-  | grep -E "atm-ej|atm-sim|filebeat|elasticsearch|kibana"
+grep -c "atm-ej-" docker-compose.yml
 ```
 
-You should see 5x `atm-ej-00X`, 5x `atm-sim-00X`, `filebeat`,
-`elasticsearch`, and `kibana` all `Up`.
+If this returns `0`, add the following 5 services to
+`docker-compose.yml`, before the `volumes:` section at the bottom:
 
-> If `atm-ej-00X` services are missing from `docker-compose.yml`,
-> they need to be added — see `config/zabbix/` and project history,
-> or recreate them following the same pattern as `atm-sim-00X` but
-> with `command: python3 ej_log_generator.py` and
-> `EJ_LOG_PATH: "/var/log/atm-ej/ATM-00X.log"`.
+```yaml
+  atm-ej-001:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: atm-ej-001
+    command: python3 ej_log_generator.py
+    environment:
+      ATM_ID: "ATM-001"
+      ATM_TERMINAL_ID: "TID001"
+      ATM_BRANCH: "Addis Ababa Main Branch"
+      EJ_LOG_PATH: "/var/log/atm-ej/ATM-001.log"
+    volumes:
+      - ./ej-logs:/var/log/atm-ej
+    restart: unless-stopped
 
-### 9.4 — Build and start EJ generators (first time only)
+  atm-ej-002:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: atm-ej-002
+    command: python3 ej_log_generator.py
+    environment:
+      ATM_ID: "ATM-002"
+      ATM_TERMINAL_ID: "TID002"
+      ATM_BRANCH: "Bole International Branch"
+      EJ_LOG_PATH: "/var/log/atm-ej/ATM-002.log"
+    volumes:
+      - ./ej-logs:/var/log/atm-ej
+    restart: unless-stopped
+
+  atm-ej-003:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: atm-ej-003
+    command: python3 ej_log_generator.py
+    environment:
+      ATM_ID: "ATM-003"
+      ATM_TERMINAL_ID: "TID003"
+      ATM_BRANCH: "Merkato Branch"
+      EJ_LOG_PATH: "/var/log/atm-ej/ATM-003.log"
+    volumes:
+      - ./ej-logs:/var/log/atm-ej
+    restart: unless-stopped
+
+  atm-ej-004:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: atm-ej-004
+    command: python3 ej_log_generator.py
+    environment:
+      ATM_ID: "ATM-004"
+      ATM_TERMINAL_ID: "TID004"
+      ATM_BRANCH: "Hawassa Branch"
+      EJ_LOG_PATH: "/var/log/atm-ej/ATM-004.log"
+    volumes:
+      - ./ej-logs:/var/log/atm-ej
+    restart: unless-stopped
+
+  atm-ej-005:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: atm-ej-005
+    command: python3 ej_log_generator.py
+    environment:
+      ATM_ID: "ATM-005"
+      ATM_TERMINAL_ID: "TID005"
+      ATM_BRANCH: "Dire Dawa Branch"
+      EJ_LOG_PATH: "/var/log/atm-ej/ATM-005.log"
+    volumes:
+      - ./ej-logs:/var/log/atm-ej
+    restart: unless-stopped
+```
+
+Then commit so future clones don't hit this:
+```bash
+git add docker-compose.yml
+git commit -m "Add missing atm-ej EJ log generator services"
+git push
+```
+
+### 8.4 — Build and start EJ generators
 
 ```bash
 docker compose build atm-ej-001
@@ -237,7 +321,17 @@ ls -la ej-logs/
 wc -l ej-logs/*.log
 ```
 
-### 9.5 — Confirm data reaches Elasticsearch
+### 8.5 — Confirm all ELK/EJ containers running
+
+```bash
+docker ps --format "table {{.Names}}\t{{.Status}}" \
+  | grep -E "atm-ej|atm-sim|filebeat|elasticsearch|kibana"
+```
+
+You should see 5x `atm-ej-00X`, 5x `atm-sim-00X`, `filebeat`,
+`elasticsearch`, and `kibana` all `Up`.
+
+### 8.6 — Confirm data reaches Elasticsearch
 
 ```bash
 sleep 30
@@ -247,7 +341,7 @@ curl -s "http://localhost:9200/_cat/indices?v"
 You should see `.ds-atm-ej-live-YYYY.MM.dd-*` indices with
 non-zero `docs.count`.
 
-### 9.6 — Create the Kibana Data View
+### 8.7 — Create the Kibana Data View
 
 1. Open `http://localhost:5601`
 2. **Stack Management → Data Views → Create data view**
@@ -265,7 +359,7 @@ Search examples for dispute investigation:
 
 ---
 
-## Step 10 — Backup and restore database
+## Step 9 — Backup and restore database
 
 ### Backup (run before switching machines)
 ```bash
@@ -326,3 +420,9 @@ New-NetFirewallRule -DisplayName "WSL ATM Services" -Direction Inbound -Action A
    host machine's network; the `/12` CIDR minimizes how often this
    needs revisiting, but the interface IP for ATM-001 must still be
    set per machine.
+4. **EJ generator services + permissions (Step 8)** — `ej-logs/`
+   ownership and `filebeat.yml` ownership are host-filesystem
+   properties not captured by `git`, and must be fixed on each new
+   machine. The `atm-ej-00X` services themselves are now committed
+   to `docker-compose.yml`, so step 8.3 should only be needed on
+   clones predating this fix.
