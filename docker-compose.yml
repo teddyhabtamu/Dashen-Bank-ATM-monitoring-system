@@ -173,6 +173,8 @@ services:
       DB_PASS: ${DB_PASS}
       GRAFANA_URL: ${GRAFANA_URL}
       REPORT_PORTAL_PORT: ${REPORT_PORTAL_PORT}
+      ES_HOST: elasticsearch:9200
+      ES_INDEX: .ds-atm-ej-live-*,atm-electronic-journal
     volumes:
       - ./report-portal:/app:rw
     ports:

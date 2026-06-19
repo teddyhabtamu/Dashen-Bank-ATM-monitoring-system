@@ -25,7 +25,25 @@ docker exec zabbix-db pg_dump -U zabbix zabbix \
   -t atm_transactions \
   > "$BACKUP_DIR/atm_custom_tables.sql"
 
+# Full Zabbix database backup (includes hosts, items, triggers, history)
+echo "Backing up full Zabbix database..."
+docker exec zabbix-db pg_dump -U zabbix zabbix --no-owner --no-acl \
+  | gzip > "$BACKUP_DIR/zabbix_full_$DATE.sql.gz"
+
+echo "  $BACKUP_DIR/zabbix_full_$DATE.sql.gz"
+
+# Keep only the last 7 full backups to avoid filling disk
+ls -t "$BACKUP_DIR"/zabbix_full_*.sql.gz 2>/dev/null | tail -n +8 | xargs -r rm
+
 echo "Backup complete:"
 echo "  $BACKUP_DIR/atm_locations.csv"
 echo "  $BACKUP_DIR/atm_transactions.csv"
 echo "  $BACKUP_DIR/atm_custom_tables.sql"
+
+
+# Auto-commit backup to git (best-effort, won't fail the script if git fails)
+cd "$(dirname "$0")/.."
+git add config/postgres/ 2>/dev/null
+git commit -m "Automated backup $(date +%Y-%m-%d)" 2>/dev/null
+git push 2>/dev/null
+echo "Backup committed to git (if changes existed)"

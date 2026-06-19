@@ -597,6 +597,12 @@ body {
     </div>
   </div>
   <div class="header-right">
+    <a href="/admin/atm" class="btn btn-outline" style="padding:6px 14px;font-size:11px;font-weight:600;text-decoration:none;">
+      <i data-lucide="settings" style="width:13px;height:13px"></i> ATM Admin
+    </a>
+    <a href="/ej-search" class="btn btn-outline" style="padding:6px 14px;font-size:11px;font-weight:600;text-decoration:none;">
+      <i data-lucide="file-search" style="width:13px;height:13px"></i> EJ Search
+    </a>
     <div class="live-badge">
       <span class="pulse-dot"></span> System Online
     </div>
@@ -1061,3 +1067,256 @@ setInterval(loadKPIs, 30000);
 </body>
 </html>
 """
+
+ADMIN_HTML = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATM Admin — Dashen Bank</title>
+<link rel="icon" type="image/png" href="/static/logo.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:#F0F2F6;color:#0F172A;font-size:13px;line-height:1.5;padding:32px}
+h1{color:#012169;font-size:22px;font-weight:800;letter-spacing:-0.3px;margin-bottom:4px}
+p.sub{color:#64748B;font-size:13px;margin-bottom:24px}
+.card{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(1,33,105,.04);border:1px solid #EEF1F6;margin-bottom:24px}
+.card-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;background:#FAFBFC;border-bottom:1px solid #EEF1F6;overflow:hidden;border-radius:12px 12px 0 0}
+.card-header h2{font-size:15px;font-weight:700}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:none;transition:.2s}
+.btn-primary{background:#012169;color:#fff}
+.btn-primary:hover{background:#273274;box-shadow:0 4px 16px rgba(1,33,105,.25)}
+.btn-outline{background:#fff;color:#475569;border:1px solid #E4E9F1}
+.btn-outline:hover{border-color:#012169;color:#012169}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#012169;color:#fff;font-weight:600;padding:10px 12px;text-align:left;white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid #EEF1F6}
+tr:nth-child(even){background:#F8FAFC}
+tr:hover{background:#EEF2FF}
+.actions{display:flex;gap:6px}
+.actions a{padding:5px 10px;border-radius:4px;font-size:11px;text-decoration:none;font-weight:500}
+.actions .edit{background:rgba(1,33,105,.06);color:#012169}
+.actions .edit:hover{background:rgba(1,33,105,.12)}
+.badge{padding:2px 8px;border-radius:100px;font-size:10px;font-weight:600}
+.badge.active{background:rgba(5,150,105,.1);color:#059669}
+.badge.inactive{background:rgba(220,38,38,.08);color:#DC2626}
+.empty{text-align:center;padding:48px;color:#94A3B8;font-size:14px}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;padding:24px}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group label{font-size:10px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.6px}
+.form-group input,.form-group select{padding:8px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;transition:border-color .2s}
+.form-group input:focus,.form-group select:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
+.form-actions{padding:0 24px 24px;display:flex;gap:10px}
+.form-actions .btn{padding:10px 20px}
+.cust-select{position:relative;font-family:inherit}
+.cust-select select{display:none}
+.cust-trigger{background:#fff;border:1px solid #E4E9F1;border-radius:6px;padding:8px 28px 8px 10px;font-size:12px;color:#0F172A;cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;transition:border-color .2s,box-shadow .2s;position:relative}
+.cust-trigger:hover{border-color:#CBD5E1}
+.cust-trigger:after{content:'';position:absolute;right:10px;top:50%;margin-top:-2px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #94A3B8;transition:transform .2s}
+.cust-trigger.open{box-shadow:0 0 0 3px rgba(1,33,105,.06);border-color:#012169}
+.cust-trigger.open:after{transform:rotate(180deg);margin-top:-7px}
+.cust-drop{position:absolute;top:100%;left:0;right:0;z-index:999;background:#fff;border:1px solid #E4E9F1;border-radius:6px;box-shadow:0 8px 32px rgba(1,33,105,.1);margin-top:4px;max-height:200px;overflow-y:auto;display:none}
+.cust-drop.show{display:block}
+.cust-drop.up{top:auto;bottom:100%;margin-top:0;margin-bottom:4px}
+.cust-trigger.up:after{transform:rotateX(180deg);margin-top:-7px}
+.cust-trigger.open.up:after{transform:rotateX(0);margin-top:-2px}
+.cust-opt{padding:8px 10px;font-size:12px;color:#0F172A;cursor:pointer;transition:background .1s}
+.cust-opt:hover{background:#EEF2FF;color:#012169}
+.cust-opt.sel{background:#F0F2F6;color:#012169;font-weight:600}
+.flatpickr-calendar{background:#fff;border:1px solid #E4E9F1;box-shadow:0 8px 32px rgba(1,33,105,.1);border-radius:8px;font-family:'Inter',sans-serif;margin-top:4px}
+.flatpickr-calendar.arrowTop:before,.flatpickr-calendar.arrowTop:after{display:none}
+.flatpickr-months .flatpickr-month{background:#fff;color:#0F172A;height:48px}
+.flatpickr-current-month .flatpickr-monthDropdown-months{font-weight:600;font-size:13px}
+.flatpickr-current-month input.cur-year{font-weight:600;font-size:13px}
+.flatpickr-months .flatpickr-prev-month,.flatpickr-months .flatpickr-next-month{color:#94A3B8;fill:#94A3B8}
+.flatpickr-months .flatpickr-prev-month:hover,.flatpickr-months .flatpickr-next-month:hover{color:#012169}
+.flatpickr-weekday{color:#64748B;font-weight:600;font-size:11px}
+.flatpickr-day{color:#0F172A;font-size:12px;border-radius:4px;line-height:34px}
+.flatpickr-day:hover{background:#EEF2FF;border-color:#EEF2FF}
+.flatpickr-day.selected,.flatpickr-day.selected:hover{background:#012169;border-color:#012169;color:#fff}
+.flatpickr-day.today{border-color:#012169}
+.flatpickr-day.today:hover{border-color:#012169;background:#EEF2FF}
+.flatpickr-day.inRange,.flatpickr-day.prevMonthDay.inRange,.flatpickr-day.nextMonthDay.inRange,.flatpickr-day.today.inRange,.flatpickr-day.prevMonthDay.today.inRange,.flatpickr-day.nextMonthDay.today.inRange{background:#EEF2FF;border-color:#EEF2FF;color:#012169}
+.flatpickr-day.startRange,.flatpickr-day.endRange,.flatpickr-day.startRange:hover,.flatpickr-day.endRange:hover{background:#012169;border-color:#012169;color:#fff}
+.flatpickr-day.flatpickr-disabled,.flatpickr-day.flatpickr-disabled:hover{color:#CBD5E1}
+.flatpickr-time input{font-size:12px}
+</style>
+</head>
+<body>
+<div style="margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+  <a href="/" style="background:#F0F2F6;padding:8px 16px;border-radius:6px;color:#012169;text-decoration:none;font-weight:500;font-size:13px">&larr; Report Portal</a>
+  <span style="color:#94A3B8;font-size:13px">|</span>
+  <span style="color:#475569;font-size:13px;font-weight:600">ATM Registration Admin</span>
+</div>
+<h1>ATM Registration</h1>
+<p class="sub">Manage ATM location data used by monitoring dashboards and reports.</p>
+<div class="card">
+  <div class="card-header"><h2>{{ADMIN_FORM_TITLE}}</h2></div>
+  {{ADMIN_FORM_EDIT_NOTE}}
+  <form method="post" action="/admin/atm/save">
+    <div class="form-grid">{{ADMIN_FORM_FIELDS}}</div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary"><i data-lucide="save" style="width:14px;height:14px"></i> Save ATM</button>
+      <a href="/admin/atm" class="btn btn-outline">Cancel</a>
+    </div>
+  </form>
+</div>
+<div class="card">
+  <div class="card-header">
+    <h2>Registered ATMs ({{ADMIN_ATM_COUNT}})</h2>
+    <a href="/admin/atm" class="btn btn-primary">+ Add New ATM</a>
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th>ATM ID</th><th>Branch</th><th>District</th><th>City</th><th>Region</th>
+        <th>Latitude</th><th>Longitude</th><th>Terminal ID</th><th>Vendor</th><th>Model</th>
+        <th>Install Date</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody>{{ADMIN_TABLE_ROWS}}</tbody>
+    </table>
+  </div>
+</div>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+lucide.createIcons()
+function initCustomSelects(){document.querySelectorAll('select').forEach(function(sel){if(sel.closest('.cust-select'))return;var wrap=document.createElement('div');wrap.className='cust-select';sel.parentNode.insertBefore(wrap,sel);wrap.appendChild(sel);var trig=document.createElement('div');trig.className='cust-trigger';trig.textContent=sel.options[sel.selectedIndex].text;wrap.appendChild(trig);var drop=document.createElement('div');drop.className='cust-drop';wrap.appendChild(drop);for(var i=0;i<sel.length;i++){(function(idx){var o=document.createElement('div');o.className='cust-opt'+(idx===sel.selectedIndex?' sel':'');o.textContent=sel.options[idx].text;o.addEventListener('click',function(){sel.selectedIndex=idx;trig.textContent=sel.options[idx].text;drop.querySelectorAll('.cust-opt').forEach(function(c){c.classList.remove('sel')});o.classList.add('sel');trig.classList.remove('open');drop.classList.remove('show');sel.dispatchEvent(new Event('change'))});drop.appendChild(o)})(i)}trig.addEventListener('click',function(e){e.stopPropagation();var already=drop.classList.contains('show');document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')});if(!already){var rect=trig.getBoundingClientRect();if(window.innerHeight-rect.bottom<180){drop.classList.add('up');trig.classList.add('up')}else{drop.classList.remove('up');trig.classList.remove('up')}drop.classList.add('show');trig.classList.add('open')}})});document.addEventListener('click',function(){document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')})})}
+document.querySelectorAll('.flatpickr-date').forEach(el => flatpickr(el, {
+  dateFormat: 'Y-m-d',
+  allowInput: true,
+  disableMobile: true,
+  monthSelectorType: 'static',
+}))
+initCustomSelects()
+</script>
+</body>
+</html>"""
+
+EJ_SEARCH_HTML = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EJ Search — Dashen Bank</title>
+<link rel="icon" type="image/png" href="/static/logo.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:#F0F2F6;color:#0F172A;font-size:13px;line-height:1.5;padding:32px}
+h1{color:#012169;font-size:22px;font-weight:800;letter-spacing:-0.3px;margin-bottom:4px}
+p.sub{color:#64748B;font-size:13px;margin-bottom:24px}
+.card{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(1,33,105,.04);border:1px solid #EEF1F6;margin-bottom:24px}
+.card-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;background:#FAFBFC;border-bottom:1px solid #EEF1F6;overflow:hidden;border-radius:12px 12px 0 0}
+.card-header h2{font-size:15px;font-weight:700}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:none;transition:.2s}
+.btn-primary{background:#012169;color:#fff}
+.btn-primary:hover{background:#273274;box-shadow:0 4px 16px rgba(1,33,105,.25)}
+.btn-outline{background:#fff;color:#475569;border:1px solid #E4E9F1}
+.btn-outline:hover{border-color:#012169;color:#012169}
+.btn-gold{background:#FDD79A;color:#012169}
+.btn-gold:hover{background:#C49A00}
+.search-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;padding:24px}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group label{font-size:10px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.6px}
+.form-group input,.form-group select{padding:8px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;transition:border-color .2s}
+.form-group input:focus,.form-group select:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
+.form-group select{display:none}
+.cust-select{position:relative;font-family:inherit;grid-column:unset}
+.cust-trigger{background:#fff;border:1px solid #E4E9F1;border-radius:6px;padding:8px 28px 8px 10px;font-size:12px;color:#0F172A;cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;transition:border-color .2s,box-shadow .2s;position:relative}
+.cust-trigger:hover{border-color:#CBD5E1}
+.cust-trigger:after{content:'';position:absolute;right:10px;top:50%;margin-top:-2px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #94A3B8;transition:transform .2s}
+.cust-trigger.open{box-shadow:0 0 0 3px rgba(1,33,105,.06);border-color:#012169}
+.cust-trigger.open:after{transform:rotate(180deg);margin-top:-7px}
+.cust-drop{position:absolute;top:100%;left:0;right:0;z-index:999;background:#fff;border:1px solid #E4E9F1;border-radius:6px;box-shadow:0 8px 32px rgba(1,33,105,.1);margin-top:4px;max-height:200px;overflow-y:auto;display:none}
+.cust-drop.show{display:block}
+.cust-drop.up{top:auto;bottom:100%;margin-top:0;margin-bottom:4px}
+.cust-trigger.up:after{transform:rotateX(180deg);margin-top:-7px}
+.cust-trigger.open.up:after{transform:rotateX(0);margin-top:-2px}
+.cust-opt{padding:8px 10px;font-size:12px;color:#0F172A;cursor:pointer;transition:background .1s}
+.cust-opt:hover{background:#EEF2FF;color:#012169}
+.cust-opt.sel{background:#F0F2F6;color:#012169;font-weight:600}
+.search-actions{padding:0 24px 24px;display:flex;gap:10px}
+.search-actions .btn{padding:10px 20px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#012169;color:#fff;font-weight:600;padding:10px 12px;text-align:left;white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid #EEF1F6;font-variant-numeric:tabular-nums}
+tr:nth-child(even){background:#F8FAFC}
+tr:hover{background:#EEF2FF}
+.empty{text-align:center;padding:48px;color:#94A3B8;font-size:14px}
+.badge{padding:2px 8px;border-radius:100px;font-size:10px;font-weight:600}
+.badge.APPROVED{background:rgba(5,150,105,.1);color:#059669}
+.badge.DECLINED{background:rgba(220,38,38,.08);color:#DC2626}
+.badge.TIMEOUT,.badge.ERROR{background:rgba(217,119,6,.1);color:#D97706}
+.result-count{font-size:12px;color:#64748B;padding:4px 24px 16px}
+.flatpickr-calendar{background:#fff;border:1px solid #E4E9F1;box-shadow:0 8px 32px rgba(1,33,105,.1);border-radius:8px;font-family:'Inter',sans-serif;margin-top:4px}
+.flatpickr-calendar.arrowTop:before,.flatpickr-calendar.arrowTop:after{display:none}
+.flatpickr-months .flatpickr-month{background:#fff;color:#0F172A;height:48px}
+.flatpickr-current-month .flatpickr-monthDropdown-months{font-weight:600;font-size:13px}
+.flatpickr-current-month input.cur-year{font-weight:600;font-size:13px}
+.flatpickr-months .flatpickr-prev-month,.flatpickr-months .flatpickr-next-month{color:#94A3B8;fill:#94A3B8}
+.flatpickr-months .flatpickr-prev-month:hover,.flatpickr-months .flatpickr-next-month:hover{color:#012169}
+.flatpickr-weekday{color:#64748B;font-weight:600;font-size:11px}
+.flatpickr-day{color:#0F172A;font-size:12px;border-radius:4px;line-height:34px}
+.flatpickr-day:hover{background:#EEF2FF;border-color:#EEF2FF}
+.flatpickr-day.selected,.flatpickr-day.selected:hover{background:#012169;border-color:#012169;color:#fff}
+.flatpickr-day.today{border-color:#012169}
+.flatpickr-day.today:hover{border-color:#012169;background:#EEF2FF}
+.flatpickr-day.inRange,.flatpickr-day.prevMonthDay.inRange,.flatpickr-day.nextMonthDay.inRange,.flatpickr-day.today.inRange,.flatpickr-day.prevMonthDay.today.inRange,.flatpickr-day.nextMonthDay.today.inRange{background:#EEF2FF;border-color:#EEF2FF;color:#012169}
+.flatpickr-day.startRange,.flatpickr-day.endRange,.flatpickr-day.startRange:hover,.flatpickr-day.endRange:hover{background:#012169;border-color:#012169;color:#fff}
+.flatpickr-day.flatpickr-disabled,.flatpickr-day.flatpickr-disabled:hover{color:#CBD5E1}
+.flatpickr-time input{font-size:12px}
+</style>
+</head>
+<body>
+<div style="margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+  <a href="/" style="background:#F0F2F6;padding:8px 16px;border-radius:6px;color:#012169;text-decoration:none;font-weight:500;font-size:13px">&larr; Report Portal</a>
+  <span style="color:#94A3B8;font-size:13px">|</span>
+  <span style="color:#475569;font-size:13px;font-weight:600">Electronic Journal Search</span>
+</div>
+<h1>EJ Search</h1>
+<p class="sub">Search the electronic journal for dispute investigation and transaction lookup.</p>
+<form method="post" action="/ej-search">
+<div class="card">
+  <div class="card-header"><h2>Search Criteria</h2></div>
+    <div class="search-grid">
+      <div class="form-group">
+        <label>Card (Last 4 Digits)</label>
+        <input type="text" name="card" placeholder="e.g. 1234" maxlength="4" pattern="[0-9]{4}" value="{{EJ_CARD}}">
+      </div>
+      <div class="form-group">
+        <label>Date From</label>
+        <input type="text" name="date_from" class="flatpickr-date" placeholder="YYYY-MM-DD" value="{{EJ_DATE_FROM}}">
+      </div>
+      <div class="form-group">
+        <label>Date To</label>
+        <input type="text" name="date_to" class="flatpickr-date" placeholder="YYYY-MM-DD" value="{{EJ_DATE_TO}}">
+      </div>
+      <div class="form-group">
+        <label>ATM</label>
+        <select name="atm_id">{{EJ_ATM_OPTIONS}}</select>
+      </div>
+    </div>
+    <div class="search-actions">
+      <button type="submit" class="btn btn-primary"><i data-lucide="search" style="width:14px;height:14px"></i> Search</button>
+      <a href="/ej-search" class="btn btn-outline">Clear</a>
+    </div>
+</div>
+{{EJ_RESULTS_SECTION}}
+</form>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+function initCustomSelects(){document.querySelectorAll('select').forEach(function(sel){if(sel.closest('.cust-select'))return;var wrap=document.createElement('div');wrap.className='cust-select';sel.parentNode.insertBefore(wrap,sel);wrap.appendChild(sel);var trig=document.createElement('div');trig.className='cust-trigger';trig.textContent=sel.options[sel.selectedIndex].text;wrap.appendChild(trig);var drop=document.createElement('div');drop.className='cust-drop';wrap.appendChild(drop);for(var i=0;i<sel.length;i++){(function(idx){var o=document.createElement('div');o.className='cust-opt'+(idx===sel.selectedIndex?' sel':'');o.textContent=sel.options[idx].text;o.addEventListener('click',function(){sel.selectedIndex=idx;trig.textContent=sel.options[idx].text;drop.querySelectorAll('.cust-opt').forEach(function(c){c.classList.remove('sel')});o.classList.add('sel');trig.classList.remove('open');drop.classList.remove('show');sel.dispatchEvent(new Event('change'))});drop.appendChild(o)})(i)}trig.addEventListener('click',function(e){e.stopPropagation();var already=drop.classList.contains('show');document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')});if(!already){var rect=trig.getBoundingClientRect();if(window.innerHeight-rect.bottom<180){drop.classList.add('up');trig.classList.add('up')}else{drop.classList.remove('up');trig.classList.remove('up')}drop.classList.add('show');trig.classList.add('open')}})});document.addEventListener('click',function(){document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')})})}
+document.querySelectorAll('.flatpickr-date').forEach(el => flatpickr(el, {
+  dateFormat: 'Y-m-d',
+  allowInput: true,
+  disableMobile: true,
+  monthSelectorType: 'static',
+}))
+initCustomSelects()
+</script>
+</body>
+</html>"""
