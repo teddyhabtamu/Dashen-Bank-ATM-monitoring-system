@@ -180,11 +180,11 @@ A successful response returns `1`.
 
 ---
 
-## Step 8 — Verify ELK Stack and Electronic Journal (EJ) log search
+## Step 8 — Verify OpenSearch Stack and Electronic Journal (EJ) log search
 
 The EJ generator containers (`atm-ej-001` through `atm-ej-005`) write
-transaction-style log files that Filebeat ships to Elasticsearch for
-search in Kibana. These are **separate** from `atm-sim-00X`
+transaction-style log files that Filebeat ships to OpenSearch for
+search in OpenSearch Dashboards. These are **separate** from `atm-sim-00X`
 (hardware metrics) and `txn-feed-00X` (PostgreSQL transactions).
 
 > **Confirmed issue:** on a fresh clone, the `atm-ej-00X` services
@@ -321,31 +321,31 @@ ls -la ej-logs/
 wc -l ej-logs/*.log
 ```
 
-### 8.5 — Confirm all ELK/EJ containers running
+### 8.5 — Confirm all OpenSearch/EJ containers running
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}" \
-  | grep -E "atm-ej|atm-sim|filebeat|elasticsearch|kibana"
+  | grep -E "atm-ej|atm-sim|filebeat|opensearch"
 ```
 
 You should see 5x `atm-ej-00X`, 5x `atm-sim-00X`, `filebeat`,
-`elasticsearch`, and `kibana` all `Up`.
+`opensearch`, and `opensearch-dashboards` all `Up`.
 
-### 8.6 — Confirm data reaches Elasticsearch
+### 8.6 — Confirm data reaches OpenSearch
 
 ```bash
 sleep 30
 curl -s "http://localhost:9200/_cat/indices?v"
 ```
 
-You should see `.ds-atm-ej-live-YYYY.MM.dd-*` indices with
+You should see `atm-electronic-journal` index with
 non-zero `docs.count`.
 
-### 8.7 — Create the Kibana Data View
+### 8.7 — Create the OpenSearch Dashboards Index Pattern
 
 1. Open `http://localhost:5601`
-2. **Stack Management → Data Views → Create data view**
-3. Index pattern: `.ds-atm-ej-live-*`
+2. **Stack Management → Index Patterns → Create index pattern**
+3. Index pattern: `atm-electronic-journal`
 4. Timestamp field: `@timestamp`
 5. Save
 
@@ -382,7 +382,7 @@ then prints row counts to verify.
 |---|---|---|
 | Zabbix | http://localhost:8080 | Admin/zabbix |
 | Grafana | http://localhost:3001 | admin/dashen2024 |
-| Kibana | http://localhost:5601 | no login |
+| OpenSearch Dashboards | http://localhost:5601 | admin / admin |
 | GLPI | http://localhost:8082 | glpi/DashenGLPI2024 |
 | Report Portal | http://localhost:8888 | no login |
 | pgAdmin | http://localhost:5050 | admin@dashenbank.com/dashen2024 |

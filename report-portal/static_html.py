@@ -1219,14 +1219,14 @@ p.sub{color:#64748B;font-size:13px;margin-bottom:24px}
 .btn-outline:hover{border-color:#012169;color:#012169}
 .btn-gold{background:#FDD79A;color:#012169}
 .btn-gold:hover{background:#C49A00}
-.search-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;padding:24px}
+.search-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;padding:24px}
 .form-group{display:flex;flex-direction:column;gap:4px}
 .form-group label{font-size:10px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.6px}
-.form-group input,.form-group select{padding:8px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;transition:border-color .2s}
+.form-group input,.form-group select{padding:8px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;transition:border-color .2s;width:100%}
 .form-group input:focus,.form-group select:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
 .form-group select{display:none}
-.cust-select{position:relative;font-family:inherit;grid-column:unset}
-.cust-trigger{background:#fff;border:1px solid #E4E9F1;border-radius:6px;padding:8px 28px 8px 10px;font-size:12px;color:#0F172A;cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;transition:border-color .2s,box-shadow .2s;position:relative}
+.cust-select{position:relative;font-family:inherit;grid-column:unset;width:100%}
+.cust-trigger{background:#fff;border:1px solid #E4E9F1;border-radius:6px;padding:8px 28px 8px 10px;font-size:12px;color:#0F172A;cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;transition:border-color .2s,box-shadow .2s;position:relative;width:100%}
 .cust-trigger:hover{border-color:#CBD5E1}
 .cust-trigger:after{content:'';position:absolute;right:10px;top:50%;margin-top:-2px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #94A3B8;transition:transform .2s}
 .cust-trigger.open{box-shadow:0 0 0 3px rgba(1,33,105,.06);border-color:#012169}
@@ -1245,12 +1245,18 @@ table{width:100%;border-collapse:collapse;font-size:12px}
 th{background:#012169;color:#fff;font-weight:600;padding:10px 12px;text-align:left;white-space:nowrap}
 td{padding:8px 12px;border-bottom:1px solid #EEF1F6;font-variant-numeric:tabular-nums}
 tr:nth-child(even){background:#F8FAFC}
-tr:hover{background:#EEF2FF}
+.ej-row:hover{background:#EEF2FF !important}
 .empty{text-align:center;padding:48px;color:#94A3B8;font-size:14px}
 .badge{padding:2px 8px;border-radius:100px;font-size:10px;font-weight:600}
 .badge.APPROVED{background:rgba(5,150,105,.1);color:#059669}
 .badge.DECLINED{background:rgba(220,38,38,.08);color:#DC2626}
 .badge.TIMEOUT,.badge.ERROR{background:rgba(217,119,6,.1);color:#D97706}
+.badge-evt{padding:2px 8px;border-radius:100px;font-size:10px;font-weight:600;text-transform:uppercase}
+.badge-evt.TXN{background:rgba(37,99,235,0.1);color:#2563eb}
+.badge-evt.ERROR{background:rgba(220,38,38,0.1);color:#dc2626}
+.badge-evt.CASH{background:rgba(5,150,105,0.1);color:#059669}
+.badge-evt.MAINT{background:rgba(100,116,139,0.1);color:#64748b}
+.details-row td{border-top:none !important}
 .result-count{font-size:12px;color:#64748B;padding:4px 24px 16px}
 .flatpickr-calendar{background:#fff;border:1px solid #E4E9F1;box-shadow:0 8px 32px rgba(1,33,105,.1);border-radius:8px;font-family:'Inter',sans-serif;margin-top:4px}
 .flatpickr-calendar.arrowTop:before,.flatpickr-calendar.arrowTop:after{display:none}
@@ -1284,8 +1290,24 @@ tr:hover{background:#EEF2FF}
   <div class="card-header"><h2>Search Criteria</h2></div>
     <div class="search-grid">
       <div class="form-group">
-        <label>Card (Last 4 Digits)</label>
-        <input type="text" name="card" placeholder="e.g. 1234" maxlength="4" pattern="[0-9]{4}" value="{{EJ_CARD}}">
+        <label>Search Keyword / Message</label>
+        <input type="text" name="keyword" placeholder="e.g. seq, error, load" value="{{EJ_KEYWORD}}">
+      </div>
+      <div class="form-group">
+        <label>Card Suffix / Number</label>
+        <input type="text" name="card" placeholder="e.g. 1234" value="{{EJ_CARD}}">
+      </div>
+      <div class="form-group">
+        <label>ATM</label>
+        <select name="atm_id">{{EJ_ATM_OPTIONS}}</select>
+      </div>
+      <div class="form-group">
+        <label>Event Type</label>
+        <select name="event_type">{{EJ_EVENT_TYPE_OPTIONS}}</select>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select name="status">{{EJ_STATUS_OPTIONS}}</select>
       </div>
       <div class="form-group">
         <label>Date From</label>
@@ -1296,8 +1318,16 @@ tr:hover{background:#EEF2FF}
         <input type="text" name="date_to" class="flatpickr-date" placeholder="YYYY-MM-DD" value="{{EJ_DATE_TO}}">
       </div>
       <div class="form-group">
-        <label>ATM</label>
-        <select name="atm_id">{{EJ_ATM_OPTIONS}}</select>
+        <label>Min Amount</label>
+        <input type="number" name="min_amount" placeholder="e.g. 100" value="{{EJ_MIN_AMOUNT}}">
+      </div>
+      <div class="form-group">
+        <label>Max Amount</label>
+        <input type="number" name="max_amount" placeholder="e.g. 5000" value="{{EJ_MAX_AMOUNT}}">
+      </div>
+      <div class="form-group">
+        <label>Auth Code</label>
+        <input type="text" name="auth_code" placeholder="e.g. 482910" value="{{EJ_AUTH_CODE}}">
       </div>
     </div>
     <div class="search-actions">
@@ -1307,8 +1337,20 @@ tr:hover{background:#EEF2FF}
 </div>
 {{EJ_RESULTS_SECTION}}
 </form>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
+function toggleDetails(idx) {
+  var row = document.getElementById('details-' + idx);
+  var chevron = document.getElementById('chevron-' + idx);
+  if (row.style.display === 'none') {
+    row.style.display = 'table-row';
+    chevron.style.transform = 'rotate(90deg)';
+  } else {
+    row.style.display = 'none';
+    chevron.style.transform = 'rotate(0deg)';
+  }
+}
 function initCustomSelects(){document.querySelectorAll('select').forEach(function(sel){if(sel.closest('.cust-select'))return;var wrap=document.createElement('div');wrap.className='cust-select';sel.parentNode.insertBefore(wrap,sel);wrap.appendChild(sel);var trig=document.createElement('div');trig.className='cust-trigger';trig.textContent=sel.options[sel.selectedIndex].text;wrap.appendChild(trig);var drop=document.createElement('div');drop.className='cust-drop';wrap.appendChild(drop);for(var i=0;i<sel.length;i++){(function(idx){var o=document.createElement('div');o.className='cust-opt'+(idx===sel.selectedIndex?' sel':'');o.textContent=sel.options[idx].text;o.addEventListener('click',function(){sel.selectedIndex=idx;trig.textContent=sel.options[idx].text;drop.querySelectorAll('.cust-opt').forEach(function(c){c.classList.remove('sel')});o.classList.add('sel');trig.classList.remove('open');drop.classList.remove('show');sel.dispatchEvent(new Event('change'))});drop.appendChild(o)})(i)}trig.addEventListener('click',function(e){e.stopPropagation();var already=drop.classList.contains('show');document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')});if(!already){var rect=trig.getBoundingClientRect();if(window.innerHeight-rect.bottom<180){drop.classList.add('up');trig.classList.add('up')}else{drop.classList.remove('up');trig.classList.remove('up')}drop.classList.add('show');trig.classList.add('open')}})});document.addEventListener('click',function(){document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')})})}
 document.querySelectorAll('.flatpickr-date').forEach(el => flatpickr(el, {
   dateFormat: 'Y-m-d',
@@ -1317,6 +1359,7 @@ document.querySelectorAll('.flatpickr-date').forEach(el => flatpickr(el, {
   monthSelectorType: 'static',
 }))
 initCustomSelects()
+lucide.createIcons()
 </script>
 </body>
 </html>"""

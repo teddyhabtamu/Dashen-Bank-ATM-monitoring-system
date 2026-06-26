@@ -11,7 +11,7 @@ filebeat.inputs:
     multiline.match: after
 
 output.elasticsearch:
-  hosts: ["elasticsearch:9200"]
+  hosts: ["opensearch:9200"]
   index: "atm-ej-live-%{+yyyy.MM.dd}"
   pipeline: "atm_ej_parser"
 

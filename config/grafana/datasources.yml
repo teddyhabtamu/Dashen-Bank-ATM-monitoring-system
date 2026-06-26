@@ -23,8 +23,10 @@ datasources:
 
   - name: EJ-Elasticsearch
     type: elasticsearch
-    url: http://elasticsearch:9200
+    url: http://opensearch:9200
     jsonData:
-      index: .ds-atm-ej-live-*
+      index: atm-*
       timeField: "@timestamp"
       esVersion: "8.0.0"
+      logMessageField: message
+      logLevelField: status

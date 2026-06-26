@@ -1,10 +1,10 @@
-from elasticsearch import Elasticsearch
+from opensearchpy import OpenSearch
 from faker import Faker
 import random
 from datetime import datetime, timedelta
 
 fake = Faker()
-es = Elasticsearch("http://localhost:9200")
+es = OpenSearch("http://localhost:9200")
 
 # ATM definitions - realistic Dashen Bank branches
 atms = [
@@ -93,13 +93,13 @@ for i in range(1000):
 
     docs.append(doc)
 
-# Bulk insert into Elasticsearch
-print("Loading into Elasticsearch...")
+# Bulk insert into OpenSearch
+print("Loading into OpenSearch...")
 for i, doc in enumerate(docs):
-    es.index(index="atm-electronic-journal", document=doc)
+    es.index(index="atm-electronic-journal", body=doc)
     if (i+1) % 100 == 0:
         print(f"  {i+1}/1000 loaded...")
 
 print("Done! 1000 EJ entries loaded successfully.")
 print(f"ATMs covered: {[a['id'] for a in atms]}")
-print("Now open Kibana at http://localhost:5601 to explore the data.")
+print("Now open OpenSearch Dashboards at http://localhost:5601 to explore the data.")

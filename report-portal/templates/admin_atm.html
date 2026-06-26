@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}ATM Admin — Dashen Bank{% endblock %}
+
+{% block extra_style %}
+body { background: #F0F2F6; color: #0F172A; padding: 32px; }
+h1 { color: #012169; font-size: 22px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 4px; }
+p.sub { color: #64748B; font-size: 13px; margin-bottom: 24px; }
+.card-header h2 { font-size: 15px; font-weight: 700; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 14px; padding: 24px; }
+.form-actions { padding: 0 24px 24px; display: flex; gap: 10px; }
+.form-actions .btn { padding: 10px 20px; }
+.actions { display: flex; gap: 6px; }
+.actions a { padding: 5px 10px; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 500; }
+.actions .edit { background: rgba(1,33,105,.06); color: #012169; }
+.actions .edit:hover { background: rgba(1,33,105,.12); }
+.empty { text-align: center; padding: 48px; color: #94A3B8; font-size: 14px; }
+{% endblock %}
+
+{% block body %}
+<div style="margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+  <a href="/" style="background:#F0F2F6;padding:8px 16px;border-radius:6px;color:#012169;text-decoration:none;font-weight:500;font-size:13px">&larr; Report Portal</a>
+  <span style="color:#94A3B8;font-size:13px">|</span>
+  <span style="color:#475569;font-size:13px;font-weight:600">ATM Registration Admin</span>
+</div>
+<h1>ATM Registration</h1>
+<p class="sub">Manage ATM location data used by monitoring dashboards and reports.</p>
+
+<div class="card">
+  <div class="card-header"><h2>{{ form_title }}</h2></div>
+  {% if edit_note %}<h3 style="padding:24px 24px 0;font-size:14px;color:#012169">Editing ATM <code>{{ edit_mode }}</code></h3>{% endif %}
+  <form method="post" action="/admin/atm/save">
+    <div class="form-grid">
+      {% for name, label, typ in fields %}
+        <div class="form-group">
+          <label>{{ label }}</label>
+          {% if typ == 'select' %}
+            <select name="{{ name }}">
+              {% for opt in ['active','inactive'] %}
+                <option value="{{ opt }}"{% if edit_data.get(name,'') == opt %} selected{% endif %}>{{ opt }}</option>
+              {% endfor %}
+            </select>
+          {% elif typ == 'date' %}
+            <input type="text" name="{{ name }}" class="flatpickr-date" placeholder="YYYY-MM-DD" value="{{ edit_data.get(name,'') or '' }}">
+          {% elif typ == 'number' %}
+            <input type="number" name="{{ name }}" step="any" value="{{ edit_data.get(name,'') or '' }}">
+          {% else %}
+            <input type="text" name="{{ name }}" value="{{ edit_data.get(name,'') or '' }}">
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary"><i data-lucide="save" style="width:14px;height:14px"></i> Save ATM</button>
+      <a href="/admin/atm" class="btn btn-outline">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2>Registered ATMs ({{ atm_count }})</h2>
+    <a href="/admin/atm" class="btn btn-primary">+ Add New ATM</a>
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th>ATM ID</th><th>Branch</th><th>District</th><th>City</th><th>Region</th>
+        <th>Latitude</th><th>Longitude</th><th>Terminal ID</th><th>Vendor</th><th>Model</th>
+        <th>Install Date</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% if atms %}
+          {% for d in atms %}
+          <tr>
+            <td>{{ d.atm_id }}</td>
+            <td>{{ d.branch or '—' }}</td>
+            <td>{{ d.district or '—' }}</td>
+            <td>{{ d.city or '—' }}</td>
+            <td>{{ d.region or '—' }}</td>
+            <td>{{ d.latitude or '—' }}</td>
+            <td>{{ d.longitude or '—' }}</td>
+            <td>{{ d.terminal_id or '—' }}</td>
+            <td>{{ d.vendor or '—' }}</td>
+            <td>{{ d.model or '—' }}</td>
+            <td>{{ d.install_date or '—' }}</td>
+            <td>
+              {% set status = d.status or 'active' %}
+              <span class="badge {{ status }}">{{ status }}</span>
+            </td>
+            <td class="actions"><a class="edit" href="?edit={{ d.atm_id }}">Edit</a></td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="13" class="empty">No ATMs registered yet.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+lucide.createIcons()
+document.querySelectorAll('.flatpickr-date').forEach(el => flatpickr(el, {
+  dateFormat: 'Y-m-d', allowInput: true, disableMobile: true, monthSelectorType: 'static',
+}))
+initCustomSelects()
+</script>
+{% endblock %}

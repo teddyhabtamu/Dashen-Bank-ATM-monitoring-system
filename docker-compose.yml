@@ -84,39 +84,41 @@ services:
       - zabbix-web
     restart: unless-stopped
 
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
-    container_name: elasticsearch
+  opensearch:
+    image: opensearchproject/opensearch:2.14.0
+    container_name: opensearch
     environment:
       - discovery.type=single-node
-      - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - DISABLE_SECURITY_PLUGIN=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - compatibility.override_main_response_version=true
     ports:
       - "9200:9200"
     volumes:
-      - esdata:/usr/share/elasticsearch/data
+      - opensearch-data:/usr/share/opensearch/data
     restart: unless-stopped
 
-  kibana:
-    image: docker.elastic.co/kibana/kibana:8.13.0
-    container_name: kibana
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.14.0
+    container_name: opensearch-dashboards
     environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - OPENSEARCH_HOSTS=http://opensearch:9200
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
     ports:
       - "5601:5601"
     depends_on:
-      - elasticsearch
+      - opensearch
     restart: unless-stopped
 
   filebeat:
-    image: docker.elastic.co/beats/filebeat:8.13.0
+    image: docker.elastic.co/beats/filebeat-oss:7.12.1
     container_name: filebeat
     user: root
     volumes:
       - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - ./ej-logs:/var/log/atm-ej:ro
     depends_on:
-      - elasticsearch
+      - opensearch
     restart: unless-stopped
 
   mariadb:
@@ -173,8 +175,8 @@ services:
       DB_PASS: ${DB_PASS}
       GRAFANA_URL: ${GRAFANA_URL}
       REPORT_PORTAL_PORT: ${REPORT_PORTAL_PORT}
-      ES_HOST: elasticsearch:9200
-      ES_INDEX: .ds-atm-ej-live-*,atm-electronic-journal
+      ES_HOST: opensearch:9200
+      ES_INDEX: atm-ej-live-*,atm-electronic-journal
     volumes:
       - ./report-portal:/app:rw
     ports:
@@ -516,8 +518,7 @@ services:
 volumes:
   pgdata:
   grafana-data:
-  esdata:
-  kibanadata:
+  opensearch-data:
   mariadb-data:
   glpi-root:
 

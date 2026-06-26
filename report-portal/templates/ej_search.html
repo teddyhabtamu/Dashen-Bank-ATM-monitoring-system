@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+
+{% block title %}EJ Search — Dashen Bank{% endblock %}
+
+{% block extra_style %}
+body { background: #F0F2F6; color: #0F172A; padding: 32px; }
+h1 { color: #012169; font-size: 22px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 4px; }
+p.sub { color: #64748B; font-size: 13px; margin-bottom: 24px; }
+.search-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap: 14px; padding: 24px; }
+.search-actions { padding: 0 24px 24px; display: flex; gap: 10px; }
+.search-actions .btn { padding: 10px 20px; }
+td { font-variant-numeric: tabular-nums; }
+.ej-row:hover { background: #EEF2FF !important; }
+.badge-evt { padding: 2px 8px; border-radius: 100px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+.badge-evt.TXN  { background: rgba(37,99,235,0.1); color: #2563eb; }
+.badge-evt.ERROR{ background: rgba(220,38,38,0.1); color: #dc2626; }
+.badge-evt.CASH { background: rgba(5,150,105,0.1); color: #059669; }
+.badge-evt.MAINT{ background: rgba(100,116,139,0.1); color: #64748b; }
+.details-row td { border-top: none !important; }
+.result-count { font-size: 12px; color: #64748B; padding: 4px 24px 16px; }
+{% endblock %}
+
+{% block body %}
+<div style="margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+  <a href="/" style="background:#F0F2F6;padding:8px 16px;border-radius:6px;color:#012169;text-decoration:none;font-weight:500;font-size:13px">&larr; Report Portal</a>
+  <span style="color:#94A3B8;font-size:13px">|</span>
+  <span style="color:#475569;font-size:13px;font-weight:600">Electronic Journal Search</span>
+</div>
+<h1>EJ Search</h1>
+<p class="sub">Search the electronic journal for dispute investigation and transaction lookup.</p>
+
+<form method="post" action="/ej-search">
+<div class="card">
+  <div class="card-header"><h2>Search Criteria</h2></div>
+  <div class="search-grid">
+
+    <div class="form-group">
+      <label>Search Keyword / Message</label>
+      <input type="text" name="keyword" placeholder="e.g. seq, error, load" value="{{ keyword }}">
+    </div>
+
+    <div class="form-group">
+      <label>Card Suffix / Number</label>
+      <input type="text" name="card" placeholder="e.g. 1234" value="{{ card }}">
+    </div>
+
+    <div class="form-group">
+      <label>ATM</label>
+      <select name="atm_id">
+        <option value="">All ATMs</option>
+        {% for a_id, a_branch in db_atms %}
+          <option value="{{ a_id }}"{% if a_id == atm_id %} selected{% endif %}>{{ a_id }}{% if a_branch %} — {{ a_branch }}{% endif %}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Event Type</label>
+      <select name="event_type">
+        <option value=""{% if not event_type %} selected{% endif %}>All Event Types</option>
+        <option value="TXN"{% if event_type == 'TXN' %} selected{% endif %}>TXN (Transactions)</option>
+        <option value="ERROR"{% if event_type == 'ERROR' %} selected{% endif %}>ERROR (Faults/Errors)</option>
+        <option value="CASH"{% if event_type == 'CASH' %} selected{% endif %}>CASH (Cash Ops)</option>
+        <option value="MAINT"{% if event_type == 'MAINT' %} selected{% endif %}>MAINT (Maintenance)</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Status</label>
+      <select name="status">
+        <option value=""{% if not status %} selected{% endif %}>All Statuses</option>
+        <option value="APPROVED"{% if status == 'APPROVED' %} selected{% endif %}>APPROVED</option>
+        <option value="DECLINED"{% if status == 'DECLINED' %} selected{% endif %}>DECLINED</option>
+        <option value="TIMEOUT"{% if status == 'TIMEOUT' %} selected{% endif %}>TIMEOUT</option>
+        <option value="ERROR"{% if status == 'ERROR' %} selected{% endif %}>ERROR</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Date From</label>
+      <input type="text" name="date_from" class="flatpickr-date" placeholder="YYYY-MM-DD" value="{{ date_from }}">
+    </div>
+
+    <div class="form-group">
+      <label>Date To</label>
+      <input type="text" name="date_to" class="flatpickr-date" placeholder="YYYY-MM-DD" value="{{ date_to }}">
+    </div>
+
+    <div class="form-group">
+      <label>Min Amount</label>
+      <input type="number" name="min_amount" placeholder="e.g. 100" value="{{ min_amount }}">
+    </div>
+
+    <div class="form-group">
+      <label>Max Amount</label>
+      <input type="number" name="max_amount" placeholder="e.g. 5000" value="{{ max_amount }}">
+    </div>
+
+    <div class="form-group">
+      <label>Auth Code</label>
+      <input type="text" name="auth_code" placeholder="e.g. 482910" value="{{ auth_code }}">
+    </div>
+
+  </div>
+  <div class="search-actions">
+    <button type="submit" class="btn btn-primary"><i data-lucide="search" style="width:14px;height:14px"></i> Search</button>
+    <a href="/ej-search" class="btn btn-outline">Clear</a>
+  </div>
+</div>
+
+{# ── RESULTS ── #}
+{% if searched %}
+  {% if error %}
+    <div class="card">
+      <div class="card-header"><h2>Error</h2></div>
+      <p style="padding:24px;color:#DC2626">{{ error }}</p>
+    </div>
+  {% else %}
+    <div class="card">
+      <div class="card-header">
+        <h2>Results ({{ total }})</h2>
+        <a href="/ej-search/csv?card={{ card }}&date_from={{ date_from }}&date_to={{ date_to }}&atm_id={{ atm_id }}&keyword={{ keyword }}&event_type={{ event_type }}&status={{ status }}&min_amount={{ min_amount }}&max_amount={{ max_amount }}&auth_code={{ auth_code }}"
+           class="btn btn-gold">
+          <i data-lucide="download" style="width:14px;height:14px"></i> Export to CSV
+        </a>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th>Timestamp</th><th>ATM ID</th><th>Transaction Type</th><th>Card (masked)</th><th>Status</th><th style="text-align:right">Amount</th>
+          </tr></thead>
+          <tbody>
+            {% if results %}
+              {% for idx, r in results %}
+              <tr onclick="toggleDetails({{ idx }})" class="ej-row" style="cursor:pointer">
+                <td>
+                  <i data-lucide="chevron-right" class="chevron-icon" id="chevron-{{ idx }}"
+                     style="width:14px;height:14px;transition:transform 0.2s;vertical-align:middle;margin-right:8px;color:#64748B"></i>
+                  {{ r.timestamp }}
+                </td>
+                <td>{{ r.atm_id }}</td>
+                <td><span class="badge-evt {{ r.event_type }}">{{ r.txn_type or r.event_type or '—' }}</span></td>
+                <td>{{ r.card or '—' }}</td>
+                <td><span class="badge {{ r.status }}">{{ r.status or '—' }}</span></td>
+                <td style="text-align:right;font-weight:600">
+                  {% if r.amount %}ETB {{ '{:,.2f}'.format(r.amount) }}{% else %}—{% endif %}
+                </td>
+              </tr>
+              <tr id="details-{{ idx }}" class="details-row" style="display:none;background:#F8FAFC">
+                <td colspan="6" style="padding:16px 24px;border-bottom:1px solid #EEF1F6">
+                  <div style="display:flex;flex-direction:column;gap:12px">
+                    <div style="background:#0F172A;color:#E2E8F0;font-family:monospace;padding:12px;border-radius:6px;font-size:11px;word-break:break-all;white-space:pre-wrap;border-left:4px solid #FDD79A">
+                      <span style="color:#94A3B8;font-weight:600;display:block;margin-bottom:4px">RAW LOG LINE</span>{{ r.message }}
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px,1fr));gap:12px;font-size:12px">
+                      <div><strong style="color:#64748B">Terminal ID:</strong> {{ r.terminal_id or '—' }}</div>
+                      <div><strong style="color:#64748B">Event Type:</strong> {{ r.event_type or '—' }}</div>
+                      <div><strong style="color:#64748B">Sub Type:</strong> {{ r.sub_type or '—' }}</div>
+                      <div><strong style="color:#64748B">Currency:</strong> {{ r.currency or '—' }}</div>
+                      <div><strong style="color:#64748B">Auth Code:</strong> {{ r.auth_code or '—' }}</div>
+                      <div><strong style="color:#64748B">Error Code:</strong> {{ r.error_code or '—' }}</div>
+                      <div><strong style="color:#64748B">Cassette ID:</strong> {{ r.cassette_id or '—' }}</div>
+                      <div><strong style="color:#64748B">Operator ID:</strong> {{ r.operator_id or '—' }}</div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="6" class="empty">No results found.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+      {# ── PAGINATION ── #}
+      {% if total_pages > 1 %}
+      <div style="display:flex;align-items:center;justify-content:center;gap:6px;padding:14px 24px;border-top:1px solid #EEF1F6">
+        {% if page > 1 %}
+          <button type="submit" name="page" value="{{ page - 1 }}" class="btn btn-outline" style="padding:6px 12px;font-size:11px">&larr; Prev</button>
+        {% endif %}
+        {% for p in range([1, page-2]|max, [total_pages, page+2]|min + 1) %}
+          <button type="submit" name="page" value="{{ p }}" class="btn btn-outline"
+                  style="padding:6px 10px;font-size:11px;min-width:32px{% if p == page %};background:#012169;color:#fff;border-color:#012169{% endif %}">{{ p }}</button>
+        {% endfor %}
+        {% if page < total_pages %}
+          <button type="submit" name="page" value="{{ page + 1 }}" class="btn btn-outline" style="padding:6px 12px;font-size:11px">Next &rarr;</button>
+        {% endif %}
+      </div>
+      {% endif %}
+
+    </div>
+  {% endif %}
+{% endif %}
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+function toggleDetails(idx) {
+  var row = document.getElementById('details-' + idx);
+  var chevron = document.getElementById('chevron-' + idx);
+  if (row.style.display === 'none') {
+    row.style.display = 'table-row';
+    chevron.style.transform = 'rotate(90deg)';
+  } else {
+    row.style.display = 'none';
+    chevron.style.transform = 'rotate(0deg)';
+  }
+}
+document.querySelectorAll('.flatpickr-date').forEach(el => flatpickr(el, {
+  dateFormat: 'Y-m-d', allowInput: true, disableMobile: true, monthSelectorType: 'static',
+}))
+initCustomSelects()
+lucide.createIcons()
+</script>
+{% endblock %}
