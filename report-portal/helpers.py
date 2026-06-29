@@ -16,6 +16,7 @@ LOGO_PATH = os.path.join(os.path.dirname(__file__), 'static', 'logo.png')
 
 DASHEN_BLUE  = '273274'
 DASHEN_GOLD  = 'FDD79A'
+DASHEN_NAVY  = '012169'
 ALT_ROW      = 'F8FAFC'
 BORDER_COLOR = 'E2E8F0'
 
@@ -166,69 +167,76 @@ def csv_send(headers, rows, name, title='', days=0, atm='all'):
 # ─── PDF HELPERS ───────────────────────────────────────────────────────────────
 
 def _pdf_kpi_block(story, kpis):
-    """Append a KPI summary card section to the story."""
-    P = lambda txt, **kw: Paragraph(txt, ParagraphStyle('kpi', **kw))
-
-    story.append(Spacer(1, 0.5 * cm))
-    story.append(P('<font color="#0F2557" size="13"><b>Performance Summary</b></font>',
-                    spaceBefore=4, spaceAfter=12))
-
+    """Append a premium KPI card section with Dashen Bank branding."""
     ncols = min(len(kpis), 4)
     page_w = landscape(A4)[0] - 3 * cm
     cw = page_w / ncols
 
-    labels_row = []
-    values_row = []
-    for label, value in kpis:
-        labels_row.append(
-            P(f'<font size="8" color="#64748B">{label}</font>', alignment=TA_CENTER))
-        values_row.append(
-            P(f'<font size="20" color="#0F2557"><b>{value}</b></font>', alignment=TA_CENTER))
+    Kl = lambda txt: Paragraph(
+        f'<font color="white" size="9"><b>{txt}</b></font>',
+        ParagraphStyle('kl', alignment=TA_CENTER))
+    Kv = lambda txt: Paragraph(
+        f'<font color="#012169" size="22"><b>{txt}</b></font>',
+        ParagraphStyle('kv', alignment=TA_CENTER))
+
+    labels_row = [Kl(label) for label, _ in kpis]
+    values_row = [Kv(value) for _, value in kpis]
 
     while len(labels_row) < ncols:
-        labels_row.append(P(''))
-        values_row.append(P(''))
+        labels_row.append(Paragraph('', ParagraphStyle('_e')))
+        values_row.append(Paragraph('', ParagraphStyle('_e')))
 
     t = Table([labels_row, values_row], colWidths=[cw] * ncols)
-    accent_colors = ['#0F2557', '#059669', '#D97706', '#DC2626']
-    style_cmds = [
+    t.setStyle(TableStyle([
         ('ALIGN',       (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN',      (0, 0), (-1, -1), 'MIDDLE'),
-        ('FONTNAME',    (0, 0), (-1,  0), 'Helvetica'),
-        ('FONTNAME',    (0, 1), (-1,  1), 'Helvetica-Bold'),
-        ('GRID',        (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
-        ('BACKGROUND',  (0, 0), (-1, -1), colors.white),
+        ('BACKGROUND',  (0, 0), (-1,  0), colors.HexColor('#273274')),
+        ('TEXTCOLOR',   (0, 0), (-1,  0), colors.white),
         ('TOPPADDING',  (0, 0), (-1,  0), 14),
-        ('BOTTOMPADDING', (0, 0), (-1,  0), 6),
-        ('TOPPADDING',  (0, 1), (-1,  1), 6),
-        ('BOTTOMPADDING', (0, 1), (-1,  1), 14),
-    ]
-    for i in range(ncols):
-        style_cmds.append(
-            ('LINEABOVE', (i, 0), (i, 1), 3, colors.HexColor(accent_colors[i % 4])))
-    t.setStyle(TableStyle(style_cmds))
+        ('BOTTOMPADDING', (0, 0), (-1,  0), 10),
+        ('BACKGROUND',  (0, 1), (-1,  1), colors.white),
+        ('TOPPADDING',  (0, 1), (-1,  1), 16),
+        ('BOTTOMPADDING', (0, 1), (-1,  1), 20),
+        ('LINEABOVE',   (0, 1), (-1,  1), 3, colors.HexColor('#FDD79A')),
+        ('INNERGRID',   (0, 0), (-1, -1), 0, colors.white),
+        ('BOX',         (0, 0), (0,  1), 0.5, colors.HexColor('#E2E8F0')),
+        ('BOX',         (1, 0), (1,  1), 0.5, colors.HexColor('#E2E8F0')),
+        ('BOX',         (2, 0), (2,  1), 0.5, colors.HexColor('#E2E8F0')),
+        ('BOX',         (3, 0), (3,  1), 0.5, colors.HexColor('#E2E8F0')),
+    ]))
+    story.append(Spacer(1, 0.4 * cm))
+    story.append(Paragraph(
+        '<font color="#012169" size="14"><b>Performance Summary</b></font>',
+        ParagraphStyle('sec', spaceBefore=4, spaceAfter=2)))
+    story.append(HRFlowable(width=4*cm, thickness=2.5,
+                             color=colors.HexColor('#FDD79A'), spaceAfter=14))
     story.append(t)
-    story.append(Spacer(1, 1 * cm))
+    story.append(Spacer(1, 0.8 * cm))
 
 
 def _pdf_header_block(story, title, days, atm):
-    """Shared PDF header: logo + title + gold rule."""
-    P = lambda txt, **kw: Paragraph(txt, ParagraphStyle('_h', **kw))
+    """Shared PDF header: logo + bank name + gold rule + report title + metadata."""
     if os.path.exists(LOGO_PATH):
         img = Image(LOGO_PATH, width=5 * cm, height=1.5 * cm, kind='proportional')
         img.hAlign = 'CENTER'
         story.append(img)
         story.append(Spacer(1, 0.3 * cm))
+
+    # Explicit styles to avoid overlapping
+    style_bank = ParagraphStyle('_h1', fontSize=16, leading=20, alignment=TA_CENTER, spaceAfter=2)
+    style_sys  = ParagraphStyle('_h2', fontSize=9, leading=12, alignment=TA_CENTER, spaceAfter=6)
+    style_title = ParagraphStyle('_h3', fontSize=12, leading=15, alignment=TA_CENTER, spaceAfter=6)
+    style_meta = ParagraphStyle('_h4', fontSize=8, leading=10, alignment=TA_CENTER, spaceAfter=6)
+
     story += [
-        P('<font color="#0F2557" size="14"><b>DASHEN BANK S.C. — ATM MONITORING SYSTEM</b></font>',
-          alignment=TA_CENTER, spaceAfter=4),
-        P(f'<font color="#0F2557" size="11"><b>{title}</b></font>',
-          alignment=TA_CENTER, spaceAfter=4),
-        P(f'<font color="#64748B" size="9">Period: Last {days} days  |  '
-          f'ATM: {"All ATMs" if atm == "all" else atm}  |  '
-          f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")} EAT</font>',
-          alignment=TA_CENTER, spaceAfter=2),
-        HRFlowable(width='100%', thickness=2, color=colors.HexColor('#C9A84C'), spaceAfter=12),
+        Paragraph('<b><font color="#012169">DASHEN BANK S.C.</font></b>', style_bank),
+        Paragraph('<font color="#273274">ATM MONITORING SYSTEM</font>', style_sys),
+        HRFlowable(width='70%', thickness=2.5, color=colors.HexColor('#FDD79A'), spaceAfter=10),
+        Paragraph(f'<b><font color="#273274">{title}</font></b>', style_title),
+        Paragraph(f'<font color="#64748B">Period: Last {days} days  |  '
+                  f'ATM: {"All ATMs" if atm == "all" else atm}  |  '
+                  f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")} EAT</font>', style_meta),
+        Spacer(1, 0.2 * cm),
     ]
 
 
@@ -252,7 +260,7 @@ def pdf_send(title, headers, rows, days, atm, name, kpis=None):
     story.append(mktable(headers, rows))
     story.append(Spacer(1, 0.5 * cm))
     story.append(P(
-        f'<font size="8" color="#64748B">Dashen Bank ATM Monitoring System  |  Confidential  |  '
+        f'<font size="7" color="#94A3B8">Dashen Bank ATM Monitoring System  |  Confidential  |  '
         f'{datetime.now().strftime("%Y-%m-%d")}</font>',
         alignment=TA_CENTER
     ))
@@ -269,7 +277,7 @@ def mktable(headers, rows):
     cw = page_w / len(headers)
     t = Table(data, colWidths=[cw] * len(headers), repeatRows=1)
     t.setStyle(TableStyle([
-        ('BACKGROUND',    (0, 0), (-1,  0), colors.HexColor('#0F2557')),
+        ('BACKGROUND',    (0, 0), (-1,  0), colors.HexColor('#273274')),
         ('TEXTCOLOR',     (0, 0), (-1,  0), colors.white),
         ('FONTNAME',      (0, 0), (-1,  0), 'Helvetica-Bold'),
         ('FONTSIZE',      (0, 0), (-1,  0), 9),

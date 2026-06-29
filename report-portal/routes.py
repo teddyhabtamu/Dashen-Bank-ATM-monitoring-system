@@ -562,7 +562,12 @@ def report_full(fmt):
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
                                 rightMargin=1.5 * cm, leftMargin=1.5 * cm,
                                 topMargin=2 * cm, bottomMargin=1.5 * cm)
-        P = lambda txt, **kw: Paragraph(txt, ParagraphStyle('_p', **kw))
+        # Explicit styles for header
+        style_bank = ParagraphStyle('_h1', fontSize=18, leading=22, alignment=TA_CENTER, spaceAfter=4)
+        style_sys  = ParagraphStyle('_h2', fontSize=11, leading=14, alignment=TA_CENTER, spaceAfter=8)
+        style_full = ParagraphStyle('_h3', fontSize=14, leading=18, alignment=TA_CENTER, spaceAfter=8)
+        style_meta = ParagraphStyle('_h4', fontSize=9, leading=12, alignment=TA_CENTER)
+        style_sec  = ParagraphStyle('_h_sec', fontSize=12, leading=15, spaceBefore=12, spaceAfter=8)
 
         story = []
         if os.path.exists(LOGO_PATH):
@@ -572,11 +577,12 @@ def report_full(fmt):
             story.append(Spacer(1, 0.5 * cm))
 
         story += [
-            P('<font color="#0F2557" size="18"><b>DASHEN BANK S.C.</b></font>', alignment=TA_CENTER, spaceAfter=6),
-            P('<font color="#0F2557" size="13"><b>ATM MONITORING SYSTEM — COMPLETE MANAGEMENT REPORT</b></font>', alignment=TA_CENTER, spaceAfter=6),
-            HRFlowable(width='60%', thickness=2, color=colors.HexColor('#C9A84C'), spaceAfter=10),
-            P(f'<font color="#64748B" size="10">Period: Last {days} days  |  Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")} EAT</font>', alignment=TA_CENTER),
-            Spacer(1, 1 * cm)
+            Paragraph('<b><font color="#012169">DASHEN BANK S.C.</font></b>', style_bank),
+            Paragraph('<font color="#273274">ATM MONITORING SYSTEM</font>', style_sys),
+            HRFlowable(width='60%', thickness=2.5, color=colors.HexColor('#FDD79A'), spaceAfter=12),
+            Paragraph('<b><font color="#273274">COMPLETE MANAGEMENT REPORT</font></b>', style_full),
+            Paragraph(f'<font color="#64748B">Period: Last {days} days  |  Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")} EAT</font>', style_meta),
+            Spacer(1, 1.2 * cm)
         ]
 
         cur = conn.cursor()
@@ -584,14 +590,14 @@ def report_full(fmt):
         # 1. Transaction Summary
         s1_sql = "SELECT atm_id, branch, COUNT(*), SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END), SUM(CASE WHEN status='DECLINED' THEN 1 ELSE 0 END), SUM(CASE WHEN status='ERROR' THEN 1 ELSE 0 END), ROUND(100.0*SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2), COALESCE(SUM(CASE WHEN status='APPROVED' AND txn_type='WITHDRAWAL' THEN amount ELSE 0 END),0) FROM atm_transactions WHERE recorded_at >= NOW() - INTERVAL %s GROUP BY atm_id, branch ORDER BY atm_id"
         cur.execute(s1_sql, [interval_str])
-        story += [P('<font color="#0F2557" size="12"><b>1. Transaction Summary</b></font>', spaceBefore=12, spaceAfter=8),
+        story += [Paragraph('<b><font color="#012169">1. Transaction Summary</font></b>', style_sec),
                   mktable(['ATM', 'Branch', 'Total Txns', 'Approved', 'Declined', 'Errors', 'Success Rate %', 'Cash Dispensed ETB'], cur.fetchall()),
                   Spacer(1, 0.8 * cm)]
 
         # 2. Cash Level
         s2_sql = "SELECT atm_id, branch, COALESCE(SUM(amount),0), COALESCE(ROUND(AVG(amount),2),0), COUNT(*), COALESCE(MAX(amount),0) FROM atm_transactions WHERE status='APPROVED' AND txn_type='WITHDRAWAL' AND recorded_at >= NOW() - INTERVAL %s GROUP BY atm_id, branch ORDER BY 3 DESC"
         cur.execute(s2_sql, [interval_str])
-        story += [P('<font color="#0F2557" size="12"><b>2. Cash Level & Dispensing</b></font>', spaceBefore=12, spaceAfter=8),
+        story += [Paragraph('<b><font color="#012169">2. Cash Level & Dispensing</font></b>', style_sec),
                   mktable(['ATM', 'Branch', 'Total Dispensed ETB', 'Avg Withdrawal ETB', 'Withdrawal Count', 'Largest Withdrawal ETB'], cur.fetchall()),
                   Spacer(1, 0.8 * cm)]
 
@@ -603,7 +609,7 @@ def report_full(fmt):
             res3_desc = [list(r) for r in res3]
             for r in res3_desc:
                 r.insert(3, _describe_error(r[2]))
-            story += [P('<font color="#0F2557" size="12"><b>3. Error & Incident Log</b></font>', spaceBefore=12, spaceAfter=8),
+            story += [Paragraph('<b><font color="#012169">3. Error & Incident Log</font></b>', style_sec),
                       mktable(['ATM', 'Branch', 'Error Code', 'Description', 'Occurrences', 'First Seen', 'Last Seen'], res3_desc),
                       Spacer(1, 0.8 * cm)]
 
@@ -628,13 +634,13 @@ def report_full(fmt):
         res4 = cur.fetchall()
         if res4:
             story += [PageBreak(),
-                      P('<font color="#0F2557" size="12"><b>4. ATM Performance Metrics</b></font>', spaceBefore=12, spaceAfter=8),
+                      Paragraph('<b><font color="#012169">4. ATM Performance Metrics</font></b>', style_sec),
                       mktable(['ATM', 'Branch', 'Total Transactions', 'Success Rate %', 'Avg Daily Txns', 'Peak Hour', 'Rank'], res4),
                       Spacer(1, 0.8 * cm)]
 
-        story.append(P(
+        story.append(Paragraph(
             f'<font size="8" color="#64748B">Dashen Bank ATM Monitoring System  |  Confidential Management Report  |  {datetime.now().strftime("%Y-%m-%d")}</font>',
-            alignment=TA_CENTER
+            style_meta
         ))
 
         cur.close(); conn.close()
