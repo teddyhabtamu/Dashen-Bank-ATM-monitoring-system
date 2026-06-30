@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 DB_HOST   = os.environ.get('DB_HOST',   'postgres')
 DB_NAME   = os.environ.get('DB_NAME',   'zabbix')
 DB_USER   = os.environ.get('DB_USER',   'zabbix')
-DB_PASS   = os.environ.get('DB_PASS',   'zabbix_pass')
+DB_PASS   = os.environ.get('DB_PASS',   '')
 
 ZABBIX_URL  = os.environ.get('ZABBIX_URL',  'http://zabbix-web:8080/api_jsonrpc.php')
 ZABBIX_USER = os.environ.get('ZABBIX_USER', 'Admin')

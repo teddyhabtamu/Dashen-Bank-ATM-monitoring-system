@@ -29,74 +29,12 @@
 }
 body { background: var(--surface); color: var(--text-primary); min-height: 100vh; }
 
-/* ── HEADER ── */
-.header {
-  background: rgba(255,255,255,0.92);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  padding: 0 36px;
-  height: 68px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  border-bottom: 1px solid var(--border-light);
-}
-.header::after {
-  content: '';
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  height: 3px;
-  background: var(--dashen-gold);
-  opacity: 0.6;
-}
-.header-left { display: flex; align-items: center; gap: 18px; }
-.logo-container { display: flex; align-items: center; justify-content: center; }
-.logo-container img { height: 34px; object-fit: contain; }
-.header-divider { width: 1px; height: 32px; background: var(--border); }
-.header-title { display: flex; flex-direction: column; }
-.header-brand { font-size: 16px; font-weight: 800; color: var(--dashen-navy); letter-spacing: -0.2px; line-height: 1.3; }
-.header-sub { font-size: 10px; color: var(--text-tertiary); font-weight: 500; letter-spacing: 0.5px; margin-top: -1px; }
-.header-right { display: flex; align-items: center; gap: 14px; }
-.live-badge {
-  background: var(--success-bg);
-  border: 1px solid rgba(5,150,105,0.15);
-  color: var(--success);
-  padding: 6px 16px;
-  border-radius: 100px;
-  font-size: 11px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  letter-spacing: 0.2px;
-}
-.pulse-dot {
-  width: 7px; height: 7px; border-radius: 50%; background: var(--success);
-  animation: pulse 2s cubic-bezier(0.4,0,0.6,1) infinite;
-  flex-shrink: 0;
-}
-@keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(5,150,105,0.4); }
-  50%       { box-shadow: 0 0 0 6px rgba(5,150,105,0); }
-}
+
+
 
 /* ── BREADCRUMB ── */
-.breadcrumb {
-  padding: 20px 36px 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-.breadcrumb a { color: var(--text-secondary); text-decoration: none; font-weight: 500; transition: color 0.15s; }
-.breadcrumb a:hover { color: var(--dashen-blue); }
-
 /* ── MAIN ── */
-.main-container { max-width: 1240px; margin: 0 auto; padding: 20px 36px 48px; }
+.main-container { padding: 20px 36px 48px; }
 
 /* ── KPI ── */
 .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 18px; margin-bottom: 28px; }
@@ -273,10 +211,6 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
 .loading-bar { height: 3px; width: 0%; border-radius: 3px; background: var(--dashen-navy); animation: loading 1.8s ease-in-out infinite; }
 .loading-text { font-size: 11px; font-weight: 500; color: var(--text-secondary); margin-top: 8px; text-align: center; }
 @keyframes loading { 0% { width: 0%; opacity: 1; } 50% { width: 100%; opacity: 1; } 100% { width: 100%; opacity: 0; } }
-/* ── FOOTER ── */
-.footer { text-align: center; padding: 24px 36px; font-size: 11px; color: var(--text-tertiary); border-top: 1px solid var(--border-light); margin-top: 12px; }
-.footer a { color: var(--text-secondary); text-decoration: none; font-weight: 500; }
-.footer a:hover { color: var(--dashen-blue); }
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -285,12 +219,6 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
 /* ── RESPONSIVE ── */
 @media(max-width:1024px){ .kpi-grid { grid-template-columns: repeat(3,1fr); } }
 @media(max-width:768px){
-  .header { padding: 12px 20px; height: auto; min-height: 60px; flex-wrap: wrap; gap: 12px; }
-  .header::after { display: none; }
-  .logo-container img { height: 26px; }
-  .header-brand { font-size: 14px; }
-  .header-sub { font-size: 9px; }
-  .breadcrumb { padding: 14px 20px 0; font-size: 11px; flex-wrap: wrap; line-height: 1.6; }
   .main-container { padding: 16px 20px 40px; }
   .kpi-grid { grid-template-columns: repeat(2,1fr); gap: 14px; }
   .kpi-card { padding: 16px 18px; }
@@ -306,42 +234,16 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
   .card-actions { padding: 14px 20px; flex-direction: column; gap: 8px; }
   .card-actions .btn { width: 100%; justify-content: center; }
 }
-@media(max-width:480px){ .kpi-grid { grid-template-columns: 1fr; } .header { flex-direction: column; align-items: flex-start; } }
+@media(max-width:480px){ .kpi-grid { grid-template-columns: 1fr; } }
 {% endblock %}
 
 {% block body %}
-<header class="header">
-  <div class="header-left">
-    <div class="logo-container">
-      <img src="/static/logo.png" alt="Dashen Bank" />
-    </div>
-    <div class="header-divider"></div>
-    <div class="header-title">
-      <span class="header-brand">Dashen Bank</span>
-      <span class="header-sub">ATM Report Portal</span>
-    </div>
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="layout-dashboard"></i></div>
+  <div>
+    <h1 class="page-title">Report Dashboard</h1>
+    <p class="page-subtitle">Real-time ATM transaction overview, KPIs, and downloadable reports.</p>
   </div>
-  <div class="header-right">
-    <a href="/admin/atm" class="btn btn-outline" style="padding:6px 14px;font-size:11px;font-weight:600;text-decoration:none;">
-      <i data-lucide="settings" style="width:13px;height:13px"></i> ATM Admin
-    </a>
-    <a href="/ej-search" class="btn btn-outline" style="padding:6px 14px;font-size:11px;font-weight:600;text-decoration:none;">
-      <i data-lucide="file-search" style="width:13px;height:13px"></i> EJ Search
-    </a>
-    <div class="live-badge">
-      <span class="pulse-dot"></span> System Online
-    </div>
-  </div>
-</header>
-
-<div class="breadcrumb">
-  <i data-lucide="home" style="width:12px;height:12px;"></i>
-  <a href="#">Dashen Bank</a>
-  <i data-lucide="chevron-right" style="width:12px;height:12px;opacity:0.35;"></i>
-  <a id="grafana-link" href="#" target="_blank">ATM Monitoring</a>
-  <script>document.getElementById('grafana-link').href='http://'+window.location.hostname+':3002';</script>
-  <i data-lucide="chevron-right" style="width:12px;height:12px;opacity:0.35;"></i>
-  <span style="color:var(--text-primary);font-weight:600;">Report Centre</span>
 </div>
 
 <main class="main-container">
@@ -606,10 +508,6 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
 
   </div>
 </main>
-
-<footer class="footer">
-  Dashen Bank &middot; ATM Report Portal &middot; <a href="https://dashenbanksc.com/frequently-asked-questions/#:~:text=Our%20Customer%20Service%20Team%20is,via%206333%20for%20any%20support." target="_blank">Support</a>
-</footer>
 {% endblock %}
 
 {% block extra_scripts %}

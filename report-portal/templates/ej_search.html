@@ -3,9 +3,8 @@
 {% block title %}EJ Search — Dashen Bank{% endblock %}
 
 {% block extra_style %}
-body { background: #F0F2F6; color: #0F172A; padding: 32px; }
-h1 { color: #012169; font-size: 22px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 4px; }
-p.sub { color: #64748B; font-size: 13px; margin-bottom: 24px; }
+body { background: #F0F2F6; color: #0F172A; }
+.card-header h2 { font-size: 15px; font-weight: 700; }
 .search-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap: 14px; padding: 24px; }
 .search-actions { padding: 0 24px 24px; display: flex; gap: 10px; }
 .search-actions .btn { padding: 10px 20px; }
@@ -21,13 +20,14 @@ td { font-variant-numeric: tabular-nums; }
 {% endblock %}
 
 {% block body %}
-<div style="margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-  <a href="/" style="background:#F0F2F6;padding:8px 16px;border-radius:6px;color:#012169;text-decoration:none;font-weight:500;font-size:13px">&larr; Report Portal</a>
-  <span style="color:#94A3B8;font-size:13px">|</span>
-  <span style="color:#475569;font-size:13px;font-weight:600">Electronic Journal Search</span>
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="file-search"></i></div>
+  <div>
+    <h1 class="page-title">EJ Search</h1>
+    <p class="page-subtitle">Search the electronic journal for dispute investigation and transaction lookup.</p>
+  </div>
 </div>
-<h1>EJ Search</h1>
-<p class="sub">Search the electronic journal for dispute investigation and transaction lookup.</p>
+<div class="page-content">
 
 <form method="post" action="/ej-search">
 <div class="card">
@@ -193,6 +193,7 @@ td { font-variant-numeric: tabular-nums; }
   {% endif %}
 {% endif %}
 </form>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}

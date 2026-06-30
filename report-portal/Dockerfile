@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN pip install flask psycopg2-binary openpyxl reportlab requests
 
-COPY app.py .
+COPY . .
 
 EXPOSE 8888
 

@@ -6,9 +6,11 @@ Configures: Categories, Teams, SLA, Ticket Templates, Status Rules
 import requests
 import json
 
-GLPI_URL = "http://localhost:8082/apirest.php"
-APP_TOKEN = "XuApka4zrjQ9GFFEgGFHBlkpdmcPuY32q4DtsmmQ"
-USER = "glpi"
+import os
+
+GLPI_URL = os.environ.get('GLPI_URL', "http://localhost:8082/apirest.php")
+APP_TOKEN = os.environ.get('GLPI_APP_TOKEN', '')
+USER = os.environ.get('GLPI_USER', "glpi")
 PASS = os.environ.get('GLPI_API_PASSWORD', '')
 
 headers = {

@@ -33,7 +33,7 @@ SWITCH_PORT = int(os.environ.get('SWITCH_PORT', '9876'))
 DB_HOST = os.environ.get('DB_HOST', 'postgres')
 DB_NAME = os.environ.get('DB_NAME', 'zabbix')
 DB_USER = os.environ.get('DB_USER', 'zabbix')
-DB_PASS = os.environ.get('DB_PASS', 'zabbix_pass')
+DB_PASS = os.environ.get('DB_PASS', '')
 INTERVAL = int(os.environ.get('INTERVAL', '10'))
 
 # ─── ISO 8583 MESSAGE TYPES ───────────────────────────────────────────────────

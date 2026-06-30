@@ -3,64 +3,62 @@
 {% block title %}ATM Admin — Dashen Bank{% endblock %}
 
 {% block extra_style %}
-body { background: #F0F2F6; color: #0F172A; padding: 32px; }
-h1 { color: #012169; font-size: 22px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 4px; }
-p.sub { color: #64748B; font-size: 13px; margin-bottom: 24px; }
+body { background: #F0F2F6; color: #0F172A; }
 .card-header h2 { font-size: 15px; font-weight: 700; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 14px; padding: 24px; }
 .form-actions { padding: 0 24px 24px; display: flex; gap: 10px; }
 .form-actions .btn { padding: 10px 20px; }
 .actions { display: flex; gap: 6px; }
-.actions a { padding: 5px 10px; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 500; }
+.actions a { padding: 5px 10px; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 500; cursor:pointer }
 .actions .edit { background: rgba(1,33,105,.06); color: #012169; }
 .actions .edit:hover { background: rgba(1,33,105,.12); }
+.actions .delete { background: rgba(220,38,38,.07); color: #DC2626; }
+.actions .delete:hover { background: rgba(220,38,38,.14); }
 .empty { text-align: center; padding: 48px; color: #94A3B8; font-size: 14px; }
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:2000;display:none;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.modal-overlay.show{display:flex}
+.modal{background:#fff;border-radius:14px;width:640px;max-width:94vw;max-height:88vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.2);animation:modalIn .25s ease}
+@keyframes modalIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid #EEF1F6}
+.modal-header h2{font-size:16px;font-weight:700;color:#012169}
+.modal-close{width:32px;height:32px;border:none;background:transparent;color:#94A3B8;cursor:pointer;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:.2s}
+.modal-close:hover{background:#F1F5F9;color:#475569}
+.modal-close svg{width:18px;height:18px}
+.form-group{position:relative}
+.form-group.error input,.form-group.error select,.form-group.error .flatpickr-input{border-color:#DC2626;background:#FEF2F2}
+.field-error{display:none;color:#DC2626;font-size:11px;margin-top:3px;font-weight:500}
+.form-group.error .field-error{display:block}
+.modal-alert{display:none;padding:10px 16px;margin:0 24px;border-radius:6px;font-size:13px;font-weight:500}
+.modal-alert.error{display:block;background:#FEF2F2;color:#DC2626;border:1px solid #FECACA}
+.modal-alert.success{display:block;background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0}
+.required{color:#DC2626}
+.modal-confirm{background:#fff;border-radius:14px;width:400px;max-width:90vw;padding:32px 28px 24px;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,.2);animation:modalIn .25s ease}
+.modal-confirm-icon{width:48px;height:48px;border-radius:50%;background:#FEF2F2;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;color:#DC2626}
+.modal-confirm-icon svg{width:24px;height:24px}
+.modal-confirm h3{font-size:17px;font-weight:700;color:#0F172A;margin:0 0 8px}
+.modal-confirm p{font-size:14px;color:#475569;margin:0 0 4px;line-height:1.5}
+.modal-confirm-note{font-size:12px;color:#94A3B8;margin-top:8px!important}
+.modal-confirm-actions{display:flex;gap:10px;justify-content:center;margin-top:20px}
+.modal-confirm-actions .btn{padding:9px 22px;font-size:13px}
+.btn-danger{background:#DC2626;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;transition:.2s}
+.btn-danger:hover{background:#B91C1C}
+.btn-danger:disabled{background:#FCA5A5;cursor:not-allowed}
 {% endblock %}
 
 {% block body %}
-<div style="margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-  <a href="/" style="background:#F0F2F6;padding:8px 16px;border-radius:6px;color:#012169;text-decoration:none;font-weight:500;font-size:13px">&larr; Report Portal</a>
-  <span style="color:#94A3B8;font-size:13px">|</span>
-  <span style="color:#475569;font-size:13px;font-weight:600">ATM Registration Admin</span>
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="settings"></i></div>
+  <div>
+    <h1 class="page-title">ATM Registration</h1>
+    <p class="page-subtitle">Manage ATM location data used by monitoring dashboards and reports.</p>
+  </div>
 </div>
-<h1>ATM Registration</h1>
-<p class="sub">Manage ATM location data used by monitoring dashboards and reports.</p>
-
-<div class="card">
-  <div class="card-header"><h2>{{ form_title }}</h2></div>
-  {% if edit_note %}<h3 style="padding:24px 24px 0;font-size:14px;color:#012169">Editing ATM <code>{{ edit_mode }}</code></h3>{% endif %}
-  <form method="post" action="/admin/atm/save">
-    <div class="form-grid">
-      {% for name, label, typ in fields %}
-        <div class="form-group">
-          <label>{{ label }}</label>
-          {% if typ == 'select' %}
-            <select name="{{ name }}">
-              {% for opt in ['active','inactive'] %}
-                <option value="{{ opt }}"{% if edit_data.get(name,'') == opt %} selected{% endif %}>{{ opt }}</option>
-              {% endfor %}
-            </select>
-          {% elif typ == 'date' %}
-            <input type="text" name="{{ name }}" class="flatpickr-date" placeholder="YYYY-MM-DD" value="{{ edit_data.get(name,'') or '' }}">
-          {% elif typ == 'number' %}
-            <input type="number" name="{{ name }}" step="any" value="{{ edit_data.get(name,'') or '' }}">
-          {% else %}
-            <input type="text" name="{{ name }}" value="{{ edit_data.get(name,'') or '' }}">
-          {% endif %}
-        </div>
-      {% endfor %}
-    </div>
-    <div class="form-actions">
-      <button type="submit" class="btn btn-primary"><i data-lucide="save" style="width:14px;height:14px"></i> Save ATM</button>
-      <a href="/admin/atm" class="btn btn-outline">Cancel</a>
-    </div>
-  </form>
-</div>
+<div class="page-content">
 
 <div class="card">
   <div class="card-header">
     <h2>Registered ATMs ({{ atm_count }})</h2>
-    <a href="/admin/atm" class="btn btn-primary">+ Add New ATM</a>
+    <button class="btn btn-primary" onclick="openModal()"><i data-lucide="plus" style="width:14px;height:14px"></i> Add New ATM</button>
   </div>
   <div style="overflow-x:auto">
     <table>
@@ -88,7 +86,7 @@ p.sub { color: #64748B; font-size: 13px; margin-bottom: 24px; }
               {% set status = d.status or 'active' %}
               <span class="badge {{ status }}">{{ status }}</span>
             </td>
-            <td class="actions"><a class="edit" href="?edit={{ d.atm_id }}">Edit</a></td>
+            <td class="actions"><a class="edit" onclick="editATM('{{ d.atm_id }}')">Edit</a><a class="delete" onclick="deleteATM('{{ d.atm_id }}')">Delete</a></td>
           </tr>
           {% endfor %}
         {% else %}
@@ -98,15 +96,282 @@ p.sub { color: #64748B; font-size: 13px; margin-bottom: 24px; }
     </table>
   </div>
 </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">Add New ATM</h2>
+      <button class="modal-close" onclick="closeModal()"><i data-lucide="x"></i></button>
+    </div>
+    <form method="post" action="/admin/atm/save" id="atmForm" novalidate>
+      <div class="modal-alert" id="formAlert"></div>
+      <div class="form-grid">
+        {% for name, label, typ in fields %}
+          <div class="form-group" data-field="{{ name }}">
+            <label>{{ label }} <span class="required">*</span></label>
+            {% if typ == 'select' %}
+              <select name="{{ name }}" id="field-{{ name }}" required>
+                <option value="">-- Select --</option>
+                {% for opt in ['active','inactive'] %}
+                  <option value="{{ opt }}">{{ opt }}</option>
+                {% endfor %}
+              </select>
+            {% elif typ == 'date' %}
+              <input type="text" name="{{ name }}" id="field-{{ name }}" class="flatpickr-date" placeholder="YYYY-MM-DD" required>
+            {% elif typ == 'number' %}
+              <input type="number" name="{{ name }}" id="field-{{ name }}" step="any" required>
+            {% else %}
+              <input type="text" name="{{ name }}" id="field-{{ name }}" required>
+            {% endif %}
+            <span class="field-error" id="error-{{ name }}"></span>
+          </div>
+        {% endfor %}
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary"><i data-lucide="save" style="width:14px;height:14px"></i> Save ATM</button>
+        <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="deleteOverlay" onclick="if(event.target===this)closeDeleteModal()">
+  <div class="modal-confirm">
+    <div class="modal-confirm-icon"><i data-lucide="alert-triangle"></i></div>
+    <h3>Delete ATM</h3>
+    <p>Are you sure you want to delete <strong id="deleteAtmId">ATM-XXX</strong>?</p>
+    <p class="modal-confirm-note">This will remove it from maps, reports, and dashboards permanently.</p>
+    <div class="modal-confirm-actions">
+      <button class="btn btn-outline" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
-lucide.createIcons()
-document.querySelectorAll('.flatpickr-date').forEach(el => flatpickr(el, {
-  dateFormat: 'Y-m-d', allowInput: true, disableMobile: true, monthSelectorType: 'static',
-}))
-initCustomSelects()
+var atmsData = {{ atms|tojson }};
+var FIELDS = {{ fields|tojson }};
+
+function openModal(data){
+  clearErrors();
+  document.getElementById('formAlert').className = 'modal-alert';
+  document.getElementById('formAlert').textContent = '';
+  document.getElementById('modalOverlay').classList.add('show');
+  document.getElementById('modalTitle').textContent = data ? 'Edit ATM' : 'Add New ATM';
+  {% for name, label, typ in fields %}
+    var el = document.getElementById('field-{{ name }}');
+    if(el) el.value = data ? (data['{{ name }}'] || '') : '';
+  {% endfor %}
+  syncCustomSelects();
+  lucide.createIcons();
+  initFlatpickr();
+}
+function syncCustomSelects(){
+  document.querySelectorAll('select').forEach(function(sel){
+    var wrap = sel.closest('.cust-select');
+    if(!wrap) return;
+    var trig = wrap.querySelector('.cust-trigger');
+    var drop = wrap.querySelector('.cust-drop');
+    if(trig) trig.textContent = sel.options[sel.selectedIndex].text;
+    if(drop){
+      drop.querySelectorAll('.cust-opt').forEach(function(o, i){
+        o.classList.toggle('sel', i === sel.selectedIndex);
+      });
+    }
+  });
+}
+function editATM(id){
+  var data = atmsData.find(function(a){ return a.atm_id === id; });
+  if(data) openModal(data);
+}
+function deleteATM(id){
+  document.getElementById('deleteAtmId').textContent = id;
+  document.getElementById('deleteOverlay').classList.add('show');
+  document.getElementById('confirmDeleteBtn').dataset.atmId = id;
+  document.getElementById('confirmDeleteBtn').disabled = false;
+  document.getElementById('confirmDeleteBtn').innerHTML = '<i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete';
+  lucide.createIcons();
+}
+function closeDeleteModal(){
+  document.getElementById('deleteOverlay').classList.remove('show');
+}
+function confirmDelete(){
+  var btn = document.getElementById('confirmDeleteBtn');
+  var id = btn.dataset.atmId;
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader-2" style="width:14px;height:14px;animation:spin 1s linear infinite"></i> Deleting...';
+  lucide.createIcons();
+  fetch('/admin/atm/delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+    body: 'atm_id=' + encodeURIComponent(id)
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if(data.success){
+      closeDeleteModal();
+      location.reload();
+    } else {
+      alert(data.message || 'Failed to delete ATM.');
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete';
+      lucide.createIcons();
+    }
+  })
+  .catch(function(){
+    alert('Network error. Please try again.');
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete';
+    lucide.createIcons();
+  });
+}
+function closeModal(){
+  document.getElementById('modalOverlay').classList.remove('show');
+  clearErrors();
+}
+function clearErrors(){
+  document.querySelectorAll('.form-group.error').forEach(function(g){ g.classList.remove('error'); });
+  document.querySelectorAll('.field-error').forEach(function(e){ e.textContent = ''; });
+  document.getElementById('formAlert').className = 'modal-alert';
+}
+function showFieldError(name, msg){
+  var group = document.querySelector('.form-group[data-field="'+name+'"]');
+  if(group) group.classList.add('error');
+  var el = document.getElementById('error-'+name);
+  if(el) el.textContent = msg;
+}
+function showAlert(msg, type){
+  var el = document.getElementById('formAlert');
+  el.textContent = msg;
+  el.className = 'modal-alert ' + type;
+}
+function initFlatpickr(){
+  document.querySelectorAll('.flatpickr-date').forEach(function(el){
+    if(el._flatpickr) el._flatpickr.destroy();
+    flatpickr(el,{dateFormat:'Y-m-d',allowInput:true,disableMobile:true,monthSelectorType:'static'});
+  });
+}
+
+var VALIDATORS = {
+  atm_id: function(v){
+    if(!v) return 'ATM ID is required';
+    if(v.length < 3) return 'ATM ID must be at least 3 characters';
+    if(!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(v)) return 'Only letters, numbers, hyphens and underscores';
+  },
+  branch: function(v){
+    if(!v) return 'Branch is required';
+    if(v.length < 2) return 'Branch must be at least 2 characters';
+  },
+  district: function(v){
+    if(!v) return 'District is required';
+    if(v.length < 2) return 'District must be at least 2 characters';
+  },
+  city: function(v){
+    if(!v) return 'City is required';
+    if(v.length < 2) return 'City must be at least 2 characters';
+  },
+  region: function(v){
+    if(!v) return 'Region is required';
+    if(v.length < 2) return 'Region must be at least 2 characters';
+  },
+  latitude: function(v){
+    if(!v) return 'Latitude is required';
+    var n = parseFloat(v);
+    if(isNaN(n)) return 'Latitude must be a number';
+    if(n < -90 || n > 90) return 'Latitude must be between -90 and 90';
+  },
+  longitude: function(v){
+    if(!v) return 'Longitude is required';
+    var n = parseFloat(v);
+    if(isNaN(n)) return 'Longitude must be a number';
+    if(n < -180 || n > 180) return 'Longitude must be between -180 and 180';
+  },
+  terminal_id: function(v){
+    if(!v) return 'Terminal ID is required';
+    if(v.length < 2) return 'Terminal ID must be at least 2 characters';
+  },
+  vendor: function(v){
+    if(!v) return 'Vendor is required';
+    if(v.length < 2) return 'Vendor must be at least 2 characters';
+  },
+  model: function(v){
+    if(!v) return 'Model is required';
+    if(v.length < 2) return 'Model must be at least 2 characters';
+  },
+  install_date: function(v){
+    if(!v) return 'Install date is required';
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return 'Use YYYY-MM-DD format';
+  },
+  status: function(v){
+    if(!v || v === '') return 'Status is required';
+    if(v !== 'active' && v !== 'inactive') return 'Status must be active or inactive';
+  }
+};
+
+document.getElementById('atmForm').addEventListener('submit', function(e){
+  e.preventDefault();
+  clearErrors();
+
+  var errors = {};
+  var formData = new FormData(this);
+
+  FIELDS.forEach(function(f){
+    var field = f[0];
+    var val = (formData.get(field) || '').trim();
+    var validator = VALIDATORS[field];
+    if(validator){
+      var err = validator(val);
+      if(err){ errors[field] = err; showFieldError(field, err); }
+    }
+  });
+
+  if(Object.keys(errors).length > 0){
+    showAlert('Please fix the highlighted fields before saving.', 'error');
+    return;
+  }
+
+  var btn = this.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader-2" style="width:14px;height:14px;animation:spin 1s linear infinite"></i> Saving...';
+  lucide.createIcons();
+
+  fetch(this.action, {
+    method: 'POST',
+    body: formData,
+    headers: {'X-Requested-With': 'XMLHttpRequest'}
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if(data.error){
+      if(data.errors){
+        Object.keys(data.errors).forEach(function(field){
+          showFieldError(field, data.errors[field]);
+        });
+      }
+      showAlert(data.message || 'Validation failed. Please check the form.', 'error');
+    } else {
+      showAlert('ATM saved successfully! Redirecting...', 'success');
+      setTimeout(function(){ window.location.href = '/admin/atm'; }, 600);
+    }
+  })
+  .catch(function(){
+    showAlert('Network error. Please try again.', 'error');
+  })
+  .finally(function(){
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="save" style="width:14px;height:14px"></i> Save ATM';
+    lucide.createIcons();
+  });
+});
+
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape'){ closeModal(); closeDeleteModal(); }
+});
+initCustomSelects();
+initFlatpickr();
 </script>
 {% endblock %}

@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 DB_HOST = os.environ.get('DB_HOST', 'postgres')
 DB_NAME = os.environ.get('DB_NAME', 'zabbix')
 DB_USER = os.environ.get('DB_USER', 'zabbix')
-DB_PASS = os.environ.get('DB_PASS', 'zabbix_pass')
+DB_PASS = os.environ.get('DB_PASS', '')
 
 CHECK_INTERVAL   = int(os.environ.get('CHECK_INTERVAL',   '60'))   # seconds between scans
 VELOCITY_WINDOW  = int(os.environ.get('VELOCITY_WINDOW',  '10'))   # minutes
@@ -118,11 +118,11 @@ def check_velocity(conn, cur):
         FROM atm_transactions
         WHERE txn_type = 'WITHDRAWAL'
         AND status = 'APPROVED'
-        AND recorded_at >= NOW() - INTERVAL '%s minutes'
+        AND recorded_at >= NOW() - INTERVAL %s
         AND card_masked IS NOT NULL
         GROUP BY atm_id, branch, card_masked
         HAVING COUNT(*) >= %s
-    """ % (VELOCITY_WINDOW, VELOCITY_LIMIT))
+    """, (f"{VELOCITY_WINDOW} minutes", VELOCITY_LIMIT))
     hits = cur.fetchall()
     for atm_id, branch, card, cnt, total in hits:
         if already_detected(cur, atm_id, 'VELOCITY', card, window_minutes=VELOCITY_WINDOW):
@@ -142,12 +142,12 @@ def check_failure_spike(conn, cur):
             ROUND(100.0 * SUM(CASE WHEN status IN ('DECLINED','ERROR','TIMEOUT')
                 THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) AS fail_rate
         FROM atm_transactions
-        WHERE recorded_at >= NOW() - INTERVAL '%s minutes'
+        WHERE recorded_at >= NOW() - INTERVAL %s
         GROUP BY atm_id, branch
         HAVING COUNT(*) >= 5
         AND (SUM(CASE WHEN status IN ('DECLINED','ERROR','TIMEOUT') THEN 1 ELSE 0 END)
             / NULLIF(COUNT(*), 0)::float) >= %s
-    """ % (FAILURE_WINDOW, FAILURE_THRESHOLD))
+    """, (f"{FAILURE_WINDOW} minutes", FAILURE_THRESHOLD))
     hits = cur.fetchall()
     for atm_id, branch, total, failed, fail_rate in hits:
         if already_detected(cur, atm_id, 'FAILURE_SPIKE', None, window_minutes=FAILURE_WINDOW):
@@ -183,11 +183,11 @@ def check_rapid_sequential(conn, cur):
         SELECT
             atm_id, branch, card_masked, COUNT(*) AS cnt
         FROM atm_transactions
-        WHERE recorded_at >= NOW() - INTERVAL '%s minutes'
+        WHERE recorded_at >= NOW() - INTERVAL %s
         AND card_masked IS NOT NULL
         GROUP BY atm_id, branch, card_masked
         HAVING COUNT(*) >= %s
-    """ % (RAPID_WINDOW, RAPID_LIMIT))
+    """, (f"{RAPID_WINDOW} minutes", RAPID_LIMIT))
     hits = cur.fetchall()
     for atm_id, branch, card, cnt in hits:
         if already_detected(cur, atm_id, 'RAPID_SEQ', card, window_minutes=RAPID_WINDOW):
@@ -229,7 +229,7 @@ def check_offhours_spike(conn, cur):
         LEFT JOIN historical_avg h ON c.atm_id = h.atm_id
         WHERE c.current_cnt > COALESCE(h.avg_cnt, 1) * %s
         AND c.current_cnt >= 3
-    """ % OFFHOURS_MULT)
+    """, (OFFHOURS_MULT,))
     hits = cur.fetchall()
     for atm_id, branch, current, avg in hits:
         if already_detected(cur, atm_id, 'OFFHOURS_SPIKE', None, window_minutes=60):

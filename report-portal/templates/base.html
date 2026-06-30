@@ -11,9 +11,105 @@
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 {% block extra_head %}{% endblock %}
 <style>
-/* ── SHARED CUSTOM SELECT (cust-select) ── */
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;background:#F0F2F6;color:#0F172A;min-height:100vh}
+
+/* ── SIDEBAR ── */
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:240px;background:#012169;z-index:1000;display:flex;flex-direction:column;transition:width .3s cubic-bezier(.4,0,.2,1);overflow:hidden}
+.sidebar.collapsed{width:60px}
+
+.sidebar-brand{display:flex;align-items:center;gap:10px;padding:15px 10px 15px 15px;border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0;overflow:hidden;min-height:60px}
+.sidebar.collapsed .sidebar-brand{justify-content:center;padding:16px 8px;gap:0}
+.sidebar-logo{width:28px;height:28px;object-fit:contain;border-radius:4px;flex-shrink:0}
+.sidebar.collapsed .sidebar-logo{display:none}
+.sidebar.collapsed .sidebar-actions{margin-left:0}
+.sidebar-brand-text{display:flex;flex-direction:column;white-space:nowrap;opacity:1;transition:opacity .2s ease .15s}
+.sidebar.collapsed .sidebar-brand-text{opacity:0;width:0;overflow:hidden;padding:0;margin:0;pointer-events:none;flex-shrink:0}
+.sidebar-brand-text .name{font-size:13px;font-weight:700;color:#fff;letter-spacing:-.1px;line-height:1.3}
+.sidebar-brand-text .sub{font-size:9px;color:rgba(255,255,255,.4);font-weight:500;letter-spacing:.4px;margin-top:-1px}
+
+.sidebar-nav{flex:1;padding:12px 8px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.sidebar.collapsed .sidebar-nav{padding:12px 4px}
+.nav-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:8px;color:rgba(255,255,255,.55);text-decoration:none;font-size:13px;font-weight:500;transition:all .2s ease;position:relative;white-space:nowrap;overflow:hidden;min-height:38px}
+.sidebar.collapsed .nav-item{justify-content:center;padding:10px 0;gap:0;color:rgba(255,255,255,.8)}
+.nav-item:hover{background:rgba(255,255,255,.08);color:rgba(255,255,255,.85)}
+.nav-item i{width:18px;height:18px;flex-shrink:0;color:rgba(255,255,255,.7);transition:opacity .2s}
+.nav-item:hover i{color:#fff}
+.sidebar.collapsed .nav-item i{color:rgba(255,255,255,.7)}
+.nav-item.active{background:rgba(255,255,255,.12);color:#fff;font-weight:600}
+.nav-item.active::before{content:'';position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:0 3px 3px 0;background:#FDD79A}
+.nav-item.active i{color:#fff}
+.nav-item span{opacity:1;transition:opacity .2s ease .15s}
+.sidebar.collapsed .nav-item span{opacity:0;width:0;margin:0;padding:0;pointer-events:none}
+.nav-section-label{padding:16px 12px 6px;font-size:9px;font-weight:600;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.8px;overflow:hidden;white-space:nowrap;transition:opacity .2s ease}
+.sidebar.collapsed .nav-section-label{opacity:0;height:0;padding:0 12px;margin:0;overflow:hidden;pointer-events:none}
+
+.sidebar-support{border-top:1px solid rgba(255,255,255,.06);padding:4px 8px;flex-shrink:0}
+.sidebar-support .nav-item{padding:8px 12px;font-size:12px;min-height:32px;color:rgba(255,255,255,.4)}
+.sidebar-support .nav-item:hover{color:rgba(255,255,255,.7);background:rgba(255,255,255,.05)}
+.sidebar-support .nav-item i{width:15px;height:15px;color:rgba(255,255,255,.4)}
+.sidebar-support .nav-item:hover i{color:rgba(255,255,255,.7)}
+.sidebar.collapsed .sidebar-support .nav-item span{opacity:0;width:0;margin:0;padding:0;pointer-events:none}
+.sidebar.collapsed .sidebar-support .nav-item{justify-content:center;padding:8px 0;gap:0}
+.sidebar-collapse-btn{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;background:rgba(255,255,255,.1);color:rgba(255,255,255,.8);cursor:pointer;border-radius:6px;flex-shrink:0;transition:all .2s ease}
+.sidebar-collapse-btn:hover{background:rgba(255,255,255,.2);color:#fff}
+.collapse-icon{width:16px;height:16px}
+.sidebar.collapsed .sidebar-collapse-btn{background:rgba(255,255,255,.08);color:rgba(255,255,255,.6)}
+.sidebar.collapsed .sidebar-collapse-btn:hover{background:rgba(255,255,255,.16);color:#fff}
+
+/* ── TOP BAR ── */
+.top-bar{display:none;position:sticky;top:0;z-index:900;height:56px;background:rgba(255,255,255,.95);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid #EEF1F6;padding:0 16px;align-items:center;justify-content:space-between}
+.top-bar-left{display:flex;align-items:center;gap:12px}
+.top-bar-right{display:flex;align-items:center}
+.hamburger{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:none;background:transparent;color:#475569;cursor:pointer;border-radius:8px;transition:.2s}
+.hamburger:hover{background:#F8FAFC}
+.hamburger i{width:20px;height:20px}
+.live-badge{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:#059669;letter-spacing:.2px}
+.pulse-dot{width:7px;height:7px;border-radius:50%;background:#059669;animation:pulse 2s cubic-bezier(.4,0,.6,1) infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(5,150,105,.4)}50%{box-shadow:0 0 0 6px rgba(5,150,105,0)}}
+
+.sidebar-close{display:none;align-items:center;justify-content:center;width:32px;height:32px;border:none;background:rgba(255,255,255,.1);color:rgba(255,255,255,.6);cursor:pointer;border-radius:6px;flex-shrink:0;transition:.2s}
+.sidebar-close:hover{background:rgba(255,255,255,.16);color:#fff}
+.sidebar-close svg{width:18px;height:18px}
+
+.sidebar-actions{display:flex;align-items:center;gap:4px;margin-left:auto}
+
+.main-content{margin-left:240px;min-height:100vh;display:flex;flex-direction:column;transition:margin-left .3s cubic-bezier(.4,0,.2,1)}
+.sidebar.collapsed ~ .main-content{margin-left:60px}
+
+/* ── PAGE HEADER (shared across all pages) ── */
+.page-header{padding:28px 36px 0;display:flex;align-items:flex-start;gap:14px}
+.page-header-icon{width:40px;height:40px;border-radius:10px;background:rgba(1,33,105,.06);display:flex;align-items:center;justify-content:center;color:#012169;flex-shrink:0}
+.page-header-icon svg{width:20px;height:20px}
+.page-title{font-size:20px;font-weight:800;color:#012169;letter-spacing:-.3px;line-height:1.2}
+.page-subtitle{font-size:13px;color:#64748B;margin-top:2px;line-height:1.5}
+.page-content{padding:20px 36px 48px}
+@media(max-width:768px){.page-header{padding:16px 20px 0}.page-content{padding:16px 20px 40px}}
+.overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:899;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);opacity:0;transition:opacity .3s ease}
+.overlay.show{display:block;opacity:1}
+
+@media(max-width:768px){
+  .top-bar{display:flex}
+  .sidebar-close{display:flex}
+  .sidebar{transform:translateX(-100%);width:280px !important;transition:transform .35s cubic-bezier(.22,1,.36,1);box-shadow:4px 0 40px rgba(0,0,0,.15);z-index:1000}
+  .sidebar.open{transform:translateX(0)}
+  .overlay.show{display:block}
+  .main-content{margin-left:0 !important}
+  .sidebar.collapsed{width:280px !important}
+  .sidebar.collapsed .sidebar-brand-text,
+  .sidebar.collapsed .nav-item span,
+  .sidebar.collapsed .nav-section-label{opacity:1 !important;pointer-events:auto !important}
+  .sidebar.collapsed .sidebar-collapse-btn{display:none}
+  .sidebar-nav{padding:8px 10px}
+  .nav-item{padding:12px 14px;font-size:14px;min-height:44px;border-radius:10px}
+  .nav-item i{width:20px;height:20px}
+  .sidebar-brand{padding:14px 16px}
+  .sidebar-logo{width:30px;height:30px}
+  .sidebar-brand-text .name{font-size:15px}
+  .sidebar-collapse-btn{display:none}
+}
+
+/* ── SHARED CUSTOM SELECT ── */
 .cust-select{position:relative;font-family:inherit;width:100%}
 .cust-select select{display:none}
 .cust-trigger{background:#fff;border:1px solid #E4E9F1;border-radius:6px;padding:8px 28px 8px 10px;font-size:12px;color:#0F172A;cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;transition:border-color .2s,box-shadow .2s;position:relative;width:100%}
@@ -78,8 +174,121 @@ tr:hover{background:#EEF2FF}
 </style>
 </head>
 <body>
+
+<header class="top-bar">
+  <div class="top-bar-left">
+    <button class="hamburger" id="hamburger" onclick="toggleMobile()" aria-label="Toggle menu">
+      <i data-lucide="menu"></i>
+    </button>
+  </div>
+  <div class="top-bar-right">
+    <div class="live-badge">
+      <span class="pulse-dot"></span> System Online
+    </div>
+  </div>
+</header>
+
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <img src="/static/logo.png" alt="Dashen Bank" class="sidebar-logo">
+    <div class="sidebar-brand-text">
+      <span class="name">Dashen Bank</span>
+      <span class="sub">ATM Monitoring</span>
+    </div>
+    <div class="sidebar-actions">
+      <button class="sidebar-collapse-btn" onclick="toggleCollapse()" title="Collapse sidebar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="collapse-icon"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><polyline points="13 9 16 12 13 15"/></svg>
+      </button>
+      <button class="sidebar-close" id="sidebarClose" onclick="closeMobile()" aria-label="Close menu">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Navigation</div>
+    <a href="/" class="nav-item {% if request.path == '/' %}active{% endif %}">
+      <i data-lucide="layout-dashboard"></i>
+      <span>Dashboard</span>
+    </a>
+    <a href="/admin/atm" class="nav-item {% if request.path.startswith('/admin') %}active{% endif %}">
+      <i data-lucide="settings"></i>
+      <span>ATM Registration</span>
+    </a>
+    <a href="/ej-search" class="nav-item {% if request.path.startswith('/ej-search') %}active{% endif %}">
+      <i data-lucide="file-search"></i>
+      <span>EJ Search</span>
+    </a>
+    <div class="nav-section-label" style="margin-top:8px">Quick Links</div>
+    <a href="http://localhost:3002" target="_blank" class="nav-item">
+      <i data-lucide="bar-chart-3"></i>
+      <span>Grafana</span>
+    </a>
+    <a href="http://localhost:8080" target="_blank" class="nav-item">
+      <i data-lucide="server"></i>
+      <span>Zabbix</span>
+    </a>
+  </nav>
+  <div class="sidebar-support">
+    <a href="https://dashenbanksc.com/frequently-asked-questions/#:~:text=Our%20Customer%20Service%20Team%20is,via%206333%20for%20any%20support." target="_blank" class="nav-item support-link">
+      <i data-lucide="help-circle"></i>
+      <span>Support</span>
+    </a>
+  </div>
+</div>
+
+<div class="overlay" id="overlay" onclick="closeMobile()"></div>
+
+<div class="main-content">
 {% block body %}{% endblock %}
+</div>
+
 <script>
+// Fix external links to use current hostname
+document.querySelectorAll('.nav-item[href*="localhost"]').forEach(function(el){
+  el.href = el.href.replace('localhost', window.location.hostname);
+});
+
+// ── SIDEBAR COLLAPSE ──
+(function(){
+  var saved = localStorage.getItem('sidebarCollapsed');
+  if(saved === 'true') {
+    document.getElementById('sidebar').classList.add('collapsed');
+    var icon = document.querySelector('.collapse-icon polyline');
+    if(icon) icon.setAttribute('points', '10 9 15 12 10 15');
+  }
+  lucide.createIcons();
+})();
+
+function toggleCollapse(){
+  var s = document.getElementById('sidebar');
+  s.classList.toggle('collapsed');
+  var icon = s.querySelector('.collapse-icon polyline');
+  if(icon) icon.setAttribute('points', s.classList.contains('collapsed') ? '10 9 15 12 10 15' : '16 15 11 12 16 9');
+  localStorage.setItem('sidebarCollapsed', s.classList.contains('collapsed'));
+}
+
+// ── MOBILE ──
+function toggleMobile(){
+  var s = document.getElementById('sidebar');
+  if(s.classList.contains('open')) return closeMobile();
+  s.classList.remove('collapsed');
+  s.classList.add('open');
+  document.getElementById('overlay').classList.add('show');
+}
+function closeMobile(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+}
+document.querySelectorAll('.sidebar-nav .nav-item').forEach(function(el){
+  el.addEventListener('click', function(){
+    if(window.innerWidth <= 768 && !this.getAttribute('target')) closeMobile();
+  });
+});
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape' && document.getElementById('overlay').classList.contains('show')) closeMobile();
+});
+
+// ── CUSTOM SELECTS ──
 function initCustomSelects(){
   document.querySelectorAll('select').forEach(function(sel){
     if(sel.closest('.cust-select'))return;

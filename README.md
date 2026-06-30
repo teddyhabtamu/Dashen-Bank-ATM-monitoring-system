@@ -63,7 +63,7 @@ Grafana auto-loads datasources from `config/grafana/datasources.yml`
 and dashboards from `config/grafana/dashboards/`.
 
 If dashboards did not load automatically:
-1. Open `http://localhost:3001` (`admin` / `dashen2024`)
+1. Open `http://localhost:3002` (`admin` / `dashen2024`)
 2. **Dashboards → Import → Upload JSON file**
    → import each file from `config/grafana/dashboards/`
 
@@ -187,12 +187,6 @@ transaction-style log files that Filebeat ships to OpenSearch for
 search in OpenSearch Dashboards. These are **separate** from `atm-sim-00X`
 (hardware metrics) and `txn-feed-00X` (PostgreSQL transactions).
 
-> **Confirmed issue:** on a fresh clone, the `atm-ej-00X` services
-> are **not present** in `docker-compose.yml` (only `atm-sim-00X`
-> and `txn-feed-00X` are). They must be added manually once — see
-> 8.3 below. This is now fixed in the repo going forward; if your
-> clone predates the fix, follow 8.1–8.5.
-
 ### 8.1 — Fix `ej-logs/` directory ownership
 
 After cloning on a new machine this directory is often created as
@@ -214,98 +208,19 @@ sudo chmod 644 filebeat.yml
 docker compose restart filebeat
 ```
 
-### 8.3 — Add the EJ generator services (if missing)
+### 8.3 — Verify EJ generator services are in docker-compose.yml
 
-Check first:
+The `atm-ej-001` through `atm-ej-005` services are now committed
+in `docker-compose.yml`. Verify they are present:
+
 ```bash
 grep -c "atm-ej-" docker-compose.yml
+# Expected: 5
 ```
 
-If this returns `0`, add the following 5 services to
-`docker-compose.yml`, before the `volumes:` section at the bottom:
-
-```yaml
-  atm-ej-001:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-ej-001
-    command: python3 ej_log_generator.py
-    environment:
-      ATM_ID: "ATM-001"
-      ATM_TERMINAL_ID: "TID001"
-      ATM_BRANCH: "Addis Ababa Main Branch"
-      EJ_LOG_PATH: "/var/log/atm-ej/ATM-001.log"
-    volumes:
-      - ./ej-logs:/var/log/atm-ej
-    restart: unless-stopped
-
-  atm-ej-002:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-ej-002
-    command: python3 ej_log_generator.py
-    environment:
-      ATM_ID: "ATM-002"
-      ATM_TERMINAL_ID: "TID002"
-      ATM_BRANCH: "Bole International Branch"
-      EJ_LOG_PATH: "/var/log/atm-ej/ATM-002.log"
-    volumes:
-      - ./ej-logs:/var/log/atm-ej
-    restart: unless-stopped
-
-  atm-ej-003:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-ej-003
-    command: python3 ej_log_generator.py
-    environment:
-      ATM_ID: "ATM-003"
-      ATM_TERMINAL_ID: "TID003"
-      ATM_BRANCH: "Merkato Branch"
-      EJ_LOG_PATH: "/var/log/atm-ej/ATM-003.log"
-    volumes:
-      - ./ej-logs:/var/log/atm-ej
-    restart: unless-stopped
-
-  atm-ej-004:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-ej-004
-    command: python3 ej_log_generator.py
-    environment:
-      ATM_ID: "ATM-004"
-      ATM_TERMINAL_ID: "TID004"
-      ATM_BRANCH: "Hawassa Branch"
-      EJ_LOG_PATH: "/var/log/atm-ej/ATM-004.log"
-    volumes:
-      - ./ej-logs:/var/log/atm-ej
-    restart: unless-stopped
-
-  atm-ej-005:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-ej-005
-    command: python3 ej_log_generator.py
-    environment:
-      ATM_ID: "ATM-005"
-      ATM_TERMINAL_ID: "TID005"
-      ATM_BRANCH: "Dire Dawa Branch"
-      EJ_LOG_PATH: "/var/log/atm-ej/ATM-005.log"
-    volumes:
-      - ./ej-logs:/var/log/atm-ej
-    restart: unless-stopped
-```
-
-Then commit so future clones don't hit this:
+If the count is `0`, your clone predates this fix. Run:
 ```bash
-git add docker-compose.yml
-git commit -m "Add missing atm-ej EJ log generator services"
-git push
+git pull
 ```
 
 ### 8.4 — Build and start EJ generators
@@ -381,7 +296,7 @@ then prints row counts to verify.
 | Service | URL | Login |
 |---|---|---|
 | Zabbix | http://localhost:8080 | Admin/zabbix |
-| Grafana | http://localhost:3001 | admin/dashen2024 |
+| Grafana | http://localhost:3002 | admin/dashen2024 |
 | OpenSearch Dashboards | http://localhost:5601 | admin / admin |
 | GLPI | http://localhost:8082 | glpi/DashenGLPI2024 |
 | Report Portal | http://localhost:8888 | no login |
@@ -399,13 +314,13 @@ $wslIp = (wsl hostname -I).Trim().Split(" ")[0]
 netsh interface portproxy reset
 netsh interface portproxy add v4tov4 listenport=8080 listenaddress=0.0.0.0 connectport=8080 connectaddress=$wslIp
 netsh interface portproxy add v4tov4 listenport=8082 listenaddress=0.0.0.0 connectport=8082 connectaddress=$wslIp
-netsh interface portproxy add v4tov4 listenport=3001 listenaddress=0.0.0.0 connectport=3001 connectaddress=$wslIp
+netsh interface portproxy add v4tov4 listenport=3002 listenaddress=0.0.0.0 connectport=3002 connectaddress=$wslIp
 netsh interface portproxy add v4tov4 listenport=5601 listenaddress=0.0.0.0 connectport=5601 connectaddress=$wslIp
 netsh interface portproxy add v4tov4 listenport=9200 listenaddress=0.0.0.0 connectport=9200 connectaddress=$wslIp
 netsh interface portproxy add v4tov4 listenport=8888 listenaddress=0.0.0.0 connectport=8888 connectaddress=$wslIp
 netsh interface portproxy add v4tov4 listenport=5050 listenaddress=0.0.0.0 connectport=5050 connectaddress=$wslIp
 
-New-NetFirewallRule -DisplayName "WSL ATM Services" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8080,3001,5601,8082,8888,9200,5050 -Profile Any
+New-NetFirewallRule -DisplayName "WSL ATM Services" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8080,3002,5601,8082,8888,9200,5050 -Profile Any
 ```
 
 ---
@@ -420,9 +335,8 @@ New-NetFirewallRule -DisplayName "WSL ATM Services" -Direction Inbound -Action A
    host machine's network; the `/12` CIDR minimizes how often this
    needs revisiting, but the interface IP for ATM-001 must still be
    set per machine.
-4. **EJ generator services + permissions (Step 8)** — `ej-logs/`
-   ownership and `filebeat.yml` ownership are host-filesystem
-   properties not captured by `git`, and must be fixed on each new
-   machine. The `atm-ej-00X` services themselves are now committed
-   to `docker-compose.yml`, so step 8.3 should only be needed on
-   clones predating this fix.
+4. **EJ generator permissions (Step 8)** — `ej-logs/` ownership
+   and `filebeat.yml` ownership are host-filesystem properties not
+   captured by `git`, and must be fixed on each new machine (steps
+   8.1–8.2). The `atm-ej-00X` services are now committed to
+   `docker-compose.yml`.
