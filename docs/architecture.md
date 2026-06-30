@@ -18,41 +18,41 @@ same. See `docs/atm-onboarding.md` for that process.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  DATA GENERATION (currently simulated, will be real ATMs)    │
-│                                                                │
-│  atm-sim-00X      → hardware status (HTTP API)                │
-│  atm-ej-00X       → Electronic Journal log files               │
-│  txn-feed-00X     → transactions written to PostgreSQL          │
-│  iso8583-gateway  → ISO 8583 transaction parsing                │
+│  DATA GENERATION (currently simulated, will be real ATMs)   │
+│                                                             │
+│  atm-sim-00X      → hardware status (HTTP API)              │
+│  atm-ej-00X       → Electronic Journal log files            │
+│  txn-feed-00X     → transactions written to PostgreSQL      │
+│  iso8583-gateway  → ISO 8583 transaction parsing            │
 └─────────────────────────────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  COLLECTION & STORAGE                                         │
-│                                                                │
-│  Zabbix server    → polls hardware status every 30s            │
-│  Filebeat         → ships EJ logs to OpenSearch                 │
-│  PostgreSQL       → stores transactions + ATM locations          │
+│  COLLECTION & STORAGE                                       │
+│                                                             │
+│  Zabbix server    → polls hardware status every 30s         │
+│  Filebeat         → ships EJ logs to OpenSearch             │
+│  PostgreSQL       → stores transactions + ATM locations     │
 └─────────────────────────────────────────────────────────────┘
                             │
                             ▼
-┌─────────────────────────────────────────────────────────────┐
-│  ANALYSIS & ALERTING                                           │
-│                                                                │
-│  Zabbix triggers     → fire on thresholds (cash low, door open) │
+┌──────────────────────────────────────────────────────────────────┐
+│  ANALYSIS & ALERTING                                             │
+│                                                                  │
+│  Zabbix triggers     → fire on thresholds (cash low, door open)  │
 │  anomaly-detector    → flags suspicious transaction patterns     │
 │  network-correlator  → links network issues to txn failures      │
-└─────────────────────────────────────────────────────────────┘
+└──────────────────────────────────────────────────────────────────┘
                             │
                             ▼
-┌─────────────────────────────────────────────────────────────┐
+┌────────────────────────────────────────────────────────────────┐
 │  PRESENTATION (what people actually look at)                   │
 │                                                                │
-│  Grafana          → dashboards, geo-map, drill-down              │
-│  OS Dashboards    → EJ log search for dispute investigation       │
-│  GLPI             → auto-created tickets, SLA, mobile              │
-│  Report Portal    → PDF/Excel/CSV reports on demand                │
-└─────────────────────────────────────────────────────────────┘
+│  Grafana          → dashboards, geo-map, drill-down            │
+│  OS Dashboards    → EJ log search for dispute investigation    │
+│  GLPI             → auto-created tickets, SLA, mobile          │
+│  Report Portal    → PDF/Excel/CSV reports on demand            │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ---

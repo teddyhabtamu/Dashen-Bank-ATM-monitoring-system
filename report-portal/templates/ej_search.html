@@ -17,6 +17,29 @@ td { font-variant-numeric: tabular-nums; }
 .badge-evt.MAINT{ background: rgba(100,116,139,0.1); color: #64748b; }
 .details-row td { border-top: none !important; }
 .result-count { font-size: 12px; color: #64748B; padding: 4px 24px 16px; }
+
+.detail-wrap{padding:0!important}
+.detail-inner{border-top:3px solid #FDD79A;background:#fff}
+.detail-header{background:#012169;color:#fff;padding:10px 20px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px}
+.detail-header svg{width:14px;height:14px}
+.detail-body{padding:16px 20px 20px}
+.detail-message{background:#F8FAFC;border:1px solid #E2E8F0;border-left:3px solid #FDD79A;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;line-height:1.6;color:#334155;word-break:break-all;white-space:pre-wrap;margin-bottom:16px}
+.detail-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(180px,1fr));gap:10px}
+.detail-field{background:#F8FAFC;border-radius:5px;padding:8px 10px}
+.detail-field-label{font-size:10px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
+.detail-field-value{font-size:13px;color:#0F172A;font-weight:500}
+.pagi-active{background:#012169!important;color:#fff!important;border-color:#012169!important}
+
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+.skel-card{border-radius:12px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.05);border:1px solid #EEF1F6;overflow:hidden}
+.skel-header{padding:16px 24px;border-bottom:1px solid #EEF1F6}
+.skel-header .skel-line{height:18px;width:160px}
+.skel-body{padding:8px 24px 12px}
+.skel-row{display:grid;grid-template-columns:2fr 1.2fr 1.5fr 1.5fr 1fr 1fr;gap:12px;padding:12px 0;border-bottom:1px solid #F6F8FA;align-items:center}
+.skel-row:last-child{border-bottom:none}
+.skel-line{height:13px;border-radius:6px;background:linear-gradient(90deg,#EEF1F6 25%,#E2E8F0 50%,#EEF1F6 75%);background-size:800px 100%;animation:shimmer 1.5s infinite linear}
+.skel-line.w-15{width:60%}.skel-line.w-20{width:70%}.skel-line.w-25{width:50%}.skel-line.w-30{width:55%}.skel-line.w-10{width:35%}.skel-line.w-12{width:45%}
+.skel-line.h-32{height:32px;width:100px}
 {% endblock %}
 
 {% block body %}
@@ -27,9 +50,11 @@ td { font-variant-numeric: tabular-nums; }
     <p class="page-subtitle">Search the electronic journal for dispute investigation and transaction lookup.</p>
   </div>
 </div>
-<div class="page-content">
+<div class="page-content" id="ejPageContent">
 
-<form method="post" action="/ej-search">
+<div id="ejResults">
+
+<form method="post" action="/ej-search" id="ejSearchForm">
 <div class="card">
   <div class="card-header"><h2>Search Criteria</h2></div>
   <div class="search-grid">
@@ -103,12 +128,12 @@ td { font-variant-numeric: tabular-nums; }
 
   </div>
   <div class="search-actions">
-    <button type="submit" class="btn btn-primary"><i data-lucide="search" style="width:14px;height:14px"></i> Search</button>
+    <button type="submit" class="btn btn-primary" id="ejSearchBtn"><i data-lucide="search" style="width:14px;height:14px"></i> Search</button>
     <a href="/ej-search" class="btn btn-outline">Clear</a>
   </div>
 </div>
 
-{# ── RESULTS ── #}
+<div id="ejResultsArea">
 {% if searched %}
   {% if error %}
     <div class="card">
@@ -132,7 +157,7 @@ td { font-variant-numeric: tabular-nums; }
           <tbody>
             {% if results %}
               {% for idx, r in results %}
-              <tr onclick="toggleDetails({{ idx }})" class="ej-row" style="cursor:pointer">
+              <tr data-idx="{{ idx }}" class="ej-row" style="cursor:pointer">
                 <td>
                   <i data-lucide="chevron-right" class="chevron-icon" id="chevron-{{ idx }}"
                      style="width:14px;height:14px;transition:transform 0.2s;vertical-align:middle;margin-right:8px;color:#64748B"></i>
@@ -146,21 +171,22 @@ td { font-variant-numeric: tabular-nums; }
                   {% if r.amount %}ETB {{ '{:,.2f}'.format(r.amount) }}{% else %}—{% endif %}
                 </td>
               </tr>
-              <tr id="details-{{ idx }}" class="details-row" style="display:none;background:#F8FAFC">
-                <td colspan="6" style="padding:16px 24px;border-bottom:1px solid #EEF1F6">
-                  <div style="display:flex;flex-direction:column;gap:12px">
-                    <div style="background:#0F172A;color:#E2E8F0;font-family:monospace;padding:12px;border-radius:6px;font-size:11px;word-break:break-all;white-space:pre-wrap;border-left:4px solid #FDD79A">
-                      <span style="color:#94A3B8;font-weight:600;display:block;margin-bottom:4px">RAW LOG LINE</span>{{ r.message }}
-                    </div>
-                    <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px,1fr));gap:12px;font-size:12px">
-                      <div><strong style="color:#64748B">Terminal ID:</strong> {{ r.terminal_id or '—' }}</div>
-                      <div><strong style="color:#64748B">Event Type:</strong> {{ r.event_type or '—' }}</div>
-                      <div><strong style="color:#64748B">Sub Type:</strong> {{ r.sub_type or '—' }}</div>
-                      <div><strong style="color:#64748B">Currency:</strong> {{ r.currency or '—' }}</div>
-                      <div><strong style="color:#64748B">Auth Code:</strong> {{ r.auth_code or '—' }}</div>
-                      <div><strong style="color:#64748B">Error Code:</strong> {{ r.error_code or '—' }}</div>
-                      <div><strong style="color:#64748B">Cassette ID:</strong> {{ r.cassette_id or '—' }}</div>
-                      <div><strong style="color:#64748B">Operator ID:</strong> {{ r.operator_id or '—' }}</div>
+              <tr id="details-{{ idx }}" class="details-row" style="display:none">
+                <td colspan="6" class="detail-wrap">
+                  <div class="detail-inner">
+                    <div class="detail-header"><i data-lucide="terminal"></i> LOG DETAILS</div>
+                    <div class="detail-body">
+                      <div class="detail-message">{{ r.message }}</div>
+                      <div class="detail-grid">
+                        <div class="detail-field"><div class="detail-field-label">Terminal ID</div><div class="detail-field-value">{{ r.terminal_id or '—' }}</div></div>
+                        <div class="detail-field"><div class="detail-field-label">Event Type</div><div class="detail-field-value">{{ r.event_type or '—' }}</div></div>
+                        <div class="detail-field"><div class="detail-field-label">Sub Type</div><div class="detail-field-value">{{ r.sub_type or '—' }}</div></div>
+                        <div class="detail-field"><div class="detail-field-label">Currency</div><div class="detail-field-value">{{ r.currency or '—' }}</div></div>
+                        <div class="detail-field"><div class="detail-field-label">Auth Code</div><div class="detail-field-value">{{ r.auth_code or '—' }}</div></div>
+                        <div class="detail-field"><div class="detail-field-label">Error Code</div><div class="detail-field-value">{{ r.error_code or '—' }}</div></div>
+                        <div class="detail-field"><div class="detail-field-label">Cassette ID</div><div class="detail-field-value">{{ r.cassette_id or '—' }}</div></div>
+                        <div class="detail-field"><div class="detail-field-label">Operator ID</div><div class="detail-field-value">{{ r.operator_id or '—' }}</div></div>
+                      </div>
                     </div>
                   </div>
                 </td>
@@ -177,14 +203,14 @@ td { font-variant-numeric: tabular-nums; }
       {% if total_pages > 1 %}
       <div style="display:flex;align-items:center;justify-content:center;gap:6px;padding:14px 24px;border-top:1px solid #EEF1F6">
         {% if page > 1 %}
-          <button type="submit" name="page" value="{{ page - 1 }}" class="btn btn-outline" style="padding:6px 12px;font-size:11px">&larr; Prev</button>
+          <button type="submit" name="page" value="{{ page - 1 }}" class="btn btn-outline pagi-btn" style="padding:6px 12px;font-size:11px">&larr; Prev</button>
         {% endif %}
         {% for p in range([1, page-2]|max, [total_pages, page+2]|min + 1) %}
-          <button type="submit" name="page" value="{{ p }}" class="btn btn-outline"
-                  style="padding:6px 10px;font-size:11px;min-width:32px{% if p == page %};background:#012169;color:#fff;border-color:#012169{% endif %}">{{ p }}</button>
+          <button type="submit" name="page" value="{{ p }}" class="btn btn-outline pagi-btn{% if p == page %} pagi-active{% endif %}"
+                  style="padding:6px 10px;font-size:11px;min-width:32px">{{ p }}</button>
         {% endfor %}
         {% if page < total_pages %}
-          <button type="submit" name="page" value="{{ page + 1 }}" class="btn btn-outline" style="padding:6px 12px;font-size:11px">Next &rarr;</button>
+          <button type="submit" name="page" value="{{ page + 1 }}" class="btn btn-outline pagi-btn" style="padding:6px 12px;font-size:11px">Next &rarr;</button>
         {% endif %}
       </div>
       {% endif %}
@@ -192,8 +218,11 @@ td { font-variant-numeric: tabular-nums; }
     </div>
   {% endif %}
 {% endif %}
-</form>
 </div>
+</form>
+
+</div><!-- /ejResults -->
+</div><!-- /page-content -->
 {% endblock %}
 
 {% block extra_scripts %}
@@ -210,10 +239,94 @@ function toggleDetails(idx) {
     chevron.style.transform = 'rotate(0deg)';
   }
 }
-document.querySelectorAll('.flatpickr-date').forEach(el => flatpickr(el, {
-  dateFormat: 'Y-m-d', allowInput: true, disableMobile: true, monthSelectorType: 'static',
-}))
-initCustomSelects()
-lucide.createIcons()
+
+var lastClickedBtn = null;
+document.getElementById('ejSearchForm').addEventListener('submit', function(e){
+  e.preventDefault();
+  var form = this;
+  var resultsArea = document.getElementById('ejResultsArea');
+  var skeleton = document.getElementById('ejSkeleton');
+
+  if(!skeleton){
+    skeleton = document.createElement('div');
+    skeleton.id = 'ejSkeleton';
+    skeleton.innerHTML = [
+      '<div class="skel-card">',
+      '  <div class="skel-header"><div class="skel-line"></div></div>',
+      '  <div class="skel-body">',
+      '    <div class="skel-row"><div class="skel-line w-20"></div><div class="skel-line w-15"></div><div class="skel-line w-25"></div><div class="skel-line w-10"></div><div class="skel-line w-12"></div></div>',
+      '    <div class="skel-row"><div class="skel-line w-15"></div><div class="skel-line w-20"></div><div class="skel-line w-10"></div><div class="skel-line w-25"></div><div class="skel-line w-12"></div></div>',
+      '    <div class="skel-row"><div class="skel-line w-25"></div><div class="skel-line w-15"></div><div class="skel-line w-20"></div><div class="skel-line w-10"></div><div class="skel-line w-12"></div></div>',
+      '    <div class="skel-row"><div class="skel-line w-20"></div><div class="skel-line w-25"></div><div class="skel-line w-15"></div><div class="skel-line w-10"></div><div class="skel-line w-12"></div></div>',
+      '    <div class="skel-row"><div class="skel-line w-15"></div><div class="skel-line w-10"></div><div class="skel-line w-25"></div><div class="skel-line w-20"></div><div class="skel-line w-12"></div></div>',
+      '    <div class="skel-row"><div class="skel-line w-10"></div><div class="skel-line w-20"></div><div class="skel-line w-15"></div><div class="skel-line w-25"></div><div class="skel-line w-12"></div></div>',
+      '    <div class="skel-row"><div class="skel-line w-30"></div><div class="skel-line w-15"></div><div class="skel-line w-20"></div><div class="skel-line w-10"></div><div class="skel-line w-12"></div></div>',
+      '    <div class="skel-row"><div class="skel-line w-20"></div><div class="skel-line w-10"></div><div class="skel-line w-25"></div><div class="skel-line w-15"></div><div class="skel-line w-12"></div></div>',
+      '  </div>',
+      '</div>'
+    ].join('\n');
+    resultsArea.parentNode.insertBefore(skeleton, resultsArea.nextSibling);
+  }
+
+  resultsArea.style.display = 'none';
+  skeleton.style.display = 'block';
+
+  var fd = new FormData(form);
+  if(lastClickedBtn && lastClickedBtn.name){
+    fd.append(lastClickedBtn.name, lastClickedBtn.value);
+  }
+  lastClickedBtn = null;
+
+  var searchBtn = document.getElementById('ejSearchBtn');
+  searchBtn.disabled = true;
+  searchBtn.innerHTML = '<i data-lucide="loader-2" style="width:14px;height:14px;animation:spin 1s linear infinite"></i> Searching...';
+  lucide.createIcons();
+
+  fetch(form.action, {
+    method: 'POST',
+    body: fd,
+    headers: {'X-Requested-With': 'XMLHttpRequest'}
+  })
+  .then(function(r){ return r.text(); })
+  .then(function(html){
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    var newContent = tmp.querySelector('#ejResultsArea');
+    if(newContent){
+      resultsArea.innerHTML = newContent.innerHTML;
+    }
+    resultsArea.style.display = '';
+    skeleton.style.display = 'none';
+    initEJComponents();
+  })
+  .catch(function(){
+    resultsArea.style.display = '';
+    skeleton.style.display = 'none';
+    resultsArea.innerHTML = '<div class="card"><div class="card-header"><h2>Error</h2></div><p style="padding:24px;color:#DC2626">Network error. Please try again.</p></div>';
+  })
+  .finally(function(){
+    searchBtn.disabled = false;
+    searchBtn.innerHTML = '<i data-lucide="search" style="width:14px;height:14px"></i> Search';
+    lucide.createIcons();
+  });
+});
+
+function initEJComponents(){
+  document.querySelectorAll('.flatpickr-date').forEach(function(el){
+    if(el._flatpickr) el._flatpickr.destroy();
+    flatpickr(el,{dateFormat:'Y-m-d',allowInput:true,disableMobile:true,monthSelectorType:'static'});
+  });
+  initCustomSelects();
+  lucide.createIcons();
+}
+
+document.getElementById('ejSearchForm').addEventListener('click', function(e){
+  var pagiBtn = e.target.closest('.pagi-btn');
+  if(pagiBtn){ lastClickedBtn = pagiBtn; return; }
+  var row = e.target.closest('.ej-row');
+  if(row && row.dataset.idx !== undefined) toggleDetails(row.dataset.idx);
+});
+
+initEJComponents();
 </script>
 {% endblock %}
