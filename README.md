@@ -340,3 +340,14 @@ New-NetFirewallRule -DisplayName "WSL ATM Services" -Direction Inbound -Action A
    captured by `git`, and must be fixed on each new machine (steps
    8.1–8.2). The `atm-ej-00X` services are now committed to
    `docker-compose.yml`.
+
+
+   ## Star History
+
+<a href="https://www.star-history.com/?repos=teddyhabtamu%2FDashen-Bank-ATM-monitoring-system&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=teddyhabtamu/Dashen-Bank-ATM-monitoring-system&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=teddyhabtamu/Dashen-Bank-ATM-monitoring-system&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=teddyhabtamu/Dashen-Bank-ATM-monitoring-system&type=date&legend=top-left" />
+ </picture>
+</a>
