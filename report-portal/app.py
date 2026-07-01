@@ -16,6 +16,7 @@ REPORT_PORTAL_PORT = os.environ.get('REPORT_PORTAL_PORT', '8888')
 
 def create_app():
     app = Flask(__name__)
+    app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'atm-report-portal-dev-key')
 
     # ── Blueprints ──────────────────────────────────────────────
     from blueprints.portal    import bp as portal_bp

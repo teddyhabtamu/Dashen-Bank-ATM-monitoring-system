@@ -253,6 +253,10 @@ def ej_search_csv():
 
     buf = io.StringIO()
     w   = csv.writer(buf)
+    if not rows and not must:
+        w.writerow(['ERROR: No search filters provided. Export cancelled.'])
+    elif not rows:
+        w.writerow(['ERROR: OpenSearch query failed or returned no data. Check that OpenSearch is running and try again.'])
     w.writerow(['Timestamp', 'ATM ID', 'Transaction Type', 'Card (masked)', 'Status', 'Amount', 'Raw Log'])
     w.writerows(rows)
     buf.seek(0)

@@ -2,7 +2,7 @@
 blueprints/admin.py
 ATM Admin registration routes.
 """
-from flask import Blueprint, render_template, request, redirect, jsonify
+from flask import Blueprint, render_template, request, redirect, jsonify, flash
 from db import get_db
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -51,6 +51,7 @@ def atm_save():
     if errors:
         if is_ajax:
             return jsonify({'error': True, 'errors': errors, 'message': 'Please fix the highlighted fields.'})
+        flash('Validation failed. Please correct the highlighted fields.', 'error')
         return redirect('/admin/atm')
 
     conn = get_db()
@@ -89,6 +90,7 @@ def atm_save():
             db_err = {'_general': f'Database error: {err_msg}'}
         if is_ajax:
             return jsonify({'error': True, 'errors': db_err, 'message': 'Database error. Please try again.'})
+        flash(f'Database error: {err_msg}', 'error')
         return redirect('/admin/atm')
     finally:
         cur.close()
@@ -107,6 +109,7 @@ def atm_delete():
     if not atm_id:
         if is_ajax:
             return jsonify({'error': True, 'message': 'ATM ID is required.'})
+        flash('ATM ID is required for deletion.', 'error')
         return redirect('/admin/atm')
 
     conn = get_db()
@@ -116,12 +119,14 @@ def atm_delete():
         if cur.rowcount == 0:
             if is_ajax:
                 return jsonify({'error': True, 'message': f'ATM {atm_id} not found.'})
+            flash(f'ATM {atm_id} not found.', 'error')
             return redirect('/admin/atm')
         conn.commit()
     except Exception as e:
         conn.rollback()
         if is_ajax:
             return jsonify({'error': True, 'message': f'Database error: {str(e)}'})
+        flash(f'Database error: {str(e)}', 'error')
         return redirect('/admin/atm')
     finally:
         cur.close()

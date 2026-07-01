@@ -203,8 +203,10 @@ function confirmDelete(){
   var btn = document.getElementById('confirmDeleteBtn');
   var id = btn.dataset.atmId;
   btn.disabled = true;
-  btn.innerHTML = '<i data-lucide="loader-2" style="width:14px;height:14px;animation:spin 1s linear infinite"></i> Deleting...';
+  btn.innerHTML = '<i data-lucide="loader-2" style="width:14px;height:14px"></i> Deleting...';
   lucide.createIcons();
+  var spnIcon = btn.querySelector('svg');
+  if(spnIcon){ spnIcon.style.animation = 'spin 1s linear infinite'; }
   fetch('/admin/atm/delete', {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
@@ -216,14 +218,14 @@ function confirmDelete(){
       closeDeleteModal();
       location.reload();
     } else {
-      alert(data.message || 'Failed to delete ATM.');
+      showToast(data.message || 'Failed to delete ATM.', 'error');
       btn.disabled = false;
       btn.innerHTML = '<i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete';
       lucide.createIcons();
     }
   })
   .catch(function(){
-    alert('Network error. Please try again.');
+    showToast('Network error. Please try again.', 'error');
     btn.disabled = false;
     btn.innerHTML = '<i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete';
     lucide.createIcons();
@@ -336,8 +338,10 @@ document.getElementById('atmForm').addEventListener('submit', function(e){
 
   var btn = this.querySelector('button[type="submit"]');
   btn.disabled = true;
-  btn.innerHTML = '<i data-lucide="loader-2" style="width:14px;height:14px;animation:spin 1s linear infinite"></i> Saving...';
+  btn.innerHTML = '<i data-lucide="loader-2" style="width:14px;height:14px"></i> Saving...';
   lucide.createIcons();
+  var spnIcon = btn.querySelector('svg');
+  if(spnIcon){ spnIcon.style.animation = 'spin 1s linear infinite'; }
 
   fetch(this.action, {
     method: 'POST',

@@ -170,6 +170,56 @@ tr:hover{background:#EEF2FF}
 .badge.active,.badge.APPROVED{background:rgba(5,150,105,.1);color:#059669}
 .badge.inactive,.badge.DECLINED{background:rgba(220,38,38,.08);color:#DC2626}
 .badge.TIMEOUT,.badge.ERROR{background:rgba(217,119,6,.1);color:#D97706}
+/* ── ALERT CARDS (shared error/success/warning/info component) ── */
+.alert-card {
+  border-radius:10px; padding:18px 22px;
+  display:flex; align-items:flex-start; gap:14px;
+  margin-bottom:20px;
+  animation:alertIn .3s ease;
+}
+@keyframes alertIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.alert-card.error{background:#FEF2F2;border:1px solid #FECACA}
+.alert-card.success{background:#ECFDF5;border:1px solid #A7F3D0}
+.alert-card.warning{background:#FFFBEB;border:1px solid #FDE68A}
+.alert-card.info{background:#EFF6FF;border:1px solid #BFDBFE}
+.alert-icon{width:20px;height:20px;flex-shrink:0;margin-top:2px}
+.alert-card.error .alert-icon{color:#DC2626}
+.alert-card.success .alert-icon{color:#059669}
+.alert-card.warning .alert-icon{color:#D97706}
+.alert-card.info .alert-icon{color:#2563EB}
+.alert-content{flex:1;min-width:0}
+.alert-title{font-size:14px;font-weight:700;color:#0F172A;margin-bottom:2px}
+.alert-message{font-size:13px;color:#475569;line-height:1.5}
+.alert-action{margin-top:10px;display:flex;gap:8px}
+.alert-action .btn{padding:6px 14px;font-size:12px}
+
+/* ── TOAST NOTIFICATIONS ── */
+.toast-container{
+  position:fixed;top:20px;right:20px;z-index:9999;
+  display:flex;flex-direction:column;gap:10px;max-width:420px;width:100%;pointer-events:none;
+}
+.toast{
+  border-radius:10px;padding:14px 18px;
+  display:flex;align-items:flex-start;gap:12px;
+  box-shadow:0 8px 32px rgba(0,0,0,.12);
+  animation:toastIn .35s ease;pointer-events:auto;
+}
+@keyframes toastIn{from{opacity:0;transform:translateX(100px)}to{opacity:1;transform:translateX(0)}}
+.toast.error{background:#FEF2F2;border:1px solid #FECACA}
+.toast.success{background:#ECFDF5;border:1px solid #A7F3D0}
+.toast.warning{background:#FFFBEB;border:1px solid #FDE68A}
+.toast.info{background:#EFF6FF;border:1px solid #BFDBFE}
+.toast-icon{width:18px;height:18px;flex-shrink:0;margin-top:1px}
+.toast.error .toast-icon{color:#DC2626}
+.toast.success .toast-icon{color:#059669}
+.toast.warning .toast-icon{color:#D97706}
+.toast.info .toast-icon{color:#2563EB}
+.toast-content{flex:1}
+.toast-title{font-size:13px;font-weight:700;color:#0F172A}
+.toast-message{font-size:12px;color:#475569;margin-top:1px;line-height:1.4}
+.toast-close{width:24px;height:24px;border:none;background:transparent;color:#94A3B8;cursor:pointer;border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.2s}
+.toast-close:hover{background:#F1F5F9}
 {% block extra_style %}{% endblock %}
 </style>
 </head>
@@ -238,6 +288,23 @@ tr:hover{background:#EEF2FF}
 
 <div class="overlay" id="overlay" onclick="closeMobile()"></div>
 
+<div class="toast-container" id="toastContainer">
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+    <div class="toast {{ category }}">
+      <i data-lucide="{{ 'alert-circle' if category == 'error' else 'check-circle-2' if category == 'success' else 'alert-triangle' if category == 'warning' else 'info' }}" class="toast-icon"></i>
+      <div class="toast-content">
+        <div class="toast-title">{{ category|title if category != 'error' else 'Error' }}</div>
+        <div class="toast-message">{{ message }}</div>
+      </div>
+      <button class="toast-close" onclick="this.closest('.toast').remove()"><i data-lucide="x" style="width:14px;height:14px"></i></button>
+    </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+</div>
+
 <div class="main-content">
 {% block body %}{% endblock %}
 </div>
@@ -287,6 +354,46 @@ document.querySelectorAll('.sidebar-nav .nav-item').forEach(function(el){
 document.addEventListener('keydown', function(e){
   if(e.key === 'Escape' && document.getElementById('overlay').classList.contains('show')) closeMobile();
 });
+
+// ── TOAST NOTIFICATION ──
+function showToast(msg, type, duration) {
+  type = type || 'error';
+  duration = duration || 5000;
+  var container = document.getElementById('toastContainer');
+  var icons = { error: 'alert-circle', success: 'check-circle-2', warning: 'alert-triangle', info: 'info' };
+  var titles = { error: 'Error', success: 'Success', warning: 'Warning', info: 'Info' };
+  var toast = document.createElement('div');
+  toast.className = 'toast ' + type;
+  toast.innerHTML = [
+    '<i data-lucide="' + (icons[type] || 'alert-circle') + '" class="toast-icon"></i>',
+    '<div class="toast-content">',
+    '  <div class="toast-title">' + (titles[type] || 'Notice') + '</div>',
+    '  <div class="toast-message">' + msg + '</div>',
+    '</div>',
+    '<button class="toast-close" onclick="this.closest(\'.toast\').remove()"><i data-lucide="x" style="width:14px;height:14px"></i></button>'
+  ].join('');
+  container.appendChild(toast);
+  lucide.createIcons();
+  setTimeout(function(){
+    toast.style.transition = 'opacity .3s, transform .3s';
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(100px)';
+    setTimeout(function(){ if(toast.parentNode) toast.parentNode.removeChild(toast); }, 300);
+  }, duration);
+}
+
+// Auto-hide flash messages after 6 seconds
+(function(){
+  var toasts = document.querySelectorAll('#toastContainer > .toast');
+  toasts.forEach(function(t){
+    setTimeout(function(){
+      t.style.transition = 'opacity .3s, transform .3s';
+      t.style.opacity = '0';
+      t.style.transform = 'translateX(100px)';
+      setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 300);
+    }, 6000);
+  });
+})();
 
 // ── CUSTOM SELECTS ──
 function initCustomSelects(){

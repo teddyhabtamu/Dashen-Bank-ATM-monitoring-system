@@ -136,10 +136,46 @@ td { font-variant-numeric: tabular-nums; }
 <div id="ejResultsArea">
 {% if searched %}
   {% if error %}
-    <div class="card">
-      <div class="card-header"><h2>Error</h2></div>
-      <p style="padding:24px;color:#DC2626">{{ error }}</p>
+    {% set err_lower = error|lower %}
+    {% if 'cannot connect' in err_lower %}
+    <div class="alert-card error">
+      <i data-lucide="wifi-off" class="alert-icon" style="width:22px;height:22px"></i>
+      <div class="alert-content">
+        <div class="alert-title">Connection Error</div>
+        <div class="alert-message">{{ error }}. <strong>OpenSearch is not reachable.</strong> Check that the OpenSearch container is running and the ES_HOST environment variable is correct.</div>
+        <div class="alert-action">
+          <button class="btn btn-outline" onclick="document.getElementById('ejSearchForm').requestSubmit()"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Retry Search</button>
+        </div>
+      </div>
     </div>
+    {% elif 'status' in err_lower %}
+    <div class="alert-card warning">
+      <i data-lucide="alert-triangle" class="alert-icon" style="width:22px;height:22px"></i>
+      <div class="alert-content">
+        <div class="alert-title">OpenSearch Error</div>
+        <div class="alert-message">{{ error }}. The search request was rejected. This may indicate a query timeout, index issue, or resource constraint.</div>
+      </div>
+    </div>
+    {% elif 'filter' in err_lower %}
+    <div class="alert-card info">
+      <i data-lucide="search-x" class="alert-icon" style="width:22px;height:22px"></i>
+      <div class="alert-content">
+        <div class="alert-title">No Search Filters</div>
+        <div class="alert-message">{{ error }}. Enter at least one filter (keyword, date range, ATM, etc.) to narrow the results.</div>
+      </div>
+    </div>
+    {% else %}
+    <div class="alert-card error">
+      <i data-lucide="alert-circle" class="alert-icon" style="width:22px;height:22px"></i>
+      <div class="alert-content">
+        <div class="alert-title">Search Error</div>
+        <div class="alert-message">{{ error }}</div>
+        <div class="alert-action">
+          <button class="btn btn-outline" onclick="document.getElementById('ejSearchForm').requestSubmit()"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Retry</button>
+        </div>
+      </div>
+    </div>
+    {% endif %}
   {% else %}
     <div class="card">
       <div class="card-header">
@@ -279,8 +315,10 @@ document.getElementById('ejSearchForm').addEventListener('submit', function(e){
 
   var searchBtn = document.getElementById('ejSearchBtn');
   searchBtn.disabled = true;
-  searchBtn.innerHTML = '<i data-lucide="loader-2" style="width:14px;height:14px;animation:spin 1s linear infinite"></i> Searching...';
+  searchBtn.innerHTML = '<i data-lucide="loader-2" style="width:14px;height:14px"></i> Searching...';
   lucide.createIcons();
+  var spnIcon = searchBtn.querySelector('svg');
+  if(spnIcon){ spnIcon.style.animation = 'spin 1s linear infinite'; }
 
   fetch(form.action, {
     method: 'POST',
@@ -302,7 +340,8 @@ document.getElementById('ejSearchForm').addEventListener('submit', function(e){
   .catch(function(){
     resultsArea.style.display = '';
     skeleton.style.display = 'none';
-    resultsArea.innerHTML = '<div class="card"><div class="card-header"><h2>Error</h2></div><p style="padding:24px;color:#DC2626">Network error. Please try again.</p></div>';
+    resultsArea.innerHTML = '<div class="alert-card error"><i data-lucide="wifi-off" class="alert-icon" style="width:22px;height:22px"></i><div class="alert-content"><div class="alert-title">Network Error</div><div class="alert-message">Could not reach the server. Check your connection and try again.</div><div class="alert-action"><button class="btn btn-outline" onclick="document.getElementById(\'ejSearchForm\').requestSubmit()"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Retry</button></div></div></div>';
+    lucide.createIcons();
   })
   .finally(function(){
     searchBtn.disabled = false;
