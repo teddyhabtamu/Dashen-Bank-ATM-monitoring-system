@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login — Dashen Bank ATM Monitoring</title>
+<link rel="icon" type="image/png" href="/static/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Inter',sans-serif;font-size:14px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  background:linear-gradient(135deg,#F0F2F6 0%,#E2E8F0 100%);
+  color:#0F172A;min-height:100vh;
+  display:flex;align-items:center;justify-content:center;
+  padding:20px;
+}
+.login-card{
+  background:#fff;border-radius:16px;width:400px;max-width:100%;
+  box-shadow:0 24px 80px rgba(1,33,105,.12);
+  padding:40px 36px 36px;
+  animation:cardIn .4s ease;
+}
+@keyframes cardIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.login-logo{text-align:center;margin-bottom:32px}
+.login-logo img{width:48px;height:48px;object-fit:contain}
+.login-logo h1{font-size:18px;font-weight:800;color:#012169;margin-top:12px;letter-spacing:-.3px}
+.login-logo p{font-size:12px;color:#64748B;margin-top:2px;font-weight:500}
+.form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:18px}
+.form-group label{font-size:11px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.5px}
+.form-group input{
+  padding:10px 14px;border:1px solid #E4E9F1;border-radius:8px;
+  font-size:14px;font-family:inherit;outline:none;
+  transition:border-color .2s,box-shadow .2s;width:100%
+}
+.form-group input:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.08)}
+.form-group input.error{border-color:#DC2626;background:#FEF2F2}
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;padding:11px 20px;border-radius:8px;border:none;
+  font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;
+  transition:.2s;margin-top:8px
+}
+.btn-primary{background:#012169;color:#fff}
+.btn-primary:hover{background:#273274;box-shadow:0 4px 16px rgba(1,33,105,.25)}
+.btn-primary:disabled{background:#94A3B8;cursor:not-allowed;box-shadow:none}
+.alert-card{
+  border-radius:8px;padding:12px 16px;display:flex;align-items:flex-start;gap:10px;
+  margin-bottom:20px;animation:alertIn .3s ease;
+}
+@keyframes alertIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.alert-card.error{background:#FEF2F2;border:1px solid #FECACA}
+.alert-icon{width:18px;height:18px;flex-shrink:0;margin-top:1px;color:#DC2626}
+.alert-message{font-size:13px;color:#DC2626;font-weight:500;line-height:1.4}
+.footer{text-align:center;margin-top:24px;font-size:11px;color:#94A3B8}
+</style>
+</head>
+<body>
+<div class="login-card">
+  <div class="login-logo">
+    <img src="https://cdn.brandfetch.io/idNZ7JoLsG/w/150/h/149/theme/dark/logo.png?c=1dxbfHSJFAPEGdCLU4o5B" alt="Dashen Bank">
+    <h1>ATM Monitoring System</h1>
+    <p>Report Portal</p>
+  </div>
+
+  {% if error %}
+  <div class="alert-card error">
+    <i data-lucide="alert-circle" class="alert-icon"></i>
+    <div class="alert-message">{{ error }}</div>
+  </div>
+  {% endif %}
+
+  <form method="post" action="/login?next={{ next }}" id="loginForm">
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" name="username" id="username" placeholder="Enter your username" autocomplete="username" required autofocus>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" name="password" id="password" placeholder="Enter your password" autocomplete="current-password" required>
+    </div>
+    <button type="submit" class="btn btn-primary" id="loginBtn">
+      <i data-lucide="log-in" style="width:16px;height:16px"></i> Sign In
+    </button>
+  </form>
+
+  <div class="footer">Dashen Bank S.C. &mdash; Authorized Personnel Only</div>
+</div>
+
+<script>
+lucide.createIcons();
+
+document.getElementById('loginForm').addEventListener('submit', function(e){
+  var btn = document.getElementById('loginBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader-2" style="width:16px;height:16px"></i> Signing In...';
+  lucide.createIcons();
+  var spn = btn.querySelector('svg');
+  if(spn) spn.style.animation = 'spin 1s linear infinite';
+});
+</script>
+</body>
+</html>

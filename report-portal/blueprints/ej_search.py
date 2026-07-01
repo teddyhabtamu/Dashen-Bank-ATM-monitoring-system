@@ -2,15 +2,17 @@
 blueprints/ej_search.py
 Electronic Journal search routes — search UI and CSV export.
 """
-import csv, io
+import csv, io, os, logging
 import requests
 from flask import Blueprint, render_template, request, Response
+from blueprints.auth import login_required
 from db import get_db
 from datetime import datetime, date
 
+logger = logging.getLogger(__name__)
+
 bp = Blueprint('ej_search', __name__)
 
-import os
 ES_HOST  = os.environ.get('ES_HOST', 'opensearch:9200')
 ES_INDEX = os.environ.get('ES_INDEX', 'atm-ej-live-*,atm-electronic-journal')
 
@@ -114,6 +116,7 @@ def _fmt_ts(ts):
 
 
 @bp.route('/ej-search', methods=['GET', 'POST'])
+@login_required
 def ej_search():
     # Defaults
     keyword = card = date_from = atm_id = event_type = status = min_amount = max_amount = auth_code = ''
@@ -182,10 +185,13 @@ def ej_search():
                         })
                 else:
                     error = f"OpenSearch returned status {resp.status_code}"
+                    logger.warning('OS search failed: status=%s query=%s', resp.status_code, keyword or '(no keyword)')
             except requests.exceptions.ConnectionError:
                 error = f"Cannot connect to OpenSearch at {ES_HOST}"
+                logger.error('OS connection error: host=%s', ES_HOST)
             except Exception as e:
                 error = f"Search error: {e}"
+                logger.exception('OS search exception')
 
         total_pages = max(1, (total + per_page - 1) // per_page) if total else 1
 
@@ -214,6 +220,7 @@ def ej_search():
 
 
 @bp.route('/ej-search/csv')
+@login_required
 def ej_search_csv():
     card        = request.args.get('card', '')
     date_from   = request.args.get('date_from', '')

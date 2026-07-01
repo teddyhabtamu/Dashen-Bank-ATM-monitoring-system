@@ -662,17 +662,36 @@ function gen(type, fmt, daysId, atmId) {
   const days = document.getElementById(daysId).value;
   const atm  = atmId ? document.getElementById(atmId).value : 'all';
   const lw   = document.getElementById('lw-'+type);
-  const ts   = Date.now();
-  const url  = `/report/${type}/${fmt}?days=${days}&atm=${atm}&_t=${ts}`;
+  const url  = `/report/${type}/${fmt}?days=${days}&atm=${atm}`;
+  const names = { transaction:'Transaction', cash:'Cash Level', error:'Error & Incident',
+                  performance:'Performance', availability:'Availability', full:'Complete Report' };
   lw.classList.add('active');
-  const iframe = document.createElement('iframe');
-  iframe.style.display = 'none';
-  iframe.src = url;
-  document.body.appendChild(iframe);
-  setTimeout(() => {
-    lw.classList.remove('active');
-    if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-  }, 4000);
+
+  fetch(url)
+    .then(function(r){
+      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+      var ct = r.headers.get('Content-Type') || '';
+      if (ct.includes('text/html')) throw new Error('Session expired. Please refresh and log in again.');
+      var disposition = r.headers.get('Content-Disposition') || '';
+      var filename = 'report.' + (fmt === 'pdf' ? 'pdf' : fmt === 'excel' ? 'xlsx' : 'csv');
+      var match = disposition.match(/filename\*?=(?:UTF-8'')?([^;\n]+)/i);
+      if (match) filename = match[1].replace(/["']/g, '');
+      return r.blob().then(function(blob){ return { blob: blob, filename: filename }; });
+    })
+    .then(function(result){
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(result.blob);
+      a.download = result.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+      lw.classList.remove('active');
+    })
+    .catch(function(err){
+      lw.classList.remove('active');
+      showToast('Failed to generate ' + (names[type] || type) + ' report: ' + err.message, 'error', 8000);
+    });
 }
 
 loadKPIs();

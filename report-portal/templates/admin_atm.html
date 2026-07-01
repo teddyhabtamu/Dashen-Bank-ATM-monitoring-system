@@ -43,6 +43,7 @@ body { background: #F0F2F6; color: #0F172A; }
 .btn-danger{background:#DC2626;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;transition:.2s}
 .btn-danger:hover{background:#B91C1C}
 .btn-danger:disabled{background:#FCA5A5;cursor:not-allowed}
+.pagi-active{background:#012169!important;color:#fff!important;border-color:#012169!important}
 {% endblock %}
 
 {% block body %}
@@ -58,11 +59,31 @@ body { background: #F0F2F6; color: #0F172A; }
 <div class="card">
   <div class="card-header">
     <h2>Registered ATMs ({{ atm_count }})</h2>
-    <button class="btn btn-primary" onclick="openModal()"><i data-lucide="plus" style="width:14px;height:14px"></i> Add New ATM</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <form method="get" action="/admin/atm" id="searchForm" style="display:flex;gap:6px;align-items:center">
+        <input type="text" name="search" placeholder="Search ATM ID, branch, city…" value="{{ search }}"
+               style="padding:7px 12px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;width:220px;transition:border-color .2s"
+               onfocus="this.style.borderColor='#012169'" onblur="this.style.borderColor='#E4E9F1'">
+        <button type="submit" class="btn btn-outline" style="padding:7px 12px"><i data-lucide="search" style="width:14px;height:14px"></i></button>
+        {% if search %}<a href="/admin/atm" class="btn btn-outline" style="padding:7px 12px">Clear</a>{% endif %}
+      </form>
+      <a href="/admin/atm/csv" class="btn btn-outline"><i data-lucide="download" style="width:14px;height:14px"></i> Export CSV</a>
+      <button class="btn btn-outline" onclick="openImportModal()"><i data-lucide="upload" style="width:14px;height:14px"></i> Import CSV</button>
+      <button class="btn btn-primary" onclick="openModal()"><i data-lucide="plus" style="width:14px;height:14px"></i> Add New ATM</button>
+    </div>
   </div>
   <div style="overflow-x:auto">
+    <div id="selectionBar" style="display:none;align-items:center;gap:10px;padding:10px 24px;background:#EEF2FF;border-bottom:1px solid #CBD5E1;font-size:13px">
+      <i data-lucide="check-square" style="width:16px;height:16px;color:#012169"></i>
+      <span style="font-weight:600;color:#012169"><span id="selectedCount">0</span> selected</span>
+      <span style="color:#94A3B8">|</span>
+      <button class="btn btn-danger" id="bulkDeleteBtn" onclick="openBulkDeleteModal()" style="padding:6px 14px;font-size:12px" disabled>
+        <i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete Selected
+      </button>
+    </div>
     <table>
       <thead><tr>
+        <th style="width:36px;padding:8px 6px"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" style="cursor:pointer;width:15px;height:15px"></th>
         <th>ATM ID</th><th>Branch</th><th>District</th><th>City</th><th>Region</th>
         <th>Latitude</th><th>Longitude</th><th>Terminal ID</th><th>Vendor</th><th>Model</th>
         <th>Install Date</th><th>Status</th><th></th>
@@ -70,7 +91,8 @@ body { background: #F0F2F6; color: #0F172A; }
       <tbody>
         {% if atms %}
           {% for d in atms %}
-          <tr>
+          <tr data-atm-id="{{ d.atm_id }}">
+            <td style="padding:8px 6px;text-align:center"><input type="checkbox" class="row-checkbox" value="{{ d.atm_id }}" onchange="updateSelection()" style="cursor:pointer;width:15px;height:15px"></td>
             <td>{{ d.atm_id }}</td>
             <td>{{ d.branch or '—' }}</td>
             <td>{{ d.district or '—' }}</td>
@@ -90,11 +112,28 @@ body { background: #F0F2F6; color: #0F172A; }
           </tr>
           {% endfor %}
         {% else %}
-          <tr><td colspan="13" class="empty">No ATMs registered yet.</td></tr>
+          <tr><td colspan="14" class="empty">No ATMs registered yet.</td></tr>
         {% endif %}
       </tbody>
     </table>
   </div>
+  {% if total_pages > 1 %}
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-top:1px solid #EEF1F6">
+    <div style="font-size:12px;color:#64748B">Page {{ page }} of {{ total_pages }}</div>
+    <div style="display:flex;gap:6px">
+      {% if page > 1 %}
+      <a href="/admin/atm?page={{ page - 1 }}{% if search %}&search={{ search }}{% endif %}" class="btn btn-outline pagi-btn" style="padding:6px 12px;font-size:11px">&larr; Previous</a>
+      {% endif %}
+      {% for p in range([1, page-2]|max, [total_pages, page+2]|min + 1) %}
+      <a href="/admin/atm?page={{ p }}{% if search %}&search={{ search }}{% endif %}" class="btn btn-outline pagi-btn{% if p == page %} pagi-active{% endif %}"
+         style="padding:6px 10px;font-size:11px;min-width:32px">{{ p }}</a>
+      {% endfor %}
+      {% if page < total_pages %}
+      <a href="/admin/atm?page={{ page + 1 }}{% if search %}&search={{ search }}{% endif %}" class="btn btn-outline pagi-btn" style="padding:6px 12px;font-size:11px">Next &rarr;</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 </div>
 
@@ -136,6 +175,74 @@ body { background: #F0F2F6; color: #0F172A; }
   </div>
 </div>
 
+<div class="modal-overlay" id="bulkDeleteOverlay" onclick="if(event.target===this)closeBulkDeleteModal()">
+  <div class="modal-confirm">
+    <div class="modal-confirm-icon"><i data-lucide="alert-triangle"></i></div>
+    <h3>Delete <span id="bulkDeleteCount">0</span> ATMs</h3>
+    <p>Are you sure you want to delete the following <span id="bulkDeleteCount2">0</span> ATMs?</p>
+    <div id="bulkDeleteList" style="max-height:160px;overflow-y:auto;margin:12px 0;font-size:12px;color:#475569;text-align:left;background:#F8FAFC;border-radius:6px;padding:8px 12px"></div>
+    <p class="modal-confirm-note">This will remove them from maps, reports, and dashboards permanently.</p>
+    <div class="modal-confirm-actions">
+      <button class="btn btn-outline" onclick="closeBulkDeleteModal()">Cancel</button>
+      <button class="btn btn-danger" id="confirmBulkDeleteBtn" onclick="confirmBulkDelete()">Delete <span id="bulkDeleteCount3">0</span> ATMs</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="importOverlay" onclick="if(event.target===this)closeImportModal()">
+  <div class="modal" style="width:920px;max-width:96vw">
+    <div class="modal-header">
+      <h2>Import ATMs from CSV</h2>
+      <button class="modal-close" onclick="closeImportModal()"><i data-lucide="x"></i></button>
+    </div>
+    <div id="importStepFile" style="padding:36px 32px;text-align:center">
+      <p style="font-size:14px;color:#475569;margin:0 0 8px;line-height:1.6">
+        Upload a CSV file with columns: <code>atm_id, branch, district, city, region, latitude, longitude, terminal_id, vendor, model, install_date, status</code>.
+        Existing ATMs with matching IDs will be updated.
+      </p>
+      <a href="/admin/atm/csv" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#012169;font-weight:500;text-decoration:none;margin-bottom:24px">
+        <i data-lucide="download" style="width:14px;height:14px"></i> Download sample CSV
+      </a>
+      <div id="importDropZone" style="border:2px dashed #CBD5E1;border-radius:12px;padding:40px 24px;cursor:pointer;transition:all .2s;background:#FAFBFC;max-width:500px;margin:0 auto"
+           onmouseover="this.style.borderColor='#012169';this.style.background='#EEF2FF'"
+           onmouseout="this.style.borderColor='#CBD5E1';this.style.background='#FAFBFC'"
+           ondragover="event.preventDefault();this.style.borderColor='#012169';this.style.background='#EEF2FF'"
+           ondragleave="this.style.borderColor='#CBD5E1';this.style.background='#FAFBFC'"
+           ondrop="event.preventDefault();selectImportFile(event.dataTransfer.files[0])"
+           onclick="document.getElementById('importFileInput').click()">
+        <i data-lucide="file-up" style="width:44px;height:44px;color:#94A3B8;margin-bottom:10px"></i>
+        <div style="font-size:15px;font-weight:600;color:#475569">Drop CSV here or click to browse</div>
+        <div style="font-size:12px;color:#94A3B8;margin-top:4px">Maximum 10,000 rows</div>
+        <input type="file" id="importFileInput" accept=".csv" style="display:none" onchange="selectImportFile(this.files[0])">
+      </div>
+    </div>
+
+    <div id="importStepPreview" style="display:none">
+      <div id="importSummary" style="display:flex;align-items:center;gap:12px;padding:12px 24px;background:#F8FAFC;border-bottom:1px solid #EEF1F6;flex-wrap:wrap">
+        <span style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500"><i data-lucide="file-text" style="width:16px;height:16px;color:#012169"></i> <span id="importFileName"></span></span>
+        <span style="color:#CBD5E1">|</span>
+        <span style="font-size:12px;color:#64748B"><span id="importValidCount">0</span> valid</span>
+        <span style="font-size:12px;color:#DC2626" id="importErrorCountLabel"><span id="importErrorCount">0</span> with errors</span>
+        <span style="color:#CBD5E1">|</span>
+        <span style="font-size:12px;color:#64748B"><span id="importTotalCount">0</span> total rows</span>
+        <div style="flex:1"></div>
+        <button class="btn btn-outline" onclick="resetImport()" style="padding:6px 14px;font-size:11px">Change file</button>
+        <button class="btn btn-primary" id="importUploadBtn" onclick="uploadImport()" style="padding:7px 16px;font-size:12px">
+          <i data-lucide="upload" style="width:14px;height:14px"></i> Upload <span id="importUploadCount">0</span> valid rows
+        </button>
+      </div>
+      <div style="padding:0 24px 24px;max-height:480px;overflow-y:auto">
+        <div class="modal-alert" id="importAlert"></div>
+        <table style="font-size:11px;margin-top:0;table-layout:fixed;width:100%">
+          <thead><tr id="importPreviewHead"></tr></thead>
+          <tbody id="importPreviewBody"></tbody>
+        </table>
+      </div>
+      <div id="importResult" style="display:none;padding:16px 24px 24px"></div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="deleteOverlay" onclick="if(event.target===this)closeDeleteModal()">
   <div class="modal-confirm">
     <div class="modal-confirm-icon"><i data-lucide="alert-triangle"></i></div>
@@ -153,7 +260,6 @@ body { background: #F0F2F6; color: #0F172A; }
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
-var atmsData = {{ atms|tojson }};
 var FIELDS = {{ fields|tojson }};
 
 function openModal(data){
@@ -185,8 +291,15 @@ function syncCustomSelects(){
   });
 }
 function editATM(id){
-  var data = atmsData.find(function(a){ return a.atm_id === id; });
-  if(data) openModal(data);
+  fetch('/admin/atm/get?atm_id=' + encodeURIComponent(id), {
+    headers: {'X-Requested-With': 'XMLHttpRequest'}
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if(data.error){ showToast(data.message || 'ATM not found', 'error'); return; }
+    openModal(data);
+  })
+  .catch(function(){ showToast('Failed to load ATM data.', 'error'); });
 }
 function deleteATM(id){
   document.getElementById('deleteAtmId').textContent = id;
@@ -372,8 +485,409 @@ document.getElementById('atmForm').addEventListener('submit', function(e){
   });
 });
 
+var _importRows = [];
+var _importValidRows = [];
+
+function openImportModal(){
+  resetImport();
+  document.getElementById('importOverlay').classList.add('show');
+  lucide.createIcons();
+}
+
+function closeImportModal(){
+  document.getElementById('importOverlay').classList.remove('show');
+}
+
+function resetImport(){
+  _importRows = [];
+  _importValidRows = [];
+  document.getElementById('importStepFile').style.display = 'block';
+  document.getElementById('importStepPreview').style.display = 'none';
+  document.getElementById('importResult').style.display = 'none';
+  document.getElementById('importAlert').className = 'modal-alert';
+}
+
+function selectImportFile(file){
+  if(!file) return;
+  if(!file.name.endsWith('.csv')){
+    showToast('Please select a .csv file.', 'error');
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var parsed = parseCSV(e.target.result);
+    if(!parsed || parsed.length < 2){
+      showToast('CSV file appears empty or has no data rows.', 'error');
+      return;
+    }
+    _importRows = parsed;
+    renderPreviewTable(file.name);
+  };
+  reader.readAsText(file);
+}
+
+function parseCSV(text){
+  text = text.replace(/^\ufeff/, '').replace(/\r\n?/g, '\n');
+  var rawRows = text.split('\n');
+  if(rawRows.length < 2) return null;
+  var headers = rawRows[0].trim().toLowerCase().split(',').map(function(h){ return h.trim(); });
+  var COL_MAP = {
+    'atm_id': 'atm_id', 'branch': 'branch', 'district': 'district',
+    'city': 'city', 'region': 'region', 'latitude': 'latitude',
+    'longitude': 'longitude', 'terminal_id': 'terminal_id', 'vendor': 'vendor',
+    'model': 'model', 'install_date': 'install_date', 'status': 'status'
+  };
+  var mapped = [];
+  for(var h = 0; h < headers.length; h++){
+    mapped.push(COL_MAP[headers[h]] || null);
+  }
+
+  var result = [];
+  for(var r = 1; r < rawRows.length; r++){
+    var line = rawRows[r].trim();
+    if(!line) continue;
+    var vals = splitLine(line);
+    var row = {};
+    for(var c = 0; c < vals.length; c++){
+      var key = c < mapped.length ? mapped[c] : null;
+      if(key) row[key] = vals[c].trim();
+    }
+    result.push(row);
+  }
+  return result;
+}
+
+function splitLine(line){
+  var result = [];
+  var current = '';
+  var inQuotes = false;
+  for(var i = 0; i < line.length; i++){
+    var ch = line[i];
+    if(inQuotes){
+      if(ch === '"'){
+        if(i + 1 < line.length && line[i + 1] === '"'){ current += '"'; i++; }
+        else { inQuotes = false; }
+      } else { current += ch; }
+    } else {
+      if(ch === '"'){ inQuotes = true; }
+      else if(ch === ','){ result.push(current); current = ''; }
+      else { current += ch; }
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+function validateRow(row){
+  var errs = {};
+  if(!row.atm_id) errs.atm_id = 'Required';
+  else if(row.atm_id.length < 3) errs.atm_id = 'Min 3 chars';
+  else if(!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(row.atm_id)) errs.atm_id = 'Invalid format';
+  if(!row.branch) errs.branch = 'Required';
+  else if(row.branch.length < 2) errs.branch = 'Min 2 chars';
+  if(!row.district) errs.district = 'Required';
+  else if(row.district.length < 2) errs.district = 'Min 2 chars';
+  if(!row.city) errs.city = 'Required';
+  else if(row.city.length < 2) errs.city = 'Min 2 chars';
+  if(!row.region) errs.region = 'Required';
+  else if(row.region.length < 2) errs.region = 'Min 2 chars';
+  if(!row.terminal_id) errs.terminal_id = 'Required';
+  else if(row.terminal_id.length < 2) errs.terminal_id = 'Min 2 chars';
+  if(!row.vendor) errs.vendor = 'Required';
+  else if(row.vendor.length < 2) errs.vendor = 'Min 2 chars';
+  if(!row.model) errs.model = 'Required';
+  else if(row.model.length < 2) errs.model = 'Min 2 chars';
+  if(row.latitude){
+    var lat = parseFloat(row.latitude);
+    if(isNaN(lat)) errs.latitude = 'Not a number';
+    else if(lat < -90 || lat > 90) errs.latitude = 'Out of range';
+  }
+  if(row.longitude){
+    var lng = parseFloat(row.longitude);
+    if(isNaN(lng)) errs.longitude = 'Not a number';
+    else if(lng < -180 || lng > 180) errs.longitude = 'Out of range';
+  }
+  if(row.install_date && !/^\d{4}-\d{2}-\d{2}$/.test(row.install_date)){
+    errs.install_date = 'Use YYYY-MM-DD';
+  }
+  if(row.status && row.status !== 'active' && row.status !== 'inactive'){
+    errs.status = 'Must be active/inactive';
+  }
+  return errs;
+}
+
+function renderPreviewTable(fileName){
+  var validCount = 0;
+  var errorCount = 0;
+  var rowsWithErrors = [];
+
+  for(var i = 0; i < _importRows.length; i++){
+    var errs = validateRow(_importRows[i]);
+    _importRows[i]._errors = errs;
+    _importRows[i]._rowNum = i + 1;
+    if(Object.keys(errs).length > 0){
+      errorCount++;
+      rowsWithErrors.push(i);
+    } else {
+      validCount++;
+    }
+  }
+
+  _importValidRows = [];
+  for(var i = 0; i < _importRows.length; i++){
+    if(Object.keys(_importRows[i]._errors).length === 0){
+      _importValidRows.push(_importRows[i]);
+    }
+  }
+
+  document.getElementById('importStepFile').style.display = 'none';
+  document.getElementById('importStepPreview').style.display = 'block';
+  document.getElementById('importResult').style.display = 'none';
+  document.getElementById('importFileName').textContent = fileName;
+  document.getElementById('importValidCount').textContent = validCount;
+  document.getElementById('importErrorCount').textContent = errorCount;
+  document.getElementById('importTotalCount').textContent = _importRows.length;
+  document.getElementById('importErrorCountLabel').style.display = errorCount > 0 ? '' : 'none';
+  document.getElementById('importUploadCount').textContent = validCount;
+  document.getElementById('importUploadBtn').disabled = validCount === 0;
+
+  var THEAD = document.getElementById('importPreviewHead');
+  var TBODY = document.getElementById('importPreviewBody');
+  THEAD.innerHTML = '';
+  TBODY.innerHTML = '';
+
+  var COLS = ['atm_id','branch','district','city','region','latitude','longitude','terminal_id','vendor','model','install_date','status'];
+  var LABELS = ['ATM ID','Branch','District','City','Region','Lat','Lng','Terminal ID','Vendor','Model','Install Date','Status'];
+  var COL_WIDTHS = ['80px','90px','80px','80px','80px','60px','60px','85px','65px','75px','80px','60px'];
+
+  var headRow = document.createElement('tr');
+  var numTh = document.createElement('th');
+  numTh.style.cssText = 'width:32px';
+  headRow.appendChild(numTh);
+  for(var c = 0; c < COLS.length; c++){
+    var th = document.createElement('th');
+    th.textContent = LABELS[c];
+    th.style.cssText = 'width:' + COL_WIDTHS[c] + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    headRow.appendChild(th);
+  }
+  THEAD.appendChild(headRow);
+
+  var visibleRows = _importRows.length > 100 ? _importRows.slice(0, 100) : _importRows;
+  var total = _importRows.length;
+
+  for(var i = 0; i < visibleRows.length; i++){
+    var row = visibleRows[i];
+    var tr = document.createElement('tr');
+    if(Object.keys(row._errors).length > 0) tr.style.background = '#FEF2F2';
+
+    var numTd = document.createElement('td');
+    numTd.textContent = row._rowNum;
+    numTd.style.cssText = 'color:#94A3B8;font-size:10px;text-align:center;width:32px;padding:6px 4px';
+    tr.appendChild(numTd);
+
+    for(var c = 0; c < COLS.length; c++){
+      var td = document.createElement('td');
+      var val = row[COLS[c]] || '';
+      td.textContent = val || '—';
+      td.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:' + COL_WIDTHS[c];
+      if(row._errors[COLS[c]]){
+        td.style.cssText += ';background:#FEF2F2;color:#DC2626;border-bottom:2px solid #DC2626;cursor:help';
+        td.title = row._errors[COLS[c]];
+        var dot = document.createElement('span');
+        dot.textContent = '!';
+        dot.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#DC2626;color:#fff;font-size:9px;font-weight:700;margin-left:4px;flex-shrink:0';
+        td.appendChild(dot);
+      }
+      tr.appendChild(td);
+    }
+    TBODY.appendChild(tr);
+  }
+
+  if(total > 100){
+    var moreTr = document.createElement('tr');
+    var moreTd = document.createElement('td');
+    moreTd.colSpan = COLS.length + 1;
+    moreTd.textContent = '… and ' + (total - 100) + ' more rows (scroll to view all)';
+    moreTd.style.cssText = 'text-align:center;color:#94A3B8;font-size:11px;padding:12px';
+    moreTr.appendChild(moreTd);
+    TBODY.appendChild(moreTr);
+  }
+
+  if(total === 0 || validCount === 0){
+    var emptyTr = document.createElement('tr');
+    var emptyTd = document.createElement('td');
+    emptyTd.colSpan = COLS.length + 1;
+    emptyTd.textContent = validCount === 0 && total > 0 ? 'No valid rows to import. Fix errors and try again.' : 'No data rows found.';
+    emptyTd.style.cssText = 'text-align:center;padding:32px;color:#94A3B8;font-size:13px';
+    emptyTr.appendChild(emptyTd);
+    TBODY.appendChild(emptyTr);
+  }
+
+  document.getElementById('importAlert').className = 'modal-alert';
+  lucide.createIcons();
+}
+
+function uploadImport(){
+  if(_importValidRows.length === 0){ showToast('No valid rows to upload.', 'error'); return; }
+
+  var btn = document.getElementById('importUploadBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader-2" style="width:14px;height:14px"></i> Uploading ' + _importValidRows.length + ' rows…';
+  lucide.createIcons();
+  var spn = btn.querySelector('svg');
+  if(spn) spn.style.animation = 'spin 1s linear infinite';
+
+  var COLS = ['atm_id','branch','district','city','region','latitude','longitude','terminal_id','vendor','model','install_date','status'];
+  var csvLines = [COLS.join(',')];
+  for(var i = 0; i < _importValidRows.length; i++){
+    csvLines.push(COLS.map(function(c){ return (_importValidRows[i][c] || ''); }).join(','));
+  }
+  var csvBlob = csvLines.join('\n');
+
+  var formData = new FormData();
+  formData.append('file', new Blob([csvBlob], {type: 'text/csv'}), 'import.csv');
+
+  fetch('/admin/atm/import', {
+    method: 'POST',
+    body: formData,
+    headers: {'X-Requested-With': 'XMLHttpRequest'}
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    var el = document.getElementById('importResult');
+    el.style.display = 'block';
+    document.getElementById('importStepPreview').querySelector('div[style*="max-height"]').style.display = 'none';
+    document.getElementById('importSummary').style.display = 'none';
+
+    if(data.error){
+      el.innerHTML = '<div class="modal-alert error" style="display:block">' + escapeHtml(data.message) + '</div>';
+    } else {
+      var imported = data.imported || 0;
+      var skipped = data.skipped || 0;
+      var total = imported + skipped;
+      var html = '<div style="text-align:center;padding:24px 0 8px">';
+      if(imported > 0){
+        html += '<div style="width:56px;height:56px;border-radius:50%;background:#D1FAE5;display:flex;align-items:center;justify-content:center;margin:0 auto 16px"><i data-lucide="check-circle" style="width:28px;height:28px;color:#065F46"></i></div>';
+        html += '<div style="font-size:20px;font-weight:700;color:#065F46">' + imported + ' ATM' + (imported !== 1 ? 's' : '') + ' imported</div>';
+      } else {
+        html += '<div style="width:56px;height:56px;border-radius:50%;background:#FEF3C7;display:flex;align-items:center;justify-content:center;margin:0 auto 16px"><i data-lucide="alert-triangle" style="width:28px;height:28px;color:#92400E"></i></div>';
+        html += '<div style="font-size:20px;font-weight:700;color:#92400E">No rows were imported</div>';
+      }
+      if(skipped > 0) html += '<p style="color:#64748B;font-size:13px;margin:4px 0 0">' + skipped + ' row(s) skipped due to errors</p>';
+      html += '</div>';
+      if(data.db_errors && data.db_errors.length > 0){
+        html += '<div style="margin-top:16px;background:#FEF2F2;border-radius:8px;padding:12px 16px;font-size:12px">';
+        html += '<div style="font-weight:600;color:#DC2626;margin-bottom:6px">Database errors:</div>';
+        data.db_errors.forEach(function(e){
+          html += '<div style="padding:4px 0;color:#7F1D1D"><strong>' + escapeHtml(e.atm_id) + '</strong>: ' + escapeHtml(e.error) + '</div>';
+        });
+        html += '</div>';
+      }
+      if(imported > 0){
+        html += '<div style="text-align:center;margin-top:20px"><button class="btn btn-primary" onclick="location.reload()" style="padding:10px 24px"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Reload to see changes</button></div>';
+      } else {
+        html += '<div style="text-align:center;margin-top:20px"><button class="btn btn-outline" onclick="resetImport()" style="padding:10px 24px">Try a different file</button></div>';
+      }
+      el.innerHTML = html;
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="upload" style="width:14px;height:14px"></i> Upload valid rows';
+    lucide.createIcons();
+  })
+  .catch(function(){
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="upload" style="width:14px;height:14px"></i> Upload valid rows';
+    lucide.createIcons();
+    document.getElementById('importResult').style.display = 'block';
+    document.getElementById('importResult').innerHTML = '<div class="modal-alert error" style="display:block">Network error. Please try again.</div>';
+  });
+}
+
+function toggleSelectAll(){
+  var checked = document.getElementById('selectAll').checked;
+  document.querySelectorAll('.row-checkbox').forEach(function(cb){ cb.checked = checked; });
+  updateSelection();
+}
+
+function updateSelection(){
+  var checked = document.querySelectorAll('.row-checkbox:checked');
+  var count = checked.length;
+  var bar = document.getElementById('selectionBar');
+  var btn = document.getElementById('bulkDeleteBtn');
+  document.getElementById('selectedCount').textContent = count;
+  if(count > 0){
+    bar.style.display = 'flex';
+    btn.disabled = false;
+  } else {
+    bar.style.display = 'none';
+    btn.disabled = true;
+  }
+  document.getElementById('selectAll').checked = document.querySelectorAll('.row-checkbox').length === count && count > 0;
+}
+
+function openBulkDeleteModal(){
+  var checked = document.querySelectorAll('.row-checkbox:checked');
+  var ids = [];
+  checked.forEach(function(cb){ ids.push(cb.value); });
+  if(ids.length === 0) return;
+  document.getElementById('bulkDeleteCount').textContent = ids.length;
+  document.getElementById('bulkDeleteCount2').textContent = ids.length;
+  document.getElementById('bulkDeleteCount3').textContent = ids.length;
+  var list = document.getElementById('bulkDeleteList');
+  list.innerHTML = ids.map(function(id){
+    return '<span style="display:inline-block;background:#EEF2FF;padding:2px 8px;border-radius:4px;margin:2px 3px;font-family:monospace;font-size:11px">' + escapeHtml(id) + '</span>';
+  }).join('');
+  document.getElementById('bulkDeleteOverlay').classList.add('show');
+  lucide.createIcons();
+}
+
+function closeBulkDeleteModal(){
+  document.getElementById('bulkDeleteOverlay').classList.remove('show');
+}
+
+function confirmBulkDelete(){
+  var btn = document.getElementById('confirmBulkDeleteBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader-2" style="width:14px;height:14px"></i> Deleting...';
+  lucide.createIcons();
+  var spn = btn.querySelector('svg');
+  if(spn) spn.style.animation = 'spin 1s linear infinite';
+
+  var ids = [];
+  document.querySelectorAll('.row-checkbox:checked').forEach(function(cb){ ids.push(cb.value); });
+
+  fetch('/admin/atm/bulk-delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+    body: JSON.stringify({ids: ids})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if(data.success){
+      document.getElementById('bulkDeleteOverlay').classList.remove('show');
+      showToast(data.deleted + ' ATM' + (data.deleted !== 1 ? 's' : '') + ' deleted successfully.', 'success');
+      setTimeout(function(){ location.reload(); }, 800);
+    } else {
+      showToast(data.message || 'Failed to delete ATMs.', 'error');
+      btn.disabled = false;
+      btn.innerHTML = 'Delete ' + ids.length + ' ATMs';
+      lucide.createIcons();
+    }
+  })
+  .catch(function(){
+    showToast('Network error. Please try again.', 'error');
+    btn.disabled = false;
+    btn.innerHTML = 'Delete ' + ids.length + ' ATMs';
+    lucide.createIcons();
+  });
+}
+
+function escapeHtml(str){
+  return (str + '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 document.addEventListener('keydown', function(e){
-  if(e.key === 'Escape'){ closeModal(); closeDeleteModal(); }
+  if(e.key === 'Escape'){ closeModal(); closeDeleteModal(); closeImportModal(); closeBulkDeleteModal(); }
 });
 initCustomSelects();
 initFlatpickr();

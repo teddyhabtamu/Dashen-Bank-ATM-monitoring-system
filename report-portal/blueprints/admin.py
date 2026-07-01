@@ -2,7 +2,10 @@
 blueprints/admin.py
 ATM Admin registration routes.
 """
-from flask import Blueprint, render_template, request, redirect, jsonify, flash
+import csv, io, re
+from datetime import datetime
+from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response
+from blueprints.auth import login_required
 from db import get_db
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -24,10 +27,41 @@ FIELDS = [
 
 
 @bp.route('/atm')
+@login_required
 def atm_list():
+    search = request.args.get('search', '').strip()
+    per_page = 50
+
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (ValueError, TypeError):
+        page = 1
+
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM atm_locations ORDER BY atm_id")
+
+    if search:
+        like = f'%{search}%'
+        cur.execute("""SELECT COUNT(*) FROM atm_locations
+                       WHERE atm_id ILIKE %s OR branch ILIKE %s
+                       OR district ILIKE %s OR city ILIKE %s OR region ILIKE %s""",
+                    (like, like, like, like, like))
+        total = cur.fetchone()[0]
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        page = min(page, total_pages)
+        cur.execute("""SELECT * FROM atm_locations
+                       WHERE atm_id ILIKE %s OR branch ILIKE %s
+                       OR district ILIKE %s OR city ILIKE %s OR region ILIKE %s
+                       ORDER BY atm_id LIMIT %s OFFSET %s""",
+                    (like, like, like, like, like, per_page, (page - 1) * per_page))
+    else:
+        cur.execute("SELECT COUNT(*) FROM atm_locations")
+        total = cur.fetchone()[0]
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        page = min(page, total_pages)
+        cur.execute("SELECT * FROM atm_locations ORDER BY atm_id LIMIT %s OFFSET %s",
+                    (per_page, (page - 1) * per_page))
+
     cols = [d[0] for d in cur.description]
     rows = cur.fetchall()
     cur.close()
@@ -35,10 +69,31 @@ def atm_list():
 
     atms = [dict(zip(cols, r)) for r in rows]
 
-    return render_template('admin_atm.html', atms=atms, atm_count=len(atms), fields=FIELDS)
+    return render_template('admin_atm.html', atms=atms, atm_count=total,
+                           page=page, total_pages=total_pages,
+                           search=search, fields=FIELDS)
+
+
+@bp.route('/atm/get')
+@login_required
+def atm_get():
+    atm_id = request.args.get('atm_id', '').strip()
+    if not atm_id:
+        return jsonify({'error': True, 'message': 'ATM ID is required'}), 400
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM atm_locations WHERE atm_id = %s", (atm_id,))
+    cols = [d[0] for d in cur.description]
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        return jsonify({'error': True, 'message': f'ATM {atm_id} not found'}), 404
+    return jsonify(dict(zip(cols, row)))
 
 
 @bp.route('/atm/save', methods=['POST'])
+@login_required
 def atm_save():
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     field_names = [f[0] for f in FIELDS]
@@ -103,6 +158,7 @@ def atm_save():
 
 
 @bp.route('/atm/delete', methods=['POST'])
+@login_required
 def atm_delete():
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     atm_id = request.form.get('atm_id', '').strip()
@@ -135,6 +191,138 @@ def atm_delete():
     if is_ajax:
         return jsonify({'success': True, 'atm_id': atm_id})
     return redirect('/admin/atm')
+
+
+@bp.route('/atm/bulk-delete', methods=['POST'])
+@login_required
+def atm_bulk_delete():
+    data = request.get_json(silent=True)
+    if not data or 'ids' not in data or not isinstance(data['ids'], list):
+        return jsonify({'error': True, 'message': 'Please provide a list of ATM IDs.'})
+
+    ids = [i.strip() for i in data['ids'] if i.strip()]
+    if not ids:
+        return jsonify({'error': True, 'message': 'No ATM IDs provided.'})
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        placeholders = ','.join(['%s'] * len(ids))
+        cur.execute(f"DELETE FROM atm_locations WHERE atm_id IN ({placeholders})", ids)
+        deleted = cur.rowcount
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': True, 'message': f'Database error: {str(e)}'})
+    finally:
+        cur.close()
+        conn.close()
+
+    return jsonify({'success': True, 'deleted': deleted})
+
+
+@bp.route('/atm/csv')
+@login_required
+def atm_csv_export():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM atm_locations ORDER BY atm_id")
+    cols = [d[0] for d in cur.description]
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(cols)
+    w.writerows(rows)
+
+    return Response(
+        buf.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename=atm_locations_{datetime.now().strftime("%Y%m%d")}.csv'}
+    )
+
+
+@bp.route('/atm/import', methods=['POST'])
+@login_required
+def atm_import():
+    file = request.files.get('file')
+    if not file or not file.filename:
+        return jsonify({'error': True, 'message': 'Please select a CSV file to upload.'})
+
+    try:
+        content = file.stream.read().decode('utf-8-sig')
+    except Exception:
+        return jsonify({'error': True, 'message': 'Could not read file. Ensure it is a valid UTF-8 CSV.'})
+
+    reader = csv.DictReader(io.StringIO(content))
+    required = ['atm_id', 'branch', 'district', 'city', 'region',
+                'terminal_id', 'vendor', 'model', 'status']
+    missing_cols = [c for c in required if c not in reader.fieldnames]
+    if missing_cols:
+        return jsonify({'error': True, 'message': f'Missing required columns: {", ".join(missing_cols)}'})
+
+    rows = []
+    errors = []
+    line = 1
+    for row in reader:
+        line += 1
+        errs = _validate(row)
+        if errs:
+            errors.append({'line': line, 'atm_id': row.get('atm_id', '?'), 'errors': errs})
+        else:
+            rows.append(row)
+
+    if errors and not rows:
+        return jsonify({'error': True, 'message': f'All {len(errors)} row(s) have errors. No data imported.',
+                        'import_errors': errors})
+
+    imported = 0
+    db_errors = []
+    if rows:
+        conn = get_db()
+        cur = conn.cursor()
+        for row in rows:
+            try:
+                cur.execute("""
+                    INSERT INTO atm_locations
+                        (atm_id, branch, district, city, region, latitude, longitude,
+                         terminal_id, vendor, model, install_date, status)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (atm_id) DO UPDATE SET
+                        branch       = EXCLUDED.branch,
+                        district     = EXCLUDED.district,
+                        city         = EXCLUDED.city,
+                        region       = EXCLUDED.region,
+                        latitude     = EXCLUDED.latitude,
+                        longitude    = EXCLUDED.longitude,
+                        terminal_id  = EXCLUDED.terminal_id,
+                        vendor       = EXCLUDED.vendor,
+                        model        = EXCLUDED.model,
+                        install_date = EXCLUDED.install_date,
+                        status       = EXCLUDED.status
+                """, (
+                    row['atm_id'], row.get('branch'), row.get('district'),
+                    row.get('city'), row.get('region'), row.get('latitude'),
+                    row.get('longitude'), row.get('terminal_id'),
+                    row.get('vendor'), row.get('model'),
+                    row.get('install_date'), row.get('status')
+                ))
+                imported += 1
+            except Exception as e:
+                db_errors.append({'atm_id': row['atm_id'], 'error': str(e)})
+        conn.commit()
+        cur.close()
+        conn.close()
+
+    return jsonify({
+        'success': True,
+        'imported': imported,
+        'skipped': len(errors),
+        'db_errors': db_errors,
+        'import_errors': errors
+    })
 
 
 def _validate(data):

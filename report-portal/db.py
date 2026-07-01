@@ -1,12 +1,81 @@
+"""
+db.py — PostgreSQL connection pool.
+Uses psycopg2's ThreadedConnectionPool so Flask's threaded workers
+reuse connections instead of opening a new one per request.
+
+Returns a thin wrapper whose .close() returns the connection to the pool.
+"""
 import os
-import psycopg2
+import logging
+from psycopg2 import pool
+
+logger = logging.getLogger(__name__)
 
 DB_HOST = os.environ.get('DB_HOST', 'postgres')
+DB_PORT = int(os.environ.get('DB_PORT', 5432))
 DB_NAME = os.environ.get('DB_NAME', 'zabbix')
 DB_USER = os.environ.get('DB_USER', 'zabbix')
 DB_PASS = os.environ.get('DB_PASS', '')
+DB_POOL_MIN = int(os.environ.get('DB_POOL_MIN', 2))
+DB_POOL_MAX = int(os.environ.get('DB_POOL_MAX', 20))
+
+_config = {
+    'host': DB_HOST,
+    'port': DB_PORT,
+    'dbname': DB_NAME,
+    'user': DB_USER,
+    'password': DB_PASS,
+}
+
+_pool = None
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        try:
+            _pool = pool.ThreadedConnectionPool(DB_POOL_MIN, DB_POOL_MAX, **_config)
+            logger.info('DB pool created (min=%d, max=%d)', DB_POOL_MIN, DB_POOL_MAX)
+        except Exception as e:
+            logger.critical('Failed to create DB pool: %s', e)
+            raise
+    return _pool
+
+
+class _PooledConnection:
+    """Thin wrapper that delegates all attribute access to the real connection
+    but overrides .close() to return it to the pool instead."""
+
+    def __init__(self, conn, pool):
+        object.__setattr__(self, '_conn', conn)
+        object.__setattr__(self, '_pool', pool)
+
+    def close(self):
+        try:
+            object.__getattribute__(self, '_pool').putconn(
+                object.__getattribute__(self, '_conn'))
+        except Exception as e:
+            logger.error('Failed to return connection to pool: %s', e)
+
+    def __getattr__(self, name):
+        if name in ('_conn', '_pool'):
+            raise AttributeError(name)
+        return getattr(object.__getattribute__(self, '_conn'), name)
+
+    def __setattr__(self, name, value):
+        if name in ('_conn', '_pool'):
+            object.__setattr__(self, name, value)
+        else:
+            setattr(object.__getattribute__(self, '_conn'), name, value)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
 
 def get_db():
-    return psycopg2.connect(host=DB_HOST, dbname=DB_NAME,
-                            user=DB_USER, password=DB_PASS)
+    p = _get_pool()
+    raw = p.getconn()
+    return _PooledConnection(raw, p)

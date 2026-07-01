@@ -176,6 +176,9 @@ services:
       REPORT_PORTAL_PORT: ${REPORT_PORTAL_PORT}
       ES_HOST: opensearch:9200
       ES_INDEX: atm-ej-live-*,atm-electronic-journal
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASS: ${ADMIN_PASS:-admin123}
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-}
     volumes:
       - ./report-portal:/app:rw
     ports:

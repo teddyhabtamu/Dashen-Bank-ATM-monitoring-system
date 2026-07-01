@@ -279,9 +279,21 @@ tr:hover{background:#EEF2FF}
     </a>
   </nav>
   <div class="sidebar-support">
+    {% if session.get('logged_in') %}
+    <div style="padding:8px 12px 4px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:4px">
+      <div style="width:26px;height:26px;border-radius:50%;background:rgba(253,215,154,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <i data-lucide="user" style="width:14px;height:14px;color:#FDD79A"></i>
+      </div>
+      <span style="font-size:12px;color:rgba(255,255,255,.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ session.get('username', 'User') }}</span>
+    </div>
+    {% endif %}
     <a href="https://dashenbanksc.com/frequently-asked-questions/#:~:text=Our%20Customer%20Service%20Team%20is,via%206333%20for%20any%20support." target="_blank" class="nav-item support-link">
       <i data-lucide="help-circle"></i>
       <span>Support</span>
+    </a>
+    <a href="/logout" class="nav-item" style="color:rgba(255,255,255,.4)">
+      <i data-lucide="log-out" style="width:15px;height:15px"></i>
+      <span>Logout</span>
     </a>
   </div>
 </div>

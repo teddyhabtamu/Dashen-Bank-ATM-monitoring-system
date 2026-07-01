@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify, send_file
+from blueprints.auth import login_required
 import openpyxl, io, os, csv
 from collections import Counter
 from db import get_db
@@ -18,6 +19,7 @@ bp = Blueprint('report', __name__)
 
 
 @bp.route('/api/atms')
+@login_required
 def api_atms():
     try:
         conn = get_db(); cur = conn.cursor()
@@ -29,6 +31,7 @@ def api_atms():
 
 
 @bp.route('/api/stats')
+@login_required
 def api_stats():
     try:
         conn = get_db(); cur = conn.cursor()
@@ -50,6 +53,7 @@ def api_stats():
 # ─── TRANSACTION SUMMARY ────────────────────────────────────────────────────────
 
 @bp.route('/report/transaction/<fmt>')
+@login_required
 def report_transaction(fmt):
     days = int(request.args.get('days', 7))
     atm  = request.args.get('atm', 'all')
@@ -106,6 +110,7 @@ def report_transaction(fmt):
 # ─── CASH LEVEL ─────────────────────────────────────────────────────────────────
 
 @bp.route('/report/cash/<fmt>')
+@login_required
 def report_cash(fmt):
     days = int(request.args.get('days', 7))
     atm  = request.args.get('atm', 'all')
@@ -166,6 +171,7 @@ def _describe_error(code):
 # ─── ERROR & INCIDENT ────────────────────────────────────────────────────────────
 
 @bp.route('/report/error/<fmt>')
+@login_required
 def report_error(fmt):
     days = int(request.args.get('days', 7))
     atm  = request.args.get('atm', 'all')
@@ -225,6 +231,7 @@ def report_error(fmt):
 # ─── ATM PERFORMANCE ────────────────────────────────────────────────────────────
 
 @bp.route('/report/performance/<fmt>')
+@login_required
 def report_performance(fmt):
     days = int(request.args.get('days', 7))
     conn = get_db(); cur = conn.cursor()
@@ -286,6 +293,7 @@ def report_performance(fmt):
 # ─── ATM AVAILABILITY ───────────────────────────────────────────────────────────
 
 @bp.route('/report/availability/<fmt>')
+@login_required
 def report_availability(fmt):
     days = int(request.args.get('days', 7))
     atm  = request.args.get('atm', 'all')
@@ -384,6 +392,7 @@ def report_availability(fmt):
 # ─── COMPLETE MANAGEMENT REPORT ─────────────────────────────────────────────────
 
 @bp.route('/report/full/<fmt>')
+@login_required
 def report_full(fmt):
     days = int(request.args.get('days', 7))
     atm  = request.args.get('atm', 'all')
