@@ -30,6 +30,10 @@ def create_app():
 
     app.jinja_env.globals['enumerate'] = enumerate
 
+    @app.route('/health')
+    def health():
+        return {'status': 'ok'}, 200
+
     @app.before_request
     def start_timer():
         g.start = time.time()

@@ -11,18 +11,18 @@ from db import get_db
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 FIELDS = [
-    ('atm_id',      'ATM ID',       'text'),
-    ('branch',      'Branch',       'text'),
-    ('district',    'District',     'text'),
-    ('city',        'City',         'text'),
-    ('region',      'Region',       'text'),
-    ('latitude',    'Latitude',     'number'),
-    ('longitude',   'Longitude',    'number'),
-    ('terminal_id', 'Terminal ID',  'text'),
-    ('vendor',      'Vendor',       'text'),
-    ('model',       'Model',        'text'),
-    ('install_date','Install Date', 'date'),
-    ('status',      'Status',       'select'),
+    ('atm_id',      'ATM ID',       'text',   20),
+    ('branch',      'Branch',       'text',   100),
+    ('district',    'District',     'text',   100),
+    ('city',        'City',         'text',   100),
+    ('region',      'Region',       'text',   100),
+    ('latitude',    'Latitude',     'number', None),
+    ('longitude',   'Longitude',    'number', None),
+    ('terminal_id', 'Terminal ID',  'text',   20),
+    ('vendor',      'Vendor',       'text',   50),
+    ('model',       'Model',        'text',   50),
+    ('install_date','Install Date', 'date',   None),
+    ('status',      'Status',       'select', None),
 ]
 
 
@@ -221,12 +221,38 @@ def atm_bulk_delete():
     return jsonify({'success': True, 'deleted': deleted})
 
 
+@bp.route('/atm/check', methods=['POST'])
+@login_required
+def atm_check():
+    data = request.get_json(silent=True)
+    if not data or 'ids' not in data:
+        return jsonify({'existing': []})
+    ids = [i.strip() for i in data['ids'] if i.strip()]
+    if not ids:
+        return jsonify({'existing': []})
+    conn = get_db()
+    cur = conn.cursor()
+    placeholders = ','.join(['%s'] * len(ids))
+    cur.execute(f"SELECT atm_id FROM atm_locations WHERE atm_id IN ({placeholders})", ids)
+    existing = [r[0] for r in cur.fetchall()]
+    cur.close()
+    conn.close()
+    return jsonify({'existing': existing})
+
+
 @bp.route('/atm/csv')
 @login_required
 def atm_csv_export():
+    ids_param = request.args.get('ids', '').strip()
+
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM atm_locations ORDER BY atm_id")
+    if ids_param:
+        ids = [i.strip() for i in ids_param.split(',') if i.strip()]
+        placeholders = ','.join(['%s'] * len(ids))
+        cur.execute(f"SELECT * FROM atm_locations WHERE atm_id IN ({placeholders}) ORDER BY atm_id", ids)
+    else:
+        cur.execute("SELECT * FROM atm_locations ORDER BY atm_id")
     cols = [d[0] for d in cur.description]
     rows = cur.fetchall()
     cur.close()
@@ -334,6 +360,12 @@ def _validate(data):
             errors[field] = 'This field is required'
     if data.get('atm_id') and len(data['atm_id']) < 3:
         errors['atm_id'] = 'ATM ID must be at least 3 characters'
+    maxlens = {'atm_id': 20, 'branch': 100, 'district': 100, 'city': 100,
+               'region': 100, 'terminal_id': 20, 'vendor': 50, 'model': 50}
+    for field, maxlen in maxlens.items():
+        val = data.get(field)
+        if val and len(val) > maxlen:
+            errors[field] = f'Max {maxlen} characters'
     if data.get('latitude'):
         try:
             n = float(data['latitude'])

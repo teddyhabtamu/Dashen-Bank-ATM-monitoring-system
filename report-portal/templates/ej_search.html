@@ -10,6 +10,8 @@ body { background: #F0F2F6; color: #0F172A; }
 .search-actions .btn { padding: 10px 20px; }
 td { font-variant-numeric: tabular-nums; }
 .ej-row:hover { background: #EEF2FF !important; }
+.ej-row.expanded { background: #F0F4FF !important; }
+.ej-row.expanded td:first-child .chevron-icon { color: #012169 !important; }
 .badge-evt { padding: 2px 8px; border-radius: 100px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
 .badge-evt.TXN  { background: rgba(37,99,235,0.1); color: #2563eb; }
 .badge-evt.ERROR{ background: rgba(220,38,38,0.1); color: #dc2626; }
@@ -180,7 +182,8 @@ td { font-variant-numeric: tabular-nums; }
     <div class="card">
       <div class="card-header">
         <h2>Results ({{ total }})</h2>
-        <a href="/ej-search/csv?card={{ card }}&date_from={{ date_from }}&date_to={{ date_to }}&atm_id={{ atm_id }}&keyword={{ keyword }}&event_type={{ event_type }}&status={{ status }}&min_amount={{ min_amount }}&max_amount={{ max_amount }}&auth_code={{ auth_code }}"
+        <a id="ejExportBtn"
+           href="/ej-search/csv?card={{ card }}&date_from={{ date_from }}&date_to={{ date_to }}&atm_id={{ atm_id }}&keyword={{ keyword }}&event_type={{ event_type }}&status={{ status }}&min_amount={{ min_amount }}&max_amount={{ max_amount }}&auth_code={{ auth_code }}"
            class="btn btn-gold">
           <i data-lucide="download" style="width:14px;height:14px"></i> Export to CSV
         </a>
@@ -188,12 +191,16 @@ td { font-variant-numeric: tabular-nums; }
       <div style="overflow-x:auto">
         <table>
           <thead><tr>
+            <th style="width:32px;padding:8px 4px;text-align:center"><input type="checkbox" id="ejSelectAll" onchange="ejToggleSelectAll()" style="cursor:pointer;width:15px;height:15px"></th>
             <th>Timestamp</th><th>ATM ID</th><th>Transaction Type</th><th>Card (masked)</th><th>Status</th><th style="text-align:right">Amount</th>
           </tr></thead>
           <tbody>
             {% if results %}
               {% for idx, r in results %}
               <tr data-idx="{{ idx }}" class="ej-row" style="cursor:pointer">
+                <td style="padding:8px 4px;text-align:center" onclick="event.stopPropagation()">
+                  <input type="checkbox" class="ej-row-checkbox" value="{{ idx }}" onchange="ejUpdateSelection()" style="cursor:pointer;width:15px;height:15px">
+                </td>
                 <td>
                   <i data-lucide="chevron-right" class="chevron-icon" id="chevron-{{ idx }}"
                      style="width:14px;height:14px;transition:transform 0.2s;vertical-align:middle;margin-right:8px;color:#64748B"></i>
@@ -208,7 +215,7 @@ td { font-variant-numeric: tabular-nums; }
                 </td>
               </tr>
               <tr id="details-{{ idx }}" class="details-row" style="display:none">
-                <td colspan="6" class="detail-wrap">
+                <td colspan="7" class="detail-wrap">
                   <div class="detail-inner">
                     <div class="detail-header"><i data-lucide="terminal"></i> LOG DETAILS</div>
                     <div class="detail-body">
@@ -267,12 +274,15 @@ td { font-variant-numeric: tabular-nums; }
 function toggleDetails(idx) {
   var row = document.getElementById('details-' + idx);
   var chevron = document.getElementById('chevron-' + idx);
+  var parent = chevron ? chevron.closest('.ej-row') : null;
   if (row.style.display === 'none') {
     row.style.display = 'table-row';
     chevron.style.transform = 'rotate(90deg)';
+    if(parent) parent.classList.add('expanded');
   } else {
     row.style.display = 'none';
     chevron.style.transform = 'rotate(0deg)';
+    if(parent) parent.classList.remove('expanded');
   }
 }
 
@@ -350,6 +360,36 @@ document.getElementById('ejSearchForm').addEventListener('submit', function(e){
   });
 });
 
+function ejInitSelection(){
+  var btn = document.getElementById('ejExportBtn');
+  if(!btn) return;
+  var allCbs = document.querySelectorAll('.ej-row-checkbox');
+  var checked = document.querySelectorAll('.ej-row-checkbox:checked');
+  document.getElementById('ejSelectAll').checked = allCbs.length > 0 && checked.length === allCbs.length;
+  if(checked.length > 0){
+    var ids = [];
+    checked.forEach(function(cb){ ids.push(cb.value); });
+    var sep = btn.href.indexOf('?') > -1 ? '&' : '?';
+    var base = btn.href.replace(/[\?&]selected=[^&]*/g, '');
+    btn.href = base + sep + 'selected=' + ids.join(',');
+    btn.innerHTML = '<i data-lucide="download" style="width:14px;height:14px"></i> Export CSV (' + checked.length + ')';
+  } else {
+    btn.href = btn.href.replace(/[\?&]selected=[^&]*/g, '');
+    btn.innerHTML = '<i data-lucide="download" style="width:14px;height:14px"></i> Export to CSV';
+  }
+  lucide.createIcons();
+}
+
+function ejToggleSelectAll(){
+  var checked = document.getElementById('ejSelectAll').checked;
+  document.querySelectorAll('.ej-row-checkbox').forEach(function(cb){ cb.checked = checked; });
+  ejInitSelection();
+}
+
+function ejUpdateSelection(){
+  ejInitSelection();
+}
+
 function initEJComponents(){
   document.querySelectorAll('.flatpickr-date').forEach(function(el){
     if(el._flatpickr) el._flatpickr.destroy();
@@ -357,13 +397,23 @@ function initEJComponents(){
   });
   initCustomSelects();
   lucide.createIcons();
+  ejInitSelection();
 }
 
 document.getElementById('ejSearchForm').addEventListener('click', function(e){
   var pagiBtn = e.target.closest('.pagi-btn');
   if(pagiBtn){ lastClickedBtn = pagiBtn; return; }
   var row = e.target.closest('.ej-row');
-  if(row && row.dataset.idx !== undefined) toggleDetails(row.dataset.idx);
+  if(row && row.dataset.idx !== undefined){ toggleDetails(row.dataset.idx); return; }
+  if(e.target.closest('.detail-inner')){
+    if(e.target.closest('.detail-header')){
+      var detailRow = e.target.closest('.details-row');
+      if(detailRow && detailRow.id && detailRow.id.startsWith('details-')){
+        toggleDetails(detailRow.id.replace('details-', ''));
+      }
+    }
+    return;
+  }
 });
 
 initEJComponents();

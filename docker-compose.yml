@@ -183,6 +183,12 @@ services:
       - ./report-portal:/app:rw
     ports:
       - "8888:8888"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8888/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     depends_on:
       - postgres
     restart: unless-stopped

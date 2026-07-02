@@ -8,12 +8,17 @@ body { background: #F0F2F6; color: #0F172A; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 14px; padding: 24px; }
 .form-actions { padding: 0 24px 24px; display: flex; gap: 10px; }
 .form-actions .btn { padding: 10px 20px; }
-.actions { display: flex; gap: 6px; }
-.actions a { padding: 5px 10px; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 500; cursor:pointer }
-.actions .edit { background: rgba(1,33,105,.06); color: #012169; }
-.actions .edit:hover { background: rgba(1,33,105,.12); }
-.actions .delete { background: rgba(220,38,38,.07); color: #DC2626; }
-.actions .delete:hover { background: rgba(220,38,38,.14); }
+.kebab-wrap{position:relative;text-align:center}
+.kebab-btn{background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:4px;color:#94A3B8;transition:.15s;line-height:1}
+.kebab-btn:hover{background:#F1F5F9;color:#475569}
+.kebab-menu{display:none;position:absolute;right:0;top:100%;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:4px;z-index:100;min-width:130px;border:1px solid #EEF1F6}
+.kebab-menu.show{display:block}
+.kebab-item{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:none;width:100%;text-align:left;transition:.1s}
+.kebab-item:hover{background:#F8FAFC}
+.kebab-item.edit{color:#012169}
+.kebab-item.edit:hover{background:#EEF2FF}
+.kebab-item.delete{color:#DC2626}
+.kebab-item.delete:hover{background:#FEF2F2}
 .empty { text-align: center; padding: 48px; color: #94A3B8; font-size: 14px; }
 .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:2000;display:none;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 .modal-overlay.show{display:flex}
@@ -61,13 +66,13 @@ body { background: #F0F2F6; color: #0F172A; }
     <h2>Registered ATMs ({{ atm_count }})</h2>
     <div style="display:flex;gap:8px;align-items:center">
       <form method="get" action="/admin/atm" id="searchForm" style="display:flex;gap:6px;align-items:center">
-        <input type="text" name="search" placeholder="Search ATM ID, branch, city…" value="{{ search }}"
+        <input type="text" name="search" placeholder="Search ATM ID, branch, city…" value="{{ search }}" maxlength="100"
                style="padding:7px 12px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;width:220px;transition:border-color .2s"
                onfocus="this.style.borderColor='#012169'" onblur="this.style.borderColor='#E4E9F1'">
         <button type="submit" class="btn btn-outline" style="padding:7px 12px"><i data-lucide="search" style="width:14px;height:14px"></i></button>
         {% if search %}<a href="/admin/atm" class="btn btn-outline" style="padding:7px 12px">Clear</a>{% endif %}
       </form>
-      <a href="/admin/atm/csv" class="btn btn-outline"><i data-lucide="download" style="width:14px;height:14px"></i> Export CSV</a>
+      <a id="atmExportBtn" href="/admin/atm/csv" class="btn btn-outline"><i data-lucide="download" style="width:14px;height:14px"></i> Export CSV</a>
       <button class="btn btn-outline" onclick="openImportModal()"><i data-lucide="upload" style="width:14px;height:14px"></i> Import CSV</button>
       <button class="btn btn-primary" onclick="openModal()"><i data-lucide="plus" style="width:14px;height:14px"></i> Add New ATM</button>
     </div>
@@ -76,14 +81,13 @@ body { background: #F0F2F6; color: #0F172A; }
     <div id="selectionBar" style="display:none;align-items:center;gap:10px;padding:10px 24px;background:#EEF2FF;border-bottom:1px solid #CBD5E1;font-size:13px">
       <i data-lucide="check-square" style="width:16px;height:16px;color:#012169"></i>
       <span style="font-weight:600;color:#012169"><span id="selectedCount">0</span> selected</span>
-      <span style="color:#94A3B8">|</span>
       <button class="btn btn-danger" id="bulkDeleteBtn" onclick="openBulkDeleteModal()" style="padding:6px 14px;font-size:12px" disabled>
         <i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete Selected
       </button>
     </div>
     <table>
       <thead><tr>
-        <th style="width:36px;padding:8px 6px"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" style="cursor:pointer;width:15px;height:15px"></th>
+        <th style="width:36px;padding:8px 6px;text-align:center"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" style="cursor:pointer;width:15px;height:15px"></th>
         <th>ATM ID</th><th>Branch</th><th>District</th><th>City</th><th>Region</th>
         <th>Latitude</th><th>Longitude</th><th>Terminal ID</th><th>Vendor</th><th>Model</th>
         <th>Install Date</th><th>Status</th><th></th>
@@ -108,7 +112,13 @@ body { background: #F0F2F6; color: #0F172A; }
               {% set status = d.status or 'active' %}
               <span class="badge {{ status }}">{{ status }}</span>
             </td>
-            <td class="actions"><a class="edit" onclick="editATM('{{ d.atm_id }}')">Edit</a><a class="delete" onclick="deleteATM('{{ d.atm_id }}')">Delete</a></td>
+            <td class="kebab-wrap">
+              <button class="kebab-btn" onclick="toggleKebab(event,this)" title="Actions">&#8942;</button>
+              <div class="kebab-menu">
+                <button class="kebab-item edit" onclick="editATM('{{ d.atm_id }}')"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
+                <button class="kebab-item delete" onclick="deleteATM('{{ d.atm_id }}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
+              </div>
+            </td>
           </tr>
           {% endfor %}
         {% else %}
@@ -146,7 +156,7 @@ body { background: #F0F2F6; color: #0F172A; }
     <form method="post" action="/admin/atm/save" id="atmForm" novalidate>
       <div class="modal-alert" id="formAlert"></div>
       <div class="form-grid">
-        {% for name, label, typ in fields %}
+        {% for name, label, typ, maxlen in fields %}
           <div class="form-group" data-field="{{ name }}">
             <label>{{ label }} <span class="required">*</span></label>
             {% if typ == 'select' %}
@@ -161,7 +171,7 @@ body { background: #F0F2F6; color: #0F172A; }
             {% elif typ == 'number' %}
               <input type="number" name="{{ name }}" id="field-{{ name }}" step="any" required>
             {% else %}
-              <input type="text" name="{{ name }}" id="field-{{ name }}" required>
+              <input type="text" name="{{ name }}" id="field-{{ name }}" maxlength="{{ maxlen or '' }}" required>
             {% endif %}
             <span class="field-error" id="error-{{ name }}"></span>
           </div>
@@ -268,10 +278,14 @@ function openModal(data){
   document.getElementById('formAlert').textContent = '';
   document.getElementById('modalOverlay').classList.add('show');
   document.getElementById('modalTitle').textContent = data ? 'Edit ATM' : 'Add New ATM';
-  {% for name, label, typ in fields %}
-    var el = document.getElementById('field-{{ name }}');
-    if(el) el.value = data ? (data['{{ name }}'] || '') : '';
-  {% endfor %}
+  FIELDS.forEach(function(f){
+    var name = f[0], typ = f[2];
+    var el = document.getElementById('field-' + name);
+    if(!el) return;
+    var val = data ? (data[name] || '') : '';
+    if(typ === 'select') el.value = val;
+    else el.value = val;
+  });
   syncCustomSelects();
   lucide.createIcons();
   initFlatpickr();
@@ -370,6 +384,34 @@ function initFlatpickr(){
     flatpickr(el,{dateFormat:'Y-m-d',allowInput:true,disableMobile:true,monthSelectorType:'static'});
   });
 }
+
+function checkDuplicateAtmId(id, callback){
+  if(!id || id.length < 3){ if(callback) callback(false); return; }
+  fetch('/admin/atm/check', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+    body: JSON.stringify({ids: [id]})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    var exists = data.existing && data.existing.indexOf(id) !== -1;
+    if(callback) callback(exists);
+  })
+  .catch(function(){ if(callback) callback(false); });
+}
+
+document.getElementById('field-atm_id').addEventListener('blur', function(){
+  var val = this.value.trim();
+  if(!val || val.length < 3) return;
+  var titleEl = document.getElementById('modalTitle');
+  if(titleEl && titleEl.textContent === 'Add New ATM'){
+    checkDuplicateAtmId(val, function(exists){
+      if(exists){
+        showFieldError('atm_id', 'This ATM ID already exists. It will be updated on save.');
+      }
+    });
+  }
+});
 
 var VALIDATORS = {
   atm_id: function(v){
@@ -521,7 +563,39 @@ function selectImportFile(file){
       return;
     }
     _importRows = parsed;
-    renderPreviewTable(file.name);
+
+    var allIds = [];
+    for(var i = 0; i < _importRows.length; i++){
+      if(_importRows[i].atm_id) allIds.push(_importRows[i].atm_id);
+    }
+
+    if(allIds.length > 0){
+      fetch('/admin/atm/check', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+        body: JSON.stringify({ids: allIds})
+      })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        var existingMap = {};
+        if(data.existing){
+          for(var e = 0; e < data.existing.length; e++){
+            existingMap[data.existing[e]] = true;
+          }
+        }
+        for(var i = 0; i < _importRows.length; i++){
+          _importRows[i]._exists = !!existingMap[_importRows[i].atm_id];
+        }
+        renderPreviewTable(file.name);
+      })
+      .catch(function(){
+        for(var i = 0; i < _importRows.length; i++) _importRows[i]._exists = false;
+        renderPreviewTable(file.name);
+      });
+    } else {
+      for(var i = 0; i < _importRows.length; i++) _importRows[i]._exists = false;
+      renderPreviewTable(file.name);
+    }
   };
   reader.readAsText(file);
 }
@@ -633,10 +707,14 @@ function renderPreviewTable(fileName){
     }
   }
 
+  var newCount = 0;
+  var updateCount = 0;
   _importValidRows = [];
   for(var i = 0; i < _importRows.length; i++){
     if(Object.keys(_importRows[i]._errors).length === 0){
       _importValidRows.push(_importRows[i]);
+      if(_importRows[i]._exists) updateCount++;
+      else newCount++;
     }
   }
 
@@ -644,11 +722,11 @@ function renderPreviewTable(fileName){
   document.getElementById('importStepPreview').style.display = 'block';
   document.getElementById('importResult').style.display = 'none';
   document.getElementById('importFileName').textContent = fileName;
-  document.getElementById('importValidCount').textContent = validCount;
+  document.getElementById('importValidCount').textContent = newCount + ' new · ' + updateCount + ' update';
   document.getElementById('importErrorCount').textContent = errorCount;
   document.getElementById('importTotalCount').textContent = _importRows.length;
   document.getElementById('importErrorCountLabel').style.display = errorCount > 0 ? '' : 'none';
-  document.getElementById('importUploadCount').textContent = validCount;
+  document.getElementById('importUploadCount').textContent = validCount + ' (' + newCount + ' new, ' + updateCount + ' updates)';
   document.getElementById('importUploadBtn').disabled = validCount === 0;
 
   var THEAD = document.getElementById('importPreviewHead');
@@ -664,6 +742,10 @@ function renderPreviewTable(fileName){
   var numTh = document.createElement('th');
   numTh.style.cssText = 'width:32px';
   headRow.appendChild(numTh);
+  var typeTh = document.createElement('th');
+  typeTh.textContent = 'Type';
+  typeTh.style.cssText = 'width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+  headRow.appendChild(typeTh);
   for(var c = 0; c < COLS.length; c++){
     var th = document.createElement('th');
     th.textContent = LABELS[c];
@@ -684,6 +766,17 @@ function renderPreviewTable(fileName){
     numTd.textContent = row._rowNum;
     numTd.style.cssText = 'color:#94A3B8;font-size:10px;text-align:center;width:32px;padding:6px 4px';
     tr.appendChild(numTd);
+
+    var typeTd = document.createElement('td');
+    typeTd.style.cssText = 'text-align:center;padding:4px';
+    if(row._errors && Object.keys(row._errors).length > 0){
+      typeTd.innerHTML = '<span style="display:inline-block;font-size:9px;font-weight:600;padding:1px 6px;border-radius:3px;background:#FEF2F2;color:#DC2626">Error</span>';
+    } else if(row._exists){
+      typeTd.innerHTML = '<span style="display:inline-block;font-size:9px;font-weight:600;padding:1px 6px;border-radius:3px;background:#EFF6FF;color:#1D4ED8">Update</span>';
+    } else {
+      typeTd.innerHTML = '<span style="display:inline-block;font-size:9px;font-weight:600;padding:1px 6px;border-radius:3px;background:#ECFDF5;color:#065F46">New</span>';
+    }
+    tr.appendChild(typeTd);
 
     for(var c = 0; c < COLS.length; c++){
       var td = document.createElement('td');
@@ -706,7 +799,7 @@ function renderPreviewTable(fileName){
   if(total > 100){
     var moreTr = document.createElement('tr');
     var moreTd = document.createElement('td');
-    moreTd.colSpan = COLS.length + 1;
+    moreTd.colSpan = COLS.length + 2;
     moreTd.textContent = '… and ' + (total - 100) + ' more rows (scroll to view all)';
     moreTd.style.cssText = 'text-align:center;color:#94A3B8;font-size:11px;padding:12px';
     moreTr.appendChild(moreTd);
@@ -716,7 +809,7 @@ function renderPreviewTable(fileName){
   if(total === 0 || validCount === 0){
     var emptyTr = document.createElement('tr');
     var emptyTd = document.createElement('td');
-    emptyTd.colSpan = COLS.length + 1;
+    emptyTd.colSpan = COLS.length + 2;
     emptyTd.textContent = validCount === 0 && total > 0 ? 'No valid rows to import. Fix errors and try again.' : 'No data rows found.';
     emptyTd.style.cssText = 'text-align:center;padding:32px;color:#94A3B8;font-size:13px';
     emptyTr.appendChild(emptyTd);
@@ -761,34 +854,25 @@ function uploadImport(){
 
     if(data.error){
       el.innerHTML = '<div class="modal-alert error" style="display:block">' + escapeHtml(data.message) + '</div>';
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="upload" style="width:14px;height:14px"></i> Upload valid rows';
+      lucide.createIcons();
+      return;
+    }
+
+    var imported = data.imported || 0;
+    var skipped = data.skipped || 0;
+
+    closeImportModal();
+
+    if(imported > 0){
+      var msg = imported + ' ATM' + (imported !== 1 ? 's' : '') + ' imported successfully';
+      if(skipped > 0) msg += ' (' + skipped + ' skipped)';
+      showToast(msg, 'success');
+      setTimeout(function(){ location.reload(); }, 1200);
     } else {
-      var imported = data.imported || 0;
-      var skipped = data.skipped || 0;
-      var total = imported + skipped;
-      var html = '<div style="text-align:center;padding:24px 0 8px">';
-      if(imported > 0){
-        html += '<div style="width:56px;height:56px;border-radius:50%;background:#D1FAE5;display:flex;align-items:center;justify-content:center;margin:0 auto 16px"><i data-lucide="check-circle" style="width:28px;height:28px;color:#065F46"></i></div>';
-        html += '<div style="font-size:20px;font-weight:700;color:#065F46">' + imported + ' ATM' + (imported !== 1 ? 's' : '') + ' imported</div>';
-      } else {
-        html += '<div style="width:56px;height:56px;border-radius:50%;background:#FEF3C7;display:flex;align-items:center;justify-content:center;margin:0 auto 16px"><i data-lucide="alert-triangle" style="width:28px;height:28px;color:#92400E"></i></div>';
-        html += '<div style="font-size:20px;font-weight:700;color:#92400E">No rows were imported</div>';
-      }
-      if(skipped > 0) html += '<p style="color:#64748B;font-size:13px;margin:4px 0 0">' + skipped + ' row(s) skipped due to errors</p>';
-      html += '</div>';
-      if(data.db_errors && data.db_errors.length > 0){
-        html += '<div style="margin-top:16px;background:#FEF2F2;border-radius:8px;padding:12px 16px;font-size:12px">';
-        html += '<div style="font-weight:600;color:#DC2626;margin-bottom:6px">Database errors:</div>';
-        data.db_errors.forEach(function(e){
-          html += '<div style="padding:4px 0;color:#7F1D1D"><strong>' + escapeHtml(e.atm_id) + '</strong>: ' + escapeHtml(e.error) + '</div>';
-        });
-        html += '</div>';
-      }
-      if(imported > 0){
-        html += '<div style="text-align:center;margin-top:20px"><button class="btn btn-primary" onclick="location.reload()" style="padding:10px 24px"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Reload to see changes</button></div>';
-      } else {
-        html += '<div style="text-align:center;margin-top:20px"><button class="btn btn-outline" onclick="resetImport()" style="padding:10px 24px">Try a different file</button></div>';
-      }
-      el.innerHTML = html;
+      showToast('No rows were imported. Check your file and try again.', 'warning');
+      setTimeout(function(){ location.reload(); }, 1500);
     }
     btn.disabled = false;
     btn.innerHTML = '<i data-lucide="upload" style="width:14px;height:14px"></i> Upload valid rows';
@@ -803,26 +887,62 @@ function uploadImport(){
   });
 }
 
+function toggleKebab(event, btn){
+  event.stopPropagation();
+  document.querySelectorAll('.kebab-menu.show').forEach(function(m){
+    if(m !== btn.nextElementSibling) m.classList.remove('show');
+  });
+  var menu = btn.nextElementSibling;
+  menu.classList.toggle('show');
+  if(menu.classList.contains('show')){
+    var rect = btn.getBoundingClientRect();
+    var spaceBelow = window.innerHeight - rect.bottom;
+    menu.style.top = spaceBelow < 150 ? 'auto' : '100%';
+    menu.style.bottom = spaceBelow < 150 ? '100%' : 'auto';
+  } else {
+    menu.style.top = '';
+    menu.style.bottom = '';
+  }
+}
+
+document.addEventListener('click', function(){
+  document.querySelectorAll('.kebab-menu.show').forEach(function(m){ m.classList.remove('show'); });
+});
+
 function toggleSelectAll(){
   var checked = document.getElementById('selectAll').checked;
   document.querySelectorAll('.row-checkbox').forEach(function(cb){ cb.checked = checked; });
   updateSelection();
+  lucide.createIcons();
 }
 
 function updateSelection(){
   var checked = document.querySelectorAll('.row-checkbox:checked');
   var count = checked.length;
   var bar = document.getElementById('selectionBar');
-  var btn = document.getElementById('bulkDeleteBtn');
+  var delBtn = document.getElementById('bulkDeleteBtn');
   document.getElementById('selectedCount').textContent = count;
+  var expBtn = document.getElementById('atmExportBtn');
+  if(!expBtn) expBtn = document.querySelector('a[href*=\"/admin/atm/csv\"]');
   if(count > 0){
     bar.style.display = 'flex';
-    btn.disabled = false;
+    delBtn.disabled = false;
+    var ids = [];
+    checked.forEach(function(cb){ ids.push(cb.value); });
+    if(expBtn){
+      expBtn.href = '/admin/atm/csv?ids=' + encodeURIComponent(ids.join(','));
+      expBtn.innerHTML = '<i data-lucide="download" style="width:14px;height:14px"></i> Export CSV (' + count + ')';
+    }
   } else {
     bar.style.display = 'none';
-    btn.disabled = true;
+    delBtn.disabled = true;
+    if(expBtn){
+      expBtn.href = '/admin/atm/csv';
+      expBtn.innerHTML = '<i data-lucide="download" style="width:14px;height:14px"></i> Export CSV';
+    }
   }
   document.getElementById('selectAll').checked = document.querySelectorAll('.row-checkbox').length === count && count > 0;
+  lucide.createIcons();
 }
 
 function openBulkDeleteModal(){

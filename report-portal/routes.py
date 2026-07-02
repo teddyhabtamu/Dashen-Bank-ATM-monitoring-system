@@ -23,7 +23,7 @@ bp = Blueprint('report', __name__)
 def api_atms():
     try:
         conn = get_db(); cur = conn.cursor()
-        cur.execute("SELECT DISTINCT atm_id, branch FROM atm_transactions ORDER BY atm_id")
+        cur.execute("SELECT atm_id, branch FROM atm_locations ORDER BY atm_id")
         rows = cur.fetchall(); cur.close(); conn.close()
         return jsonify([{'id': r[0], 'branch': r[1]} for r in rows])
     except Exception as e:
@@ -40,7 +40,7 @@ def api_stats():
                 ROUND(100.0*SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),1),
                 COALESCE(SUM(CASE WHEN status='APPROVED' AND txn_type='WITHDRAWAL'
                     AND recorded_at>=CURRENT_DATE THEN amount ELSE 0 END),0),
-                (SELECT COUNT(DISTINCT atm_id) FROM atm_transactions)
+                (SELECT COUNT(*) FROM atm_locations)
             FROM atm_transactions
             WHERE recorded_at >= NOW() - INTERVAL '7 days'
         """)

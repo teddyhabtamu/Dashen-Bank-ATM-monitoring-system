@@ -652,7 +652,6 @@ async function loadATMs() {
     if (atms.error) throw new Error(atms.error);
     populateATMSelect('txn-atm', atms);
     populateATMSelect('avail-atm', atms);
-    document.getElementById('kpi-atm-count').textContent = atms.length;
   } catch(e){
     showToast('Could not load ATM list: ' + e.message, 'error', 8000);
   }

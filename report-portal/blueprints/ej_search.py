@@ -7,7 +7,7 @@ import requests
 from flask import Blueprint, render_template, request, Response
 from blueprints.auth import login_required
 from db import get_db
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,8 @@ def _fmt_ts(ts):
 @login_required
 def ej_search():
     # Defaults
-    keyword = card = date_from = atm_id = event_type = status = min_amount = max_amount = auth_code = ''
+    keyword = card = atm_id = event_type = status = min_amount = max_amount = auth_code = ''
+    date_from = (date.today() - timedelta(days=30)).isoformat()
     date_to   = date.today().isoformat()
     page      = 1
     per_page  = 50
@@ -133,8 +134,8 @@ def ej_search():
         searched    = True
         keyword     = request.form.get('keyword', '').strip()
         card        = request.form.get('card', '').strip()
-        date_from   = request.form.get('date_from', '')
-        date_to     = request.form.get('date_to', date.today().isoformat())
+        date_from   = request.form.get('date_from', (date.today() - timedelta(days=30)).isoformat()) or (date.today() - timedelta(days=30)).isoformat()
+        date_to     = request.form.get('date_to', date.today().isoformat()) or date.today().isoformat()
         atm_id      = request.form.get('atm_id', '')
         event_type  = request.form.get('event_type', '')
         status      = request.form.get('status', '')
@@ -223,8 +224,8 @@ def ej_search():
 @login_required
 def ej_search_csv():
     card        = request.args.get('card', '')
-    date_from   = request.args.get('date_from', '')
-    date_to     = request.args.get('date_to', date.today().isoformat())
+    date_from   = request.args.get('date_from', (date.today() - timedelta(days=30)).isoformat()) or (date.today() - timedelta(days=30)).isoformat()
+    date_to     = request.args.get('date_to', date.today().isoformat()) or date.today().isoformat()
     atm_id      = request.args.get('atm_id', '')
     keyword     = request.args.get('keyword', '')
     event_type  = request.args.get('event_type', '')
@@ -232,6 +233,14 @@ def ej_search_csv():
     min_amount  = request.args.get('min_amount', '')
     max_amount  = request.args.get('max_amount', '')
     auth_code   = request.args.get('auth_code', '')
+
+    selected = request.args.get('selected', '').strip()
+    selected_set = set()
+    if selected:
+        for s in selected.split(','):
+            s = s.strip()
+            if s.isdigit():
+                selected_set.add(int(s))
 
     must = _build_must(keyword, card, date_from, date_to, atm_id,
                        event_type, status, min_amount, max_amount, auth_code)
@@ -244,7 +253,9 @@ def ej_search_csv():
                 timeout=30,
             )
             if resp.status_code == 200:
-                for hit in resp.json().get('hits', {}).get('hits', []):
+                for idx, hit in enumerate(resp.json().get('hits', {}).get('hits', [])):
+                    if selected_set and idx not in selected_set:
+                        continue
                     src = _parse_ej_log_line(hit['_source'])
                     rows.append([
                         _fmt_ts(src.get('@timestamp', '')),
