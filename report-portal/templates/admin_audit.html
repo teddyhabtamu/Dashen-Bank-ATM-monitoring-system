@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Audit Log — Admin{% endblock %}
+{% block extra_style %}
+.pagination{display:flex;align-items:center;justify-content:center;gap:8px;padding:16px 24px;border-top:1px solid #EEF1F6}
+.pagination .btn{padding:6px 12px;font-size:11px}
+.pagination .current{font-size:12px;color:#64748B;font-weight:600}
+.search-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.search-bar input,.search-bar select{padding:7px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;outline:none;font-family:inherit}
+.search-bar input:focus,.search-bar select:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
+.search-bar .btn{padding:7px 14px;font-size:11px}
+.badge-action{display:inline-block;padding:2px 8px;border-radius:100px;font-size:9px;font-weight:600;white-space:nowrap}
+.card-header{overflow:visible !important}
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="history"></i></div>
+  <div>
+    <h1 class="page-title">Audit Log</h1>
+    <p class="page-subtitle">Track all administrative actions and system events.</p>
+  </div>
+</div>
+<div class="page-content">
+
+<div class="card">
+  <div class="card-header">
+    <h2>Activity Log ({{ total }})</h2>
+    <form method="get" action="/admin/audit" class="search-bar" style="overflow:visible">
+      <input type="text" name="search" placeholder="Search username or detail..." value="{{ search }}">
+      <select name="action">
+        <option value="">All Actions</option>
+        {% for a in actions %}
+        <option value="{{ a }}" {% if action_filter == a %}selected{% endif %}>{{ a }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-primary" style="font-size:11px">Filter</button>
+      {% if search or action_filter %}
+      <a href="/admin/audit" class="btn btn-outline" style="font-size:11px">Clear</a>
+      {% endif %}
+    </form>
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>User</th>
+          <th>Action</th>
+          <th>Detail</th>
+          <th>IP</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if logs %}
+          {% for row in logs %}
+          <tr>
+            <td style="font-size:11px;color:#64748B;white-space:nowrap">{{ row[1].strftime('%Y-%m-%d %H:%M') if row[1] else '—' }}</td>
+            <td style="font-weight:600;color:#0F172A">{{ row[2] }}</td>
+            <td><span class="badge-action" style="background:#EEF2FF;color:#012169">{{ row[3] }}</span></td>
+            <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:#475569" title="{{ row[4] if row[4] else '' }}">{{ row[4] if row[4] else '—' }}</td>
+            <td style="font-size:11px;color:#94A3B8;font-family:monospace">{{ row[5] if row[5] else '—' }}</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="5" style="padding:48px;text-align:center;color:#94A3B8;font-size:14px">No audit log entries found.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+  {% if total_pages > 1 %}
+  <div class="pagination">
+    {% if page > 1 %}
+    <a href="?page={{ page-1 }}{% if search %}&search={{ search }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}" class="btn btn-outline">&larr; Prev</a>
+    {% endif %}
+    <span class="current">Page {{ page }} of {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a href="?page={{ page+1 }}{% if search %}&search={{ search }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}" class="btn btn-outline">Next &rarr;</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+</div>
+{% endblock %}

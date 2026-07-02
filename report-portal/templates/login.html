@@ -74,6 +74,7 @@ body{
   {% endif %}
 
   <form method="post" action="/login?next={{ next }}" id="loginForm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="form-group">
       <label>Username</label>
       <input type="text" name="username" id="username" placeholder="Enter your username" autocomplete="username" required autofocus>

@@ -73,11 +73,14 @@ body { background: #F0F2F6; color: #0F172A; }
         {% if search %}<a href="/admin/atm" class="btn btn-outline" style="padding:7px 12px">Clear</a>{% endif %}
       </form>
       <a id="atmExportBtn" href="/admin/atm/csv" class="btn btn-outline"><i data-lucide="download" style="width:14px;height:14px"></i> Export CSV</a>
+      {% if session.get('role') in ('admin', 'operator') %}
       <button class="btn btn-outline" onclick="openImportModal()"><i data-lucide="upload" style="width:14px;height:14px"></i> Import CSV</button>
       <button class="btn btn-primary" onclick="openModal()"><i data-lucide="plus" style="width:14px;height:14px"></i> Add New ATM</button>
+      {% endif %}
     </div>
   </div>
   <div style="overflow-x:auto">
+    {% if session.get('role') in ('admin', 'operator') %}
     <div id="selectionBar" style="display:none;align-items:center;gap:10px;padding:10px 24px;background:#EEF2FF;border-bottom:1px solid #CBD5E1;font-size:13px">
       <i data-lucide="check-square" style="width:16px;height:16px;color:#012169"></i>
       <span style="font-weight:600;color:#012169"><span id="selectedCount">0</span> selected</span>
@@ -85,18 +88,23 @@ body { background: #F0F2F6; color: #0F172A; }
         <i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete Selected
       </button>
     </div>
+    {% endif %}
     <table>
       <thead><tr>
+        {% if session.get('role') in ('admin', 'operator') %}
         <th style="width:36px;padding:8px 6px;text-align:center"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" style="cursor:pointer;width:15px;height:15px"></th>
+        {% endif %}
         <th>ATM ID</th><th>Branch</th><th>District</th><th>City</th><th>Region</th>
         <th>Latitude</th><th>Longitude</th><th>Terminal ID</th><th>Vendor</th><th>Model</th>
-        <th>Install Date</th><th>Status</th><th></th>
+        <th>Install Date</th><th>Status</th>{% if session.get('role') in ('admin', 'operator') %}<th></th>{% endif %}
       </tr></thead>
       <tbody>
         {% if atms %}
           {% for d in atms %}
           <tr data-atm-id="{{ d.atm_id }}">
+            {% if session.get('role') in ('admin', 'operator') %}
             <td style="padding:8px 6px;text-align:center"><input type="checkbox" class="row-checkbox" value="{{ d.atm_id }}" onchange="updateSelection()" style="cursor:pointer;width:15px;height:15px"></td>
+            {% endif %}
             <td>{{ d.atm_id }}</td>
             <td>{{ d.branch or '—' }}</td>
             <td>{{ d.district or '—' }}</td>
@@ -112,6 +120,7 @@ body { background: #F0F2F6; color: #0F172A; }
               {% set status = d.status or 'active' %}
               <span class="badge {{ status }}">{{ status }}</span>
             </td>
+            {% if session.get('role') in ('admin', 'operator') %}
             <td class="kebab-wrap">
               <button class="kebab-btn" onclick="toggleKebab(event,this)" title="Actions">&#8942;</button>
               <div class="kebab-menu">
@@ -119,6 +128,7 @@ body { background: #F0F2F6; color: #0F172A; }
                 <button class="kebab-item delete" onclick="deleteATM('{{ d.atm_id }}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
               </div>
             </td>
+            {% endif %}
           </tr>
           {% endfor %}
         {% else %}
@@ -154,6 +164,7 @@ body { background: #F0F2F6; color: #0F172A; }
       <button class="modal-close" onclick="closeModal()"><i data-lucide="x"></i></button>
     </div>
     <form method="post" action="/admin/atm/save" id="atmForm" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="modal-alert" id="formAlert"></div>
       <div class="form-grid">
         {% for name, label, typ, maxlen in fields %}

@@ -57,6 +57,7 @@ td { font-variant-numeric: tabular-nums; }
 <div id="ejResults">
 
 <form method="post" action="/ej-search" id="ejSearchForm">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div class="card">
   <div class="card-header"><h2>Search Criteria</h2></div>
   <div class="search-grid">

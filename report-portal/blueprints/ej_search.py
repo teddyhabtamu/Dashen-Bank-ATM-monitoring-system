@@ -5,8 +5,9 @@ Electronic Journal search routes — search UI and CSV export.
 import csv, io, os, logging
 import requests
 from flask import Blueprint, render_template, request, Response
-from blueprints.auth import login_required
+from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from db import get_db
+from audit import log_action
 from datetime import datetime, date, timedelta
 
 logger = logging.getLogger(__name__)
@@ -117,6 +118,7 @@ def _fmt_ts(ts):
 
 @bp.route('/ej-search', methods=['GET', 'POST'])
 @login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def ej_search():
     # Defaults
     keyword = card = atm_id = event_type = status = min_amount = max_amount = auth_code = ''
@@ -196,13 +198,16 @@ def ej_search():
 
         total_pages = max(1, (total + per_page - 1) // per_page) if total else 1
 
+        # Audit log for EJ search
+        if searched and not error:
+            log_action('EJ_SEARCH', f'keyword={keyword}, card={card}, atm={atm_id}, event={event_type}, status={status}, amount={min_amount}-{max_amount}, auth={auth_code}, results={total}')
+
     # ATM dropdown from database
-    conn = get_db()
-    cur  = conn.cursor()
-    cur.execute("SELECT atm_id, branch FROM atm_locations ORDER BY atm_id")
-    db_atms = cur.fetchall()
-    cur.close()
-    conn.close()
+    with get_db() as conn:
+        cur  = conn.cursor()
+        cur.execute("SELECT atm_id, branch FROM atm_locations ORDER BY atm_id")
+        db_atms = cur.fetchall()
+        cur.close()
 
     return render_template(
         'ej_search.html',
@@ -222,6 +227,7 @@ def ej_search():
 
 @bp.route('/ej-search/csv')
 @login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def ej_search_csv():
     card        = request.args.get('card', '')
     date_from   = request.args.get('date_from', (date.today() - timedelta(days=30)).isoformat()) or (date.today() - timedelta(days=30)).isoformat()
@@ -278,6 +284,9 @@ def ej_search_csv():
     w.writerow(['Timestamp', 'ATM ID', 'Transaction Type', 'Card (masked)', 'Status', 'Amount', 'Raw Log'])
     w.writerows(rows)
     buf.seek(0)
+
+    # Audit log for EJ CSV export
+    log_action('EJ_EXPORT_CSV', f'keyword={keyword}, card={card}, atm={atm_id}, event={event_type}, status={status}, amount={min_amount}-{max_amount}, auth={auth_code}, rows={len(rows)}')
 
     return Response(
         buf.getvalue(),

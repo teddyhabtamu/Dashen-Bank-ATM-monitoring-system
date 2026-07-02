@@ -146,3 +146,65 @@ CREATE TABLE IF NOT EXISTS atm_network_metrics (
 
 CREATE INDEX IF NOT EXISTS idx_net_metrics_atm
     ON atm_network_metrics(atm_id, recorded_at DESC);
+
+-- ─── AUDIT LOG ────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id          SERIAL PRIMARY KEY,
+    performed_at TIMESTAMP DEFAULT NOW(),
+    username     VARCHAR(100) NOT NULL,
+    action       VARCHAR(50) NOT NULL,
+    detail       TEXT,
+    ip_address   VARCHAR(45)
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_performed ON audit_log(performed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_username  ON audit_log(username);
+CREATE INDEX IF NOT EXISTS idx_audit_action    ON audit_log(action);
+
+-- ─── MISSING COMPOSITE INDEXES ────────────────────────────────
+
+CREATE INDEX IF NOT EXISTS idx_txn_atm_time
+    ON atm_transactions(atm_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_txn_status_type_time
+    ON atm_transactions(status, txn_type, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_txn_recorded_status
+    ON atm_transactions(recorded_at DESC, status);
+CREATE INDEX IF NOT EXISTS idx_txn_type_status
+    ON atm_transactions(txn_type, status, recorded_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_loc_branch
+    ON atm_locations(branch);
+
+CREATE INDEX IF NOT EXISTS idx_anomaly_severity
+    ON atm_anomalies(severity, detected_at DESC);
+
+-- ─── APP USERS (RBAC) ─────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS app_users (
+    username      VARCHAR(100) PRIMARY KEY,
+    password_hash VARCHAR(256) NOT NULL,
+    role          VARCHAR(20) NOT NULL DEFAULT 'viewer',
+    created_at    TIMESTAMP DEFAULT NOW(),
+    last_login    TIMESTAMP
+);
+
+INSERT INTO app_users (username, password_hash, role) VALUES
+    ('admin', '$2b$12$LJ3m4ys3Lk0TSwHnbfOMiOXPm1Qlq5Gz0n3t7s5YxVvKj2qWqGqO', 'admin')
+ON CONFLICT (username) DO NOTHING;
+
+-- ─── SCHEDULED REPORTS ────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS scheduled_reports (
+    id          SERIAL PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL,
+    report_type VARCHAR(50) NOT NULL,
+    format      VARCHAR(10) NOT NULL DEFAULT 'pdf',
+    schedule    VARCHAR(50) NOT NULL,
+    recipients  TEXT NOT NULL,
+    params      TEXT,
+    enabled     BOOLEAN DEFAULT TRUE,
+    created_at  TIMESTAMP DEFAULT NOW(),
+    last_run    TIMESTAMP,
+    next_run    TIMESTAMP
+);

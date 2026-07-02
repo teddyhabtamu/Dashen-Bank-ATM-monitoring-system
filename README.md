@@ -299,8 +299,30 @@ then prints row counts to verify.
 | Grafana | http://localhost:3002 | admin/dashen2024 |
 | OpenSearch Dashboards | http://localhost:5601 | admin / admin |
 | GLPI | http://localhost:8082 | glpi/DashenGLPI2024 |
-| Report Portal | http://localhost:8888 | no login |
+| Report Portal | http://localhost:8888 | see below |
 | pgAdmin | http://localhost:5050 | admin@dashenbank.com/dashen2024 |
+
+### Report Portal Users
+
+| Role | Username | Password | Permissions |
+|------|----------|----------|-------------|
+| **Admin** | `admin` | set in `.env` (`ADMIN_PASS`) | Full access — ATMs, reports, schedules, audit log, EJ search |
+| **Operator** | `operator` | `operator123` | Manage ATMs, EJ search, reports (no schedules or audit) |
+| **Viewer** | `viewer` | `viewer123` | Read-only — dashboard, ATM list, EJ search, reports |
+
+To add more users, run:
+```bash
+docker exec -w /app report-portal python3 -c "
+from db import get_db
+from werkzeug.security import generate_password_hash
+with get_db() as conn:
+    cur = conn.cursor()
+    cur.execute(\"INSERT INTO app_users (username, password_hash, role) VALUES (%s, %s, %s)\",
+        ('newuser', generate_password_hash('newpass'), 'viewer'))
+    conn.commit()
+    cur.close()
+"
+```
 
 ---
 

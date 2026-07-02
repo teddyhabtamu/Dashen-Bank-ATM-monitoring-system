@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <title>{% block title %}Dashen Bank{% endblock %}</title>
 <link rel="icon" type="image/png" href="/static/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -272,7 +273,7 @@ tr:hover{background:#EEF2FF}
       <i data-lucide="layout-dashboard"></i>
       <span>Dashboard</span>
     </a>
-    <a href="/admin/atm" class="nav-item {% if request.path.startswith('/admin') %}active{% endif %}">
+    <a href="/admin/atm" class="nav-item {% if request.path.startswith('/admin/atm') %}active{% endif %}">
       <i data-lucide="settings"></i>
       <span>ATM Registration</span>
     </a>
@@ -280,6 +281,16 @@ tr:hover{background:#EEF2FF}
       <i data-lucide="file-search"></i>
       <span>EJ Search</span>
     </a>
+    {% if session.get('role') == 'admin' %}
+    <a href="/admin/schedules" class="nav-item {% if request.path.startswith('/admin/schedules') %}active{% endif %}">
+      <i data-lucide="calendar"></i>
+      <span>Schedule Reports</span>
+    </a>
+    <a href="/admin/audit" class="nav-item {% if request.path.startswith('/admin/audit') %}active{% endif %}">
+      <i data-lucide="history"></i>
+      <span>Audit Log</span>
+    </a>
+    {% endif %}
     <div class="nav-section-label" style="margin-top:8px">Quick Links</div>
     <a href="http://localhost:3002" target="_blank" class="nav-item">
       <i data-lucide="bar-chart-3"></i>
@@ -330,6 +341,17 @@ tr:hover{background:#EEF2FF}
 </div>
 
 <div class="main-content">
+{% if error %}
+<div class="page-content">
+  <div class="alert-card error">
+    <i data-lucide="alert-circle" class="alert-icon"></i>
+    <div class="alert-content">
+      <div class="alert-title">Access Denied</div>
+      <div class="alert-message">{{ error }}</div>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% block body %}{% endblock %}
 </div>
 
@@ -378,6 +400,24 @@ document.querySelectorAll('.sidebar-nav .nav-item').forEach(function(el){
 document.addEventListener('keydown', function(e){
   if(e.key === 'Escape' && document.getElementById('overlay').classList.contains('show')) closeMobile();
 });
+
+// ── CSRF Helper ──
+function getCSRF(){
+  var m = document.querySelector('meta[name="csrf-token"]');
+  return m ? m.getAttribute('content') : '';
+}
+(function(){
+  var _fetch = window.fetch;
+  window.fetch = function(url, opts){
+    opts = opts || {};
+    var m = (opts.method || 'GET').toUpperCase();
+    if(m === 'POST' || m === 'PUT' || m === 'DELETE' || m === 'PATCH'){
+      opts.headers = opts.headers || {};
+      if(!opts.headers['X-CSRFToken']) opts.headers['X-CSRFToken'] = getCSRF();
+    }
+    return _fetch(url, opts);
+  };
+})();
 
 // ── TOAST NOTIFICATION ──
 function showToast(msg, type, duration) {
@@ -469,6 +509,7 @@ function initCustomSelects(){
     document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')});
   });
 }
+initCustomSelects();
 </script>
 <div class="modal-overlay" id="logoutModal" onclick="if(event.target===this)this.classList.remove('show')">
   <div class="modal-confirm">

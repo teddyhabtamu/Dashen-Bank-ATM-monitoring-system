@@ -4,9 +4,10 @@ ATM Admin registration routes.
 """
 import csv, io, re
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response
-from blueprints.auth import login_required
+from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response, current_app
+from blueprints.auth import login_required, role_required, ROLE_ADMIN, ROLE_OPERATOR, ROLE_VIEWER
 from db import get_db
+from audit import log_action
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -28,6 +29,7 @@ FIELDS = [
 
 @bp.route('/atm')
 @login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_list():
     search = request.args.get('search', '').strip()
     per_page = 50
@@ -37,35 +39,34 @@ def atm_list():
     except (ValueError, TypeError):
         page = 1
 
-    conn = get_db()
-    cur = conn.cursor()
+    with get_db() as conn:
+        cur = conn.cursor()
 
-    if search:
-        like = f'%{search}%'
-        cur.execute("""SELECT COUNT(*) FROM atm_locations
-                       WHERE atm_id ILIKE %s OR branch ILIKE %s
-                       OR district ILIKE %s OR city ILIKE %s OR region ILIKE %s""",
-                    (like, like, like, like, like))
-        total = cur.fetchone()[0]
-        total_pages = max(1, (total + per_page - 1) // per_page)
-        page = min(page, total_pages)
-        cur.execute("""SELECT * FROM atm_locations
-                       WHERE atm_id ILIKE %s OR branch ILIKE %s
-                       OR district ILIKE %s OR city ILIKE %s OR region ILIKE %s
-                       ORDER BY atm_id LIMIT %s OFFSET %s""",
-                    (like, like, like, like, like, per_page, (page - 1) * per_page))
-    else:
-        cur.execute("SELECT COUNT(*) FROM atm_locations")
-        total = cur.fetchone()[0]
-        total_pages = max(1, (total + per_page - 1) // per_page)
-        page = min(page, total_pages)
-        cur.execute("SELECT * FROM atm_locations ORDER BY atm_id LIMIT %s OFFSET %s",
-                    (per_page, (page - 1) * per_page))
+        if search:
+            like = f'%{search}%'
+            cur.execute("""SELECT COUNT(*) FROM atm_locations
+                           WHERE atm_id ILIKE %s OR branch ILIKE %s
+                           OR district ILIKE %s OR city ILIKE %s OR region ILIKE %s""",
+                        (like, like, like, like, like))
+            total = cur.fetchone()[0]
+            total_pages = max(1, (total + per_page - 1) // per_page)
+            page = min(page, total_pages)
+            cur.execute("""SELECT * FROM atm_locations
+                           WHERE atm_id ILIKE %s OR branch ILIKE %s
+                           OR district ILIKE %s OR city ILIKE %s OR region ILIKE %s
+                           ORDER BY atm_id LIMIT %s OFFSET %s""",
+                        (like, like, like, like, like, per_page, (page - 1) * per_page))
+        else:
+            cur.execute("SELECT COUNT(*) FROM atm_locations")
+            total = cur.fetchone()[0]
+            total_pages = max(1, (total + per_page - 1) // per_page)
+            page = min(page, total_pages)
+            cur.execute("SELECT * FROM atm_locations ORDER BY atm_id LIMIT %s OFFSET %s",
+                        (per_page, (page - 1) * per_page))
 
-    cols = [d[0] for d in cur.description]
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
+        cols = [d[0] for d in cur.description]
+        rows = cur.fetchall()
+        cur.close()
 
     atms = [dict(zip(cols, r)) for r in rows]
 
@@ -76,17 +77,17 @@ def atm_list():
 
 @bp.route('/atm/get')
 @login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_get():
     atm_id = request.args.get('atm_id', '').strip()
     if not atm_id:
         return jsonify({'error': True, 'message': 'ATM ID is required'}), 400
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM atm_locations WHERE atm_id = %s", (atm_id,))
-    cols = [d[0] for d in cur.description]
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM atm_locations WHERE atm_id = %s", (atm_id,))
+        cols = [d[0] for d in cur.description]
+        row = cur.fetchone()
+        cur.close()
     if not row:
         return jsonify({'error': True, 'message': f'ATM {atm_id} not found'}), 404
     return jsonify(dict(zip(cols, row)))
@@ -94,6 +95,7 @@ def atm_get():
 
 @bp.route('/atm/save', methods=['POST'])
 @login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
 def atm_save():
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     field_names = [f[0] for f in FIELDS]
@@ -109,56 +111,58 @@ def atm_save():
         flash('Validation failed. Please correct the highlighted fields.', 'error')
         return redirect('/admin/atm')
 
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            INSERT INTO atm_locations
-                (atm_id, branch, district, city, region, latitude, longitude,
-                 terminal_id, vendor, model, install_date, status)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT (atm_id) DO UPDATE SET
-                branch       = EXCLUDED.branch,
-                district     = EXCLUDED.district,
-                city         = EXCLUDED.city,
-                region       = EXCLUDED.region,
-                latitude     = EXCLUDED.latitude,
-                longitude    = EXCLUDED.longitude,
-                terminal_id  = EXCLUDED.terminal_id,
-                vendor       = EXCLUDED.vendor,
-                model        = EXCLUDED.model,
-                install_date = EXCLUDED.install_date,
-                status       = EXCLUDED.status
-        """, (
-            data['atm_id'], data['branch'], data['district'], data['city'],
-            data['region'], data['latitude'], data['longitude'],
-            data['terminal_id'], data['vendor'], data['model'],
-            data['install_date'], data['status']
-        ))
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        err_msg = str(e)
-        if 'duplicate key' in err_msg.lower() or 'unique' in err_msg.lower():
-            db_err = {'atm_id': 'This ATM ID already exists'}
-        else:
-            db_err = {'_general': f'Database error: {err_msg}'}
-        if is_ajax:
-            return jsonify({'error': True, 'errors': db_err, 'message': 'Database error. Please try again.'})
-        flash(f'Database error: {err_msg}', 'error')
-        return redirect('/admin/atm')
-    finally:
-        cur.close()
-        conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                INSERT INTO atm_locations
+                    (atm_id, branch, district, city, region, latitude, longitude,
+                     terminal_id, vendor, model, install_date, status)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (atm_id) DO UPDATE SET
+                    branch       = EXCLUDED.branch,
+                    district     = EXCLUDED.district,
+                    city         = EXCLUDED.city,
+                    region       = EXCLUDED.region,
+                    latitude     = EXCLUDED.latitude,
+                    longitude    = EXCLUDED.longitude,
+                    terminal_id  = EXCLUDED.terminal_id,
+                    vendor       = EXCLUDED.vendor,
+                    model        = EXCLUDED.model,
+                    install_date = EXCLUDED.install_date,
+                    status       = EXCLUDED.status
+            """, (
+                data['atm_id'], data['branch'], data['district'], data['city'],
+                data['region'], data['latitude'], data['longitude'],
+                data['terminal_id'], data['vendor'], data['model'],
+                data['install_date'], data['status']
+            ))
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            err_msg = str(e)
+            if 'duplicate key' in err_msg.lower() or 'unique' in err_msg.lower():
+                db_err = {'atm_id': 'This ATM ID already exists'}
+            else:
+                db_err = {'_general': f'Database error: {err_msg}'}
+            if is_ajax:
+                return jsonify({'error': True, 'errors': db_err, 'message': 'Database error. Please try again.'})
+            flash(f'Database error: {err_msg}', 'error')
+            return redirect('/admin/atm')
+        finally:
+            cur.close()
 
     if is_ajax:
+        log_action('ATM_SAVE', f'ATM {data["atm_id"]} saved/updated')
         return jsonify({'success': True, 'atm_id': data['atm_id']})
 
+    log_action('ATM_SAVE', f'ATM {data["atm_id"]} saved/updated')
     return _guide_page(data)
 
 
 @bp.route('/atm/delete', methods=['POST'])
 @login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
 def atm_delete():
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     atm_id = request.form.get('atm_id', '').strip()
@@ -168,33 +172,35 @@ def atm_delete():
         flash('ATM ID is required for deletion.', 'error')
         return redirect('/admin/atm')
 
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        cur.execute("DELETE FROM atm_locations WHERE atm_id = %s", (atm_id,))
-        if cur.rowcount == 0:
+    with get_db() as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("DELETE FROM atm_locations WHERE atm_id = %s", (atm_id,))
+            if cur.rowcount == 0:
+                if is_ajax:
+                    return jsonify({'error': True, 'message': f'ATM {atm_id} not found.'})
+                flash(f'ATM {atm_id} not found.', 'error')
+                return redirect('/admin/atm')
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
             if is_ajax:
-                return jsonify({'error': True, 'message': f'ATM {atm_id} not found.'})
-            flash(f'ATM {atm_id} not found.', 'error')
+                return jsonify({'error': True, 'message': f'Database error: {str(e)}'})
+            flash(f'Database error: {str(e)}', 'error')
             return redirect('/admin/atm')
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        if is_ajax:
-            return jsonify({'error': True, 'message': f'Database error: {str(e)}'})
-        flash(f'Database error: {str(e)}', 'error')
-        return redirect('/admin/atm')
-    finally:
-        cur.close()
-        conn.close()
+        finally:
+            cur.close()
 
     if is_ajax:
+        log_action('ATM_DELETE', f'ATM {atm_id} deleted')
         return jsonify({'success': True, 'atm_id': atm_id})
+    log_action('ATM_DELETE', f'ATM {atm_id} deleted')
     return redirect('/admin/atm')
 
 
 @bp.route('/atm/bulk-delete', methods=['POST'])
 @login_required
+@role_required(ROLE_ADMIN)
 def atm_bulk_delete():
     data = request.get_json(silent=True)
     if not data or 'ids' not in data or not isinstance(data['ids'], list):
@@ -204,25 +210,26 @@ def atm_bulk_delete():
     if not ids:
         return jsonify({'error': True, 'message': 'No ATM IDs provided.'})
 
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        placeholders = ','.join(['%s'] * len(ids))
-        cur.execute(f"DELETE FROM atm_locations WHERE atm_id IN ({placeholders})", ids)
-        deleted = cur.rowcount
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        return jsonify({'error': True, 'message': f'Database error: {str(e)}'})
-    finally:
-        cur.close()
-        conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        try:
+            placeholders = ','.join(['%s'] * len(ids))
+            cur.execute(f"DELETE FROM atm_locations WHERE atm_id IN ({placeholders})", ids)
+            deleted = cur.rowcount
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            return jsonify({'error': True, 'message': f'Database error: {str(e)}'})
+        finally:
+            cur.close()
 
+    log_action('ATM_BULK_DELETE', f'{deleted} ATMs deleted: {",".join(ids)}')
     return jsonify({'success': True, 'deleted': deleted})
 
 
 @bp.route('/atm/check', methods=['POST'])
 @login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_check():
     data = request.get_json(silent=True)
     if not data or 'ids' not in data:
@@ -230,39 +237,39 @@ def atm_check():
     ids = [i.strip() for i in data['ids'] if i.strip()]
     if not ids:
         return jsonify({'existing': []})
-    conn = get_db()
-    cur = conn.cursor()
-    placeholders = ','.join(['%s'] * len(ids))
-    cur.execute(f"SELECT atm_id FROM atm_locations WHERE atm_id IN ({placeholders})", ids)
-    existing = [r[0] for r in cur.fetchall()]
-    cur.close()
-    conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        placeholders = ','.join(['%s'] * len(ids))
+        cur.execute(f"SELECT atm_id FROM atm_locations WHERE atm_id IN ({placeholders})", ids)
+        existing = [r[0] for r in cur.fetchall()]
+        cur.close()
     return jsonify({'existing': existing})
 
 
 @bp.route('/atm/csv')
 @login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_csv_export():
     ids_param = request.args.get('ids', '').strip()
 
-    conn = get_db()
-    cur = conn.cursor()
-    if ids_param:
-        ids = [i.strip() for i in ids_param.split(',') if i.strip()]
-        placeholders = ','.join(['%s'] * len(ids))
-        cur.execute(f"SELECT * FROM atm_locations WHERE atm_id IN ({placeholders}) ORDER BY atm_id", ids)
-    else:
-        cur.execute("SELECT * FROM atm_locations ORDER BY atm_id")
-    cols = [d[0] for d in cur.description]
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        if ids_param:
+            ids = [i.strip() for i in ids_param.split(',') if i.strip()]
+            placeholders = ','.join(['%s'] * len(ids))
+            cur.execute(f"SELECT * FROM atm_locations WHERE atm_id IN ({placeholders}) ORDER BY atm_id", ids)
+        else:
+            cur.execute("SELECT * FROM atm_locations ORDER BY atm_id")
+        cols = [d[0] for d in cur.description]
+        rows = cur.fetchall()
+        cur.close()
 
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(cols)
     w.writerows(rows)
 
+    log_action('EXPORT', f'ATM CSV export ({len(rows)} rows, filter={ids_param or "all"})')
     return Response(
         buf.getvalue(),
         mimetype='text/csv',
@@ -272,6 +279,7 @@ def atm_csv_export():
 
 @bp.route('/atm/import', methods=['POST'])
 @login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
 def atm_import():
     file = request.files.get('file')
     if not file or not file.filename:
@@ -307,41 +315,41 @@ def atm_import():
     imported = 0
     db_errors = []
     if rows:
-        conn = get_db()
-        cur = conn.cursor()
-        for row in rows:
-            try:
-                cur.execute("""
-                    INSERT INTO atm_locations
-                        (atm_id, branch, district, city, region, latitude, longitude,
-                         terminal_id, vendor, model, install_date, status)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                    ON CONFLICT (atm_id) DO UPDATE SET
-                        branch       = EXCLUDED.branch,
-                        district     = EXCLUDED.district,
-                        city         = EXCLUDED.city,
-                        region       = EXCLUDED.region,
-                        latitude     = EXCLUDED.latitude,
-                        longitude    = EXCLUDED.longitude,
-                        terminal_id  = EXCLUDED.terminal_id,
-                        vendor       = EXCLUDED.vendor,
-                        model        = EXCLUDED.model,
-                        install_date = EXCLUDED.install_date,
-                        status       = EXCLUDED.status
-                """, (
-                    row['atm_id'], row.get('branch'), row.get('district'),
-                    row.get('city'), row.get('region'), row.get('latitude'),
-                    row.get('longitude'), row.get('terminal_id'),
-                    row.get('vendor'), row.get('model'),
-                    row.get('install_date'), row.get('status')
-                ))
-                imported += 1
-            except Exception as e:
-                db_errors.append({'atm_id': row['atm_id'], 'error': str(e)})
-        conn.commit()
-        cur.close()
-        conn.close()
+        with get_db() as conn:
+            cur = conn.cursor()
+            for row in rows:
+                try:
+                    cur.execute("""
+                        INSERT INTO atm_locations
+                            (atm_id, branch, district, city, region, latitude, longitude,
+                             terminal_id, vendor, model, install_date, status)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        ON CONFLICT (atm_id) DO UPDATE SET
+                            branch       = EXCLUDED.branch,
+                            district     = EXCLUDED.district,
+                            city         = EXCLUDED.city,
+                            region       = EXCLUDED.region,
+                            latitude     = EXCLUDED.latitude,
+                            longitude    = EXCLUDED.longitude,
+                            terminal_id  = EXCLUDED.terminal_id,
+                            vendor       = EXCLUDED.vendor,
+                            model        = EXCLUDED.model,
+                            install_date = EXCLUDED.install_date,
+                            status       = EXCLUDED.status
+                    """, (
+                        row['atm_id'], row.get('branch'), row.get('district'),
+                        row.get('city'), row.get('region'), row.get('latitude'),
+                        row.get('longitude'), row.get('terminal_id'),
+                        row.get('vendor'), row.get('model'),
+                        row.get('install_date'), row.get('status')
+                    ))
+                    imported += 1
+                except Exception as e:
+                    db_errors.append({'atm_id': row['atm_id'], 'error': str(e)})
+            conn.commit()
+            cur.close()
 
+    log_action('ATM_IMPORT', f'Imported {imported}, skipped {len(errors)}, db_errors {len(db_errors)}')
     return jsonify({
         'success': True,
         'imported': imported,
@@ -387,6 +395,202 @@ def _validate(data):
     if data.get('status') and data['status'] not in ('active', 'inactive'):
         errors['status'] = 'Must be active or inactive'
     return errors
+
+
+# ─── AUDIT LOG ───────────────────────────────────────────────
+
+@bp.route('/audit')
+@login_required
+@role_required(ROLE_ADMIN)
+def audit_log():
+    page = max(1, int(request.args.get('page', 1)))
+    per_page = 50
+    search = request.args.get('search', '').strip()
+    action_filter = request.args.get('action', '').strip()
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            where_clauses = []
+            params = []
+            if search:
+                where_clauses.append("(username ILIKE %s OR detail ILIKE %s)")
+                like = f'%{search}%'
+                params.extend([like, like])
+            if action_filter:
+                where_clauses.append("action = %s")
+                params.append(action_filter)
+            where_sql = ' AND '.join(where_clauses) if where_clauses else 'TRUE'
+
+            cur.execute(f"SELECT COUNT(*) FROM audit_log WHERE {where_sql}", params)
+            total = cur.fetchone()[0]
+            total_pages = max(1, (total + per_page - 1) // per_page)
+            page = min(page, total_pages)
+
+            cur.execute(f"""
+                SELECT id, performed_at, username, action, detail, ip_address
+                FROM audit_log WHERE {where_sql}
+                ORDER BY performed_at DESC LIMIT %s OFFSET %s
+            """, params + [per_page, (page - 1) * per_page])
+            rows = cur.fetchall()
+
+            cur.execute("SELECT DISTINCT action FROM audit_log ORDER BY action")
+            actions = [r[0] for r in cur.fetchall()]
+            cur.close()
+    except Exception as e:
+        rows = []
+        total = 0
+        total_pages = 1
+        actions = []
+
+    return render_template('admin_audit.html', logs=rows, total=total,
+                           page=page, total_pages=total_pages, search=search,
+                           action_filter=action_filter, actions=actions)
+
+
+# ─── SCHEDULED REPORTS ─────────────────────────────────────────
+
+@bp.route('/schedules')
+@login_required
+@role_required(ROLE_ADMIN)
+def schedule_list():
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, name, report_type, format, schedule, recipients, enabled, last_run FROM scheduled_reports ORDER BY id")
+            rows = cur.fetchall()
+            cur.close()
+    except Exception:
+        rows = []
+    return render_template('admin_schedules.html', schedules=rows)
+
+
+@bp.route('/schedules/save', methods=['POST'])
+@login_required
+@role_required(ROLE_ADMIN)
+def schedule_save():
+    name = request.form.get('name', '').strip()
+    report_type = request.form.get('report_type', '').strip()
+    fmt = request.form.get('format', 'pdf').strip()
+    schedule = request.form.get('schedule', '').strip()
+    recipients = request.form.get('recipients', '').strip()
+    params = request.form.get('params', '').strip()
+    schedule_id = request.form.get('id', '').strip()
+
+    if not all([name, report_type, schedule, recipients]):
+        flash('Name, report type, schedule, and recipients are required.', 'error')
+        return redirect('/admin/schedules')
+
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            if schedule_id and schedule_id.isdigit():
+                cur.execute("""
+                    UPDATE scheduled_reports SET name=%s, report_type=%s, format=%s,
+                        schedule=%s, recipients=%s, params=%s
+                    WHERE id=%s
+                """, (name, report_type, fmt, schedule, recipients, params or None, schedule_id))
+            else:
+                cur.execute("""
+                    INSERT INTO scheduled_reports (name, report_type, format, schedule, recipients, params)
+                    VALUES (%s,%s,%s,%s,%s,%s)
+                """, (name, report_type, fmt, schedule, recipients, params or None))
+            conn.commit()
+            cur.close()
+        log_action('SCHEDULE_SAVE', f'Schedule "{name}" ({report_type}/{fmt}) saved')
+        flash('Schedule saved.', 'success')
+    except Exception as e:
+        flash(f'Database error: {e}', 'error')
+
+    # Reload schedules in scheduler
+    from scheduler import load_schedules
+    sched = current_app.config.get('SCHEDULER')
+    if sched:
+        load_schedules(sched)
+
+    return redirect('/admin/schedules')
+
+
+@bp.route('/schedules/toggle', methods=['POST'])
+@login_required
+@role_required(ROLE_ADMIN)
+def schedule_toggle():
+    data = request.get_json(silent=True)
+    sid = data.get('id') if data else None
+    if not sid:
+        return jsonify({'error': True, 'message': 'Missing id'}), 400
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE scheduled_reports SET enabled = NOT enabled WHERE id = %s RETURNING enabled, name", (sid,))
+            row = cur.fetchone()
+            conn.commit()
+            cur.close()
+        if row:
+            log_action('SCHEDULE_TOGGLE', f'Schedule "{row[1]}" {"enabled" if row[0] else "disabled"}')
+            from scheduler import load_schedules
+            sched = current_app.config.get('SCHEDULER')
+            if sched:
+                if row[0]:
+                    load_schedules(sched)
+                else:
+                    sched.remove_job(f'report_{sid}')
+            return jsonify({'success': True, 'enabled': row[0]})
+        return jsonify({'error': True, 'message': 'Not found'}), 404
+    except Exception as e:
+        return jsonify({'error': True, 'message': str(e)}), 500
+
+
+@bp.route('/schedules/delete', methods=['POST'])
+@login_required
+@role_required(ROLE_ADMIN)
+def schedule_delete():
+    data = request.get_json(silent=True)
+    sid = data.get('id') if data else None
+    if not sid:
+        return jsonify({'error': True, 'message': 'Missing id'}), 400
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM scheduled_reports WHERE id = %s RETURNING name", (sid,))
+            row = cur.fetchone()
+            conn.commit()
+            cur.close()
+        if row:
+            log_action('SCHEDULE_DELETE', f'Schedule "{row[0]}" deleted')
+            sched = current_app.config.get('SCHEDULER')
+            if sched:
+                try:
+                    sched.remove_job(f'report_{sid}')
+                except Exception:
+                    pass
+            return jsonify({'success': True})
+        return jsonify({'error': True, 'message': 'Not found'}), 404
+    except Exception as e:
+        return jsonify({'error': True, 'message': str(e)}), 500
+
+
+@bp.route('/schedules/get')
+@login_required
+@role_required(ROLE_ADMIN)
+def schedule_get():
+    sid = request.args.get('id', '').strip()
+    if not sid or not sid.isdigit():
+        return jsonify({'error': True, 'message': 'Missing id'}), 400
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, name, report_type, format, schedule, recipients, params, enabled FROM scheduled_reports WHERE id = %s", (sid,))
+            row = cur.fetchone()
+            cur.close()
+        if row:
+            return jsonify({
+                'id': row[0], 'name': row[1], 'report_type': row[2],
+                'format': row[3], 'schedule': row[4], 'recipients': row[5],
+                'params': row[6], 'enabled': row[7]
+            })
+        return jsonify({'error': True, 'message': 'Not found'}), 404
+    except Exception as e:
+        return jsonify({'error': True, 'message': str(e)}), 500
 
 
 def _guide_page(data):

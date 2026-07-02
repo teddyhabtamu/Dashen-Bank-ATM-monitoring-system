@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}Schedule Reports — Admin{% endblock %}
+{% block extra_style %}
+.modal{background:#fff;border-radius:14px;width:540px;max-width:94vw;max-height:88vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.2);animation:modalIn .25s ease}
+@keyframes modalIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid #EEF1F6}
+.modal-header h2{font-size:16px;font-weight:700;color:#012169}
+.modal-close{width:32px;height:32px;border:none;background:transparent;color:#94A3B8;cursor:pointer;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:.2s}
+.modal-close:hover{background:#F1F5F9;color:#475569}
+.modal-close svg{width:18px;height:18px}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;padding:24px}
+.form-grid .full{grid-column:1/-1}
+.form-actions{padding:0 24px 24px;display:flex;gap:10px;justify-content:flex-end}
+.form-actions .btn{padding:10px 20px}
+.toggle-switch{position:relative;display:inline-block;width:36px;height:20px}
+.toggle-switch input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#CBD5E1;border-radius:20px;transition:.3s}
+.toggle-slider:before{position:absolute;content:'';height:14px;width:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s}
+.toggle-switch input:checked+.toggle-slider{background:#012169}
+.toggle-switch input:checked+.toggle-slider:before{transform:translateX(16px)}
+.cron-help{font-size:10px;color:#94A3B8;margin-top:4px;line-height:1.5}
+.cron-help code{background:#F1F5F9;padding:1px 5px;border-radius:3px;font-size:10px}
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="calendar"></i></div>
+  <div>
+    <h1 class="page-title">Schedule Reports</h1>
+    <p class="page-subtitle">Configure automated report generation and email delivery.</p>
+  </div>
+</div>
+<div class="page-content">
+
+<div class="card">
+  <div class="card-header">
+    <h2>All Schedules</h2>
+    <button class="btn btn-primary" onclick="openScheduleModal()">
+      <i data-lucide="plus" style="width:14px;height:14px"></i> New Schedule
+    </button>
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Report</th>
+          <th>Format</th>
+          <th>Schedule</th>
+          <th>Recipients</th>
+          <th style="text-align:center">Enabled</th>
+          <th>Last Run</th>
+          <th style="text-align:center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if schedules %}
+          {% for s in schedules %}
+          <tr>
+            <td style="font-weight:600;color:#0F172A">{{ s[1] }}</td>
+            <td>{{ s[2] }}</td>
+            <td><span class="badge">{{ s[3]|upper }}</span></td>
+            <td style="font-family:monospace;font-size:11px">{{ s[4] }}</td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ s[5] }}">{{ s[5] }}</td>
+            <td style="text-align:center">
+              <label class="toggle-switch">
+                <input type="checkbox" {% if s[6] %}checked{% endif %} onchange="toggleSchedule({{ s[0] }})">
+                <span class="toggle-slider"></span>
+              </label>
+            </td>
+            <td style="font-size:11px;color:#64748B">{{ s[7]|string if s[7] else '—' }}</td>
+            <td style="text-align:center">
+              <button class="btn btn-outline" style="padding:4px 8px;font-size:10px" onclick="editSchedule({{ s[0] }})">
+                <i data-lucide="pencil" style="width:12px;height:12px"></i>
+              </button>
+              <button class="btn btn-outline" style="padding:4px 8px;font-size:10px;color:#DC2626;border-color:#FECACA" onclick="deleteSchedule({{ s[0] }})">
+                <i data-lucide="trash-2" style="width:12px;height:12px"></i>
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="8" style="padding:48px;text-align:center;color:#94A3B8;font-size:14px">No scheduled reports yet. Click "New Schedule" to create one.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div>
+
+<div class="modal-overlay" id="scheduleModal" onclick="if(event.target===this)closeScheduleModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="scheduleModalTitle">New Schedule</h2>
+      <button class="modal-close" onclick="closeScheduleModal()"><i data-lucide="x"></i></button>
+    </div>
+    <form method="post" action="/admin/schedules/save" id="scheduleForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="id" id="scheduleId" value="">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Schedule Name</label>
+          <input type="text" name="name" id="schedName" required placeholder="e.g. Weekly Transaction Summary">
+        </div>
+        <div class="form-group">
+          <label>Report Type</label>
+          <select name="report_type" id="schedType">
+            <option value="transaction">Transaction Summary</option>
+            <option value="cash">Cash Level & Dispensing</option>
+            <option value="error">Error & Incident</option>
+            <option value="performance">ATM Performance</option>
+            <option value="availability">ATM Availability</option>
+            <option value="full">Complete Management Report</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Format</label>
+          <select name="format" id="schedFormat">
+            <option value="pdf">PDF</option>
+            <option value="csv">CSV</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Schedule Preset</label>
+          <select id="schedPreset" onchange="applyPreset()">
+            <option value="">-- Select a preset --</option>
+            <option value="* * * * *">Every minute (testing)</option>
+            <option value="*/30 * * * *">Every 30 minutes</option>
+            <option value="0 * * * *">Every hour</option>
+            <option value="0 6 * * *">Daily at 6 AM</option>
+            <option value="0 7 * * *">Daily at 7 AM</option>
+            <option value="0 8 * * *">Daily at 8 AM</option>
+            <option value="0 9 * * *">Daily at 9 AM</option>
+            <option value="0 6 * * 1-5">Weekdays at 6 AM</option>
+            <option value="0 7 * * 1-5">Weekdays at 7 AM</option>
+            <option value="0 7 * * 1">Weekly on Monday at 7 AM</option>
+            <option value="0 7 * * 5">Weekly on Friday at 7 AM</option>
+            <option value="0 8 1 * *">Monthly on 1st at 8 AM</option>
+            <option value="0 8 15 * *">Monthly on 15th at 8 AM</option>
+            <option value="custom">Custom (enter below)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Cron Expression</label>
+          <input type="text" name="schedule" id="schedCron" required placeholder="e.g. 0 7 * * 1" style="font-family:monospace" oninput="document.getElementById('cronDescription').textContent=describeCron(this.value)">
+          <div class="cron-help" id="cronDescription"></div>
+        </div>
+        <div class="form-group full">
+          <label>Recipients</label>
+          <input type="text" name="recipients" id="schedRecipients" required placeholder="manager@bank.com, ops@bank.com">
+        </div>
+        <div class="form-group full">
+          <label>Extra Parameters (optional)</label>
+          <input type="text" name="params" id="schedParams" placeholder="days=7, atm=all" style="font-family:monospace">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-outline" onclick="closeScheduleModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Schedule</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="deleteModal" onclick="if(event.target===this)closeDeleteModal()">
+  <div class="modal-confirm">
+    <div class="modal-confirm-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+    </div>
+    <h3 id="deleteModalTitle">Delete Schedule</h3>
+    <p id="deleteModalText">Are you sure you want to delete this schedule? This action cannot be undone.</p>
+    <div class="modal-confirm-actions">
+      <button class="btn btn-outline" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn btn-primary" style="background:#DC2626" id="deleteConfirmBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var currentScheduleData = {};
+var deleteTargetId = null;
+
+function syncCustomSelects(){
+  document.querySelectorAll('.cust-select').forEach(function(w){
+    var sel = w.querySelector('select');
+    var trig = w.querySelector('.cust-trigger');
+    if(sel && trig){
+      var opt = sel.options[sel.selectedIndex];
+      trig.textContent = opt ? opt.text : '';
+    }
+  });
+}
+
+function openScheduleModal(data){
+  data = data || {};
+  currentScheduleData = data;
+  document.getElementById('scheduleModalTitle').textContent = data.id ? 'Edit Schedule' : 'New Schedule';
+  document.getElementById('scheduleId').value = data.id || '';
+  document.getElementById('schedName').value = data.name || '';
+  document.getElementById('schedType').value = data.report_type || 'transaction';
+  document.getElementById('schedFormat').value = data.format || 'pdf';
+  document.getElementById('schedCron').value = data.schedule || '';
+  document.getElementById('schedPreset').value = '';
+  document.getElementById('cronDescription').textContent = describeCron(data.schedule || '');
+  document.getElementById('schedRecipients').value = data.recipients || '';
+  document.getElementById('schedParams').value = data.params || '';
+  document.getElementById('scheduleModal').classList.add('show');
+  setTimeout(syncCustomSelects, 10);
+}
+
+function applyPreset(){
+  var el = document.getElementById('schedPreset');
+  var val = el.value;
+  if(val && val !== 'custom'){
+    document.getElementById('schedCron').value = val;
+    document.getElementById('cronDescription').textContent = describeCron(val);
+  } else if(val === 'custom') {
+    document.getElementById('cronDescription').textContent = 'Enter a custom cron expression (minute hour day month weekday)';
+  }
+}
+
+function describeCron(cron){
+  if(!cron) return '';
+  var p = cron.trim().split(/\s+/);
+  if(p.length < 5) return '';
+  var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var parts = [];
+  var min = p[0], hour = p[1], dom = p[2], mon = p[3], dow = p[4];
+  if(mon !== '*') parts.push('in ' + (months[parseInt(mon)-1] || mon));
+  if(dom !== '*') parts.push('on day ' + dom);
+  if(dow !== '*'){
+    if(/^\d$/.test(dow)) parts.push('on ' + days[parseInt(dow)]);
+    else if(/^(\d)-(\d)$/.test(dow)){
+      var m = dow.match(/^(\d)-(\d)$/);
+      parts.push(days[parseInt(m[1])] + ' to ' + days[parseInt(m[2])]);
+    } else parts.push('on day ' + dow);
+  }
+  if(hour !== '*' && min !== '*'){
+    var h = parseInt(hour), m = parseInt(min);
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    if(h > 12) h -= 12; else if(h === 0) h = 12;
+    parts.push('at ' + h + ':' + (m < 10 ? '0' + m : m) + ' ' + ampm);
+  }
+  if(hour !== '*' && min === '0') parts.push('on the hour');
+  if(dom === '*' && dow === '*' && mon === '*') parts.push('every day');
+  return parts.length ? 'Runs ' + parts.join(', ') + '.' : '';
+}
+
+function closeScheduleModal(){
+  document.getElementById('scheduleModal').classList.remove('show');
+}
+
+function toggleSchedule(id){
+  fetch('/admin/schedules/toggle', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+    body: JSON.stringify({id: id})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if(d.success) showToast('Schedule ' + (d.enabled ? 'enabled' : 'disabled'), 'success');
+    else showToast(d.message || 'Error', 'error');
+  })
+  .catch(function(){ showToast('Network error', 'error'); });
+}
+
+function deleteSchedule(id){
+  deleteTargetId = id;
+  document.getElementById('deleteModalTitle').textContent = 'Delete Schedule';
+  document.getElementById('deleteModalText').textContent = 'Are you sure you want to delete this schedule? This action cannot be undone.';
+  document.getElementById('deleteConfirmBtn').onclick = function(){
+    fetch('/admin/schedules/delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+      body: JSON.stringify({id: deleteTargetId})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      closeDeleteModal();
+      if(d.success){ showToast('Schedule deleted', 'success'); location.reload(); }
+      else showToast(d.message || 'Error', 'error');
+    })
+    .catch(function(){ closeDeleteModal(); showToast('Network error', 'error'); });
+  };
+  document.getElementById('deleteModal').classList.add('show');
+}
+
+function closeDeleteModal(){
+  document.getElementById('deleteModal').classList.remove('show');
+}
+
+function editSchedule(id){
+  fetch('/admin/schedules/get?id=' + id)
+    .then(function(r){ return r.json(); })
+    .then(function(d){ openScheduleModal(d); })
+    .catch(function(){ showToast('Error loading schedule', 'error'); });
+}
+</script>
+{% endblock %}
