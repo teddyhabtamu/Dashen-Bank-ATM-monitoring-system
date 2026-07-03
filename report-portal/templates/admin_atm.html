@@ -281,10 +281,10 @@ body { background: #F0F2F6; color: #0F172A; }
           <i data-lucide="upload" style="width:14px;height:14px"></i> Upload <span id="importUploadCount">0</span> valid rows
         </button>
       </div>
-      <div style="padding:0 24px 24px;max-height:480px;overflow-y:auto">
+      <div style="padding:0 24px 24px;max-height:480px;overflow-y:auto;overflow-x:auto">
         <div class="modal-alert" id="importAlert"></div>
         <table style="font-size:11px;margin-top:0;table-layout:fixed;width:100%">
-          <thead><tr id="importPreviewHead"></tr></thead>
+          <thead id="importPreviewHead"><tr></tr></thead>
           <tbody id="importPreviewBody"></tbody>
         </table>
       </div>
@@ -778,18 +778,32 @@ function renderPreviewTable(fileName){
   var LABELS = ['ATM ID','Branch','District','City','Region','Lat','Lng','Terminal ID','Vendor','Model','Install Date','Status'];
   var COL_WIDTHS = ['80px','90px','80px','80px','80px','60px','60px','85px','65px','75px','80px','60px'];
 
-  var headRow = document.createElement('tr');
+  // ── COLGROUP (locks column widths) ──
+  var tableEl = THEAD.parentNode;
+  if(tableEl && tableEl.tagName === 'TABLE'){
+    var colgroup = document.createElement('colgroup');
+    var numCol = document.createElement('col'); numCol.style.width = '32px'; colgroup.appendChild(numCol);
+    var typeCol = document.createElement('col'); typeCol.style.width = '50px'; colgroup.appendChild(typeCol);
+    for(var c = 0; c < COLS.length; c++){
+      var col = document.createElement('col'); col.style.width = COL_WIDTHS[c]; colgroup.appendChild(col);
+    }
+    tableEl.insertBefore(colgroup, THEAD);
+  }
+
+  // ── HEADER ──
+  var headRow = THEAD.querySelector('tr') || document.createElement('tr');
+  headRow.innerHTML = '';
   var numTh = document.createElement('th');
-  numTh.style.cssText = 'width:32px';
+  numTh.style.cssText = 'width:32px;padding:10px 4px';
   headRow.appendChild(numTh);
   var typeTh = document.createElement('th');
   typeTh.textContent = 'Type';
-  typeTh.style.cssText = 'width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+  typeTh.style.cssText = 'width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:10px 4px';
   headRow.appendChild(typeTh);
   for(var c = 0; c < COLS.length; c++){
     var th = document.createElement('th');
     th.textContent = LABELS[c];
-    th.style.cssText = 'width:' + COL_WIDTHS[c] + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    th.style.cssText = 'width:' + COL_WIDTHS[c] + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:10px 4px';
     headRow.appendChild(th);
   }
   THEAD.appendChild(headRow);
@@ -804,7 +818,7 @@ function renderPreviewTable(fileName){
 
     var numTd = document.createElement('td');
     numTd.textContent = row._rowNum;
-    numTd.style.cssText = 'color:#94A3B8;font-size:10px;text-align:center;width:32px;padding:6px 4px';
+    numTd.style.cssText = 'color:#94A3B8;font-size:10px;text-align:center;padding:6px 4px';
     tr.appendChild(numTd);
 
     var typeTd = document.createElement('td');
@@ -822,7 +836,7 @@ function renderPreviewTable(fileName){
       var td = document.createElement('td');
       var val = row[COLS[c]] || '';
       td.textContent = val || '—';
-      td.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:' + COL_WIDTHS[c];
+      td.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:' + COL_WIDTHS[c] + ';max-width:' + COL_WIDTHS[c];
       if(row._errors[COLS[c]]){
         td.style.cssText += ';background:#FEF2F2;color:#DC2626;border-bottom:2px solid #DC2626;cursor:help';
         td.title = row._errors[COLS[c]];
