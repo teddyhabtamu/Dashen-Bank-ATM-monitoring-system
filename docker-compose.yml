@@ -184,6 +184,7 @@ services:
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASS: ${ADMIN_PASS:-admin123}
       FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-}
+      FLASK_DEBUG: 1
     volumes:
       - ./report-portal:/app:rw
     ports:

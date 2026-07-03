@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}User Management — Admin{% endblock %}
+{% block extra_style %}
+.modal{background:#fff;border-radius:14px;width:460px;max-width:94vw;max-height:88vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.2);animation:modalIn .25s ease}
+@keyframes modalIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid #EEF1F6}
+.modal-header h2{font-size:16px;font-weight:700;color:#012169}
+.modal-close{width:32px;height:32px;border:none;background:transparent;color:#94A3B8;cursor:pointer;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:.2s}
+.modal-close:hover{background:#F1F5F9;color:#475569}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:24px}
+.form-grid .full{grid-column:1/-1}
+.form-actions{padding:0 24px 24px;display:flex;gap:10px;justify-content:flex-end}
+.form-actions .btn{padding:10px 20px}
+.btn-danger{background:#DC2626;color:#fff}
+.btn-danger:hover{background:#B91C1C}
+.badge-role{display:inline-block;padding:2px 10px;border-radius:100px;font-size:10px;font-weight:600}
+.badge-role.admin{background:rgba(1,33,105,.1);color:#012169}
+.badge-role.operator{background:rgba(5,150,105,.1);color:#059669}
+.badge-role.viewer{background:rgba(100,116,139,.1);color:#475569}
+@media(max-width:768px){
+  .card-header{gap:10px}
+  .card-header > div:last-child{width:100%}
+  .card-header > div:last-child button{flex:1;justify-content:center;padding:7px 10px;font-size:11px;gap:4px;white-space:nowrap}
+  .form-grid{grid-template-columns:1fr !important;padding:16px !important}
+  .form-actions{padding:0 16px 16px !important;flex-wrap:wrap}
+  .form-actions .btn{flex:1;justify-content:center}
+}
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="users"></i></div>
+  <div>
+    <h1 class="page-title">User Management</h1>
+    <p class="page-subtitle">Create and manage operator and viewer accounts.</p>
+  </div>
+</div>
+<div class="page-content">
+
+<div class="card">
+  <div class="card-header">
+    <h2>All Users ({{ users|length }})</h2>
+    <button class="btn btn-primary" onclick="openCreateModal()"><i data-lucide="plus" style="width:14px;height:14px"></i> New User</button>
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Role</th>
+          <th>Created</th>
+          <th>Last Login</th>
+          <th style="text-align:center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if users %}
+          {% for u in users %}
+          <tr>
+            <td style="font-weight:600;color:#0F172A">{{ u[0] }}</td>
+            <td><span class="badge-role {{ u[1] }}">{{ u[1] }}</span></td>
+            <td style="font-size:11px;color:#64748B">{{ u[2].strftime('%Y-%m-%d') if u[2] else '—' }}</td>
+            <td style="font-size:11px;color:#64748B">{{ u[3].strftime('%Y-%m-%d %H:%M') if u[3] else 'Never' }}</td>
+            <td style="text-align:center">
+              <button class="btn btn-outline" style="padding:4px 8px;font-size:10px" onclick="openEditModal('{{ u[0] }}', '{{ u[1] }}')" title="Edit user">
+                <i data-lucide="edit-3" style="width:12px;height:12px"></i>
+              </button>
+              {% if u[0] != 'admin' %}
+              <button class="btn btn-outline" style="padding:4px 8px;font-size:10px;color:#DC2626;border-color:#FECACA" onclick="openDeleteModal('{{ u[0] }}')" title="Delete user">
+                <i data-lucide="trash-2" style="width:12px;height:12px"></i>
+              </button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="5" style="padding:48px;text-align:center;color:#94A3B8;font-size:14px">No users found.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div>
+
+<div class="modal-overlay" id="createModal" onclick="if(event.target===this)closeModal('createModal')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>New User</h2>
+      <button class="modal-close" onclick="closeModal('createModal')"><i data-lucide="x"></i></button>
+    </div>
+    <form method="post" action="/admin/users/create">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Username</label>
+          <input type="text" name="username" required placeholder="e.g. operator1" minlength="3" maxlength="100" pattern="[A-Za-z0-9_]+" title="Letters, numbers and underscore only">
+        </div>
+        <div class="form-group full">
+          <label>Password</label>
+          <input type="password" name="password" required placeholder="Min 4 characters" minlength="4">
+        </div>
+        <div class="form-group full">
+          <label>Role</label>
+          <select name="role">
+            <option value="viewer">Viewer (read-only)</option>
+            <option value="operator">Operator (can manage ATMs)</option>
+            <option value="admin">Administrator (full access)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal('createModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create User</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="editModal" onclick="if(event.target===this)closeModal('editModal')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Edit User: <span id="editUsernameLabel"></span></h2>
+      <button class="modal-close" onclick="closeModal('editModal')"><i data-lucide="x"></i></button>
+    </div>
+    <form method="post" action="/admin/users/edit">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="username" id="editUsernameInput" value="">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Role</label>
+          <select name="role" id="editRoleSelect">
+            <option value="viewer">Viewer (read-only)</option>
+            <option value="operator">Operator (can manage ATMs)</option>
+            <option value="admin">Administrator (full access)</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label>New Password <span style="color:#94A3B8;font-weight:400">(leave blank to keep current)</span></label>
+          <input type="password" id="editPassword" name="password" placeholder="Min 4 characters" minlength="4" autocomplete="new-password">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal('editModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="deleteModal" onclick="if(event.target===this)closeModal('deleteModal')">
+  <div class="modal-confirm">
+    <div class="modal-confirm-icon"><i data-lucide="alert-triangle"></i></div>
+    <h3>Delete User</h3>
+    <p>Are you sure you want to delete <strong id="deleteUsername"></strong>?</p>
+    <p class="modal-confirm-note">This action cannot be undone.</p>
+    <form method="post" action="/admin/users/delete" style="margin-top:16px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="username" id="deleteUsernameInput" value="">
+      <div class="modal-confirm-actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal('deleteModal')">Cancel</button>
+        <button type="submit" class="btn btn-danger">Delete</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openCreateModal(){ document.getElementById('createModal').classList.add('show'); lucide.createIcons(); }
+function openEditModal(username, role){
+  document.getElementById('editUsernameLabel').textContent = username;
+  document.getElementById('editUsernameInput').value = username;
+  document.getElementById('editPassword').value = '';
+  var sel = document.getElementById('editRoleSelect');
+  sel.value = role;
+  var wrap = sel.closest('.cust-select');
+  if(wrap){
+    var trig = wrap.querySelector('.cust-trigger');
+    if(trig) trig.textContent = sel.options[sel.selectedIndex].text;
+  }
+  document.getElementById('editModal').classList.add('show');
+  lucide.createIcons();
+}
+function openDeleteModal(username){
+  document.getElementById('deleteUsername').textContent = username;
+  document.getElementById('deleteUsernameInput').value = username;
+  document.getElementById('deleteModal').classList.add('show');
+  lucide.createIcons();
+}
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape'){ ['createModal','editModal','deleteModal'].forEach(function(id){ closeModal(id); }); }
+});
+</script>
+{% endblock %}

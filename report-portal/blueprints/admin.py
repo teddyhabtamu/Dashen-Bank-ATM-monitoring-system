@@ -5,11 +5,14 @@ ATM Admin registration routes.
 import csv, io, re
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response, current_app
+from werkzeug.security import generate_password_hash
 from blueprints.auth import login_required, role_required, ROLE_ADMIN, ROLE_OPERATOR, ROLE_VIEWER
 from db import get_db
 from audit import log_action
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+ROLES = [ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN]
 
 FIELDS = [
     ('atm_id',      'ATM ID',       'text',   20),
@@ -591,6 +594,121 @@ def schedule_get():
         return jsonify({'error': True, 'message': 'Not found'}), 404
     except Exception as e:
         return jsonify({'error': True, 'message': str(e)}), 500
+
+
+@bp.route('/users')
+@login_required
+@role_required(ROLE_ADMIN)
+def user_list():
+    search = request.args.get('search', '').strip()
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            if search:
+                cur.execute("SELECT username, role, created_at, last_login FROM app_users WHERE username ILIKE %s ORDER BY created_at DESC", (f'%{search}%',))
+            else:
+                cur.execute("SELECT username, role, created_at, last_login FROM app_users ORDER BY created_at DESC")
+            users = cur.fetchall()
+            cur.close()
+        return render_template('admin_users.html', users=users, roles=ROLES, search=search)
+    except Exception as e:
+        flash(str(e), 'error')
+        return render_template('admin_users.html', users=[], roles=ROLES, search=search)
+
+
+@bp.route('/users/create', methods=['POST'])
+@login_required
+@role_required(ROLE_ADMIN)
+def user_create():
+    username = request.form.get('username', '').strip()
+    password = request.form.get('password', '').strip()
+    role = request.form.get('role', ROLE_VIEWER).strip()
+    if not username or len(username) < 3:
+        flash('Username must be at least 3 characters', 'error')
+        return redirect('/admin/users')
+    if not password or len(password) < 4:
+        flash('Password must be at least 4 characters', 'error')
+        return redirect('/admin/users')
+    if role not in ROLES:
+        flash('Invalid role selected', 'error')
+        return redirect('/admin/users')
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT username FROM app_users WHERE username = %s", (username,))
+            if cur.fetchone():
+                cur.close()
+                flash(f'User "{username}" already exists', 'error')
+                return redirect('/admin/users')
+            cur.execute(
+                "INSERT INTO app_users (username, password_hash, role) VALUES (%s, %s, %s)",
+                (username, generate_password_hash(password), role)
+            )
+            conn.commit()
+            cur.close()
+        log_action('USER_CREATE', f'Created {role} user "{username}"')
+        flash(f'User "{username}" created successfully', 'success')
+        return redirect('/admin/users')
+    except Exception as e:
+        flash(f'Error: {e}', 'error')
+        return redirect('/admin/users')
+
+
+@bp.route('/users/edit', methods=['POST'])
+@login_required
+@role_required(ROLE_ADMIN)
+def user_edit():
+    username = request.form.get('username', '').strip()
+    role = request.form.get('role', '').strip()
+    password = request.form.get('password', '').strip()
+    if not username:
+        flash('No username provided', 'error')
+        return redirect('/admin/users')
+    if role not in ROLES:
+        flash('Invalid role selected', 'error')
+        return redirect('/admin/users')
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            if password:
+                cur.execute("UPDATE app_users SET role = %s, password_hash = %s WHERE username = %s",
+                            (role, generate_password_hash(password), username))
+            else:
+                cur.execute("UPDATE app_users SET role = %s WHERE username = %s",
+                            (role, username))
+            conn.commit()
+            cur.close()
+        log_action('USER_EDIT', f'Updated {username} (role={role})')
+        flash(f'User "{username}" updated', 'success')
+        return redirect('/admin/users')
+    except Exception as e:
+        flash(f'Error: {e}', 'error')
+        return redirect('/admin/users')
+
+
+@bp.route('/users/delete', methods=['POST'])
+@login_required
+@role_required(ROLE_ADMIN)
+def user_delete():
+    username = request.form.get('username', '').strip()
+    if not username:
+        flash('No username provided', 'error')
+        return redirect('/admin/users')
+    if username == 'admin':
+        flash('Cannot delete the default admin user', 'error')
+        return redirect('/admin/users')
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM app_users WHERE username = %s", (username,))
+            conn.commit()
+            cur.close()
+        log_action('USER_DELETE', f'Deleted user "{username}"')
+        flash(f'User "{username}" deleted', 'success')
+        return redirect('/admin/users')
+    except Exception as e:
+        flash(f'Error: {e}', 'error')
+        return redirect('/admin/users')
 
 
 def _guide_page(data):

@@ -316,6 +316,10 @@ tr:hover{background:#EEF2FF}
       <i data-lucide="history"></i>
       <span>Audit Log</span>
     </a>
+    <a href="/admin/users" class="nav-item {% if request.path.startswith('/admin/users') %}active{% endif %}">
+      <i data-lucide="users"></i>
+      <span>User Management</span>
+    </a>
     {% endif %}
     <div class="nav-section-label" style="margin-top:8px">Quick Links</div>
     <a href="http://localhost:3002" target="_blank" class="nav-item">

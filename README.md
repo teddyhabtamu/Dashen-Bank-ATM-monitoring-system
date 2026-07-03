@@ -310,19 +310,7 @@ then prints row counts to verify.
 | **Operator** | `operator` | `operator123` | Manage ATMs, EJ search, reports (no schedules or audit) |
 | **Viewer** | `viewer` | `viewer123` | Read-only — dashboard, ATM list, EJ search, reports |
 
-To add more users, run:
-```bash
-docker exec -w /app report-portal python3 -c "
-from db import get_db
-from werkzeug.security import generate_password_hash
-with get_db() as conn:
-    cur = conn.cursor()
-    cur.execute(\"INSERT INTO app_users (username, password_hash, role) VALUES (%s, %s, %s)\",
-        ('newuser', generate_password_hash('newpass'), 'viewer'))
-    conn.commit()
-    cur.close()
-"
-```
+To add more users, log in as **admin** and visit **Admin → User Management** in the sidebar. You can create, delete, and reset passwords for operator/viewer/admin accounts through the web UI.
 
 ---
 
