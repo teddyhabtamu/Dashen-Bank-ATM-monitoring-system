@@ -49,6 +49,35 @@ body { background: #F0F2F6; color: #0F172A; }
 .btn-danger:hover{background:#B91C1C}
 .btn-danger:disabled{background:#FCA5A5;cursor:not-allowed}
 .pagi-active{background:#012169!important;color:#fff!important;border-color:#012169!important}
+
+@media(max-width:768px){
+  .card-header{gap:10px}
+  .card-header form#searchForm{width:100%}
+  .card-header form#searchForm input{flex:1;width:auto;min-width:0}
+  .card-header > div:last-child{width:100%;flex-direction:row;flex-wrap:wrap;gap:6px}
+  .card-header > div:last-child > a:not(.clear-btn),
+  .card-header > div:last-child > button{flex:1;justify-content:center;padding:7px 8px;font-size:11px;gap:4px;white-space:nowrap;min-width:0}
+  .card-header > div:last-child > a:not(.clear-btn) i,
+  .card-header > div:last-child > button i{width:14px;height:14px;flex-shrink:0}
+  .card-header > div:last-child a.clear-btn{padding:6px 10px;font-size:11px;flex:none}
+  div[style*="justify-content:space-between"][style*="padding:12px 24px"]{flex-direction:column;gap:8px;padding:10px 16px !important}
+  div[style*="justify-content:space-between"][style*="padding:12px 24px"] > div:last-child{flex-wrap:wrap;justify-content:center}
+  .modal{width:100% !important;max-width:98vw !important;margin:0 8px}
+  .modal .form-grid{grid-template-columns:1fr !important;padding:16px !important}
+  #importDropZone{padding:24px 16px !important;max-width:100% !important}
+  #importSummary{flex-direction:column;align-items:stretch;gap:8px}
+  #importSummary > span[style*="color: #CBD5E1"]{display:none}
+  #importSummary div[style*="flex:1"]{display:none}
+  #importSummary button{width:100%;justify-content:center}
+  #selectionBar{flex-wrap:wrap;gap:8px;padding:8px 16px !important}
+  #selectionBar button{flex:none;padding:6px 10px;font-size:11px}
+}
+@media(max-width:480px){
+  .card-header > div:last-child{gap:4px}
+  .card-header > div:last-child > a:not(.clear-btn),
+  .card-header > div:last-child > button{padding:6px 6px;font-size:10px;gap:3px}
+  .pagi-btn{padding:4px 8px !important;font-size:10px !important;min-width:28px !important}
+}
 {% endblock %}
 
 {% block body %}
@@ -70,7 +99,7 @@ body { background: #F0F2F6; color: #0F172A; }
                style="padding:7px 12px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;width:220px;transition:border-color .2s"
                onfocus="this.style.borderColor='#012169'" onblur="this.style.borderColor='#E4E9F1'">
         <button type="submit" class="btn btn-outline" style="padding:7px 12px"><i data-lucide="search" style="width:14px;height:14px"></i></button>
-        {% if search %}<a href="/admin/atm" class="btn btn-outline" style="padding:7px 12px">Clear</a>{% endif %}
+        {% if search %}<a href="/admin/atm" class="btn btn-outline clear-btn" style="padding:7px 12px">Clear</a>{% endif %}
       </form>
       <a id="atmExportBtn" href="/admin/atm/csv" class="btn btn-outline"><i data-lucide="download" style="width:14px;height:14px"></i> Export CSV</a>
       {% if session.get('role') in ('admin', 'operator') %}

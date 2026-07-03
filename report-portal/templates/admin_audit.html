@@ -10,6 +10,22 @@
 .search-bar .btn{padding:7px 14px;font-size:11px}
 .badge-action{display:inline-block;padding:2px 8px;border-radius:100px;font-size:9px;font-weight:600;white-space:nowrap}
 .card-header{overflow:visible !important}
+
+@media(max-width:768px){
+  .card-header{gap:10px}
+  form.search-bar{flex-direction:column;align-items:stretch;gap:8px;width:100%}
+  form.search-bar input{width:100%;padding:9px 10px;font-size:13px}
+  form.search-bar select{width:100%;padding:9px 10px;font-size:13px;min-height:36px}
+  form.search-bar a,form.search-bar button{flex:1;justify-content:center;padding:9px 14px;font-size:12px;min-height:36px}
+  .pagination{flex-wrap:wrap;gap:6px;padding:10px 14px}
+  .pagination .btn{flex:1;justify-content:center;padding:8px 10px !important;font-size:11px !important;min-height:34px}
+  .pagination .current{font-size:11px}
+}
+@media(max-width:480px){
+  td[style*="max-width:300px"]{max-width:120px !important}
+  form.search-bar input,form.search-bar select{padding:8px 8px;font-size:12px}
+  .pagination .btn{padding:6px 8px !important;font-size:10px !important}
+}
 {% endblock %}
 {% block body %}
 <div class="page-header">

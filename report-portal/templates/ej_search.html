@@ -32,6 +32,25 @@ td { font-variant-numeric: tabular-nums; }
 .detail-field-value{font-size:13px;color:#0F172A;font-weight:500}
 .pagi-active{background:#012169!important;color:#fff!important;border-color:#012169!important}
 
+@media(max-width:768px){
+  .search-grid{grid-template-columns:1fr 1fr !important;padding:16px !important}
+  .search-actions{padding:0 16px 16px !important;flex-wrap:wrap}
+  .search-actions .btn{flex:1;justify-content:center;padding:8px 12px;font-size:11px}
+  .detail-grid{grid-template-columns:1fr 1fr !important}
+  .skel-row{grid-template-columns:1fr 1fr 1fr !important}
+  .card-header .btn-gold{flex:1;justify-content:center;padding:7px 10px;font-size:11px;gap:4px;white-space:nowrap;min-width:0}
+  .card-header .btn-gold i{width:14px;height:14px;flex-shrink:0}
+  div[style*="justify-content:center"][style*="gap:6px"][style*="padding:14px 24px"]{flex-wrap:wrap;gap:4px;padding:10px 14px !important}
+  div[style*="justify-content:center"][style*="gap:6px"][style*="padding:14px 24px"] .pagi-btn{padding:5px 8px !important;font-size:10px !important;min-width:28px !important}
+}
+@media(max-width:480px){
+  .search-grid{grid-template-columns:1fr !important}
+  .detail-grid{grid-template-columns:1fr !important}
+  .detail-header{padding:8px 14px;font-size:11px}
+  .detail-body{padding:12px 14px}
+  .skel-row{grid-template-columns:1fr !important}
+}
+
 @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
 .skel-card{border-radius:12px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.05);border:1px solid #EEF1F6;overflow:hidden}
 .skel-header{padding:16px 24px;border-bottom:1px solid #EEF1F6}

@@ -194,18 +194,39 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
   .kpi-grid { grid-template-columns: repeat(2,1fr); gap: 14px; }
   .kpi-card { padding: 16px 18px; }
   .kpi-value { font-size: 24px; }
-  .hero-report { flex-direction: column; align-items: flex-start; padding: 24px 20px; gap: 18px; }
-  .hero-actions { width: 100%; flex-direction: column; align-items: stretch; gap: 14px; }
+  .hero-report { flex-direction: column; align-items: flex-start; padding: 20px 18px; gap: 16px; }
+  .hero-content { gap: 14px; }
+  .hero-icon { width: 44px; height: 44px; }
+  .hero-icon i { width: 20px; height: 20px; }
+  .hero-title h2 { font-size: 17px; }
+  .hero-title p { font-size: 12px; }
+  .hero-actions { width: 100%; flex-direction: column; align-items: stretch; gap: 12px; }
   .hero-actions .form-group { min-width: 100%; }
   .hero-actions > div:last-child { flex-direction: column; width: 100%; }
   .hero-actions .btn { width: 100%; justify-content: center; padding: 11px 16px; }
-  .reports-grid { grid-template-columns: 1fr; gap: 18px; }
-  .card-content { padding: 20px; }
+  .reports-grid { grid-template-columns: 1fr; gap: 16px; }
+  .card-content { padding: 18px; }
   .form-grid { grid-template-columns: 1fr; }
-  .card-actions { padding: 14px 20px; flex-direction: column; gap: 8px; }
+  .card-actions { padding: 12px 18px; flex-direction: column; gap: 8px; }
   .card-actions .btn { width: 100%; justify-content: center; }
+  .card-header { flex-direction: column; align-items: stretch; gap: 10px; padding: 14px 18px; }
+  .card-header h3 { font-size: 14px; }
 }
-@media(max-width:480px){ .kpi-grid { grid-template-columns: 1fr; } }
+@media(max-width:480px){
+  .kpi-grid { grid-template-columns: 1fr; }
+  .main-container { padding: 12px 14px 32px; }
+  .kpi-card { padding: 14px 16px; }
+  .kpi-value { font-size: 22px; }
+  .hero-report { padding: 16px 14px; gap: 12px; }
+  .hero-content { gap: 10px; }
+  .hero-icon { width: 36px; height: 36px; }
+  .hero-icon i { width: 16px; height: 16px; }
+  .hero-title h2 { font-size: 15px; }
+  .hero-title p { font-size: 11px; }
+  .card-content { padding: 14px; }
+  .card-actions { padding: 10px 14px; }
+  .card-header { padding: 12px 14px; }
+}
 {% endblock %}
 
 {% block body %}

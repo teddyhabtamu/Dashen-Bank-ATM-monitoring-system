@@ -20,6 +20,23 @@
 .toggle-switch input:checked+.toggle-slider:before{transform:translateX(16px)}
 .cron-help{font-size:10px;color:#94A3B8;margin-top:4px;line-height:1.5}
 .cron-help code{background:#F1F5F9;padding:1px 5px;border-radius:3px;font-size:10px}
+
+@media(max-width:768px){
+  .card-header{gap:10px}
+  .card-header > div:last-child{width:100%}
+  .card-header > div:last-child button:not(.kebab-item){flex:1;justify-content:center;padding:7px 10px;font-size:11px;gap:4px;white-space:nowrap;min-width:0}
+  .card-header > div:last-child button:not(.kebab-item) i{width:14px;height:14px;flex-shrink:0}
+  .modal .form-grid{grid-template-columns:1fr !important;padding:16px !important}
+  .modal .form-actions{padding:0 16px 16px !important;flex-wrap:wrap}
+  .modal .form-actions .btn{flex:1;justify-content:center}
+  td[style*="max-width:200px"]{max-width:120px !important}
+  td[style*="text-align:center"] .btn{padding:6px 8px !important;min-width:32px;min-height:32px}
+  td[style*="font-family:monospace"]{font-size:10px !important}
+}
+@media(max-width:480px){
+  td[style*="max-width:200px"]{max-width:80px !important}
+  .modal .form-grid .form-group.full{grid-column:1}
+}
 {% endblock %}
 {% block body %}
 <div class="page-header">

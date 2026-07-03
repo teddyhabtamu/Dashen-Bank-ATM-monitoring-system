@@ -233,6 +233,32 @@ tr:hover{background:#EEF2FF}
 .toast-message{font-size:12px;color:#475569;margin-top:1px;line-height:1.4}
 .toast-close{width:24px;height:24px;border:none;background:transparent;color:#94A3B8;cursor:pointer;border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.2s}
 .toast-close:hover{background:#F1F5F9}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){
+  .toast-container{top:12px;right:12px;left:12px;max-width:100%;width:auto}
+  .modal-confirm{padding:24px 20px 20px;max-width:92vw}
+  .card-header{flex-direction:column;align-items:stretch;gap:12px;padding:14px 16px}
+  .card-header h2{font-size:14px}
+  .page-title{font-size:17px}
+  .page-subtitle{font-size:12px}
+  .form-grid{padding:16px !important;gap:12px !important}
+  .form-actions{padding:0 16px 16px !important;flex-wrap:wrap}
+  .form-actions .btn{flex:1;justify-content:center}
+  .modal-header{padding:14px 16px}
+  .modal-header h2{font-size:14px}
+  .modal{padding:0 !important;max-height:90vh}
+}
+@media(max-width:480px){
+  .page-header{padding:12px 14px 0 !important}
+  .page-content{padding:12px 14px 24px !important}
+  .page-header-icon{width:32px;height:32px}
+  .page-header-icon svg{width:16px;height:16px}
+  .card-header{padding:12px 14px}
+  .card-header h2{font-size:13px}
+  .toast-container{top:8px;right:8px;left:8px}
+  .toast{padding:10px 14px}
+}
 {% block extra_style %}{% endblock %}
 </style>
 </head>
