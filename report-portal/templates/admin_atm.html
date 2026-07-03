@@ -108,7 +108,7 @@ body { background: #F0F2F6; color: #0F172A; }
       {% endif %}
     </div>
   </div>
-  <div style="overflow-x:auto">
+  <div style="overflow:visible">
     {% if session.get('role') in ('admin', 'operator') %}
     <div id="selectionBar" style="display:none;align-items:center;gap:10px;padding:10px 24px;background:#EEF2FF;border-bottom:1px solid #CBD5E1;font-size:13px">
       <i data-lucide="check-square" style="width:16px;height:16px;color:#012169"></i>
@@ -281,7 +281,7 @@ body { background: #F0F2F6; color: #0F172A; }
           <i data-lucide="upload" style="width:14px;height:14px"></i> Upload <span id="importUploadCount">0</span> valid rows
         </button>
       </div>
-      <div style="padding:0 24px 24px;max-height:480px;overflow-y:auto;overflow-x:auto">
+      <div style="padding:0 24px 24px;max-height:480px;overflow-y:auto;overflow-x:visible">
         <div class="modal-alert" id="importAlert"></div>
         <table style="font-size:11px;margin-top:0;table-layout:fixed;width:100%">
           <thead id="importPreviewHead"><tr></tr></thead>
