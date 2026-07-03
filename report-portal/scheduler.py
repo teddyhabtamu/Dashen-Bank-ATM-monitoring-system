@@ -66,6 +66,10 @@ def _generate_report(report_type, fmt, days=7, atm='all'):
     _headers = {'X-Health-Check': '1'}
     if INTERNAL_API_KEY:
         _headers['X-Internal-Key'] = INTERNAL_API_KEY
+    today = date.today().strftime('%Y-%m-%d')
+    label = REPORT_TYPE_LABELS.get(report_type, report_type.title())
+    atm_part = f'_{atm}' if atm and atm != 'all' else ''
+    filename = f'Dashen_Bank_{label.replace(" ", "_")}{atm_part}_{today}.{fmt}'
     if fmt == 'csv':
         import requests
         url = f'{BASE_URL}/report/{report_type}/csv?days={days}&atm={atm}'
@@ -74,7 +78,7 @@ def _generate_report(report_type, fmt, days=7, atm='all'):
             if resp.status_code == 200:
                 buf.write(resp.content)
                 buf.seek(0)
-                return buf, f'{report_type}.csv', 'text/csv'
+                return buf, filename, 'text/csv'
         except Exception as e:
             logger.error('Report generation failed: %s', e)
             return None, None, None
@@ -86,7 +90,7 @@ def _generate_report(report_type, fmt, days=7, atm='all'):
             if resp.status_code == 200:
                 buf.write(resp.content)
                 buf.seek(0)
-                return buf, f'{report_type}.pdf', 'application/pdf'
+                return buf, filename, 'application/pdf'
         except Exception as e:
             logger.error('Report generation failed: %s', e)
             return None, None, None
@@ -324,8 +328,6 @@ def load_schedules(scheduler):
         for row in rows:
             rid, report_type, fmt, cron_expr, recipients, params = row
             rid_str = f'report_{rid}'
-            if scheduler.get_job(rid_str):
-                continue
             scheduler.add_job(
                 _run_scheduled_report,
                 trigger=CronTrigger.from_crontab(cron_expr),

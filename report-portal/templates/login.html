@@ -38,6 +38,10 @@ body{
 }
 .form-group input:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.08)}
 .form-group input.error{border-color:#DC2626;background:#FEF2F2}
+.pw-wrap{position:relative;display:flex;align-items:center}
+.pw-wrap input{padding-right:36px}
+.pw-toggle{position:absolute;right:8px;background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:#94A3B8;display:flex;align-items:center;transition:.15s;line-height:1}
+.pw-toggle:hover{color:#475569;background:#F1F5F9}
 .btn{
   display:flex;align-items:center;justify-content:center;gap:8px;
   width:100%;padding:11px 20px;border-radius:8px;border:none;
@@ -87,7 +91,12 @@ body{
     </div>
     <div class="form-group">
       <label>Password</label>
-      <input type="password" name="password" id="password" placeholder="Enter your password" autocomplete="current-password" required>
+      <div class="pw-wrap">
+        <input type="password" name="password" id="password" placeholder="Enter your password" autocomplete="current-password" required>
+        <button type="button" class="pw-toggle" onclick="togglePW('password',this)" tabindex="-1" aria-label="Toggle password visibility">
+          <i data-lucide="eye" style="width:16px;height:16px"></i>
+        </button>
+      </div>
     </div>
     <button type="submit" class="btn btn-primary" id="loginBtn">
       <i data-lucide="log-in" style="width:16px;height:16px"></i> Sign In
@@ -99,6 +108,19 @@ body{
 
 <script>
 lucide.createIcons();
+
+function togglePW(id, btn){
+  var inp = document.getElementById(id);
+  var icon = btn.querySelector('[data-lucide]');
+  if(inp.type === 'password'){
+    inp.type = 'text';
+    icon.setAttribute('data-lucide', 'eye-off');
+  } else {
+    inp.type = 'password';
+    icon.setAttribute('data-lucide', 'eye');
+  }
+  lucide.createIcons();
+}
 
 document.getElementById('loginForm').addEventListener('submit', function(e){
   var btn = document.getElementById('loginBtn');

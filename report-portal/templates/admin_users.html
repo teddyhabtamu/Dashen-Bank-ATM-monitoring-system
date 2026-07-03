@@ -25,6 +25,21 @@
   .form-actions{padding:0 16px 16px !important;flex-wrap:wrap}
   .form-actions .btn{flex:1;justify-content:center}
 }
+.kebab-wrap{position:relative;text-align:center}
+.kebab-btn{background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:4px;color:#94A3B8;transition:.15s;line-height:1}
+.kebab-btn:hover{background:#F1F5F9;color:#475569}
+.kebab-menu{display:none;position:absolute;right:0;top:100%;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:4px;z-index:100;min-width:130px;border:1px solid #EEF1F6}
+.kebab-menu.show{display:block}
+.kebab-item{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:none;width:100%;text-align:left;transition:.1s}
+.kebab-item:hover{background:#F8FAFC}
+.kebab-item.edit{color:#012169}
+.kebab-item.edit:hover{background:#EEF2FF}
+.kebab-item.delete{color:#DC2626}
+.kebab-item.delete:hover{background:#FEF2F2}
+.pw-wrap{position:relative;display:flex;align-items:center}
+.pw-wrap input{padding-right:36px}
+.pw-toggle{position:absolute;right:8px;background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:#94A3B8;display:flex;align-items:center;transition:.15s;line-height:1;z-index:1}
+.pw-toggle:hover{color:#475569;background:#F1F5F9}
 {% endblock %}
 {% block body %}
 <div class="page-header">
@@ -41,7 +56,7 @@
     <h2>All Users ({{ users|length }})</h2>
     <button class="btn btn-primary" onclick="openCreateModal()"><i data-lucide="plus" style="width:14px;height:14px"></i> New User</button>
   </div>
-  <div style="overflow-x:auto">
+  <div style="overflow:visible">
     <table>
       <thead>
         <tr>
@@ -60,15 +75,14 @@
             <td><span class="badge-role {{ u[1] }}">{{ u[1] }}</span></td>
             <td style="font-size:11px;color:#64748B">{{ u[2].strftime('%Y-%m-%d') if u[2] else '—' }}</td>
             <td style="font-size:11px;color:#64748B">{{ u[3].strftime('%Y-%m-%d %H:%M') if u[3] else 'Never' }}</td>
-            <td style="text-align:center">
-              <button class="btn btn-outline" style="padding:4px 8px;font-size:10px" onclick="openEditModal('{{ u[0] }}', '{{ u[1] }}')" title="Edit user">
-                <i data-lucide="edit-3" style="width:12px;height:12px"></i>
-              </button>
-              {% if u[0] != 'admin' %}
-              <button class="btn btn-outline" style="padding:4px 8px;font-size:10px;color:#DC2626;border-color:#FECACA" onclick="openDeleteModal('{{ u[0] }}')" title="Delete user">
-                <i data-lucide="trash-2" style="width:12px;height:12px"></i>
-              </button>
-              {% endif %}
+            <td style="text-align:center" class="kebab-wrap">
+              <button class="kebab-btn" onclick="toggleKebab(event,this)" title="Actions">&#8942;</button>
+              <div class="kebab-menu">
+                <button class="kebab-item edit" onclick="openEditModal('{{ u[0] }}', '{{ u[1] }}')"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
+                {% if u[0] != 'admin' %}
+                <button class="kebab-item delete" onclick="openDeleteModal('{{ u[0] }}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
+                {% endif %}
+              </div>
             </td>
           </tr>
           {% endfor %}
@@ -83,7 +97,7 @@
 </div>
 
 <div class="modal-overlay" id="createModal" onclick="if(event.target===this)closeModal('createModal')">
-  <div class="modal">
+  <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-header">
       <h2>New User</h2>
       <button class="modal-close" onclick="closeModal('createModal')"><i data-lucide="x"></i></button>
@@ -97,7 +111,12 @@
         </div>
         <div class="form-group full">
           <label>Password</label>
-          <input type="password" name="password" required placeholder="Min 4 characters" minlength="4">
+          <div class="pw-wrap">
+            <input type="password" name="password" required placeholder="Min 4 characters" minlength="4">
+            <button type="button" class="pw-toggle" onclick="togglePW(this)" tabindex="-1" aria-label="Toggle password visibility">
+              <i data-lucide="eye" style="width:15px;height:15px"></i>
+            </button>
+          </div>
         </div>
         <div class="form-group full">
           <label>Role</label>
@@ -117,7 +136,7 @@
 </div>
 
 <div class="modal-overlay" id="editModal" onclick="if(event.target===this)closeModal('editModal')">
-  <div class="modal">
+  <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-header">
       <h2>Edit User: <span id="editUsernameLabel"></span></h2>
       <button class="modal-close" onclick="closeModal('editModal')"><i data-lucide="x"></i></button>
@@ -136,7 +155,12 @@
         </div>
         <div class="form-group full">
           <label>New Password <span style="color:#94A3B8;font-weight:400">(leave blank to keep current)</span></label>
-          <input type="password" id="editPassword" name="password" placeholder="Min 4 characters" minlength="4" autocomplete="new-password">
+          <div class="pw-wrap">
+            <input type="password" id="editPassword" name="password" placeholder="Min 4 characters" minlength="4" autocomplete="new-password">
+            <button type="button" class="pw-toggle" onclick="togglePW(this)" tabindex="-1" aria-label="Toggle password visibility">
+              <i data-lucide="eye" style="width:15px;height:15px"></i>
+            </button>
+          </div>
         </div>
       </div>
       <div class="form-actions">
@@ -148,7 +172,7 @@
 </div>
 
 <div class="modal-overlay" id="deleteModal" onclick="if(event.target===this)closeModal('deleteModal')">
-  <div class="modal-confirm">
+  <div class="modal-confirm" onclick="event.stopPropagation()">
     <div class="modal-confirm-icon"><i data-lucide="alert-triangle"></i></div>
     <h3>Delete User</h3>
     <p>Are you sure you want to delete <strong id="deleteUsername"></strong>?</p>
@@ -187,6 +211,39 @@ function openDeleteModal(username){
   lucide.createIcons();
 }
 function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+function togglePW(btn){
+  var wrap = btn.closest('.pw-wrap');
+  var inp = wrap.querySelector('input');
+  var icon = btn.querySelector('[data-lucide]');
+  if(inp.type === 'password'){
+    inp.type = 'text';
+    icon.setAttribute('data-lucide', 'eye-off');
+  } else {
+    inp.type = 'password';
+    icon.setAttribute('data-lucide', 'eye');
+  }
+  lucide.createIcons();
+}
+function toggleKebab(event, btn){
+  event.stopPropagation();
+  document.querySelectorAll('.kebab-menu.show').forEach(function(m){
+    if(m !== btn.nextElementSibling) m.classList.remove('show');
+  });
+  var menu = btn.nextElementSibling;
+  menu.classList.toggle('show');
+  if(menu.classList.contains('show')){
+    var rect = btn.getBoundingClientRect();
+    var spaceBelow = window.innerHeight - rect.bottom;
+    menu.style.top = spaceBelow < 150 ? 'auto' : '100%';
+    menu.style.bottom = spaceBelow < 150 ? '100%' : 'auto';
+  } else {
+    menu.style.top = '';
+    menu.style.bottom = '';
+  }
+}
+document.addEventListener('click', function(){
+  document.querySelectorAll('.kebab-menu.show').forEach(function(m){ m.classList.remove('show'); });
+});
 document.addEventListener('keydown', function(e){
   if(e.key === 'Escape'){ ['createModal','editModal','deleteModal'].forEach(function(id){ closeModal(id); }); }
 });
