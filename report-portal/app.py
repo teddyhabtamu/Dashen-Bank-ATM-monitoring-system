@@ -87,6 +87,10 @@ def create_app():
         flash('Access denied. You do not have permission for this page.', 'error')
         return redirect(request.referrer or '/')
 
+    @app.errorhandler(404)
+    def not_found(e):
+        return render_template('404.html'), 404
+
     @app.route('/health')
     def health():
         return {'status': 'ok'}, 200
