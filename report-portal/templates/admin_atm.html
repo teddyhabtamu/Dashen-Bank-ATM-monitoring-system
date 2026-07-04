@@ -51,15 +51,17 @@ body { background: #F0F2F6; color: #0F172A; }
 .pagi-active{background:#012169!important;color:#fff!important;border-color:#012169!important}
 
 @media(max-width:768px){
+  .card { overflow-x:hidden; }
+  .card-header form#searchForm input{flex:1;width:auto !important;min-width:0}
   .card-header{gap:10px}
   .card-header form#searchForm{width:100%}
-  .card-header form#searchForm input{flex:1;width:auto;min-width:0}
   .card-header > div:last-child{width:100%;flex-direction:row;flex-wrap:wrap;gap:6px}
   .card-header > div:last-child > a:not(.clear-btn),
-  .card-header > div:last-child > button{flex:1;justify-content:center;padding:7px 8px;font-size:11px;gap:4px;white-space:nowrap;min-width:0}
+  .card-header > div:last-child > button{flex:1;justify-content:center;padding:10px 12px;font-size:12px;gap:4px;white-space:nowrap;min-width:0}
   .card-header > div:last-child > a:not(.clear-btn) i,
   .card-header > div:last-child > button i{width:14px;height:14px;flex-shrink:0}
-  .card-header > div:last-child a.clear-btn{padding:6px 10px;font-size:11px;flex:none}
+  .card-header > div:last-child a.clear-btn{padding:8px 12px;font-size:12px;flex:none}
+  .kebab-btn{padding:8px !important;min-width:36px;min-height:36px}
   div[style*="justify-content:space-between"][style*="padding:12px 24px"]{flex-direction:column;gap:8px;padding:10px 16px !important}
   div[style*="justify-content:space-between"][style*="padding:12px 24px"] > div:last-child{flex-wrap:wrap;justify-content:center}
   .modal{width:100% !important;max-width:98vw !important;margin:0 8px}
@@ -70,13 +72,44 @@ body { background: #F0F2F6; color: #0F172A; }
   #importSummary div[style*="flex:1"]{display:none}
   #importSummary button{width:100%;justify-content:center}
   #selectionBar{flex-wrap:wrap;gap:8px;padding:8px 16px !important}
-  #selectionBar button{flex:none;padding:6px 10px;font-size:11px}
+  #selectionBar button{flex:none;padding:8px 12px;font-size:12px}
+  .pagi-btn{padding:8px 12px !important;font-size:12px !important;min-width:36px !important;min-height:36px !important}
 }
 @media(max-width:480px){
   .card-header > div:last-child{gap:4px}
   .card-header > div:last-child > a:not(.clear-btn),
-  .card-header > div:last-child > button{padding:6px 6px;font-size:10px;gap:3px}
-  .pagi-btn{padding:4px 8px !important;font-size:10px !important;min-width:28px !important}
+  .card-header > div:last-child > button{padding:8px 8px;font-size:11px;gap:3px}
+  .pagi-btn{padding:6px 10px !important;font-size:11px !important;min-width:32px !important;min-height:36px !important}
+}
+
+/* ── Mobile ATM cards ── */
+.atm-cards-wrap { display:none; }
+.atm-card { background:#fff; border-radius:10px; border:1px solid #EEF1F6; box-shadow:0 1px 3px rgba(1,33,105,.04); padding:16px; margin-bottom:10px; }
+.atm-card-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.atm-card-id { font-size:15px; font-weight:700; color:#012169; }
+.atm-card-info { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
+.atm-card-detail { }
+.atm-card-label { font-size:9px; font-weight:600; color:#94A3B8; text-transform:uppercase; letter-spacing:.3px; }
+.atm-card-value { font-size:13px; color:#0F172A; font-weight:500; margin-top:1px; }
+.atm-card-meta-item { }
+.atm-card-meta-item .atm-card-label { display:inline; }
+.atm-card-actions { display:flex; gap:8px; padding-top:12px; border-top:1px solid #EEF1F6; }
+.atm-toggle { display:flex; align-items:center; gap:4px; font-size:10px; font-weight:600; color:#94A3B8; cursor:pointer; padding:8px 0; margin-bottom:4px; user-select:none; transition:.15s; }
+.atm-toggle:hover { color:#012169; }
+.atm-toggle svg { width:14px; height:14px; transition:transform .25s; }
+.atm-toggle.open svg { transform:rotate(180deg); }
+.atm-card-details { display:none; }
+.atm-card-details.open { display:flex; flex-wrap:wrap; gap:6px 12px; font-size:11px; color:#475569; padding-top:8px; }
+
+@media(max-width:768px){
+  .atm-table-wrap { display:none; }
+  .atm-cards-wrap { display:block; }
+  #selectionBar { padding:8px 14px; gap:6px; flex-wrap:wrap; font-size:12px; position:sticky; top:0; z-index:20; }
+  #selectionBar button { padding:6px 10px !important; font-size:11px !important; }
+  #bulkDeleteBtn { font-size:11px !important; }
+}
+@media(max-width:480px){
+  .atm-card-info { grid-template-columns:1fr; }
 }
 {% endblock %}
 
@@ -108,17 +141,18 @@ body { background: #F0F2F6; color: #0F172A; }
       {% endif %}
     </div>
   </div>
-  <div style="overflow:visible">
-    {% if session.get('role') in ('admin', 'operator') %}
-    <div id="selectionBar" style="display:none;align-items:center;gap:10px;padding:10px 24px;background:#EEF2FF;border-bottom:1px solid #CBD5E1;font-size:13px">
-      <i data-lucide="check-square" style="width:16px;height:16px;color:#012169"></i>
-      <span style="font-weight:600;color:#012169"><span id="selectedCount">0</span> selected</span>
-      <button class="btn btn-danger" id="bulkDeleteBtn" onclick="openBulkDeleteModal()" style="padding:6px 14px;font-size:12px" disabled>
-        <i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete Selected
-      </button>
-    </div>
-    {% endif %}
-    <table>
+    <div style="overflow:visible">
+      {% if session.get('role') in ('admin', 'operator') %}
+      <div id="selectionBar" style="display:none;align-items:center;gap:10px;padding:10px 24px;background:#EEF2FF;border-bottom:1px solid #CBD5E1;font-size:13px">
+        <i data-lucide="check-square" style="width:16px;height:16px;color:#012169"></i>
+        <span style="font-weight:600;color:#012169"><span id="selectedCount">0</span> selected</span>
+        <button class="btn btn-danger" id="bulkDeleteBtn" onclick="openBulkDeleteModal()" style="padding:6px 14px;font-size:12px" disabled>
+          <i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete Selected
+        </button>
+      </div>
+      {% endif %}
+      <div class="atm-table-wrap" style="overflow-x:auto;overflow-y:clip">
+      <table>
       <thead><tr>
         {% if session.get('role') in ('admin', 'operator') %}
         <th style="width:36px;padding:8px 6px;text-align:center"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" style="cursor:pointer;width:15px;height:15px"></th>
@@ -166,6 +200,65 @@ body { background: #F0F2F6; color: #0F172A; }
       </tbody>
     </table>
   </div>
+
+  {# ── MOBILE ATM CARDS ── #}
+  <div class="atm-cards-wrap">
+    {% if atms %}
+      {% for d in atms %}
+      {% set status = d.status or 'active' %}
+      <div class="atm-card" data-atm-id="{{ d.atm_id }}">
+        <div class="atm-card-top">
+          <div style="display:flex;align-items:center;gap:10px">
+            {% if session.get('role') in ('admin', 'operator') %}
+            <input type="checkbox" class="row-checkbox" value="{{ d.atm_id }}" onchange="updateSelection()" style="cursor:pointer;width:16px;height:16px;flex-shrink:0">
+            {% endif %}
+            <div class="atm-card-id">{{ d.atm_id }}</div>
+          </div>
+          <span class="badge {{ status }}">{{ status }}</span>
+        </div>
+        <div class="atm-card-info">
+          <div class="atm-card-detail">
+            <span class="atm-card-label">Branch</span>
+            <span class="atm-card-value">{{ d.branch or '—' }}</span>
+          </div>
+          <div class="atm-card-detail">
+            <span class="atm-card-label">District</span>
+            <span class="atm-card-value">{{ d.district or '—' }}</span>
+          </div>
+          <div class="atm-card-detail">
+            <span class="atm-card-label">City</span>
+            <span class="atm-card-value">{{ d.city or '—' }}</span>
+          </div>
+          <div class="atm-card-detail">
+            <span class="atm-card-label">Region</span>
+            <span class="atm-card-value">{{ d.region or '—' }}</span>
+          </div>
+        </div>
+        <div class="atm-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+          <i data-lucide="chevron-down"></i> More Details
+        </div>
+        <div class="atm-card-details">
+          <span class="atm-card-meta-item"><span class="atm-card-label">Terminal</span> {{ d.terminal_id or '—' }}</span>
+          <span class="atm-card-meta-item"><span class="atm-card-label">Vendor</span> {{ d.vendor or '—' }}</span>
+          <span class="atm-card-meta-item"><span class="atm-card-label">Model</span> {{ d.model or '—' }}</span>
+          <span class="atm-card-meta-item"><span class="atm-card-label">Install</span> {{ d.install_date or '—' }}</span>
+          {% if d.latitude and d.longitude %}
+          <span class="atm-card-meta-item"><span class="atm-card-label">Coords</span> {{ d.latitude }}, {{ d.longitude }}</span>
+          {% endif %}
+        </div>
+        {% if session.get('role') in ('admin', 'operator') %}
+        <div class="atm-card-actions">
+          <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px" onclick="editATM('{{ d.atm_id }}')"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
+          <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;color:#DC2626;border-color:#FECACA" onclick="deleteATM('{{ d.atm_id }}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="atm-card" style="text-align:center;color:#94A3B8;font-size:13px;padding:32px">No ATMs registered yet.</div>
+    {% endif %}
+  </div>
+
   {% if total_pages > 1 %}
   <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-top:1px solid #EEF1F6">
     <div style="font-size:12px;color:#64748B">Page {{ page }} of {{ total_pages }}</div>

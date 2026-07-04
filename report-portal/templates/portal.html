@@ -176,6 +176,13 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
 .btn-primary:hover { background: var(--dashen-blue); box-shadow: 0 4px 16px rgba(1,33,105,0.25); transform: translateY(-1px); }
 .btn-gold { background: var(--dashen-gold); color: var(--dashen-navy); font-weight: 700; border: none; letter-spacing: -0.1px; }
 .btn-gold:hover { background: #C49A00; box-shadow: 0 4px 16px rgba(253,215,154,0.3); transform: translateY(-1px); }
+.btn-ghost { background:transparent; color:var(--text-tertiary); border-color:transparent; }
+.btn-ghost:hover { background:#F1F5F9; color:var(--text-secondary); transform:translateY(-1px); }
+/* ── SECTION DIVIDER ── */
+.section-divider { display:flex; align-items:center; gap:14px; margin:32px 0 22px; }
+.section-divider::before, .section-divider::after { content:''; flex:1; height:1px; background:var(--border); }
+.section-divider .divider-badge { display:inline-flex; align-items:center; gap:8px; padding:6px 16px; border-radius:100px; background:#fff; border:1px solid var(--border-light); font-size:11px; font-weight:600; color:var(--text-secondary); white-space:nowrap; }
+.section-divider .divider-badge i { width:14px;height:14px;color:var(--dashen-navy); }
 /* ── LOADER ── */
 .loading-wrapper { display: none; margin-top: 12px; width: 100%; }
 .loading-wrapper.active { display: block; }
@@ -187,45 +194,72 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 100px; }
 ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+/* ── ACCORDION (mobile: collapsed by default) ── */
+@media(max-width:768px){
+  .report-card .card-body-inner { display:none; }
+  .report-card.expanded .card-body-inner { display:block; }
+  .report-card .card-header { cursor:pointer; user-select:none; position:relative; }
+  .report-card .card-header .accordion-chevron { position:absolute; right:18px; top:50%; transform:translateY(-50%) rotate(-90deg); transition:transform .25s; color:var(--text-tertiary); }
+  .report-card.expanded .card-header .accordion-chevron { transform:translateY(-50%) rotate(0deg); color:var(--dashen-navy); }
+}
+@media(min-width:769px){
+  .report-card .card-header .accordion-chevron { display:none; }
+  .report-card .card-body-inner { display:block !important; }
+}
+
 /* ── RESPONSIVE ── */
 @media(max-width:1024px){ .kpi-grid { grid-template-columns: repeat(3,1fr); } }
 @media(max-width:768px){
-  .main-container { padding: 16px 20px 40px; }
-  .kpi-grid { grid-template-columns: repeat(2,1fr); gap: 14px; }
-  .kpi-card { padding: 16px 18px; }
-  .kpi-value { font-size: 24px; }
-  .hero-report { flex-direction: column; align-items: flex-start; padding: 20px 18px; gap: 16px; }
-  .hero-content { gap: 14px; }
-  .hero-icon { width: 44px; height: 44px; }
-  .hero-icon i { width: 20px; height: 20px; }
-  .hero-title h2 { font-size: 17px; }
-  .hero-title p { font-size: 12px; }
-  .hero-actions { width: 100%; flex-direction: column; align-items: stretch; gap: 12px; }
+  .main-container { padding: 12px 16px 32px; }
+  .kpi-grid { grid-template-columns: repeat(2,1fr); gap: 10px; }
+  .kpi-card { padding: 12px 14px; gap: 4px; }
+  .kpi-header { font-size: 9px; gap: 6px; }
+  .kpi-icon-wrap { width: 24px; height: 24px; font-size: 11px; }
+  .kpi-icon-wrap i { width: 12px; height: 12px; }
+  .kpi-value { font-size: 20px; }
+  .kpi-footer { font-size: 9px; }
+  .hero-report { flex-direction: column; align-items: flex-start; padding: 18px 16px; gap: 14px; }
+  .hero-content { gap: 12px; }
+  .hero-icon { width: 40px; height: 40px; }
+  .hero-icon i { width: 18px; height: 18px; }
+  .hero-title h2 { font-size: 16px; }
+  .hero-title p { font-size: 11px; }
+  .hero-actions { width: 100%; flex-direction: column; align-items: stretch; gap: 10px; }
   .hero-actions .form-group { min-width: 100%; }
   .hero-actions > div:last-child { flex-direction: column; width: 100%; }
-  .hero-actions .btn { width: 100%; justify-content: center; padding: 11px 16px; }
-  .reports-grid { grid-template-columns: 1fr; gap: 16px; }
-  .card-content { padding: 18px; }
-  .form-grid { grid-template-columns: 1fr; }
-  .card-actions { padding: 12px 18px; flex-direction: column; gap: 8px; }
-  .card-actions .btn { width: 100%; justify-content: center; }
-  .card-header { flex-direction: column; align-items: stretch; gap: 10px; padding: 14px 18px; }
-  .card-header h3 { font-size: 14px; }
+  .hero-actions .btn { width: 100%; justify-content: center; padding: 10px 14px; }
+  .reports-grid { grid-template-columns: 1fr; gap: 10px; }
+  .report-card .card-content { padding: 0; }
+  .report-card .card-header { padding: 12px 14px; gap: 10px; margin-bottom: 0; }
+  .report-card .card-header .card-icon { width: 34px; height: 34px; }
+  .report-card .card-header .card-icon i { width: 16px; height: 16px; }
+  .report-card .card-header h3 { font-size: 13px; }
+  .report-card .card-body-inner { padding: 0 14px 14px; }
+  .form-grid { grid-template-columns: 1fr; gap: 10px; }
+  .card-actions { padding: 10px 14px; flex-direction: row; flex-wrap: wrap; gap: 6px; }
+  .card-actions .btn { flex:1; min-width:0; justify-content: center; padding: 8px 8px; font-size: 11px; }
+  .card-actions .btn i { width: 12px; height: 12px; }
+  .section-title { font-size: 11px; margin-bottom: 12px; }
+  /* Last Updated as full-width on mobile */
+  .kpi-card:last-child { grid-column:1/-1; }
 }
 @media(max-width:480px){
-  .kpi-grid { grid-template-columns: 1fr; }
-  .main-container { padding: 12px 14px 32px; }
-  .kpi-card { padding: 14px 16px; }
-  .kpi-value { font-size: 22px; }
-  .hero-report { padding: 16px 14px; gap: 12px; }
-  .hero-content { gap: 10px; }
-  .hero-icon { width: 36px; height: 36px; }
-  .hero-icon i { width: 16px; height: 16px; }
-  .hero-title h2 { font-size: 15px; }
-  .hero-title p { font-size: 11px; }
-  .card-content { padding: 14px; }
-  .card-actions { padding: 10px 14px; }
-  .card-header { padding: 12px 14px; }
+  .kpi-grid { grid-template-columns: repeat(2,1fr); gap: 8px; }
+  .main-container { padding: 10px 12px 24px; }
+  .kpi-card { padding: 10px 12px; }
+  .kpi-value { font-size: 18px; }
+  .kpi-header { font-size: 8px; }
+  .kpi-footer { font-size: 8px; }
+  .hero-report { padding: 14px 12px; gap: 10px; border-radius:10px; }
+  .hero-icon { width: 34px; height: 34px; }
+  .hero-icon i { width: 15px; height: 15px; }
+  .hero-title h2 { font-size: 14px; }
+  .hero-title p { font-size: 10px; }
+  .report-card .card-header { padding: 10px 12px; }
+  .report-card .card-header .accordion-chevron { right:12px; }
+  .report-card .card-body-inner { padding: 0 12px 12px; }
+  .card-actions { padding: 8px 12px; gap: 5px; }
+  .card-actions .btn { font-size: 11px; padding: 9px 8px; }
 }
 {% endblock %}
 
@@ -320,7 +354,9 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
   </div>
 
   <!-- Individual Reports -->
-  <div class="section-title">Individual Reports</div>
+  <div class="section-divider">
+    <div class="divider-badge"><i data-lucide="layers"></i> Individual Reports</div>
+  </div>
 
   <div class="reports-grid">
 
@@ -328,38 +364,41 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
     <div class="report-card">
       <div class="card-accent"></div>
       <div class="card-content">
-        <div class="card-header">
-          <div class="card-icon"><i data-lucide="bar-chart-2"></i></div>
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <div class="card-icon"><i data-lucide="bar-chart-2" style="width:22px;height:22px;"></i></div>
           <h3>Transaction Summary</h3>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label>Period</label>
-            <div class="custom-select">
-              <select id="txn-days">
-                <option value="1">Today</option>
-                <option value="7" selected>Last 7 Days</option>
-                <option value="30">Last 30 Days</option>
-                <option value="90">Last 90 Days</option>
-              </select>
+        <div class="card-body-inner">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Period</label>
+              <div class="custom-select">
+                <select id="txn-days">
+                  <option value="1">Today</option>
+                  <option value="7" selected>Last 7 Days</option>
+                  <option value="30">Last 30 Days</option>
+                  <option value="90">Last 90 Days</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Branch</label>
+              <div class="custom-select">
+                <select id="txn-atm">
+                  <option value="all" selected>All Branches</option>
+                </select>
+              </div>
             </div>
           </div>
-          <div class="form-group">
-            <label>Branch</label>
-            <div class="custom-select">
-              <select id="txn-atm">
-                <option value="all" selected>All Branches</option>
-              </select>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="gen('transaction','excel','txn-days','txn-atm')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('transaction','pdf','txn-days','txn-atm')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-ghost" onclick="gen('transaction','csv','txn-days','txn-atm')"><i data-lucide="file"></i> CSV</button>
+            <div class="loading-wrapper" id="lw-transaction">
+              <div class="loading-bar"></div><div class="loading-text">Generating...</div>
             </div>
           </div>
-        </div>
-      </div>
-      <div class="card-actions">
-        <button class="btn btn-outline" onclick="gen('transaction','excel','txn-days','txn-atm')"><i data-lucide="file-spreadsheet"></i> Excel</button>
-        <button class="btn btn-outline" onclick="gen('transaction','pdf','txn-days','txn-atm')"><i data-lucide="file-text"></i> PDF</button>
-        <button class="btn btn-outline" onclick="gen('transaction','csv','txn-days','txn-atm')"><i data-lucide="file"></i> CSV</button>
-        <div class="loading-wrapper" id="lw-transaction">
-          <div class="loading-bar"></div><div class="loading-text">Generating...</div>
         </div>
       </div>
     </div>
@@ -368,30 +407,33 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
     <div class="report-card">
       <div class="card-accent"></div>
       <div class="card-content">
-        <div class="card-header">
-          <div class="card-icon"><i data-lucide="coins"></i></div>
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <div class="card-icon"><i data-lucide="coins" style="width:22px;height:22px;"></i></div>
           <h3>Cash Level Report</h3>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
-        <div class="form-grid">
-          <div class="form-group full">
-            <label>Reporting Period</label>
-            <div class="custom-select">
-              <select id="cash-days">
-                <option value="1">Today</option>
-                <option value="7" selected>Last 7 Days</option>
-                <option value="30">Last 30 Days</option>
-                <option value="90">Last 90 Days</option>
-              </select>
+        <div class="card-body-inner">
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Reporting Period</label>
+              <div class="custom-select">
+                <select id="cash-days">
+                  <option value="1">Today</option>
+                  <option value="7" selected>Last 7 Days</option>
+                  <option value="30">Last 30 Days</option>
+                  <option value="90">Last 90 Days</option>
+                </select>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-      <div class="card-actions">
-        <button class="btn btn-outline" onclick="gen('cash','excel','cash-days')"><i data-lucide="file-spreadsheet"></i> Excel</button>
-        <button class="btn btn-outline" onclick="gen('cash','pdf','cash-days')"><i data-lucide="file-text"></i> PDF</button>
-        <button class="btn btn-outline" onclick="gen('cash','csv','cash-days')"><i data-lucide="file"></i> CSV</button>
-        <div class="loading-wrapper" id="lw-cash">
-          <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="gen('cash','excel','cash-days')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('cash','pdf','cash-days')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-ghost" onclick="gen('cash','csv','cash-days')"><i data-lucide="file"></i> CSV</button>
+            <div class="loading-wrapper" id="lw-cash">
+              <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -400,29 +442,32 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
     <div class="report-card">
       <div class="card-accent"></div>
       <div class="card-content">
-        <div class="card-header">
-          <div class="card-icon"><i data-lucide="alert-triangle"></i></div>
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <div class="card-icon"><i data-lucide="alert-triangle" style="width:22px;height:22px;"></i></div>
           <h3>Error &amp; Incident Report</h3>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
-        <div class="form-grid">
-          <div class="form-group full">
-            <label>Reporting Period</label>
-            <div class="custom-select">
-              <select id="error-days">
-                <option value="1">Today</option>
-                <option value="7" selected>Last 7 Days</option>
-                <option value="30">Last 30 Days</option>
-              </select>
+        <div class="card-body-inner">
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Reporting Period</label>
+              <div class="custom-select">
+                <select id="error-days">
+                  <option value="1">Today</option>
+                  <option value="7" selected>Last 7 Days</option>
+                  <option value="30">Last 30 Days</option>
+                </select>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-      <div class="card-actions">
-        <button class="btn btn-outline" onclick="gen('error','excel','error-days')"><i data-lucide="file-spreadsheet"></i> Excel</button>
-        <button class="btn btn-outline" onclick="gen('error','pdf','error-days')"><i data-lucide="file-text"></i> PDF</button>
-        <button class="btn btn-outline" onclick="gen('error','csv','error-days')"><i data-lucide="file"></i> CSV</button>
-        <div class="loading-wrapper" id="lw-error">
-          <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="gen('error','excel','error-days')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('error','pdf','error-days')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-ghost" onclick="gen('error','csv','error-days')"><i data-lucide="file"></i> CSV</button>
+            <div class="loading-wrapper" id="lw-error">
+              <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -431,29 +476,32 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
     <div class="report-card">
       <div class="card-accent"></div>
       <div class="card-content">
-        <div class="card-header">
-          <div class="card-icon"><i data-lucide="zap"></i></div>
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <div class="card-icon"><i data-lucide="zap" style="width:22px;height:22px;"></i></div>
           <h3>ATM Performance Report</h3>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
-        <div class="form-grid">
-          <div class="form-group full">
-            <label>Reporting Period</label>
-            <div class="custom-select">
-              <select id="perf-days">
-                <option value="7" selected>Last 7 Days</option>
-                <option value="30">Last 30 Days</option>
-                <option value="90">Last 90 Days</option>
-              </select>
+        <div class="card-body-inner">
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Reporting Period</label>
+              <div class="custom-select">
+                <select id="perf-days">
+                  <option value="7" selected>Last 7 Days</option>
+                  <option value="30">Last 30 Days</option>
+                  <option value="90">Last 90 Days</option>
+                </select>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-      <div class="card-actions">
-        <button class="btn btn-outline" onclick="gen('performance','excel','perf-days')"><i data-lucide="file-spreadsheet"></i> Excel</button>
-        <button class="btn btn-outline" onclick="gen('performance','pdf','perf-days')"><i data-lucide="file-text"></i> PDF</button>
-        <button class="btn btn-outline" onclick="gen('performance','csv','perf-days')"><i data-lucide="file"></i> CSV</button>
-        <div class="loading-wrapper" id="lw-performance">
-          <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="gen('performance','excel','perf-days')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('performance','pdf','perf-days')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-ghost" onclick="gen('performance','csv','perf-days')"><i data-lucide="file"></i> CSV</button>
+            <div class="loading-wrapper" id="lw-performance">
+              <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -462,38 +510,41 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
     <div class="report-card">
       <div class="card-accent"></div>
       <div class="card-content">
-        <div class="card-header">
-          <div class="card-icon"><i data-lucide="gauge"></i></div>
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <div class="card-icon"><i data-lucide="gauge" style="width:22px;height:22px;"></i></div>
           <h3>ATM Availability Report</h3>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label>Period</label>
-            <div class="custom-select">
-              <select id="avail-days">
-                <option value="1">Today</option>
-                <option value="7" selected>Last 7 Days</option>
-                <option value="30">Last 30 Days</option>
-                <option value="90">Last 90 Days</option>
-              </select>
+        <div class="card-body-inner">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Period</label>
+              <div class="custom-select">
+                <select id="avail-days">
+                  <option value="1">Today</option>
+                  <option value="7" selected>Last 7 Days</option>
+                  <option value="30">Last 30 Days</option>
+                  <option value="90">Last 90 Days</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Branch</label>
+              <div class="custom-select">
+                <select id="avail-atm">
+                  <option value="all" selected>All Branches</option>
+                </select>
+              </div>
             </div>
           </div>
-          <div class="form-group">
-            <label>Branch</label>
-            <div class="custom-select">
-              <select id="avail-atm">
-                <option value="all" selected>All Branches</option>
-              </select>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="gen('availability','excel','avail-days','avail-atm')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('availability','pdf','avail-days','avail-atm')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-ghost" onclick="gen('availability','csv','avail-days','avail-atm')"><i data-lucide="file"></i> CSV</button>
+            <div class="loading-wrapper" id="lw-availability">
+              <div class="loading-bar"></div><div class="loading-text">Generating...</div>
             </div>
           </div>
-        </div>
-      </div>
-      <div class="card-actions">
-        <button class="btn btn-outline" onclick="gen('availability','excel','avail-days','avail-atm')"><i data-lucide="file-spreadsheet"></i> Excel</button>
-        <button class="btn btn-outline" onclick="gen('availability','pdf','avail-days','avail-atm')"><i data-lucide="file-text"></i> PDF</button>
-        <button class="btn btn-outline" onclick="gen('availability','csv','avail-days','avail-atm')"><i data-lucide="file"></i> CSV</button>
-        <div class="loading-wrapper" id="lw-availability">
-          <div class="loading-bar"></div><div class="loading-text">Generating...</div>
         </div>
       </div>
     </div>
@@ -603,6 +654,15 @@ function gen(type, fmt, daysId, atmId) {
       lw.classList.remove('active');
       showToast('Failed to generate ' + (names[type] || type) + ' report: ' + err.message, 'error', 8000);
     });
+}
+
+// Accordion: toggle one card at a time on mobile
+function toggleAccordion(header){
+  if(window.innerWidth > 768) return;
+  var card = header.closest('.report-card');
+  var wasOpen = card.classList.contains('expanded');
+  document.querySelectorAll('.report-card.expanded').forEach(function(c){ c.classList.remove('expanded'); });
+  if(!wasOpen) card.classList.add('expanded');
 }
 
 loadKPIs();

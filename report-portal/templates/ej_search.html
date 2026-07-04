@@ -32,16 +32,62 @@ td { font-variant-numeric: tabular-nums; }
 .detail-field-value{font-size:13px;color:#0F172A;font-weight:500}
 .pagi-active{background:#012169!important;color:#fff!important;border-color:#012169!important}
 
+/* ── Accordion search filters ── */
+.search-card .card-header { cursor:pointer; user-select:none; }
+.search-card .card-header .accordion-chevron { transition:transform .25s; color:var(--text-tertiary); }
+.search-card.collapsed .search-body { display:none; }
+.search-card.collapsed .card-header .accordion-chevron { transform:rotate(-90deg); }
+
+/* ── Advanced filters toggle ── */
+.advanced-toggle { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:600; color:#64748B; cursor:pointer; padding:6px 24px; transition:.15s; user-select:none; }
+.advanced-toggle:hover { color:#012169; }
+.advanced-toggle svg { transition:transform .25s; width:14px; height:14px; }
+.advanced-toggle.open svg { transform:rotate(180deg); }
+.advanced-fields { display:none; }
+.advanced-fields.open { display:grid; gap:14px; padding:0 24px 10px; }
+
+/* ── Form spacing ── */
+.form-group { margin-bottom:2px; }
+.form-group label { margin-bottom:4px; display:block; }
+
+/* ── Mobile result cards ── */
+.ej-result-card { display:none; background:#fff; border-radius:10px; border:1px solid #EEF1F6; box-shadow:0 1px 3px rgba(1,33,105,.04); padding:14px; margin-bottom:10px; transition:.15s; }
+.ej-result-card:active { transform:scale(.98); }
+.ej-card-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.ej-card-type { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:700; color:#0F172A; }
+.ej-card-type .badge-evt { font-size:9px; }
+.ej-card-time { font-size:10px; color:#94A3B8; font-weight:500; }
+.ej-card-details { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.ej-card-field { }
+.ej-card-label { font-size:9px; font-weight:600; color:#94A3B8; text-transform:uppercase; letter-spacing:.3px; }
+.ej-card-value { font-size:12px; color:#0F172A; font-weight:500; margin-top:1px; }
+.ej-card-amount { font-size:14px; font-weight:700; color:#012169; text-align:right; }
+.ej-card-status { text-align:right; }
+.ej-card-chevron { color:#CBD5E1; width:16px; height:16px; flex-shrink:0; }
+.ej-result-card.expanded .ej-card-chevron { transform:rotate(90deg); color:#012169; }
+.ej-card-detail-wrap { display:none; margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F6; }
+.ej-result-card.expanded .ej-card-detail-wrap { display:block; }
+.ej-card-detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.ej-card-detail-field { background:#F8FAFC; border-radius:6px; padding:8px 10px; }
+.ej-card-detail-label { font-size:9px; font-weight:600; color:#94A3B8; text-transform:uppercase; letter-spacing:.3px; margin-bottom:2px; }
+.ej-card-detail-value { font-size:11px; color:#0F172A; font-weight:500; word-break:break-all; }
+.ej-card-detail-message { background:#F8FAFC; border:1px solid #E2E8F0; border-left:3px solid #FDD79A; border-radius:6px; padding:10px; font-family:monospace; font-size:10px; line-height:1.5; color:#334155; word-break:break-all; white-space:pre-wrap; margin-top:8px; grid-column:1/-1; }
+
 @media(max-width:768px){
   .search-grid{grid-template-columns:1fr 1fr !important;padding:16px !important}
-  .search-actions{padding:0 16px 16px !important;flex-wrap:wrap}
-  .search-actions .btn{flex:1;justify-content:center;padding:8px 12px;font-size:11px}
+  .advanced-fields.open { padding:0 16px 10px !important; }
+  .advanced-toggle { padding:6px 16px !important; }
+  .search-actions{padding:12px 16px !important;flex-wrap:wrap;position:sticky;bottom:0;background:#fff;border-top:1px solid #EEF1F6;z-index:10;box-shadow:0 -4px 12px rgba(0,0,0,.04)}
+  .search-actions .btn{flex:1;justify-content:center;padding:10px 12px;font-size:12px}
   .detail-grid{grid-template-columns:1fr 1fr !important}
   .skel-row{grid-template-columns:1fr 1fr 1fr !important}
-  .card-header .btn-gold{flex:1;justify-content:center;padding:7px 10px;font-size:11px;gap:4px;white-space:nowrap;min-width:0}
+  .card-header .btn-gold{flex:1;justify-content:center;padding:10px 12px;font-size:12px;gap:4px;white-space:nowrap;min-width:0}
   .card-header .btn-gold i{width:14px;height:14px;flex-shrink:0}
   div[style*="justify-content:center"][style*="gap:6px"][style*="padding:14px 24px"]{flex-wrap:wrap;gap:4px;padding:10px 14px !important}
-  div[style*="justify-content:center"][style*="gap:6px"][style*="padding:14px 24px"] .pagi-btn{padding:5px 8px !important;font-size:10px !important;min-width:28px !important}
+  div[style*="justify-content:center"][style*="gap:6px"][style*="padding:14px 24px"] .pagi-btn{padding:8px 12px !important;font-size:12px !important;min-width:36px !important;min-height:36px !important}
+  /* Hide table, show cards */
+  .ej-table-wrap { display:none; }
+  .ej-result-card { display:block; }
 }
 @media(max-width:480px){
   .search-grid{grid-template-columns:1fr !important}
@@ -49,6 +95,7 @@ td { font-variant-numeric: tabular-nums; }
   .detail-header{padding:8px 14px;font-size:11px}
   .detail-body{padding:12px 14px}
   .skel-row{grid-template-columns:1fr !important}
+  .advanced-fields.open { grid-template-columns:1fr !important; }
 }
 
 @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
@@ -77,81 +124,97 @@ td { font-variant-numeric: tabular-nums; }
 
 <form method="post" action="/ej-search" id="ejSearchForm">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-<div class="card">
-  <div class="card-header"><h2>Search Criteria</h2></div>
-  <div class="search-grid">
-
-    <div class="form-group">
-      <label>Search Keyword / Message</label>
-      <input type="text" name="keyword" placeholder="e.g. seq, error, load" value="{{ keyword }}">
-    </div>
-
-    <div class="form-group">
-      <label>Card Suffix / Number</label>
-      <input type="text" name="card" placeholder="e.g. 1234" value="{{ card }}">
-    </div>
-
-    <div class="form-group">
-      <label>ATM</label>
-      <select name="atm_id">
-        <option value="">All ATMs</option>
-        {% for a_id, a_branch in db_atms %}
-          <option value="{{ a_id }}"{% if a_id == atm_id %} selected{% endif %}>{{ a_id }}{% if a_branch %} — {{ a_branch }}{% endif %}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label>Event Type</label>
-      <select name="event_type">
-        <option value=""{% if not event_type %} selected{% endif %}>All Event Types</option>
-        <option value="TXN"{% if event_type == 'TXN' %} selected{% endif %}>TXN (Transactions)</option>
-        <option value="ERROR"{% if event_type == 'ERROR' %} selected{% endif %}>ERROR (Faults/Errors)</option>
-        <option value="CASH"{% if event_type == 'CASH' %} selected{% endif %}>CASH (Cash Ops)</option>
-        <option value="MAINT"{% if event_type == 'MAINT' %} selected{% endif %}>MAINT (Maintenance)</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label>Status</label>
-      <select name="status">
-        <option value=""{% if not status %} selected{% endif %}>All Statuses</option>
-        <option value="APPROVED"{% if status == 'APPROVED' %} selected{% endif %}>APPROVED</option>
-        <option value="DECLINED"{% if status == 'DECLINED' %} selected{% endif %}>DECLINED</option>
-        <option value="TIMEOUT"{% if status == 'TIMEOUT' %} selected{% endif %}>TIMEOUT</option>
-        <option value="ERROR"{% if status == 'ERROR' %} selected{% endif %}>ERROR</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label>Date From</label>
-      <input type="text" name="date_from" class="flatpickr-date" placeholder="YYYY-MM-DD" value="{{ date_from }}">
-    </div>
-
-    <div class="form-group">
-      <label>Date To</label>
-      <input type="text" name="date_to" class="flatpickr-date" placeholder="YYYY-MM-DD" value="{{ date_to }}">
-    </div>
-
-    <div class="form-group">
-      <label>Min Amount</label>
-      <input type="number" name="min_amount" placeholder="e.g. 100" value="{{ min_amount }}">
-    </div>
-
-    <div class="form-group">
-      <label>Max Amount</label>
-      <input type="number" name="max_amount" placeholder="e.g. 5000" value="{{ max_amount }}">
-    </div>
-
-    <div class="form-group">
-      <label>Auth Code</label>
-      <input type="text" name="auth_code" placeholder="e.g. 482910" value="{{ auth_code }}">
-    </div>
-
+<div class="card search-card{% if not searched %}{% else %} collapsed{% endif %}" id="searchCard">
+  <div class="card-header" onclick="toggleSearchCard()">
+    <h2><i data-lucide="search" style="width:14px;height:14px;margin-right:6px"></i> Search Filters</h2>
+    <i data-lucide="chevron-down" class="accordion-chevron" style="width:16px;height:16px"></i>
   </div>
-  <div class="search-actions">
-    <button type="submit" class="btn btn-primary" id="ejSearchBtn"><i data-lucide="search" style="width:14px;height:14px"></i> Search</button>
-    <a href="/ej-search" class="btn btn-outline">Clear</a>
+  <div class="search-body">
+    <div class="search-grid">
+
+      <div class="form-group">
+        <label>Keyword / Message</label>
+        <input type="text" name="keyword" placeholder="e.g. seq, error, load" value="{{ keyword }}">
+      </div>
+
+      <div class="form-group">
+        <label>ATM</label>
+        <select name="atm_id">
+          <option value="">All ATMs</option>
+          {% for a_id, a_branch in db_atms %}
+            <option value="{{ a_id }}"{% if a_id == atm_id %} selected{% endif %}>{{ a_id }}{% if a_branch %} — {{ a_branch }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Date From</label>
+        <input type="text" name="date_from" class="flatpickr-date" placeholder="YYYY-MM-DD" value="{{ date_from }}">
+      </div>
+
+      <div class="form-group">
+        <label>Date To</label>
+        <input type="text" name="date_to" class="flatpickr-date" placeholder="YYYY-MM-DD" value="{{ date_to }}">
+      </div>
+
+    </div>
+
+    <div class="advanced-toggle" id="advancedToggle" onclick="toggleAdvanced()">
+      <i data-lucide="chevron-down" style="width:14px;height:14px"></i> Advanced Filters
+    </div>
+
+    <div class="advanced-fields" id="advancedFields">
+      <div class="search-grid" style="padding:0;margin-top:10px">
+
+        <div class="form-group">
+          <label>Card Suffix / Number</label>
+          <input type="text" name="card" placeholder="e.g. 1234" value="{{ card }}">
+        </div>
+
+        <div class="form-group">
+          <label>Auth Code</label>
+          <input type="text" name="auth_code" placeholder="e.g. 482910" value="{{ auth_code }}">
+        </div>
+
+        <div class="form-group">
+          <label>Min Amount</label>
+          <input type="number" name="min_amount" placeholder="e.g. 100" value="{{ min_amount }}">
+        </div>
+
+        <div class="form-group">
+          <label>Max Amount</label>
+          <input type="number" name="max_amount" placeholder="e.g. 5000" value="{{ max_amount }}">
+        </div>
+
+        <div class="form-group">
+          <label>Event Type</label>
+          <select name="event_type">
+            <option value=""{% if not event_type %} selected{% endif %}>All Event Types</option>
+            <option value="TXN"{% if event_type == 'TXN' %} selected{% endif %}>TXN (Transactions)</option>
+            <option value="ERROR"{% if event_type == 'ERROR' %} selected{% endif %}>ERROR (Faults/Errors)</option>
+            <option value="CASH"{% if event_type == 'CASH' %} selected{% endif %}>CASH (Cash Ops)</option>
+            <option value="MAINT"{% if event_type == 'MAINT' %} selected{% endif %}>MAINT (Maintenance)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Status</label>
+          <select name="status">
+            <option value=""{% if not status %} selected{% endif %}>All Statuses</option>
+            <option value="APPROVED"{% if status == 'APPROVED' %} selected{% endif %}>APPROVED</option>
+            <option value="DECLINED"{% if status == 'DECLINED' %} selected{% endif %}>DECLINED</option>
+            <option value="TIMEOUT"{% if status == 'TIMEOUT' %} selected{% endif %}>TIMEOUT</option>
+            <option value="ERROR"{% if status == 'ERROR' %} selected{% endif %}>ERROR</option>
+          </select>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="search-actions">
+      <button type="submit" class="btn btn-primary" id="ejSearchBtn"><i data-lucide="search" style="width:14px;height:14px"></i> Search</button>
+      <a href="/ej-search" class="btn btn-outline">Clear</a>
+    </div>
   </div>
 </div>
 
@@ -201,14 +264,14 @@ td { font-variant-numeric: tabular-nums; }
   {% else %}
     <div class="card">
       <div class="card-header">
-        <h2>Results ({{ total }})</h2>
+        <h2>{{ '{:,}'.format(total) }} Results</h2>
         <a id="ejExportBtn"
            href="/ej-search/csv?card={{ card }}&date_from={{ date_from }}&date_to={{ date_to }}&atm_id={{ atm_id }}&keyword={{ keyword }}&event_type={{ event_type }}&status={{ status }}&min_amount={{ min_amount }}&max_amount={{ max_amount }}&auth_code={{ auth_code }}"
-           class="btn btn-gold">
-          <i data-lucide="download" style="width:14px;height:14px"></i> Export to CSV
+           class="btn btn-primary">
+          <i data-lucide="download" style="width:14px;height:14px"></i> Export CSV
         </a>
       </div>
-      <div style="overflow-x:auto">
+      <div class="ej-table-wrap" style="overflow-x:auto;overflow-y:clip">
         <table>
           <thead><tr>
             <th style="width:32px;padding:8px 4px;text-align:center"><input type="checkbox" id="ejSelectAll" onchange="ejToggleSelectAll()" style="cursor:pointer;width:15px;height:15px"></th>
@@ -262,6 +325,69 @@ td { font-variant-numeric: tabular-nums; }
         </table>
       </div>
 
+      {# ── MOBILE RESULT CARDS ── #}
+      <div class="ej-cards-wrap">
+        {% if results %}
+          {% for idx, r in results %}
+           <div class="ej-result-card" data-idx="{{ idx }}" onclick="ejToggleCard(this)">
+            <div class="ej-card-top">
+              <div class="ej-card-type">
+                <span class="badge-evt {{ r.event_type }}">{{ r.txn_type or r.event_type or '—' }}</span>
+              </div>
+              <div class="ej-card-amount">{% if r.amount %}ETB {{ '{:,.2f}'.format(r.amount) }}{% else %}—{% endif %}</div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="font-size:12px;color:#334155">{{ r.timestamp }}</div>
+              <span class="badge {{ r.status }}">{{ r.status or '—' }}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+              <div class="ej-card-value" style="font-size:13px">{{ r.atm_id }} · {{ r.card or '—' }}</div>
+              <i data-lucide="chevron-right" class="ej-card-chevron" style="width:16px;height:16px;color:#CBD5E1;flex-shrink:0;transition:transform .2s"></i>
+            </div>
+            <div class="ej-card-detail-wrap">
+              <div class="ej-card-detail-message">{{ r.message }}</div>
+              <div class="ej-card-detail-grid">
+                <div class="ej-card-detail-field">
+                  <div class="ej-card-detail-label">Terminal ID</div>
+                  <div class="ej-card-detail-value">{{ r.terminal_id or '—' }}</div>
+                </div>
+                <div class="ej-card-detail-field">
+                  <div class="ej-card-detail-label">Event Type</div>
+                  <div class="ej-card-detail-value">{{ r.event_type or '—' }}</div>
+                </div>
+                <div class="ej-card-detail-field">
+                  <div class="ej-card-detail-label">Sub Type</div>
+                  <div class="ej-card-detail-value">{{ r.sub_type or '—' }}</div>
+                </div>
+                <div class="ej-card-detail-field">
+                  <div class="ej-card-detail-label">Auth Code</div>
+                  <div class="ej-card-detail-value">{{ r.auth_code or '—' }}</div>
+                </div>
+                <div class="ej-card-detail-field">
+                  <div class="ej-card-detail-label">Card</div>
+                  <div class="ej-card-detail-value">{{ r.card or '—' }}</div>
+                </div>
+                <div class="ej-card-detail-field">
+                  <div class="ej-card-detail-label">Currency</div>
+                  <div class="ej-card-detail-value">{{ r.currency or '—' }}</div>
+                </div>
+                <div class="ej-card-detail-field">
+                  <div class="ej-card-detail-label">Error Code</div>
+                  <div class="ej-card-detail-value">{{ r.error_code or '—' }}</div>
+                </div>
+                <div class="ej-card-detail-field">
+                  <div class="ej-card-detail-label">Operator ID</div>
+                  <div class="ej-card-detail-value">{{ r.operator_id or '—' }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="ej-result-card" style="text-align:center;color:#94A3B8;font-size:13px;padding:24px">No results found.</div>
+        {% endif %}
+      </div>
+
       {# ── PAGINATION ── #}
       {% if total_pages > 1 %}
       <div style="display:flex;align-items:center;justify-content:center;gap:6px;padding:14px 24px;border-top:1px solid #EEF1F6">
@@ -309,6 +435,7 @@ function toggleDetails(idx) {
 var lastClickedBtn = null;
 document.getElementById('ejSearchForm').addEventListener('submit', function(e){
   e.preventDefault();
+  document.getElementById('searchCard').classList.add('collapsed');
   var form = this;
   var resultsArea = document.getElementById('ejResultsArea');
   var skeleton = document.getElementById('ejSkeleton');
@@ -408,6 +535,25 @@ function ejToggleSelectAll(){
 
 function ejUpdateSelection(){
   ejInitSelection();
+}
+
+function toggleSearchCard(){
+  var card = document.getElementById('searchCard');
+  card.classList.toggle('collapsed');
+}
+
+function toggleAdvanced(){
+  var toggle = document.getElementById('advancedToggle');
+  var fields = document.getElementById('advancedFields');
+  toggle.classList.toggle('open');
+  fields.classList.toggle('open');
+  lucide.createIcons();
+}
+
+function ejToggleCard(el){
+  el.classList.toggle('expanded');
+  var chevron = el.querySelector('.ej-card-chevron');
+  if(chevron) chevron.style.transform = el.classList.contains('expanded') ? 'rotate(90deg)' : 'rotate(0deg)';
 }
 
 function initEJComponents(){

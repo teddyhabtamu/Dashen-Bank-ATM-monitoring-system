@@ -24,18 +24,35 @@
 @media(max-width:768px){
   .card-header{gap:10px}
   .card-header > div:last-child{width:100%}
-  .card-header > div:last-child button:not(.kebab-item){flex:1;justify-content:center;padding:7px 10px;font-size:11px;gap:4px;white-space:nowrap;min-width:0}
+  .card-header > div:last-child button:not(.kebab-item){flex:1;justify-content:center;padding:10px 12px;font-size:12px;gap:4px;white-space:nowrap;min-width:0}
   .card-header > div:last-child button:not(.kebab-item) i{width:14px;height:14px;flex-shrink:0}
   .modal .form-grid{grid-template-columns:1fr !important;padding:16px !important}
   .modal .form-actions{padding:0 16px 16px !important;flex-wrap:wrap}
   .modal .form-actions .btn{flex:1;justify-content:center}
   td[style*="max-width:200px"]{max-width:120px !important}
-  td[style*="text-align:center"] .btn{padding:6px 8px !important;min-width:32px;min-height:32px}
+  td[style*="text-align:center"] .btn{padding:8px 10px !important;min-width:36px;min-height:36px;font-size:12px !important}
   td[style*="font-family:monospace"]{font-size:10px !important}
 }
 @media(max-width:480px){
   td[style*="max-width:200px"]{max-width:80px !important}
   .modal .form-grid .form-group.full{grid-column:1}
+}
+
+/* ── Mobile schedule cards ── */
+.schedules-cards-wrap { display:none; }
+.sched-card { background:#fff; border-radius:10px; border:1px solid #EEF1F6; box-shadow:0 1px 3px rgba(1,33,105,.04); padding:16px; margin-bottom:10px; }
+.sched-card-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.sched-card-name { font-size:14px; font-weight:700; color:#0F172A; }
+.sched-card-top-right { display:flex; align-items:center; gap:10px; }
+.sched-card-info { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px; }
+.sched-card-label { font-size:9px; font-weight:600; color:#94A3B8; text-transform:uppercase; letter-spacing:.3px; }
+.sched-card-value { font-size:12px; color:#0F172A; font-weight:500; margin-top:1px; }
+.sched-card-cron { font-family:monospace; font-size:10px; color:#64748B; background:#F8FAFC; padding:6px 8px; border-radius:5px; margin-bottom:10px; word-break:break-all; }
+.sched-card-actions { display:flex; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F6; }
+
+@media(max-width:768px){
+  .schedules-table-wrap { display:none; }
+  .schedules-cards-wrap { display:block; }
 }
 {% endblock %}
 {% block body %}
@@ -55,7 +72,7 @@
       <i data-lucide="plus" style="width:14px;height:14px"></i> New Schedule
     </button>
   </div>
-  <div style="overflow-x:auto">
+  <div class="schedules-table-wrap" style="overflow-x:auto;overflow-y:clip">
     <table>
       <thead>
         <tr>
@@ -86,11 +103,11 @@
             </td>
             <td style="font-size:11px;color:#64748B">{{ s[7]|string if s[7] else '—' }}</td>
             <td style="text-align:center">
-              <button class="btn btn-outline" style="padding:4px 8px;font-size:10px" onclick="editSchedule({{ s[0] }})">
-                <i data-lucide="pencil" style="width:12px;height:12px"></i>
+              <button class="btn btn-outline" style="padding:6px 10px;font-size:11px" onclick="editSchedule({{ s[0] }})" title="Edit schedule">
+                <i data-lucide="pencil" style="width:13px;height:13px"></i>
               </button>
-              <button class="btn btn-outline" style="padding:4px 8px;font-size:10px;color:#DC2626;border-color:#FECACA" onclick="deleteSchedule({{ s[0] }})">
-                <i data-lucide="trash-2" style="width:12px;height:12px"></i>
+              <button class="btn btn-outline" style="padding:6px 10px;font-size:11px;color:#DC2626;border-color:#FECACA" onclick="deleteSchedule({{ s[0] }})" title="Delete schedule">
+                <i data-lucide="trash-2" style="width:13px;height:13px"></i>
               </button>
             </td>
           </tr>
@@ -100,6 +117,47 @@
         {% endif %}
       </tbody>
     </table>
+  </div>
+
+  {# ── MOBILE SCHEDULE CARDS ── #}
+  <div class="schedules-cards-wrap">
+    {% if schedules %}
+      {% for s in schedules %}
+      <div class="sched-card">
+        <div class="sched-card-top">
+          <div class="sched-card-name">{{ s[1] }}</div>
+          <div class="sched-card-top-right">
+            <span class="badge">{{ s[3]|upper }}</span>
+            <label class="toggle-switch" style="margin-bottom:0">
+              <input type="checkbox" {% if s[6] %}checked{% endif %} onchange="toggleSchedule({{ s[0] }})">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="sched-card-info">
+          <div>
+            <div class="sched-card-label">Report</div>
+            <div class="sched-card-value">{{ s[2] }}</div>
+          </div>
+          <div>
+            <div class="sched-card-label">Last Run</div>
+            <div class="sched-card-value">{{ s[7]|string if s[7] else '—' }}</div>
+          </div>
+        </div>
+        <div class="sched-card-cron">{{ s[4] }}</div>
+        <div style="font-size:11px;color:#475569;margin-bottom:6px">
+          <span class="sched-card-label">Recipients</span>
+          <div style="margin-top:2px">{{ s[5] }}</div>
+        </div>
+        <div class="sched-card-actions">
+          <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px" onclick="editSchedule({{ s[0] }})"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
+          <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;color:#DC2626;border-color:#FECACA" onclick="deleteSchedule({{ s[0] }})"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="sched-card" style="text-align:center;color:#94A3B8;font-size:13px;padding:32px">No scheduled reports yet. Click "New Schedule" to create one.</div>
+    {% endif %}
   </div>
 </div>
 

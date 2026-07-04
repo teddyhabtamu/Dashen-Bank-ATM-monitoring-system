@@ -20,10 +20,26 @@
 @media(max-width:768px){
   .card-header{gap:10px}
   .card-header > div:last-child{width:100%}
-  .card-header > div:last-child button{flex:1;justify-content:center;padding:7px 10px;font-size:11px;gap:4px;white-space:nowrap}
+  .card-header > div:last-child button{flex:1;justify-content:center;padding:10px 12px;font-size:12px;gap:4px;white-space:nowrap}
   .form-grid{grid-template-columns:1fr !important;padding:16px !important}
   .form-actions{padding:0 16px 16px !important;flex-wrap:wrap}
   .form-actions .btn{flex:1;justify-content:center}
+  .kebab-btn{padding:8px !important;min-width:36px;min-height:36px}
+}
+
+/* ── Mobile user cards ── */
+.users-cards-wrap { display:none; }
+.user-card { background:#fff; border-radius:10px; border:1px solid #EEF1F6; box-shadow:0 1px 3px rgba(1,33,105,.04); padding:16px; margin-bottom:10px; }
+.user-card-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.user-card-name { font-size:14px; font-weight:700; color:#0F172A; }
+.user-card-info { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
+.user-card-label { font-size:9px; font-weight:600; color:#94A3B8; text-transform:uppercase; letter-spacing:.3px; }
+.user-card-value { font-size:12px; color:#0F172A; font-weight:500; margin-top:1px; }
+.user-card-actions { display:flex; gap:8px; padding-top:10px; border-top:1px solid #EEF1F6; }
+
+@media(max-width:768px){
+  .users-table-wrap { display:none; }
+  .users-cards-wrap { display:block; }
 }
 .kebab-wrap{position:relative;text-align:center}
 .kebab-btn{background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:4px;color:#94A3B8;transition:.15s;line-height:1}
@@ -56,7 +72,7 @@
     <h2>All Users ({{ users|length }})</h2>
     <button class="btn btn-primary" onclick="openCreateModal()"><i data-lucide="plus" style="width:14px;height:14px"></i> New User</button>
   </div>
-  <div style="overflow:visible">
+  <div class="users-table-wrap" style="overflow-x:auto;overflow-y:clip">
     <table>
       <thead>
         <tr>
@@ -91,6 +107,38 @@
         {% endif %}
       </tbody>
     </table>
+  </div>
+
+  {# ── MOBILE USER CARDS ── #}
+  <div class="users-cards-wrap">
+    {% if users %}
+      {% for u in users %}
+      <div class="user-card">
+        <div class="user-card-top">
+          <div class="user-card-name">{{ u[0] }}</div>
+          <span class="badge-role {{ u[1] }}">{{ u[1] }}</span>
+        </div>
+        <div class="user-card-info">
+          <div>
+            <div class="user-card-label">Created</div>
+            <div class="user-card-value">{{ u[2].strftime('%Y-%m-%d') if u[2] else '—' }}</div>
+          </div>
+          <div>
+            <div class="user-card-label">Last Login</div>
+            <div class="user-card-value">{{ u[3].strftime('%Y-%m-%d %H:%M') if u[3] else 'Never' }}</div>
+          </div>
+        </div>
+        <div class="user-card-actions">
+          <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px" onclick="openEditModal('{{ u[0] }}', '{{ u[1] }}')"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
+          {% if u[0] != 'admin' %}
+          <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;color:#DC2626;border-color:#FECACA" onclick="openDeleteModal('{{ u[0] }}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="user-card" style="text-align:center;color:#94A3B8;font-size:13px;padding:32px">No users found.</div>
+    {% endif %}
   </div>
 </div>
 

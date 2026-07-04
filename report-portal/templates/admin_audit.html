@@ -18,13 +18,28 @@
   form.search-bar select{width:100%;padding:9px 10px;font-size:13px;min-height:36px}
   form.search-bar a,form.search-bar button{flex:1;justify-content:center;padding:9px 14px;font-size:12px;min-height:36px}
   .pagination{flex-wrap:wrap;gap:6px;padding:10px 14px}
-  .pagination .btn{flex:1;justify-content:center;padding:8px 10px !important;font-size:11px !important;min-height:34px}
+  .pagination .btn{flex:1;justify-content:center;padding:8px 10px !important;font-size:11px !important;min-height:40px}
   .pagination .current{font-size:11px}
 }
 @media(max-width:480px){
   td[style*="max-width:300px"]{max-width:120px !important}
   form.search-bar input,form.search-bar select{padding:8px 8px;font-size:12px}
   .pagination .btn{padding:6px 8px !important;font-size:10px !important}
+}
+
+/* ── Mobile audit cards ── */
+.audit-cards-wrap { display:none; }
+.audit-card { background:#fff; border-radius:10px; border:1px solid #EEF1F6; box-shadow:0 1px 3px rgba(1,33,105,.04); padding:14px; margin-bottom:10px; }
+.audit-card-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.audit-card-user { font-size:13px; font-weight:700; color:#0F172A; }
+.audit-card-time { font-size:10px; color:#94A3B8; }
+.audit-card-detail { font-size:11px; color:#475569; line-height:1.5; margin-bottom:6px; word-break:break-word; }
+.audit-card-footer { display:flex; align-items:center; justify-content:space-between; padding-top:8px; border-top:1px solid #EEF1F6; }
+.audit-card-ip { font-size:10px; color:#94A3B8; font-family:monospace; }
+
+@media(max-width:768px){
+  .audit-table-wrap { display:none; }
+  .audit-cards-wrap { display:block; }
 }
 {% endblock %}
 {% block body %}
@@ -54,7 +69,7 @@
       {% endif %}
     </form>
   </div>
-  <div style="overflow-x:auto">
+  <div class="audit-table-wrap" style="overflow-x:auto;overflow-y:clip">
     <table>
       <thead>
         <tr>
@@ -82,6 +97,28 @@
       </tbody>
     </table>
   </div>
+
+  {# ── MOBILE AUDIT CARDS ── #}
+  <div class="audit-cards-wrap">
+    {% if logs %}
+      {% for row in logs %}
+      <div class="audit-card">
+        <div class="audit-card-top">
+          <div class="audit-card-user">{{ row[2] }}</div>
+          <span class="badge-action" style="background:#EEF2FF;color:#012169">{{ row[3] }}</span>
+        </div>
+        <div style="font-size:10px;color:#94A3B8;margin-bottom:6px">{{ row[1].strftime('%Y-%m-%d %H:%M') if row[1] else '—' }}</div>
+        <div class="audit-card-detail">{{ row[4] if row[4] else 'No details' }}</div>
+        <div class="audit-card-footer">
+          <span class="audit-card-ip">{{ row[5] if row[5] else '—' }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="audit-card" style="text-align:center;color:#94A3B8;font-size:13px;padding:32px">No audit log entries found.</div>
+    {% endif %}
+  </div>
+
   {% if total_pages > 1 %}
   <div class="pagination">
     {% if page > 1 %}
