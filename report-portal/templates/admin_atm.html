@@ -11,7 +11,7 @@ body { background: #F0F2F6; color: #0F172A; }
 .kebab-wrap{position:relative;text-align:center}
 .kebab-btn{background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:4px;color:#94A3B8;transition:.15s;line-height:1}
 .kebab-btn:hover{background:#F1F5F9;color:#475569}
-.kebab-menu{display:none;position:absolute;right:0;top:100%;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:4px;z-index:100;min-width:130px;border:1px solid #EEF1F6}
+.kebab-menu{display:none;position:absolute;right:0;top:100%;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:4px;z-index:100;min-width:150px;border:1px solid #EEF1F6}
 .kebab-menu.show{display:block}
 .kebab-item{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:none;width:100%;text-align:left;transition:.1s}
 .kebab-item:hover{background:#F8FAFC}
@@ -1037,23 +1037,53 @@ function uploadImport(){
 function toggleKebab(event, btn){
   event.stopPropagation();
   document.querySelectorAll('.kebab-menu.show').forEach(function(m){
-    if(m !== btn.nextElementSibling) m.classList.remove('show');
+    if(m._origParent && m._origParent === btn.parentElement) return;
+    m.classList.remove('show');
+    if(m._origParent){
+      m._origParent.appendChild(m);
+      m.style.position = '';
+      m.style.top = '';
+      m.style.left = '';
+      m.style.bottom = '';
+      delete m._origParent;
+    }
   });
   var menu = btn.nextElementSibling;
-  menu.classList.toggle('show');
   if(menu.classList.contains('show')){
-    var rect = btn.getBoundingClientRect();
-    var spaceBelow = window.innerHeight - rect.bottom;
-    menu.style.top = spaceBelow < 150 ? 'auto' : '100%';
-    menu.style.bottom = spaceBelow < 150 ? '100%' : 'auto';
-  } else {
-    menu.style.top = '';
-    menu.style.bottom = '';
+    menu.classList.remove('show');
+    if(menu._origParent){
+      menu._origParent.appendChild(menu);
+      menu.style.position = '';
+      menu.style.top = '';
+      menu.style.left = '';
+      menu.style.bottom = '';
+      delete menu._origParent;
+    }
+    return;
   }
+  menu._origParent = menu.parentElement;
+  var rect = btn.getBoundingClientRect();
+  var spaceBelow = window.innerHeight - rect.bottom;
+  document.body.appendChild(menu);
+  menu.style.position = 'fixed';
+  menu.style.top = (spaceBelow < 150 ? rect.top - menu.offsetHeight : rect.bottom) + 'px';
+  menu.style.left = Math.max(8, rect.right - 140) + 'px';
+  menu.style.bottom = 'auto';
+  menu.classList.add('show');
 }
 
 document.addEventListener('click', function(){
-  document.querySelectorAll('.kebab-menu.show').forEach(function(m){ m.classList.remove('show'); });
+  document.querySelectorAll('.kebab-menu.show').forEach(function(m){
+    m.classList.remove('show');
+    if(m._origParent){
+      m._origParent.appendChild(m);
+      m.style.position = '';
+      m.style.top = '';
+      m.style.left = '';
+      m.style.bottom = '';
+      delete m._origParent;
+    }
+  });
 });
 
 function toggleSelectAll(){

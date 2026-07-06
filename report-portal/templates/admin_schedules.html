@@ -21,16 +21,29 @@
 .cron-help{font-size:10px;color:#94A3B8;margin-top:4px;line-height:1.5}
 .cron-help code{background:#F1F5F9;padding:1px 5px;border-radius:3px;font-size:10px}
 
+/* ── Kebab menu ── */
+.kebab-wrap{position:relative;text-align:center}
+.kebab-btn{background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:4px;color:#94A3B8;transition:.15s;line-height:1}
+.kebab-btn:hover{background:#F1F5F9;color:#475569}
+.kebab-menu{display:none;position:absolute;right:0;top:100%;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:4px;z-index:100;min-width:150px;border:1px solid #EEF1F6}
+.kebab-menu.show{display:block}
+.kebab-item{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:none;width:100%;text-align:left;transition:.1s}
+.kebab-item:hover{background:#F8FAFC}
+.kebab-item.edit{color:#012169}
+.kebab-item.edit:hover{background:#EEF2FF}
+.kebab-item.delete{color:#DC2626}
+.kebab-item.delete:hover{background:#FEF2F2}
+
 @media(max-width:768px){
   .card-header{gap:10px}
   .card-header > div:last-child{width:100%}
   .card-header > div:last-child button:not(.kebab-item){flex:1;justify-content:center;padding:10px 12px;font-size:12px;gap:4px;white-space:nowrap;min-width:0}
   .card-header > div:last-child button:not(.kebab-item) i{width:14px;height:14px;flex-shrink:0}
+  .kebab-btn{padding:8px !important;min-width:36px;min-height:36px}
   .modal .form-grid{grid-template-columns:1fr !important;padding:16px !important}
   .modal .form-actions{padding:0 16px 16px !important;flex-wrap:wrap}
   .modal .form-actions .btn{flex:1;justify-content:center}
   td[style*="max-width:200px"]{max-width:120px !important}
-  td[style*="text-align:center"] .btn{padding:8px 10px !important;min-width:36px;min-height:36px;font-size:12px !important}
   td[style*="font-family:monospace"]{font-size:10px !important}
 }
 @media(max-width:480px){
@@ -72,7 +85,7 @@
       <i data-lucide="plus" style="width:14px;height:14px"></i> New Schedule
     </button>
   </div>
-  <div class="schedules-table-wrap" style="overflow-x:auto;overflow-y:clip">
+  <div class="schedules-table-wrap" style="overflow-x:auto">
     <table>
       <thead>
         <tr>
@@ -102,13 +115,12 @@
               </label>
             </td>
             <td style="font-size:11px;color:#64748B">{{ s[7]|string if s[7] else '—' }}</td>
-            <td style="text-align:center">
-              <button class="btn btn-outline" style="padding:6px 10px;font-size:11px" data-id="{{ s[0] }}" onclick="editSchedule(this.dataset.id)" title="Edit schedule">
-                <i data-lucide="pencil" style="width:13px;height:13px"></i>
-              </button>
-              <button class="btn btn-outline" style="padding:6px 10px;font-size:11px;color:#DC2626;border-color:#FECACA" data-id="{{ s[0] }}" onclick="deleteSchedule(this.dataset.id)" title="Delete schedule">
-                <i data-lucide="trash-2" style="width:13px;height:13px"></i>
-              </button>
+            <td style="text-align:center" class="kebab-wrap">
+              <button class="kebab-btn" onclick="toggleKebab(event,this)" title="Actions">&#8942;</button>
+              <div class="kebab-menu">
+                <button class="kebab-item edit" data-id="{{ s[0] }}" onclick="editSchedule(this.dataset.id)"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
+                <button class="kebab-item delete" data-id="{{ s[0] }}" onclick="deleteSchedule(this.dataset.id)"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
+              </div>
             </td>
           </tr>
           {% endfor %}
@@ -254,6 +266,60 @@
 <script>
 var currentScheduleData = {};
 var deleteTargetId = null;
+
+function toggleKebab(event, btn){
+  event.stopPropagation();
+  document.querySelectorAll('.kebab-menu.show').forEach(function(m){
+    if(m.parentElement === btn.parentElement) return;
+    m.classList.remove('show');
+    if(m._origParent){
+      m._origParent.appendChild(m);
+      m.style.position = '';
+      m.style.top = '';
+      m.style.left = '';
+      m.style.bottom = '';
+      delete m._origParent;
+    }
+  });
+  var menu = btn.nextElementSibling;
+  var already = menu.classList.contains('show');
+  if(already){
+    menu.classList.remove('show');
+    if(menu._origParent){
+      menu._origParent.appendChild(menu);
+      menu.style.position = '';
+      menu.style.top = '';
+      menu.style.left = '';
+      menu.style.bottom = '';
+      delete menu._origParent;
+    }
+    return;
+  }
+  menu._origParent = menu.parentElement;
+  var rect = btn.getBoundingClientRect();
+  var spaceBelow = window.innerHeight - rect.bottom;
+  var spaceRight = window.innerWidth - rect.right;
+  document.body.appendChild(menu);
+  menu.style.position = 'fixed';
+  menu.style.top = (spaceBelow < 150 ? rect.top - menu.offsetHeight : rect.bottom) + 'px';
+  menu.style.left = Math.max(8, rect.right - 120) + 'px';
+  menu.style.bottom = 'auto';
+  menu.classList.add('show');
+}
+
+document.addEventListener('click', function(){
+  document.querySelectorAll('.kebab-menu.show').forEach(function(m){
+    m.classList.remove('show');
+    if(m._origParent){
+      m._origParent.appendChild(m);
+      m.style.position = '';
+      m.style.top = '';
+      m.style.left = '';
+      m.style.bottom = '';
+      delete m._origParent;
+    }
+  });
+});
 
 function syncCustomSelects(){
   document.querySelectorAll('.cust-select').forEach(function(w){
