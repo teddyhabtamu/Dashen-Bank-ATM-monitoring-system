@@ -280,7 +280,7 @@ td { font-variant-numeric: tabular-nums; }
           <tbody>
             {% if results %}
               {% for idx, r in results %}
-              <tr data-idx="{{ idx }}" class="ej-row" style="cursor:pointer">
+              <tr data-idx="{{ idx }}" class="ej-row" style="cursor:pointer;--i: {{ loop.index0 }}">
                 <td style="padding:8px 4px;text-align:center" onclick="event.stopPropagation()">
                   <input type="checkbox" class="ej-row-checkbox" value="{{ idx }}" onchange="ejUpdateSelection()" style="cursor:pointer;width:15px;height:15px">
                 </td>

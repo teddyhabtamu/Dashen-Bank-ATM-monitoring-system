@@ -91,7 +91,8 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .sidebar.collapsed ~ .main-content{margin-left:60px}
 
 /* ── PAGE HEADER (shared across all pages) ── */
-.page-header{padding:28px 36px 0;display:flex;align-items:flex-start;gap:14px}
+.page-header{padding:28px 36px 0;display:flex;align-items:flex-start;gap:14px;animation:fadeSlideUp .3s ease}
+.page-content{animation:fadeIn .35s ease}
 .page-header-icon{width:40px;height:40px;border-radius:10px;background:rgba(1,33,105,.06);display:flex;align-items:center;justify-content:center;color:#012169;flex-shrink:0}
 .page-header-icon svg{width:20px;height:20px}
 .page-title{font-size:20px;font-weight:800;color:#012169;letter-spacing:-.3px;line-height:1.2}
@@ -164,7 +165,7 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .btn-gold{background:#FDD79A;color:#012169}
 .btn-gold:hover{background:#C49A00}
 /* ── SHARED CARD ── */
-.card{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(1,33,105,.04);border:1px solid #EEF1F6;margin-bottom:24px}
+.card{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(1,33,105,.04);border:1px solid #EEF1F6;margin-bottom:24px;animation:fadeSlideUp .4s ease}
 .card-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;background:#FAFBFC;border-bottom:1px solid #EEF1F6;overflow:hidden;border-radius:12px 12px 0 0}
 .card-header h2{font-size:15px;font-weight:700}
 /* ── SHARED FORM ── */
@@ -178,6 +179,7 @@ th{background:#012169;color:#fff;font-weight:600;padding:10px 12px;text-align:le
 td{padding:8px 12px;border-bottom:1px solid #EEF1F6}
 tr:nth-child(even){background:#F8FAFC}
 tr:hover{background:#EEF2FF}
+tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0.03s)}
 /* ── SHARED BADGE ── */
 .badge{padding:2px 8px;border-radius:100px;font-size:10px;font-weight:600}
 .badge.active,.badge.APPROVED{background:rgba(5,150,105,.1);color:#059669}
@@ -191,6 +193,9 @@ tr:hover{background:#EEF2FF}
   animation:alertIn .3s ease;
 }
 @keyframes alertIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeSlideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .alert-card.error{background:#FEF2F2;border:1px solid #FECACA}
 .alert-card.success{background:#ECFDF5;border:1px solid #A7F3D0}
@@ -306,6 +311,10 @@ tr:hover{background:#EEF2FF}
     <a href="/ej-search" class="nav-item {% if request.path.startswith('/ej-search') %}active{% endif %}">
       <i data-lucide="file-search"></i>
       <span>EJ Search</span>
+    </a>
+    <a href="/admin/anomalies" class="nav-item {% if request.path.startswith('/admin/anomalies') %}active{% endif %}">
+      <i data-lucide="bell"></i>
+      <span>Alert Management</span>
     </a>
     {% if session.get('role') == 'admin' %}
     <a href="/admin/schedules" class="nav-item {% if request.path.startswith('/admin/schedules') %}active{% endif %}">

@@ -83,7 +83,7 @@
       <tbody>
         {% if logs %}
           {% for row in logs %}
-          <tr>
+          <tr style="--i: {{ loop.index0 }}">
             <td style="font-size:11px;color:#64748B;white-space:nowrap">{{ row[1] if row[1] else '—' }}</td>
             <td style="font-weight:600;color:#0F172A">{{ row[2] }}</td>
             <td><span class="badge-action" style="background:#EEF2FF;color:#012169">{{ row[3] }}</span></td>

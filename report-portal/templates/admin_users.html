@@ -86,7 +86,7 @@
       <tbody>
         {% if users %}
           {% for u in users %}
-          <tr>
+          <tr style="--i: {{ loop.index0 }}">
             <td style="font-weight:600;color:#0F172A">{{ u[0] }}</td>
             <td><span class="badge-role {{ u[1] }}">{{ u[1] }}</span></td>
             <td style="font-size:11px;color:#64748B">{{ u[2] if u[2] else '—' }}</td>

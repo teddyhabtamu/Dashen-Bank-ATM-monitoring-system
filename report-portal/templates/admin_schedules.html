@@ -89,7 +89,7 @@
       <tbody>
         {% if schedules %}
           {% for s in schedules %}
-          <tr>
+          <tr style="--i: {{ loop.index0 }}">
             <td style="font-weight:600;color:#0F172A">{{ s[1] }}</td>
             <td>{{ s[2] }}</td>
             <td><span class="badge">{{ s[3]|upper }}</span></td>

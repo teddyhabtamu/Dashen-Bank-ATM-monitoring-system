@@ -164,7 +164,7 @@ body { background: #F0F2F6; color: #0F172A; }
       <tbody>
         {% if atms %}
           {% for d in atms %}
-          <tr data-atm-id="{{ d.atm_id }}">
+          <tr data-atm-id="{{ d.atm_id }}" style="--i: {{ loop.index0 }}">
             {% if session.get('role') in ('admin', 'operator') %}
             <td style="padding:8px 6px;text-align:center"><input type="checkbox" class="row-checkbox" value="{{ d.atm_id }}" onchange="updateSelection()" style="cursor:pointer;width:15px;height:15px"></td>
             {% endif %}
