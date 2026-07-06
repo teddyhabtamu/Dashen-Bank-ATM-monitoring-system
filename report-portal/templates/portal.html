@@ -242,6 +242,8 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
   .section-title { font-size: 11px; margin-bottom: 12px; }
   /* Last Updated as full-width on mobile */
   .kpi-card:last-child { grid-column:1/-1; }
+  .btn-live { width:100%; justify-content:center; margin-top:4px; margin-left:0; }
+  .page-header { flex-wrap:wrap; }
 }
 @media(max-width:480px){
   .kpi-grid { grid-template-columns: repeat(2,1fr); gap: 8px; }
@@ -270,6 +272,9 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
     <h1 class="page-title">Report Dashboard</h1>
     <p class="page-subtitle">Real-time ATM transaction overview, KPIs, and downloadable reports.</p>
   </div>
+  <a href="http://localhost:3002" target="_blank" class="btn-live btn-primary">
+    <i data-lucide="bar-chart-3"></i> Live Dashboards
+  </a>
 </div>
 
 <main class="main-container">

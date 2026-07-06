@@ -98,6 +98,9 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .hamburger:hover{background:#F8FAFC}
 .hamburger i{width:20px;height:20px}
 .live-badge{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:#059669;letter-spacing:.2px}
+.top-bar-link{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--text-secondary);text-decoration:none;margin-left:14px;transition:.2s}
+.top-bar-link:hover{color:var(--brand-blue)}
+.top-bar-link svg{width:14px;height:14px}
 .pulse-dot{width:7px;height:7px;border-radius:50%;background:#059669;animation:pulse 2s cubic-bezier(.4,0,.6,1) infinite;flex-shrink:0}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(5,150,105,.4)}50%{box-shadow:0 0 0 6px rgba(5,150,105,0)}}
 
@@ -184,6 +187,8 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .btn-outline:hover{border-color:#012169;color:#012169}
 .btn-gold{background:#FDD79A;color:#012169}
 .btn-gold:hover{background:#C49A00}
+.btn-live{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:6px;font-size:12px;font-weight:600;text-decoration:none;margin-left:auto;flex-shrink:0;white-space:nowrap}
+.btn-live svg{width:15px;height:15px}
 /* ── SHARED CARD ── */
 .card{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(1,33,105,.04);border:1px solid #EEF1F6;margin-bottom:24px;animation:fadeSlideUp .4s ease}
 .card-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;background:#FAFBFC;border-bottom:1px solid #EEF1F6;overflow:hidden;border-radius:12px 12px 0 0}
@@ -295,11 +300,14 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
       <i data-lucide="menu"></i>
     </button>
   </div>
-  <div class="top-bar-right">
-    <div class="live-badge">
-      <span class="pulse-dot"></span> System Online
+    <div class="top-bar-right">
+      <div class="live-badge">
+        <span class="pulse-dot"></span> System Online
+      </div>
+      <a href="http://localhost:3002" target="_blank" class="top-bar-link">
+        <i data-lucide="bar-chart-3"></i> Live Dashboards
+      </a>
     </div>
-  </div>
 </header>
 
 <div class="sidebar" id="sidebar">
@@ -353,7 +361,7 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
     <div class="nav-section-label" style="margin-top:8px">Quick Links</div>
     <a href="http://localhost:3002" target="_blank" class="nav-item">
       <i data-lucide="bar-chart-3"></i>
-      <span>Grafana</span>
+      <span>Live Dashboards</span>
     </a>
     <a href="http://localhost:8080" target="_blank" class="nav-item">
       <i data-lucide="server"></i>
