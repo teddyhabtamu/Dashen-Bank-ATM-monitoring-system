@@ -3,12 +3,23 @@ blueprints/admin.py
 ATM Admin registration routes.
 """
 import csv, io, re
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response, current_app
 from werkzeug.security import generate_password_hash
 from blueprints.auth import login_required, role_required, ROLE_ADMIN, ROLE_OPERATOR, ROLE_VIEWER
 from db import get_db
 from audit import log_action
+
+EAT = timezone(timedelta(hours=3))
+
+def to_eat(dt, fmt='%Y-%m-%d %H:%M'):
+    if not dt:
+        return None
+    if isinstance(dt, datetime):
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(EAT).strftime(fmt)
+    return str(dt)
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -439,6 +450,9 @@ def audit_log():
             cur.execute("SELECT DISTINCT action FROM audit_log ORDER BY action")
             actions = [r[0] for r in cur.fetchall()]
             cur.close()
+        rows = [list(r) for r in rows]
+        for r in rows:
+            r[1] = to_eat(r[1], '%Y-%m-%d %H:%M')
     except Exception as e:
         rows = []
         total = 0
@@ -462,6 +476,9 @@ def schedule_list():
             cur.execute("SELECT id, name, report_type, format, schedule, recipients, enabled, last_run FROM scheduled_reports ORDER BY id")
             rows = cur.fetchall()
             cur.close()
+        rows = [list(r) for r in rows]
+        for r in rows:
+            r[7] = to_eat(r[7], '%Y-%m-%d %H:%M')
     except Exception:
         rows = []
     return render_template('admin_schedules.html', schedules=rows)
@@ -610,6 +627,10 @@ def user_list():
                 cur.execute("SELECT username, role, created_at, last_login FROM app_users ORDER BY created_at DESC")
             users = cur.fetchall()
             cur.close()
+        users = [list(u) for u in users]
+        for u in users:
+            u[2] = to_eat(u[2], '%Y-%m-%d')
+            u[3] = to_eat(u[3], '%Y-%m-%d %H:%M')
         return render_template('admin_users.html', users=users, roles=ROLES, search=search)
     except Exception as e:
         flash(str(e), 'error')

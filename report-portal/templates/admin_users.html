@@ -89,8 +89,8 @@
           <tr>
             <td style="font-weight:600;color:#0F172A">{{ u[0] }}</td>
             <td><span class="badge-role {{ u[1] }}">{{ u[1] }}</span></td>
-            <td style="font-size:11px;color:#64748B">{{ u[2].strftime('%Y-%m-%d') if u[2] else '—' }}</td>
-            <td style="font-size:11px;color:#64748B">{{ u[3].strftime('%Y-%m-%d %H:%M') if u[3] else 'Never' }}</td>
+            <td style="font-size:11px;color:#64748B">{{ u[2] if u[2] else '—' }}</td>
+            <td style="font-size:11px;color:#64748B">{{ u[3] if u[3] else 'Never' }}</td>
             <td style="text-align:center" class="kebab-wrap">
               <button class="kebab-btn" onclick="toggleKebab(event,this)" title="Actions">&#8942;</button>
               <div class="kebab-menu">
@@ -121,11 +121,11 @@
         <div class="user-card-info">
           <div>
             <div class="user-card-label">Created</div>
-            <div class="user-card-value">{{ u[2].strftime('%Y-%m-%d') if u[2] else '—' }}</div>
+            <div class="user-card-value">{{ u[2] if u[2] else '—' }}</div>
           </div>
           <div>
             <div class="user-card-label">Last Login</div>
-            <div class="user-card-value">{{ u[3].strftime('%Y-%m-%d %H:%M') if u[3] else 'Never' }}</div>
+            <div class="user-card-value">{{ u[3] if u[3] else 'Never' }}</div>
           </div>
         </div>
         <div class="user-card-actions">

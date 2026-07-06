@@ -417,10 +417,12 @@ function toggleMobile(){
   s.classList.remove('collapsed');
   s.classList.add('open');
   document.getElementById('overlay').classList.add('show');
+  document.body.style.overflow = 'hidden';
 }
 function closeMobile(){
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('overlay').classList.remove('show');
+  document.body.style.overflow = '';
 }
 document.querySelectorAll('.sidebar-nav .nav-item').forEach(function(el){
   el.addEventListener('click', function(){
