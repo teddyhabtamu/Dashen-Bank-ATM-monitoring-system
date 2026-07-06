@@ -97,16 +97,16 @@
             <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ s[5] }}">{{ s[5] }}</td>
             <td style="text-align:center">
               <label class="toggle-switch">
-                <input type="checkbox" {% if s[6] %}checked{% endif %} onchange="toggleSchedule({{ s[0] }})">
+                <input type="checkbox" {% if s[6] %}checked{% endif %} data-id="{{ s[0] }}" onchange="toggleSchedule(this.dataset.id)">
                 <span class="toggle-slider"></span>
               </label>
             </td>
             <td style="font-size:11px;color:#64748B">{{ s[7]|string if s[7] else '—' }}</td>
             <td style="text-align:center">
-              <button class="btn btn-outline" style="padding:6px 10px;font-size:11px" onclick="editSchedule({{ s[0] }})" title="Edit schedule">
+              <button class="btn btn-outline" style="padding:6px 10px;font-size:11px" data-id="{{ s[0] }}" onclick="editSchedule(this.dataset.id)" title="Edit schedule">
                 <i data-lucide="pencil" style="width:13px;height:13px"></i>
               </button>
-              <button class="btn btn-outline" style="padding:6px 10px;font-size:11px;color:#DC2626;border-color:#FECACA" onclick="deleteSchedule({{ s[0] }})" title="Delete schedule">
+              <button class="btn btn-outline" style="padding:6px 10px;font-size:11px;color:#DC2626;border-color:#FECACA" data-id="{{ s[0] }}" onclick="deleteSchedule(this.dataset.id)" title="Delete schedule">
                 <i data-lucide="trash-2" style="width:13px;height:13px"></i>
               </button>
             </td>
@@ -129,30 +129,30 @@
           <div class="sched-card-top-right">
             <span class="badge">{{ s[3]|upper }}</span>
             <label class="toggle-switch" style="margin-bottom:0">
-              <input type="checkbox" {% if s[6] %}checked{% endif %} onchange="toggleSchedule({{ s[0] }})">
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
+            <input type="checkbox" {% if s[6] %}checked{% endif %} data-id="{{ s[0] }}" onchange="toggleSchedule(this.dataset.id)">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
-        <div class="sched-card-info">
-          <div>
-            <div class="sched-card-label">Report</div>
-            <div class="sched-card-value">{{ s[2] }}</div>
-          </div>
-          <div>
-            <div class="sched-card-label">Last Run</div>
-            <div class="sched-card-value">{{ s[7]|string if s[7] else '—' }}</div>
-          </div>
+      </div>
+      <div class="sched-card-info">
+        <div>
+          <div class="sched-card-label">Report</div>
+          <div class="sched-card-value">{{ s[2] }}</div>
         </div>
-        <div class="sched-card-cron">{{ s[4] }}</div>
-        <div style="font-size:11px;color:#475569;margin-bottom:6px">
-          <span class="sched-card-label">Recipients</span>
-          <div style="margin-top:2px">{{ s[5] }}</div>
+        <div>
+          <div class="sched-card-label">Last Run</div>
+          <div class="sched-card-value">{{ s[7]|string if s[7] else '—' }}</div>
         </div>
-        <div class="sched-card-actions">
-          <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px" onclick="editSchedule({{ s[0] }})"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
-          <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;color:#DC2626;border-color:#FECACA" onclick="deleteSchedule({{ s[0] }})"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
-        </div>
+      </div>
+      <div class="sched-card-cron">{{ s[4] }}</div>
+      <div style="font-size:11px;color:#475569;margin-bottom:6px">
+        <span class="sched-card-label">Recipients</span>
+        <div style="margin-top:2px">{{ s[5] }}</div>
+      </div>
+      <div class="sched-card-actions">
+        <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px" data-id="{{ s[0] }}" onclick="editSchedule(this.dataset.id)"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
+        <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;color:#DC2626;border-color:#FECACA" data-id="{{ s[0] }}" onclick="deleteSchedule(this.dataset.id)"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
+      </div>
       </div>
       {% endfor %}
     {% else %}

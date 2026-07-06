@@ -121,7 +121,7 @@ body { background: #F0F2F6; color: #0F172A; }
     <p class="page-subtitle">Manage ATM location data used by monitoring dashboards and reports.</p>
   </div>
 </div>
-<div class="page-content">
+<div class="page-content" data-fields='{{ fields|tojson }}'>
 
 <div class="card">
   <div class="card-header">
@@ -403,7 +403,7 @@ body { background: #F0F2F6; color: #0F172A; }
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
-var FIELDS = {{ fields|tojson }};
+var FIELDS = JSON.parse(document.querySelector('.page-content').dataset.fields);
 
 function openModal(data){
   clearErrors();
