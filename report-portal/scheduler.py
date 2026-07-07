@@ -8,7 +8,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
 from email import encoders
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from db import get_db
@@ -306,45 +306,87 @@ def _run_scheduled_report(report_id, report_type, fmt, schedule, recipients, par
         logger.error('Failed to update schedule run time: %s', e)
 
 
+# ── POLLING SCHEDULER ──
+
+_cron_trigger_cache = {}
+
+def _cron_matches(cron_expr, dt):
+    try:
+        parts = cron_expr.split()
+        if len(parts) != 5:
+            return False
+        minute, hour, day, month, weekday = parts
+        return (_cron_field(minute, dt.minute) and
+                _cron_field(hour, dt.hour) and
+                _cron_field(day, dt.day) and
+                _cron_field(month, dt.month) and
+                _cron_field(weekday, (dt.weekday() + 1) % 7))
+    except Exception:
+        return False
+
+def _cron_field(pattern, value):
+    if pattern == '*':
+        return True
+    for part in pattern.split(','):
+        if '/' in part:
+            base, step = part.split('/')
+            base = 0 if base == '*' else int(base)
+            if value >= base and (value - base) % int(step) == 0:
+                return True
+        elif '-' in part:
+            lo, hi = part.split('-')
+            if int(lo) <= value <= int(hi):
+                return True
+        else:
+            if int(part) == value:
+                return True
+    return False
+
+
 def _calc_next_run(schedule):
-    from apscheduler.triggers.cron import CronTrigger
     try:
         parts = schedule.split()
         if len(parts) == 5:
             trigger = CronTrigger.from_crontab(schedule)
-            return trigger.get_next_fire_time(None, datetime.now())
+            return trigger.get_next_fire_time(None, datetime.now(timezone.utc))
     except Exception:
         pass
     return None
 
 
-def load_schedules(scheduler):
+def _check_schedules():
     try:
+        now = datetime.now(timezone.utc)
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT id, report_type, format, schedule, recipients, params FROM scheduled_reports WHERE enabled = TRUE")
+            cur.execute(
+                "SELECT id, report_type, format, schedule, recipients, params, last_run "
+                "FROM scheduled_reports WHERE enabled = TRUE"
+            )
             rows = cur.fetchall()
             cur.close()
         for row in rows:
-            rid, report_type, fmt, cron_expr, recipients, params = row
-            rid_str = f'report_{rid}'
-            scheduler.add_job(
-                _run_scheduled_report,
-                trigger=CronTrigger.from_crontab(cron_expr),
-                args=[rid, report_type, fmt, cron_expr, recipients, params],
-                id=rid_str,
-                name=f'{report_type}/{fmt} ({rid})',
-                replace_existing=True,
-                misfire_grace_time=300,
-            )
-            logger.info('Loaded scheduled report %s: %s %s (%s)', rid, report_type, fmt, cron_expr)
+            rid, report_type, fmt, cron_expr, recipients, params, last_run = row
+            try:
+                if not _cron_matches(cron_expr, now):
+                    continue
+                if last_run and (now - last_run.replace(tzinfo=timezone.utc)).total_seconds() < 60:
+                    continue
+                _run_scheduled_report(rid, report_type, fmt, cron_expr, recipients, params)
+            except Exception as e:
+                logger.error('Error checking schedule %s: %s', rid, e)
     except Exception as e:
-        logger.error('Failed to load schedules: %s', e)
+        logger.error('Schedule poll failed: %s', e)
+
+
+def load_schedules(scheduler):
+    """Legacy — polling handles everything, no need to preload."""
+    pass
 
 
 def create_scheduler(app):
     sched = BackgroundScheduler(daemon=True)
+    sched.add_job(_check_schedules, trigger='interval', seconds=30, id='schedule_poller')
     sched.start()
-    load_schedules(sched)
-    logger.info('Report scheduler started with %d jobs', len(sched.get_jobs()))
+    logger.info('Report scheduler started (polling every 30s)')
     return sched

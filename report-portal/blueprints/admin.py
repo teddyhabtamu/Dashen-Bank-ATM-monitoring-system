@@ -521,12 +521,6 @@ def schedule_save():
     except Exception as e:
         flash(f'Database error: {e}', 'error')
 
-    # Reload schedules in scheduler
-    from scheduler import load_schedules
-    sched = current_app.config.get('SCHEDULER')
-    if sched:
-        load_schedules(sched)
-
     return redirect('/admin/schedules')
 
 
@@ -547,13 +541,6 @@ def schedule_toggle():
             cur.close()
         if row:
             log_action('SCHEDULE_TOGGLE', f'Schedule "{row[1]}" {"enabled" if row[0] else "disabled"}')
-            from scheduler import load_schedules
-            sched = current_app.config.get('SCHEDULER')
-            if sched:
-                if row[0]:
-                    load_schedules(sched)
-                else:
-                    sched.remove_job(f'report_{sid}')
             return jsonify({'success': True, 'enabled': row[0]})
         return jsonify({'error': True, 'message': 'Not found'}), 404
     except Exception as e:
