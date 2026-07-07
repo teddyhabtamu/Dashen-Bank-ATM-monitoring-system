@@ -433,7 +433,7 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
 
 <script>
 // Fix external links to use current hostname
-document.querySelectorAll('.nav-item[href*="localhost"]').forEach(function(el){
+document.querySelectorAll('[href*="localhost"]').forEach(function(el){
   el.href = el.href.replace('localhost', window.location.hostname);
 });
 
