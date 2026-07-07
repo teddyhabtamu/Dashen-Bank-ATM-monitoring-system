@@ -99,19 +99,19 @@ td .detail-preview.expanded{overflow:visible;text-overflow:clip;white-space:norm
     <h2>Anomaly Alerts ({{ total }})</h2>
     <form method="get" action="/admin/anomalies" class="search-bar" style="overflow:visible;width:100%">
       <div class="filters-wrap">
-        <select name="severity">
+        <select name="severity" onchange="this.form.submit()">
           <option value="">All Severities</option>
           {% for s in severities %}
           <option value="{{ s }}" {% if filters.severity == s %}selected{% endif %}>{{ s }}</option>
           {% endfor %}
         </select>
-        <select name="type">
+        <select name="type" onchange="this.form.submit()">
           <option value="">All Types</option>
           {% for t in anomaly_types %}
           <option value="{{ t }}" {% if filters.type == t %}selected{% endif %}>{{ anomaly_labels.get(t, t) }}</option>
           {% endfor %}
         </select>
-        <select name="atm_id" class="atm-select">
+        <select name="atm_id" class="atm-select" onchange="this.form.submit()">
           <option value="">All ATMs</option>
           {% for atm in all_atms %}
           <option value="{{ atm.id }}" {% if filters.atm_id == atm.id %}selected{% endif %}>{{ atm.id }} — {{ atm.branch }}</option>
@@ -123,8 +123,8 @@ td .detail-preview.expanded{overflow:visible;text-overflow:clip;white-space:norm
           <input type="text" name="to" placeholder="To date..." value="{{ filters.to }}" class="datepicker" readonly="readonly">
         </div>
         <button type="submit" class="btn btn-primary" style="font-size:11px">Filter</button>
-        {% if filters.severity or filters.type or filters.atm_id or filters.acknowledged or filters.from or filters.to %}
-        <a href="/admin/anomalies?acknowledged=no" class="btn btn-outline" style="font-size:11px">Clear</a>
+        {% if filters.severity or filters.type or filters.atm_id or filters.from or filters.to %}
+        <a href="/admin/anomalies" class="btn btn-outline" style="font-size:11px">Clear</a>
         {% endif %}
       </div>
     </form>
@@ -290,12 +290,32 @@ td .detail-preview.expanded{overflow:visible;text-overflow:clip;white-space:norm
   {% endif %}
 </div>
 
+<!-- ── ACKNOWLEDGE CONFIRMATION MODAL ── -->
+<div class="modal-overlay" id="ackModal">
+  <div class="modal-confirm">
+    <div class="modal-confirm-icon" style="background:var(--success-bg,#ECFDF5);color:var(--success,#059669)"><i data-lucide="check-check"></i></div>
+    <h3>Acknowledge Alert</h3>
+    <p id="ackModalMsg" style="margin:0 0 20px;line-height:1.5">Are you sure?</p>
+    <div class="modal-confirm-actions">
+      <button class="btn btn-outline" onclick="closeAckModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmAcknowledge()">Acknowledge</button>
+    </div>
+  </div>
+</div>
+
 </div>
 {% endblock %}
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
-flatpickr('.datepicker', { dateFormat: 'Y-m-d', disableMobile: true });
+var fromPicker = flatpickr('[name="from"]', {
+  dateFormat: 'Y-m-d', disableMobile: true, maxDate: 'today',
+  onChange: function(sel) { toPicker.set('minDate', sel[0] || null); }
+});
+var toPicker = flatpickr('[name="to"]', {
+  dateFormat: 'Y-m-d', disableMobile: true, maxDate: 'today',
+  onChange: function(sel) { fromPicker.set('maxDate', sel[0] || 'today'); }
+});
 
 // Searchable ATM dropdown
 (function(){
@@ -354,24 +374,6 @@ function updateSelection() {
   }
 }
 
-function acknowledge(id) {
-  fetch('/admin/anomalies/acknowledge', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({id: id})
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(d){
-    if (d.success) {
-      showToast('Anomaly #' + id + ' acknowledged.', 'success');
-      setTimeout(function(){ location.reload(); }, 800);
-    } else {
-      showToast(d.message || 'Failed to acknowledge.', 'error');
-    }
-  })
-  .catch(function(){ showToast('Network error.', 'error'); });
-}
-
 function unacknowledge(id) {
   fetch('/admin/anomalies/unacknowledge', {
     method: 'POST',
@@ -390,18 +392,41 @@ function unacknowledge(id) {
   .catch(function(){ showToast('Network error.', 'error'); });
 }
 
+// ── ACKNOWLEDGE CONFIRMATION ──
+var pendingAck = null;
+
+function acknowledge(id) {
+  pendingAck = { type: 'single', ids: [id] };
+  document.getElementById('ackModalMsg').textContent = 'Acknowledge anomaly alert #' + id + '?';
+  document.getElementById('ackModal').classList.add('show');
+}
+
 function bulkAcknowledge() {
   if (selectedIds.size === 0) return;
-  var ids = Array.from(selectedIds);
-  fetch('/admin/anomalies/bulk-acknowledge', {
+  pendingAck = { type: 'bulk', ids: Array.from(selectedIds) };
+  document.getElementById('ackModalMsg').textContent = 'Acknowledge ' + selectedIds.size + ' selected anomaly alerts?';
+  document.getElementById('ackModal').classList.add('show');
+}
+
+function closeAckModal() {
+  document.getElementById('ackModal').classList.remove('show');
+  pendingAck = null;
+}
+
+function confirmAcknowledge() {
+  if (!pendingAck) return;
+  var payload = pendingAck.type === 'bulk' ? {ids: pendingAck.ids} : {id: pendingAck.ids[0]};
+  var url = pendingAck.type === 'bulk' ? '/admin/anomalies/bulk-acknowledge' : '/admin/anomalies/acknowledge';
+  closeAckModal();
+  fetch(url, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ids: ids})
+    body: JSON.stringify(payload)
   })
   .then(function(r){ return r.json(); })
   .then(function(d){
     if (d.success) {
-      showToast(d.updated + ' anomalies acknowledged.', 'success');
+      showToast(pendingAck.type === 'bulk' ? d.updated + ' anomalies acknowledged.' : 'Anomaly #' + pendingAck.ids[0] + ' acknowledged.', 'success');
       setTimeout(function(){ location.reload(); }, 800);
     } else {
       showToast(d.message || 'Failed to acknowledge.', 'error');

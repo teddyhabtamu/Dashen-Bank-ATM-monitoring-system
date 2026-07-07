@@ -58,7 +58,7 @@
     <h2>Activity Log ({{ total }})</h2>
     <form method="get" action="/admin/audit" class="search-bar" style="overflow:visible">
       <input type="text" name="search" placeholder="Search username or detail..." value="{{ search }}">
-      <select name="action">
+      <select name="action" onchange="this.form.submit()">
         <option value="">All Actions</option>
         {% for a in actions %}
         <option value="{{ a }}" {% if action_filter == a %}selected{% endif %}>{{ a }}</option>
