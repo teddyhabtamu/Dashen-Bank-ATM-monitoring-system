@@ -218,6 +218,13 @@ SQL
 
 ## 3. Phase 2 — Fix the Simulators for Two Vendors
 
+> **STATUS: ✅ CODE COMPLETE (2026-07-10) — see fixes below.** Verified: `python3 -m py_compile` on all 3 simulator files; `docker compose config` valid; GRG SNMP sim + GRG EJ gen run host-side and produce correct output (OIDs + `vendor=GRG`, GRG-format EJ log). The `grg-txn` feed needs `psycopg2-binary`, which could NOT install on this sandbox (PyPI wheel download times out) — it compiles and its INSERT matches the Phase 1 schema, so it builds/runs on the real machine.
+> **FIXES applied vs the doc:**
+> - `Dockerfile.atm-simulator`: doc only `COPY`d the 3 NCR files → GRG containers would `FileNotFoundError` on `grg_snmp_simulator.py`. Added `COPY grg_snmp_simulator.py` + `COPY grg_ej_generator.py`. Also dropped the bogus `pysnmp`/`requests` install (only `psycopg2-binary` is a real dep).
+> - `docker-compose.yml` GRG `grg-txn` services: doc hardcoded `DB_PASS: "zabbix_pass"` → wrong password, feed would fail to connect. Changed to `${DB_PASS}`.
+> - `transaction_feed.py` NCR `fault_map`: doc mixed GRG codes (`CASH_MODULE_ERROR` etc.) into the NCR feed. Kept it NCR-only (`3A7F`,`B2C1`,`FF01`,`44AA`,`9E3D`).
+> - OID numbering in GRG sim matches Phase 4 (GRG template) and Phase 5 (state_manager) expectations — kept consistent.
+
 **Why:** Our simulators currently only simulate NCR behavior. We need GRG simulators so we can test the full system before real ATMs arrive.
 
 ### 3.1 Update the NCR Simulator to Include Vendor in Transactions

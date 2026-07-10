@@ -528,6 +528,104 @@ services:
       - ./ej-logs:/var/log/atm-ej
     restart: unless-stopped
 
+  # ─── GRG ATM SIMULATORS ───────────────────────────────
+  grg-sim-001:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: grg-sim-001
+    command: python3 grg_snmp_simulator.py
+    environment:
+      ATM_ID: "GRG-001"
+      ATM_TERMINAL_ID: "TID006"
+      ATM_BRANCH: "Bole Atlas Branch"
+      SNMP_PORT: "1166"
+    ports:
+      - "1166:1166"
+    restart: unless-stopped
+
+  grg-sim-002:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: grg-sim-002
+    command: python3 grg_snmp_simulator.py
+    environment:
+      ATM_ID: "GRG-002"
+      ATM_TERMINAL_ID: "TID007"
+      ATM_BRANCH: "Megenagna Branch"
+      SNMP_PORT: "1167"
+    ports:
+      - "1167:1167"
+    restart: unless-stopped
+
+  grg-ej-001:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: grg-ej-001
+    command: python3 grg_ej_generator.py
+    environment:
+      ATM_ID: "GRG-001"
+      ATM_TERMINAL_ID: "TID006"
+      ATM_BRANCH: "Bole Atlas Branch"
+      EJ_LOG_PATH: "/var/log/atm-ej/GRG-001.log"
+    volumes:
+      - ./ej-logs:/var/log/atm-ej
+    restart: unless-stopped
+
+  grg-ej-002:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: grg-ej-002
+    command: python3 grg_ej_generator.py
+    environment:
+      ATM_ID: "GRG-002"
+      ATM_TERMINAL_ID: "TID007"
+      ATM_BRANCH: "Megenagna Branch"
+      EJ_LOG_PATH: "/var/log/atm-ej/GRG-002.log"
+    volumes:
+      - ./ej-logs:/var/log/atm-ej
+    restart: unless-stopped
+
+  grg-txn-001:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: grg-txn-001
+    command: python3 transaction_feed.py
+    environment:
+      ATM_ID: "GRG-001"
+      ATM_TERMINAL_ID: "TID006"
+      ATM_BRANCH: "Bole Atlas Branch"
+      ATM_VENDOR: "GRG"
+      DB_HOST: "postgres"
+      DB_NAME: "zabbix"
+      DB_USER: "zabbix"
+      DB_PASS: ${DB_PASS}
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  grg-txn-002:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: grg-txn-002
+    command: python3 transaction_feed.py
+    environment:
+      ATM_ID: "GRG-002"
+      ATM_TERMINAL_ID: "TID007"
+      ATM_BRANCH: "Megenagna Branch"
+      ATM_VENDOR: "GRG"
+      DB_HOST: "postgres"
+      DB_NAME: "zabbix"
+      DB_USER: "zabbix"
+      DB_PASS: ${DB_PASS}
+    depends_on:
+      - postgres
+    restart: unless-stopped
 
 volumes:
   pgdata:

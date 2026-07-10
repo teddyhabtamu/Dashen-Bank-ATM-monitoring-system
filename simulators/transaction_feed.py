@@ -8,6 +8,7 @@ from datetime import datetime
 ATM_ID = os.environ.get('ATM_ID', 'ATM-001')
 ATM_TERMINAL_ID = os.environ.get('ATM_TERMINAL_ID', 'TID001')
 ATM_BRANCH = os.environ.get('ATM_BRANCH', 'Addis Ababa Main Branch')
+ATM_VENDOR = os.environ.get('ATM_VENDOR', 'NCR')
 DB_HOST = os.environ.get('DB_HOST', 'postgres')
 DB_NAME = os.environ.get('DB_NAME', 'zabbix')
 DB_USER = os.environ.get('DB_USER', 'zabbix')
@@ -65,15 +66,23 @@ def insert_transaction(conn):
     amount = random.choice([100,200,500,1000,2000,5000,10000]) if txn_type in ['WITHDRAWAL','TRANSFER'] else None
     auth = str(random.randint(100000,999999)) if status == 'APPROVED' else None
     err = random.choice(['3A7F','B2C1','44AA']) if status == 'ERROR' else None
+    # Normalize NCR error code -> standard fault type (Phase 1 fault_type_map)
+    NCR_FAULT_MAP = {
+        '3A7F': 'DISPENSER', 'B2C1': 'CARD_READER',
+        'FF01': 'RECEIPT_PRINTER', '44AA': 'NETWORK', '9E3D': 'DISPENSER',
+    }
+    fault_type = NCR_FAULT_MAP.get(err) if err else None
     with conn.cursor() as cur:
         cur.execute("""
             INSERT INTO atm_transactions
             (atm_id, terminal_id, branch, txn_type, card_masked,
-             amount, currency, status, auth_code, error_code, seq_number, source)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+             amount, currency, status, auth_code, error_code,
+             seq_number, source, vendor, fault_type)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (ATM_ID, ATM_TERMINAL_ID, ATM_BRANCH, txn_type, card,
               amount, 'ETB', status, auth, err,
-              str(random.randint(100000,999999)), 'SIMULATOR'))
+              str(random.randint(100000,999999)), 'SIMULATOR',
+              ATM_VENDOR, fault_type))
     conn.commit()
     return txn_type, status, amount
 
