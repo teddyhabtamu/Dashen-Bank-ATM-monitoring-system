@@ -64,6 +64,14 @@ Everything in our system must handle both. The user should never need to know wh
 
 ## 2. Phase 1 — Fix the Database Foundation
 
+> **STATUS: ✅ COMPLETE (executed 2026-07-10)**
+> - 2.1 `atm_locations`: added `snmp_community`, `snmp_version`, `ej_log_format`, `atm_name` (vendor/model already existed). All 22 existing ATMs set to NCR.
+> - 2.2 Added 2 GRG ATMs (GRG-001 Bole Atlas, GRG-002 Megenagna). **FIX:** the original GRG `INSERT` had a column-count bug (18 values for a 16-column table — duplicated `BRM9` as model and a stray `PAGRGG002`). Corrected to 16 values matching the real column order.
+> - 2.3 `fault_type_map` created + seeded (18 rows: 10 NCR + 8 GRG).
+> - 2.4 `atm_transactions`: added `vendor` + `fault_type`, created `idx_atm_txn_fault_type` / `idx_atm_txn_vendor`, backfilled `vendor` for all 96,203 rows.
+> - 2.5 `atm_current_state` created + 24 rows seeded (IN_SERVICE).
+> - Re-backed-up (`atm_custom_tables.sql`) + committed/pushed. **No manual UI steps in Phase 1.**
+
 **Why first:** Everything else — dashboards, simulators, reports — reads from the database. If the database schema is wrong, everything built on top of it is wrong.
 
 ### 2.1 Update the atm_locations Table
