@@ -18,11 +18,19 @@ docker exec zabbix-db psql -U zabbix -d zabbix \
   -c "COPY atm_transactions TO STDOUT WITH CSV HEADER" \
   > "$BACKUP_DIR/atm_transactions.csv"
 
-# Full database dump for complete restore
+# Full database dump for complete restore (ALL custom tables so a
+# fresh clone reproduces anomalies, users, audit and schedules too)
 docker exec zabbix-db pg_dump -U zabbix zabbix \
   --no-owner --no-acl \
   -t atm_locations \
   -t atm_transactions \
+  -t atm_anomalies \
+  -t atm_network_events \
+  -t atm_network_correlation \
+  -t atm_network_metrics \
+  -t app_users \
+  -t audit_log \
+  -t scheduled_reports \
   > "$BACKUP_DIR/atm_custom_tables.sql"
 
 # Full Zabbix database backup (includes hosts, items, triggers, history)
