@@ -1211,6 +1211,17 @@ docker exec zabbix-db psql -U zabbix -d zabbix \
 
 **Problem:** GRG logs use different field names than NCR. Elasticsearch receives both but Kibana search needs consistent fields.
 
+> **STATUS: 🟡 CODE-SIDE COMPLETE — MANUAL OPENSEARCH STEPS PENDING (you).**
+> The repo's `filebeat.yml` is more advanced than the doc's 6.1: it ships to **OpenSearch** via an **ingest pipeline `atm_ej_parser`** (the doc only described a Filebeat `dissect`). Three fixes committed:
+> - `filebeat.yml`: paths changed `ATM-*.log` → `*.log` so **GRG `GRG-*.log` files are actually collected** (were silently dropped). *(Note: this sandbox couldn't write the root-owned file, so it was staged via `git update-index`; the committed content is correct — verify it landed on your machine after pull.)*
+> - `report-portal/blueprints/ej_search.py`: `_parse_ej_log_line` now detects `VENDOR=GRG` and maps `ACCT_NO→card_masked`, `RESP_CODE→status`, `TXN_CODE→sub_type`, `EVENT→event_type`, `FAULT_CODE→error_code` (the GRG fallback parser was previously broken — empty card/status for GRG).
+> - `config/opensearch/atm_ej_parser.json`: **the missing ingest pipeline**, created. Parses NCR + GRG (txn + fault) via grok, defaults `vendor=NCR`, converts `amount` to float, sets `@timestamp`.
+> **Manual steps you must do (OpenSearch, on your machine):**
+> 1. Load the pipeline: `curl -X PUT "http://localhost:9200/_ingest/pipeline/atm_ej_parser" -H 'Content-Type: application/json' --data-binary @config/opensearch/atm_ej_parser.json` (or Dev Tools in OpenSearch Dashboards).
+> 2. Restart filebeat (`docker compose restart filebeat`) so GRG logs start flowing.
+> 3. Create the data view (doc 6.2): index `atm-ej-live-*` (the doc says `.ds-atm-ej-live-*` — use `atm-ej-live-*`, matching the filebeat index template).
+> 4. Verify: search a GRG card / `VENDOR=GRG` in the EJ search portal and confirm it returns results with card + status.
+
 ### 6.1 Update Filebeat to Parse Both Formats
 
 ```bash
