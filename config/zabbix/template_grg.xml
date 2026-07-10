@@ -10,7 +10,125 @@
     <templates>
         <template>
             <uuid>35e35d499df74748a0a87a21b7b4a3d0</uuid>
-            <template>Dashen Bank ATM Hardware - GRG</template>
+            <template>Dashen Bank ATM Hardware - GRG<valuemaps>
+                <valuemap>
+                    <uuid>0100dca6e120453b8e4bad07b7aef418</uuid>
+                    <name>Alert Detected</name>
+                    <mappings>
+                        <mapping>
+                            <value>0</value>
+                            <newvalue>None</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>1</value>
+                            <newvalue>Detected</newvalue>
+                        </mapping>
+                    </mappings>
+                </valuemap>
+                <valuemap>
+                    <uuid>e8888737afdb468797b8507f1472203f</uuid>
+                    <name>ATM Operational Status</name>
+                    <mappings>
+                        <mapping>
+                            <value>1</value>
+                            <newvalue>In Service</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>2</value>
+                            <newvalue>Out of Service</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>3</value>
+                            <newvalue>Partial Service</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>4</value>
+                            <newvalue>Supervisor Mode</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>5</value>
+                            <newvalue>Agent Disconnected</newvalue>
+                        </mapping>
+                    </mappings>
+                </valuemap>
+                <valuemap>
+                    <uuid>11e082d6419548fea53d3d9db66b2a10</uuid>
+                    <name>Door Status</name>
+                    <mappings>
+                        <mapping>
+                            <value>0</value>
+                            <newvalue>Closed</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>1</value>
+                            <newvalue>Open</newvalue>
+                        </mapping>
+                    </mappings>
+                </valuemap>
+                <valuemap>
+                    <uuid>dd468987e5a54cf4acb1b8957aa823a9</uuid>
+                    <name>Hardware Component Status</name>
+                    <mappings>
+                        <mapping>
+                            <value>1</value>
+                            <newvalue>OK</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>2</value>
+                            <newvalue>Error</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>3</value>
+                            <newvalue>Fault/Disabled</newvalue>
+                        </mapping>
+                    </mappings>
+                </valuemap>
+                <valuemap>
+                    <uuid>05aaa45a4bc8481a9a65b6ecb2e7f34e</uuid>
+                    <name>Printer Status</name>
+                    <mappings>
+                        <mapping>
+                            <value>1</value>
+                            <newvalue>OK</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>2</value>
+                            <newvalue>Paper Low</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>3</value>
+                            <newvalue>Paper Out</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>4</value>
+                            <newvalue>Fault</newvalue>
+                        </mapping>
+                    </mappings>
+                </valuemap>
+                <valuemap>
+                    <uuid>fc64307dd53a43b5ae5db5b2f79b8876</uuid>
+                    <name>UPS Status</name>
+                    <mappings>
+                        <mapping>
+                            <value>1</value>
+                            <newvalue>On Mains</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>2</value>
+                            <newvalue>On Battery</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>3</value>
+                            <newvalue>Battery Low</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>4</value>
+                            <newvalue>Fault</newvalue>
+                        </mapping>
+                    </mappings>
+                </valuemap>
+            </valuemaps>
+    </template>
             <name>Dashen Bank ATM Hardware - GRG</name>
             <groups>
                 <group>
