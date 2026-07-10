@@ -9,5 +9,6 @@ COPY ej_log_generator.py .
 COPY transaction_feed.py .
 COPY grg_snmp_simulator.py .
 COPY grg_ej_generator.py .
+COPY state_manager.py .
 
 CMD ["python3", "ej_log_generator.py"]

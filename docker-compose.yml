@@ -627,6 +627,23 @@ services:
       - postgres
     restart: unless-stopped
 
+  # ─── ATM STATE MANAGER (keeps atm_current_state fresh for Grafana) ──
+  state-manager:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: state-manager
+    command: python3 state_manager.py
+    environment:
+      DB_HOST: postgres
+      DB_NAME: zabbix
+      DB_USER: zabbix
+      DB_PASS: ${DB_PASS}
+      GATEWAY_IP: "172.17.0.1"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
 volumes:
   pgdata:
   grafana-data:
