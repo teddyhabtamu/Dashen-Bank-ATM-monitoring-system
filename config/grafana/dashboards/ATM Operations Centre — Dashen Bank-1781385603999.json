@@ -632,33 +632,30 @@
    },
    "id": 20,
    "title": "State Distribution",
-   "type": "barchart",
+   "type": "piechart",
    "options": {
-    "barRadius": 0,
-    "barWidth": 0.9,
-    "fullHighlight": false,
-    "groupWidth": 0.7,
     "legend": {
-     "displayMode": "list",
+     "displayMode": "table",
      "placement": "bottom",
      "showLegend": true
     },
-    "orientation": "horizontal",
-    "showValue": "auto",
-    "stacking": "none",
-    "tooltip": {
-     "mode": "single",
-     "sort": "none"
-    },
-    "xTickLabelRotation": 0,
-    "xTickLabelSpacing": 0,
+    "pieType": "donut",
     "reduceOptions": {
      "calcs": [
       "lastNotNull"
      ],
      "fields": "",
      "values": false
-    }
+    },
+    "tooltip": {
+     "mode": "single",
+     "sort": "none"
+    },
+    "displayLabels": [
+     "name",
+     "value",
+     "percent"
+    ]
    },
    "targets": [
     {
