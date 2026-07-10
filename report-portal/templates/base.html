@@ -97,12 +97,9 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .hamburger{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:none;background:transparent;color:#475569;cursor:pointer;border-radius:8px;transition:.2s}
 .hamburger:hover{background:#F8FAFC}
 .hamburger i{width:20px;height:20px}
-.live-badge{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:#059669;letter-spacing:.2px}
 .top-bar-link{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--text-secondary);text-decoration:none;margin-left:14px;transition:.2s}
 .top-bar-link:hover{color:var(--brand-blue)}
 .top-bar-link svg{width:14px;height:14px}
-.pulse-dot{width:7px;height:7px;border-radius:50%;background:#059669;animation:pulse 2s cubic-bezier(.4,0,.6,1) infinite;flex-shrink:0}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(5,150,105,.4)}50%{box-shadow:0 0 0 6px rgba(5,150,105,0)}}
 
 .sidebar-close{display:none;align-items:center;justify-content:center;width:32px;height:32px;border:none;background:rgba(255,255,255,.1);color:rgba(255,255,255,.6);cursor:pointer;border-radius:6px;flex-shrink:0;transition:.2s}
 .sidebar-close:hover{background:rgba(255,255,255,.16);color:#fff}
@@ -301,9 +298,6 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
     </button>
   </div>
     <div class="top-bar-right">
-      <div class="live-badge">
-        <span class="pulse-dot"></span> System Online
-      </div>
       <a href="http://localhost:3002" target="_blank" class="top-bar-link">
         <i data-lucide="bar-chart-3"></i> Live Dashboards
       </a>
