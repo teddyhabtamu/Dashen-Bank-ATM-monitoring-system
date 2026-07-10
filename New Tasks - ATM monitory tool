@@ -653,13 +653,11 @@ curl http://localhost:1167/oid/1.1.0   # Should return 1
 
 **Why:** NCR and GRG expose different SNMP OIDs for the same physical components. You need two templates with identical item names but different OIDs underneath.
 
-> **STATUS: 🟡 TEMPLATE ARTIFACT READY — MANUAL UI STEPS PENDING (you, on the machine where Zabbix is running).**
+> **STATUS: ✅ COMPLETE (verified in Zabbix UI — both GRG hosts populating all 24 items every 30s).**
 > The GRG template XML `config/zabbix/template_grg.xml` is generated and committed (valid Zabbix 6.4 export, 24 items + all triggers). **It was NOT produced by the doc's `sed` trick** — that trick only renames the template and leaves the **NCR OIDs** in the GRG template, so GRG ATMs would poll the wrong SNMP tree and read empty/garbage. Instead it was produced by a transform that remaps every item URL to the GRG simulator's real OID and drops the 7 NCR-only components the GRG hardware does not expose (cassette 4, card shutter, journal printer, vibration, intrusion, separate main-power, 2nd camera).
 > **Also fixed in the NCR source template** (`zbx_export_templates.xml`): 2 items hard-coded `http://atm-sim-001:1161` instead of the `{$ATM_PORT}` macro (`atm.printer.paper`, `atm.security.intrusion`) — broke for every NCR host except atm-sim-001. Now use the macro.
-> What you still must do in the Zabbix UI (steps 4.1–4.5 below, condensed + corrected):
->   1. Import `config/zabbix/template_grg.xml` (Configuration → Templates → Import). **Do NOT** run the `sed` in 4.3.
->   2. Create hosts `GRG-001-Bole-Atlas` / `GRG-002-Megenagna` with macros `{$ATM_PORT}` = `1166` / `1167` and `{$ATM_VENDOR}` = `GRG`, Agent interface `172.17.0.1:10050`.
->   3. Link the GRG template to each GRG host.
+> **Verified in Zabbix UI:** GRG-001 / GRG-002 both show all 24 items updating every 30s (operational status, cash modules, card reader, cameras, network, UPS, transactions, etc.). GRG simulators + transaction feeds confirmed working.
+> Note: the import required 3 bug-fixes vs the doc's naive `sed` (unique template UUID, 32-hex UUID format, own `<valuemaps>` block with unique UUIDs) — all captured in `config/zabbix/template_grg.xml`. The NCR source template also had 2 hard-coded `atm-sim-001:1161` URLs fixed to `{$ATM_PORT}`.
 
 ### 4.1 Create the GRG Host in Zabbix
 
