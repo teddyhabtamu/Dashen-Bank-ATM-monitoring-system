@@ -769,6 +769,9 @@ You should now see both NCR and GRG ATMs listed, all with items updating every 3
 
 **This is the most important phase for user adoption.** Users must feel at home the first time they open the new system.
 
+> **STATUS: 🟡 MANUAL UI IN PROGRESS (you, on the machine where Grafana runs).**
+> Prerequisite added & pushed: `simulators/state_manager.py` (+ compose `state-manager` service, Dockerfile COPY) keeps `atm_current_state` fresh so the state dashboards are live, not just the Phase 1 seed. Corrected in this phase: **Grafana is at `http://localhost:3002`** (doc said 3001). A PostgreSQL datasource named **`ATM-Transactions`** pointing at the `zabbix` DB is required (create it in Connections if missing).
+
 ### 5.1 Delete the Old Main Dashboard and Start Fresh
 
 The current "ATM Operations Centre" dashboard does not match the NetXMS layout users know. We will rebuild it.
