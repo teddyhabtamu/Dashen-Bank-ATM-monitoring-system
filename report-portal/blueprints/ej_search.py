@@ -34,8 +34,14 @@ def _parse_ej_log_line(src):
     parts = [p.strip() for p in msg.split('|')]
     if len(parts) < 4:
         return src
+    is_grg = any(p.upper().startswith('VENDOR=') for p in parts)
     src['atm_id'] = parts[1]
-    if parts[2].startswith('TID'):
+    if is_grg:
+        # GRG: ts | ATM | TID | VENDOR=GRG | TXN_CODE=.. (or EVENT=FAULT) | KV...
+        src['terminal_id'] = parts[2]
+        src['event_type']  = 'TXN'        # overridden below if EVENT=FAULT
+        kv_start = 3
+    elif parts[2].startswith('TID'):
         src['terminal_id'] = parts[2]
         src['event_type']  = parts[3]
         src['sub_type']    = parts[4]
@@ -51,7 +57,14 @@ def _parse_ej_log_line(src):
         key = key.strip().upper()
         val = val.strip()
         if   key == 'CARD':     src['card_masked'] = val
+        elif key == 'ACCT_NO':  src['card_masked'] = val
         elif key == 'STATUS':   src['status'] = val
+        elif key == 'RESP_CODE':src['status'] = val
+        elif key == 'TXN_CODE': src['sub_type'] = val
+        elif key == 'EVENT':    src['event_type'] = val
+        elif key == 'VENDOR':   src['vendor'] = val
+        elif key == 'FAULT_CODE': src['error_code'] = val
+        elif key == 'SEQ':      src['seq'] = val
         elif key == 'AMOUNT':
             try:    src['amount'] = float(val)
             except: pass

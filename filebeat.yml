@@ -2,7 +2,7 @@ filebeat.inputs:
   - type: log
     enabled: true
     paths:
-      - /var/log/atm-ej/ATM-*.log
+      - /var/log/atm-ej/*.log
     fields:
       log_type: atm_ej
     fields_under_root: true
