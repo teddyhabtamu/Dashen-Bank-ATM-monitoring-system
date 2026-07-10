@@ -769,13 +769,12 @@ You should now see both NCR and GRG ATMs listed, all with items updating every 3
 
 **This is the most important phase for user adoption.** Users must feel at home the first time they open the new system.
 
-> **STATUS: ✅ DASHBOARD JSON BUILT & PUSHED (you import/restart on the Grafana machine to verify).**
-> Decided to build the dashboard JSON directly (not click manually) and let Grafana provision/import it. Changes (all committed):
-> - `config/grafana/dashboards/ATM Operations Centre — Dashen Bank-*.json`: added the NetXMS state layout at the TOP — 6 state-count Stat panels (In Service / Out of Service / Agent Disconnected / In Supervisor / Hardware Faults / Out of Cash), a State-Distribution donut, and 3 status tables (Out of Service / In Supervisor / Agent Disconnected). Existing panels preserved below.
-> - `config/grafana/dashboards/Management KPI — Dashen Bank ATM Network-*.json`: added the Hardware-Fault section (Phase 4 §5.6) — a Fault-Distribution bar chart + Per-ATM Fault table, both joining `fault_type_map` so NCR+GRG faults normalize.
-> - Prerequisite `simulators/state_manager.py` keeps `atm_current_state` live (pushed earlier).
-> Fixed vs doc: **Grafana is on `http://localhost:3002`** (doc said 3001). Dashboards keep the `${DS_ATM-TRANSACTIONS}` placeholder (your manual-import workflow maps it to the `ATM-Transactions` postgres datasource). The fault panels filter `status='ERROR'`, which the txn feeds do write — verified.
-> To load: on the Grafana machine, restart the grafana container (datasources auto-provision from `config/grafana/datasources.yml`), then import each dashboard JSON (map `${DS_ATM-TRANSACTIONS}` → `ATM-Transactions`, `${DS_ZABBIX-ATM}` → `Zabbix-ATM`). Verify the state panels populate (state_manager must be running).
+> **STATUS: ✅ COMPLETE (built as JSON + data layer verified).**
+> - `config/grafana/dashboards/ATM Operations Centre — Dashen Bank-*.json`: NetXMS state layout at top — 6 state-count Stat panels, a State-Distribution donut (now queries all 7 states via a VALUES list so labels always render), and 3 status tables. Existing panels preserved.
+> - `config/grafana/dashboards/Management KPI — Dashen Bank ATM Network-*.json`: Hardware-Fault section (Phase 4 §5.6) — Fault-Distribution bar chart + Per-ATM Fault table (join `fault_type_map`, NCR+GRG aware).
+> - `simulators/state_manager.py` (+ compose `state-manager` service, Dockerfile COPY) keeps `atm_current_state` live; confirmed working (polls sims and flips states).
+> Fixed vs doc: **Grafana on `:3002`** (doc said 3001). Dashboards keep `${DS_ATM-TRANSACTIONS}`/`${DS_ZABBIX-ATM}` placeholders (manual-import maps them). Fault panels filter `status='ERROR'` (feeds write that — verified).
+> Verified: the donut query returns multiple labeled states (IN_SERVICE / OUT_OF_SERVICE / HARDWARE_FAULT / IN_SUPERVISOR + zeros) once ≥1 ATM is non-IN_SERVICE, so the donut renders slices + legend correctly. Note: with all 24 IN_SERVICE the donut is a single full circle showing total 24 by design — seed a few non-simulated ATMs (e.g. ATM-006/007/101) to see slices, or let `state-manager` drive faults.
 
 ### 5.1 Delete the Old Main Dashboard and Start Fresh
 
