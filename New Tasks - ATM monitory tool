@@ -769,8 +769,13 @@ You should now see both NCR and GRG ATMs listed, all with items updating every 3
 
 **This is the most important phase for user adoption.** Users must feel at home the first time they open the new system.
 
-> **STATUS: 🟡 MANUAL UI IN PROGRESS (you, on the machine where Grafana runs).**
-> Prerequisite added & pushed: `simulators/state_manager.py` (+ compose `state-manager` service, Dockerfile COPY) keeps `atm_current_state` fresh so the state dashboards are live, not just the Phase 1 seed. Corrected in this phase: **Grafana is at `http://localhost:3002`** (doc said 3001). A PostgreSQL datasource named **`ATM-Transactions`** pointing at the `zabbix` DB is required (create it in Connections if missing).
+> **STATUS: ✅ DASHBOARD JSON BUILT & PUSHED (you import/restart on the Grafana machine to verify).**
+> Decided to build the dashboard JSON directly (not click manually) and let Grafana provision/import it. Changes (all committed):
+> - `config/grafana/dashboards/ATM Operations Centre — Dashen Bank-*.json`: added the NetXMS state layout at the TOP — 6 state-count Stat panels (In Service / Out of Service / Agent Disconnected / In Supervisor / Hardware Faults / Out of Cash), a State-Distribution donut, and 3 status tables (Out of Service / In Supervisor / Agent Disconnected). Existing panels preserved below.
+> - `config/grafana/dashboards/Management KPI — Dashen Bank ATM Network-*.json`: added the Hardware-Fault section (Phase 4 §5.6) — a Fault-Distribution bar chart + Per-ATM Fault table, both joining `fault_type_map` so NCR+GRG faults normalize.
+> - Prerequisite `simulators/state_manager.py` keeps `atm_current_state` live (pushed earlier).
+> Fixed vs doc: **Grafana is on `http://localhost:3002`** (doc said 3001). Dashboards keep the `${DS_ATM-TRANSACTIONS}` placeholder (your manual-import workflow maps it to the `ATM-Transactions` postgres datasource). The fault panels filter `status='ERROR'`, which the txn feeds do write — verified.
+> To load: on the Grafana machine, restart the grafana container (datasources auto-provision from `config/grafana/datasources.yml`), then import each dashboard JSON (map `${DS_ATM-TRANSACTIONS}` → `ATM-Transactions`, `${DS_ZABBIX-ATM}` → `Zabbix-ATM`). Verify the state panels populate (state_manager must be running).
 
 ### 5.1 Delete the Old Main Dashboard and Start Fresh
 
