@@ -9,7 +9,7 @@
     </template_groups>
     <templates>
         <template>
-            <uuid>7aa5cd2c-c711-4bce-8174-2de4a51a753e</uuid>
+            <uuid>35e35d499df74748a0a87a21b7b4a3d0</uuid>
             <template>Dashen Bank ATM Hardware - GRG</template>
             <name>Dashen Bank ATM Hardware - GRG</name>
             <groups>
@@ -19,7 +19,7 @@
             </groups>
             <items>
                 <item>
-                    <uuid>9946b2db-45cc-4f23-8a21-b94fd463b519</uuid>
+                    <uuid>02724c028d4743b49c415e38fe47504d</uuid>
                     <name>Camera — Camera 1 Status</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.cam.cam1</key>
@@ -30,7 +30,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/9.1.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>aa866691-2d0b-4c1c-b426-6dff9c515abd</uuid>
+                            <uuid>12cc840586634047b175130a684f686e</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.cam.cam1)&lt;&gt;1</expression>
                             <name>Camera 1 Fault on {HOST.NAME}</name>
                             <priority>AVERAGE</priority>
@@ -39,7 +39,7 @@
                 </item>
                 
                 <item>
-                    <uuid>b12f8eb5-a35b-43e5-b72a-583ce1f97018</uuid>
+                    <uuid>c366860ceda747498c6e83a88e5af269</uuid>
                     <name>Camera — Storage Status</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.cam.storage</key>
@@ -50,7 +50,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/9.2.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>0da87fd2-e8ec-4a11-a669-0f4381ad541e</uuid>
+                            <uuid>5e27bfa59da54154ab69bd36dad4dc32</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.cam.storage)&lt;&gt;1</expression>
                             <name>Camera Storage Issue on {HOST.NAME}</name>
                             <priority>HIGH</priority>
@@ -58,7 +58,7 @@
                     </triggers>
                 </item>
                 <item>
-                    <uuid>4c1550d9-68d2-440b-b464-d16b897fd76a</uuid>
+                    <uuid>a58a5f6d410a45b5a69bef07b8d9387e</uuid>
                     <name>Card — Captures Today</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.card.captures</key>
@@ -67,7 +67,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/3.2.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>c73363de-1f8e-469a-a659-d3902c81bdd6</uuid>
+                            <uuid>c6066618d0974f96b097ff78cb437bd8</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.card.captures)&gt;5</expression>
                             <name>High Card Capture Count on {HOST.NAME}</name>
                             <priority>AVERAGE</priority>
@@ -76,7 +76,7 @@
                     </triggers>
                 </item>
                 <item>
-                    <uuid>3b14f03b-7389-4395-8920-80eeda64df63</uuid>
+                    <uuid>75014cad6bb34279941185f8a1f3f815</uuid>
                     <name>Card — Reader Status</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.card.reader</key>
@@ -87,7 +87,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/3.1.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>8c92c61d-e8be-4464-a8bf-4484ec8b8dd7</uuid>
+                            <uuid>7b1c857e0ca74843b4280a3cdc83757a</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.card.reader)&lt;&gt;1</expression>
                             <name>Card Reader Error on {HOST.NAME}</name>
                             <priority>HIGH</priority>
@@ -96,7 +96,7 @@
                 </item>
                 
                 <item>
-                    <uuid>271ff5ce-d995-43a7-9d4d-268d3c62196d</uuid>
+                    <uuid>74a01e6f4c7e43279489679360ae92ce</uuid>
                     <name>Cash — Cassette 1 Notes Remaining</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.cash.cassette1</key>
@@ -105,13 +105,13 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/2.1.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>2064fb88-de14-48cb-a7f9-768f3e0b22a3</uuid>
+                            <uuid>cf2dab01c1df436bb9b349b36de3fc76</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.cash.cassette1)=0</expression>
                             <name>Cash Empty — Cassette 1 on {HOST.NAME}</name>
                             <priority>DISASTER</priority>
                         </trigger>
                         <trigger>
-                            <uuid>e7ca0fe5-b304-4b11-a78e-1762981dba9f</uuid>
+                            <uuid>9248af085e5b41afaa9a4d9d7e5615e8</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.cash.cassette1)&lt;200</expression>
                             <name>Cash Low — Cassette 1 on {HOST.NAME}</name>
                             <priority>HIGH</priority>
@@ -120,7 +120,7 @@
                     </triggers>
                 </item>
                 <item>
-                    <uuid>612c6058-5221-4d17-b2f0-dfaa322ae899</uuid>
+                    <uuid>9e010a5d78e74253a1ab4690b0c7042a</uuid>
                     <name>Cash — Cassette 2 Notes Remaining</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.cash.cassette2</key>
@@ -129,13 +129,13 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/2.2.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>d95ec10b-3a96-42d8-898b-123b1919f4ac</uuid>
+                            <uuid>949b6ad29dfd4f3f92698a3d76271b9e</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.cash.cassette2)=0</expression>
                             <name>Cash Empty — Cassette 2 on {HOST.NAME}</name>
                             <priority>DISASTER</priority>
                         </trigger>
                         <trigger>
-                            <uuid>f514fa53-5c78-4ccf-baf6-189de1446c50</uuid>
+                            <uuid>97d9b758018246f68e8c04d487ab1697</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.cash.cassette2)&lt;200</expression>
                             <name>Cash Low — Cassette 2 on {HOST.NAME}</name>
                             <priority>HIGH</priority>
@@ -143,7 +143,7 @@
                     </triggers>
                 </item>
                 <item>
-                    <uuid>8b3f4715-6cdf-4398-a3e1-8f28d860c2d5</uuid>
+                    <uuid>568feecb297c476885b7074ce808bc1f</uuid>
                     <name>Cash — Cassette 3 Notes Remaining</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.cash.cassette3</key>
@@ -152,7 +152,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/2.3.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>5d2ca73b-a39e-4f0e-8320-bdab496a642e</uuid>
+                            <uuid>8d51ebbc7ce241bc9f6b0a1d510a4876</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.cash.cassette3)&lt;200</expression>
                             <name>Cash Low — Cassette 3 on {HOST.NAME}</name>
                             <priority>HIGH</priority>
@@ -161,7 +161,7 @@
                 </item>
                 
                 <item>
-                    <uuid>a7cd837b-e682-4763-9535-a4739393bf25</uuid>
+                    <uuid>7ad61e3f928849e1918a8d9a1e9c8246</uuid>
                     <name>Cash — Jam Detected</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.cash.jam</key>
@@ -172,7 +172,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/2.5.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>0c22a2ab-e797-436e-a60e-65c758dbb495</uuid>
+                            <uuid>61d5fc1109554f17b1ff84e7a33804f8</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.cash.jam)=1</expression>
                             <name>CASH JAM Detected on {HOST.NAME}</name>
                             <priority>DISASTER</priority>
@@ -181,7 +181,7 @@
                     </triggers>
                 </item>
                 <item>
-                    <uuid>4ec27895-88fc-49ed-9b01-5ab36caa9377</uuid>
+                    <uuid>406684daccf844429e99e8f12bebb63a</uuid>
                     <name>Cash — Reject Bin Fill Level</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.cash.rejectbin</key>
@@ -190,7 +190,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/2.4.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>3e58663e-18d4-419c-b209-da2e0752a2e8</uuid>
+                            <uuid>71d18c3a41914fb3a8f0c103fe77890e</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.cash.rejectbin)&gt;80</expression>
                             <name>Reject Bin Nearly Full on {HOST.NAME}</name>
                             <priority>WARNING</priority>
@@ -198,7 +198,7 @@
                     </triggers>
                 </item>
                 <item>
-                    <uuid>cdcd9d5f-2ea9-4634-888c-6fc6969e754f</uuid>
+                    <uuid>62ac7a5a1ee04554afc55c5e27246d56</uuid>
                     <name>Environment — Humidity</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.env.humidity</key>
@@ -207,7 +207,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/5.4.0</url>
                 </item>
                 <item>
-                    <uuid>fdf3f619-f0a7-41f4-b995-f4ac70c83d6f</uuid>
+                    <uuid>6c6ddcbaef0e41538dbbc79baef519fb</uuid>
                     <name>Environment — Temperature</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.env.temperature</key>
@@ -217,13 +217,13 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/5.3.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>7262043f-d67a-4ab1-aaba-265bdb0b1c62</uuid>
+                            <uuid>bfd6afb516fe43ff9b1a126c8911cb09</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.env.temperature)&gt;50</expression>
                             <name>Critical Temperature on {HOST.NAME}</name>
                             <priority>DISASTER</priority>
                         </trigger>
                         <trigger>
-                            <uuid>a857d8aa-b5c2-401e-9ffa-67aad8015411</uuid>
+                            <uuid>4b1638168d184425bfb5652ac07e0a1a</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.env.temperature)&gt;40</expression>
                             <name>High Temperature on {HOST.NAME}</name>
                             <priority>HIGH</priority>
@@ -232,7 +232,7 @@
                     </triggers>
                 </item>
                 <item>
-                    <uuid>4adb5889-973c-4233-9471-68bc6d1ce620</uuid>
+                    <uuid>4be47deecece459d9215a26d9c16e41d</uuid>
                     <name>Network — Latency</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.net.latency</key>
@@ -241,7 +241,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/8.2.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>5a3f8f2b-4f8f-40d4-8425-c0e017194207</uuid>
+                            <uuid>4ad6065c86e641d7a0a2a7f55ab9825d</uuid>
                             <expression>avg(/Dashen Bank ATM Hardware - GRG/atm.net.latency,5m)&gt;500</expression>
                             <name>High Network Latency on {HOST.NAME}</name>
                             <priority>HIGH</priority>
@@ -250,7 +250,7 @@
                     </triggers>
                 </item>
                 <item>
-                    <uuid>931f8a1c-c893-4a97-b81c-4ba829ecb842</uuid>
+                    <uuid>8030955dbdec47a9aab8e82b24ce0261</uuid>
                     <name>Network — Link Status</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.net.link</key>
@@ -261,7 +261,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/8.1.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>d0e24e6e-56a5-4407-b8a2-7703e01015ff</uuid>
+                            <uuid>8f64249677cd47bd90c91ca3dd81aaca</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.net.link)=2</expression>
                             <name>Network Link Down on {HOST.NAME}</name>
                             <priority>DISASTER</priority>
@@ -269,7 +269,7 @@
                     </triggers>
                 </item>
                 <item>
-                    <uuid>a2b366d5-d59b-4a33-a79c-18db0be93026</uuid>
+                    <uuid>7dc2505b24d94ed8b7cf9a04d02aa051</uuid>
                     <name>Network — Packet Loss</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.net.packetloss</key>
@@ -278,7 +278,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/8.3.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>97f1ccdf-760f-45d1-8bbd-0e9b0228a061</uuid>
+                            <uuid>1c2caa55e0994fb6b9c3109d58026dda</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.net.packetloss)&gt;10</expression>
                             <name>Packet Loss Detected on {HOST.NAME}</name>
                             <priority>HIGH</priority>
@@ -286,7 +286,7 @@
                     </triggers>
                 </item>
                 <item>
-                    <uuid>e49a04f8-bf83-4f1d-9598-eb043d444e46</uuid>
+                    <uuid>0952c2b82d95462598f736631230f576</uuid>
                     <name>Power — UPS Battery Level</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.power.battery</key>
@@ -295,14 +295,14 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/7.2.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>fe70b905-4709-4d86-a116-5299ccf30a95</uuid>
+                            <uuid>4065b01ba56749a7ba5eab3a7a784326</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.power.battery)&lt;5</expression>
                             <name>UPS Battery Critical on {HOST.NAME}</name>
                             <priority>DISASTER</priority>
                             <description>UPS battery near empty — ATM shutdown imminent.</description>
                         </trigger>
                         <trigger>
-                            <uuid>995c1141-81ab-4136-bb60-2a019765aeae</uuid>
+                            <uuid>14f3611dc2d44457b328c6a524b759e3</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.power.battery)&lt;20</expression>
                             <name>UPS Battery Low on {HOST.NAME}</name>
                             <priority>HIGH</priority>
@@ -311,7 +311,7 @@
                 </item>
                 
                 <item>
-                    <uuid>4fa86781-4f09-4522-85c2-275d440628f5</uuid>
+                    <uuid>1dc1db8adda84ed9abaeedc8fc448800</uuid>
                     <name>Power — UPS Status</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.power.ups</key>
@@ -322,7 +322,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/7.1.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>d3e4afad-36ee-44a4-9465-8fcbca7a0b50</uuid>
+                            <uuid>490e4a32426e496bbd814af643293510</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.power.ups)=2</expression>
                             <name>UPS on Battery on {HOST.NAME}</name>
                             <priority>WARNING</priority>
@@ -332,7 +332,7 @@
                 </item>
                 
                 <item>
-                    <uuid>a0a4a106-a44a-4fb2-aa08-51bd52a39eb8</uuid>
+                    <uuid>6b212b225b104baf9f8e9271fd6a0d79</uuid>
                     <name>Printer — Receipt Paper Level</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.printer.paper</key>
@@ -341,13 +341,13 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/4.2.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>052b7957-b45a-4c24-a1f2-8c7fa15a053b</uuid>
+                            <uuid>bef2fc0690c5461486c685dcbf034692</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.printer.paper)&lt;20</expression>
                             <name>Receipt Paper Low on {HOST.NAME}</name>
                             <priority>WARNING</priority>
                         </trigger>
                         <trigger>
-                            <uuid>a527f346-2ace-421d-b7a7-7355f0f85915</uuid>
+                            <uuid>e17d4ee9b4524fb8bf136c43ce46a401</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.printer.paper)=0</expression>
                             <name>Receipt Paper Out on {HOST.NAME}</name>
                             <priority>HIGH</priority>
@@ -355,7 +355,7 @@
                     </triggers>
                 </item>
                 <item>
-                    <uuid>6bbfdb6d-564d-4e21-bb01-833841d49496</uuid>
+                    <uuid>bae31d066f21492caf96ca5e2d51cd8a</uuid>
                     <name>Printer — Receipt Status</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.printer.receipt</key>
@@ -366,7 +366,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/4.1.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>d798379b-479f-4de4-9d5a-26823a20d68e</uuid>
+                            <uuid>a2d66b05e13c45fd83e9405ab942f9f9</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.printer.receipt)=4</expression>
                             <name>Receipt Printer Fault on {HOST.NAME}</name>
                             <priority>AVERAGE</priority>
@@ -374,7 +374,7 @@
                     </triggers>
                 </item>
                 <item>
-                    <uuid>5c3da02e-f245-42d1-bee7-756dc1dc22d6</uuid>
+                    <uuid>a04e932eb74045a9acc6b93698870492</uuid>
                     <name>Security — Cabinet Door Status</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.security.cabdoor</key>
@@ -385,7 +385,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/5.2.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>e232a428-67e0-4035-aca7-9cd7ea1c3b3c</uuid>
+                            <uuid>ef4ec211fb7a4d59bbd5610bcfb08bf8</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.security.cabdoor)=1</expression>
                             <name>Cabinet Door Open on {HOST.NAME}</name>
                             <priority>HIGH</priority>
@@ -394,7 +394,7 @@
                 </item>
                 
                 <item>
-                    <uuid>b43f07f5-b686-4e2d-a41d-cd51e5e56d88</uuid>
+                    <uuid>df3fd359e937441fac4f7f8b82e8f9dc</uuid>
                     <name>Security — Safe Door Status</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.security.safedoor</key>
@@ -405,7 +405,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/5.1.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>014fea6b-0bfa-4346-bea7-b097c0b34021</uuid>
+                            <uuid>39cc0c10e18a48d89c6e90c44ea9ccab</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.security.safedoor)=1</expression>
                             <name>SAFE DOOR OPEN on {HOST.NAME}</name>
                             <priority>DISASTER</priority>
@@ -415,7 +415,7 @@
                 </item>
                 
                 <item>
-                    <uuid>076478cf-40c0-4f5b-87dc-fe3bb04ddbf9</uuid>
+                    <uuid>54f1274d08cb4b36aa369451026dd328</uuid>
                     <name>ATM Operational Status</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.status</key>
@@ -426,20 +426,20 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/1.1.0</url>
                     <triggers>
                         <trigger>
-                            <uuid>5df73f18-a50e-4926-9ca7-95e7f0fe6ff3</uuid>
+                            <uuid>7dc378d8fe9f46bdbf240c4da958945a</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.status)=3</expression>
                             <name>ATM {HOST.NAME} in Partial Service</name>
                             <priority>HIGH</priority>
                             <description>ATM is operating with degraded functionality.</description>
                         </trigger>
                         <trigger>
-                            <uuid>c8fdd6b8-a200-464a-b0df-dcffa34059fd</uuid>
+                            <uuid>b6bcf9dc6f264cd7a8fecf96069c5f63</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.status)=4</expression>
                             <name>ATM {HOST.NAME} in Supervisor/Maintenance Mode</name>
                             <priority>WARNING</priority>
                         </trigger>
                         <trigger>
-                            <uuid>d3799fca-327d-41c0-bb1a-83c33528f1ea</uuid>
+                            <uuid>3bfaccdf89fd49d4a7e84dc146e6d844</uuid>
                             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.status)=2</expression>
                             <name>ATM {HOST.NAME} is Out of Service</name>
                             <priority>DISASTER</priority>
@@ -447,7 +447,7 @@
                     </triggers>
                 </item>
                 <item>
-                    <uuid>35d5884e-1315-4d42-8eca-25beec36f9fc</uuid>
+                    <uuid>14a5555102a84832bb4f7e665affff99</uuid>
                     <name>Transactions — Failed Today</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.txn.failed</key>
@@ -456,7 +456,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/6.2.0</url>
                 </item>
                 <item>
-                    <uuid>c034ebc0-b998-4ac1-90af-3a2384e76e63</uuid>
+                    <uuid>57f0a056ab5140e6b3bb313a22e0ced9</uuid>
                     <name>Transactions — Successful Today</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.txn.success</key>
@@ -465,7 +465,7 @@
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/6.3.0</url>
                 </item>
                 <item>
-                    <uuid>df01beee-b33c-4a8d-99a7-6b48fc5d1591</uuid>
+                    <uuid>41babd38cd684def910d01a3288520dd</uuid>
                     <name>Transactions — Total Today</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.txn.total</key>
@@ -603,7 +603,7 @@
     </templates>
     <triggers>
         <trigger>
-            <uuid>741934ad-5588-4e79-8ad9-89ab27645ed0</uuid>
+            <uuid>96fc696d1df742c39051ee7c1c5ae12b</uuid>
             <expression>last(/Dashen Bank ATM Hardware - GRG/atm.txn.failed)&gt;last(/Dashen Bank ATM Hardware - GRG/atm.txn.total)*0.2</expression>
             <name>High Transaction Failure Rate on {HOST.NAME}</name>
             <priority>HIGH</priority>
