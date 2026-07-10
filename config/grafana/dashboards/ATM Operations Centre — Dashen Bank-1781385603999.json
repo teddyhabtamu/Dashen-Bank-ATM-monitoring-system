@@ -635,14 +635,14 @@
    "type": "piechart",
    "options": {
     "legend": {
-     "displayMode": "list",
+     "displayMode": "table",
      "placement": "bottom",
      "showLegend": true
     },
     "pieType": "donut",
     "reduceOptions": {
      "calcs": [
-      "sum"
+      "lastNotNull"
      ],
      "fields": "",
      "values": false
@@ -650,7 +650,12 @@
     "tooltip": {
      "mode": "single",
      "sort": "none"
-    }
+    },
+    "displayLabels": [
+     "name",
+     "value",
+     "percent"
+    ]
    },
    "targets": [
     {
