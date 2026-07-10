@@ -661,7 +661,7 @@
      "editorMode": "code",
      "format": "table",
      "rawQuery": true,
-     "rawSql": "SELECT state AS \"State\", COUNT(*) AS \"Count\" FROM atm_current_state GROUP BY state ORDER BY COUNT(*) DESC",
+     "rawSql": "SELECT s.state AS \"State\", COALESCE(c.cnt,0) AS \"Count\"\nFROM (VALUES ('IN_SERVICE'),('OUT_OF_SERVICE'),('AGENT_DISCONNECTED'),\n             ('IN_SUPERVISOR'),('HARDWARE_FAULT'),('OUT_OF_CASH'),('OFFLINE')) s(state)\nLEFT JOIN (SELECT state, COUNT(*) AS cnt FROM atm_current_state GROUP BY state) c\n  ON c.state = s.state\nORDER BY \"Count\" DESC",
      "refId": "A",
      "sql": {
       "columns": [
