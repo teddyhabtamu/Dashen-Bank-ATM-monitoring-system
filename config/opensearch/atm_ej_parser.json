@@ -6,7 +6,7 @@
         "field": "message",
         "patterns": [
           "%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm_id} \\| %{DATA:terminal_id} \\| %{DATA:event_type} \\| %{DATA:sub_type} \\| SEQ=%{DATA:seq} \\| CARD=%{DATA:card_masked} \\| AMOUNT=%{NUMBER:amount} \\| CURRENCY=%{DATA:currency} \\| STATUS=%{DATA:status}(\\| AUTH=%{DATA:auth_code})?",
-          "%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm_id} \\| %{DATA:terminal_id} \\| VENDOR=%{DATA:vendor} \\| TXN_CODE=%{DATA:sub_type} \\| SEQ=%{DATA:seq} \\| ACCT_NO=%{DATA:card_masked} \\| AMOUNT=%{NUMBER:amount} \\| CURRENCY=%{DATA:currency} \\| RESP_CODE=%{DATA:status}(\\| AUTH=%{DATA:auth_code})?",
+          "%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm_id} \\| %{DATA:terminal_id} \\| VENDOR=%{DATA:vendor} \\| TXN_CODE=%{DATA:sub_type} \\| SEQ=%{DATA:seq} \\| ACCT_NO=%{DATA:card_masked} \\| AMOUNT=%{NUMBER:amount} \\| CURRENCY=%{DATA:currency} \\| RESP_CODE=%{DATA:status}(\\| AUTH(_CODE)?=%{DATA:auth_code})?",
           "%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm_id} \\| %{DATA:terminal_id} \\| VENDOR=%{DATA:vendor} \\| EVENT=%{DATA:event_type} \\| FAULT_CODE=%{DATA:error_code} \\| FAULT_DESC=%{DATA:fault_desc}"
         ],
         "ignore_failure": true
