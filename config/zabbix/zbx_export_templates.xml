@@ -136,7 +136,7 @@
                     <name>Cash — Cassette 1 Notes Remaining</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.cash.cassette1</key>
-                    <delay>30s</delay>
+                    <delay>10s</delay>
                     <units>notes</units>
                     <url>http://172.17.0.1:{$ATM_PORT}/oid/1.2.0</url>
                     <triggers>
@@ -306,7 +306,7 @@
                     <name>Network — Link Status</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.net.link</key>
-                    <delay>30s</delay>
+                    <delay>10s</delay>
                     <valuemap>
                         <name>Hardware Component Status</name>
                     </valuemap>
@@ -466,7 +466,7 @@
                     <name>Security — Cabinet Door Status</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.security.cabdoor</key>
-                    <delay>30s</delay>
+                    <delay>10s</delay>
                     <valuemap>
                         <name>Door Status</name>
                     </valuemap>
@@ -505,7 +505,7 @@
                     <name>Security — Safe Door Status</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.security.safedoor</key>
-                    <delay>30s</delay>
+                    <delay>10s</delay>
                     <valuemap>
                         <name>Door Status</name>
                     </valuemap>
@@ -545,7 +545,7 @@
                     <name>ATM Operational Status</name>
                     <type>HTTP_AGENT</type>
                     <key>atm.status</key>
-                    <delay>30s</delay>
+                    <delay>10s</delay>
                     <valuemap>
                         <name>ATM Operational Status</name>
                     </valuemap>

@@ -754,7 +754,7 @@
      "editorMode": "code",
      "format": "table",
      "rawQuery": true,
-     "rawSql": "SELECT l.atm_name AS \"Name\", l.branch AS \"Alias\", l.atm_id AS \"Terminal ID\", s.state_changed_at AS \"Since\", EXTRACT(EPOCH FROM (NOW()-s.state_changed_at))/60 AS \"Minutes Down\" FROM atm_current_state s JOIN atm_locations l ON s.atm_id=l.atm_id WHERE s.state='OUT_OF_SERVICE' ORDER BY s.state_changed_at ASC",
+     "rawSql": "SELECT l.atm_name as \"Name\", l.branch as \"Branch\", s.state as \"State\", TO_CHAR(s.state_changed_at AT TIME ZONE 'Africa/Addis_Ababa', 'HH24:MI:SS') as \"Since\", CASE WHEN EXTRACT(EPOCH FROM (NOW() - s.state_changed_at)) < 3600 THEN EXTRACT(EPOCH FROM (NOW() - s.state_changed_at))/60 || ' min' ELSE ROUND(EXTRACT(EPOCH FROM (NOW() - s.state_changed_at))/3600, 1) || ' hrs' END as \"Duration\" FROM atm_current_state s JOIN atm_locations l ON s.atm_id = l.atm_id WHERE s.state = 'OUT_OF_SERVICE' ORDER BY s.state_changed_at ASC",
      "refId": "A",
      "sql": {
       "columns": [
@@ -2059,7 +2059,7 @@
    "type": "bargauge"
   }
  ],
- "refresh": "",
+ "refresh": "10s",
  "schemaVersion": 39,
  "tags": [
   "operations",
