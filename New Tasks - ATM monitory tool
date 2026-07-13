@@ -1694,9 +1694,10 @@ ORDER BY s.state_changed_at ASC
 
 ## 9. Phase 8 — GLPI Improvements
 
-> **STATUS: ✅ CODE COMPLETE (9.1) — MANUAL RE-IMPORT STEPS PENDING (you).** 9.2 is GLPI-UI-only.
-> **9.1 changes committed:** `zbx_export_mediatypes.xml` (GLPI Ticket media type) — added a `vendor` parameter (`{$ATM_VENDOR}`) + updated the webhook script so ticket content now shows `Vendor`, `Severity`, and `Time`. Also added the `{$ATM_VENDOR}` macro to **both** templates (`NCR` on `zbx_export_templates.xml`, `GRG` on `template_grg.xml`) so the parameter resolves per host (it did not previously exist).
-> **Manual steps (on your machine):** re-import both Zabbix templates (*Update existing*) and re-import/overwrite the **GLPI Ticket** media type from `config/zabbix/zbx_export_mediatypes.xml` (Administration → Media types → Import), so the new macro + vendor parameter/script take effect. Then do 9.2 in GLPI UI.
+> **STATUS: ✅ COMPLETE — VERIFIED (2026-07-13).** Both code + manual steps done and confirmed in production-like run.
+> **9.1 (code):** `zbx_export_mediatypes.xml` (GLPI Ticket media type) gained a `vendor` parameter (`{$ATM_VENDOR}`) in both the Parameters and the message template, and the webhook script now writes `Vendor`, `Severity`, and `Time` into the ticket body. The `{$ATM_VENDOR}` macro was added to **both** templates (`NCR` on `zbx_export_templates.xml`, `GRG` on `template_grg.xml`) so the param resolves per host (it did not exist before).
+> **9.2 (GLPI UI):** created ITIL categories `NCR ATM Hardware` / `GRG ATM Hardware` (nested under `ATM Hardware Fault`) and two **Business Rules for Tickets** matching **Content contains `NCR`/`GRG`** → assign the matching vendor category.
+> **Verification:** live auto-tickets confirmed — `#980` (ATM-001/NCR) → `ATM Hardware Fault > NCR ATM Hardware`; `#979` (GRG-001/GRG) → `ATM Hardware Fault > GRG ATM Hardware`. Vendor line present in ticket body.
 
 ### 9.1 Add Vendor to Auto-Created Tickets
 
