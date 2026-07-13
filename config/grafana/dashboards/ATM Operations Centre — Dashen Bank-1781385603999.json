@@ -1,2085 +1,2105 @@
 {
- "__inputs": [
-  {
-   "name": "DS_ATM-TRANSACTIONS",
-   "label": "ATM-Transactions",
-   "description": "",
-   "type": "datasource",
-   "pluginId": "grafana-postgresql-datasource",
-   "pluginName": "PostgreSQL"
-  },
-  {
-   "name": "DS_ZABBIX-ATM",
-   "label": "Zabbix-ATM",
-   "description": "",
-   "type": "datasource",
-   "pluginId": "alexanderzobnin-zabbix-datasource",
-   "pluginName": "Zabbix"
-  }
- ],
- "__elements": {},
- "__requires": [
-  {
-   "type": "datasource",
-   "id": "alexanderzobnin-zabbix-datasource",
-   "name": "Zabbix",
-   "version": "1.0.0"
-  },
-  {
-   "type": "panel",
-   "id": "alexanderzobnin-zabbix-triggers-panel",
-   "name": "Zabbix Problems",
-   "version": ""
-  },
-  {
-   "type": "panel",
-   "id": "barchart",
-   "name": "Bar chart",
-   "version": ""
-  },
-  {
-   "type": "panel",
-   "id": "bargauge",
-   "name": "Bar gauge",
-   "version": ""
-  },
-  {
-   "type": "panel",
-   "id": "geomap",
-   "name": "Geomap",
-   "version": ""
-  },
-  {
-   "type": "grafana",
-   "id": "grafana",
-   "name": "Grafana",
-   "version": "10.2.6"
-  },
-  {
-   "type": "datasource",
-   "id": "grafana-postgresql-datasource",
-   "name": "PostgreSQL",
-   "version": "1.0.0"
-  },
-  {
-   "type": "panel",
-   "id": "stat",
-   "name": "Stat",
-   "version": ""
-  },
-  {
-   "type": "panel",
-   "id": "table",
-   "name": "Table",
-   "version": ""
-  },
-  {
-   "type": "panel",
-   "id": "timeseries",
-   "name": "Time series",
-   "version": ""
-  }
- ],
- "annotations": {
-  "list": [
-   {
-    "builtIn": 1,
-    "datasource": {
-     "type": "grafana",
-     "uid": "-- Grafana --"
-    },
-    "enable": true,
-    "hide": true,
-    "iconColor": "rgba(0, 211, 255, 1)",
-    "name": "Annotations & Alerts",
-    "type": "dashboard"
-   }
-  ]
- },
- "editable": true,
- "fiscalYearStartMonth": 0,
- "graphTooltip": 0,
- "id": null,
- "links": [],
- "liveNow": false,
- "panels": [
-  {
-   "collapsed": false,
-   "gridPos": {
-    "h": 1,
-    "w": 24,
-    "x": 0,
-    "y": 0
-   },
-   "id": 12,
-   "title": "ATM State Overview (NetXMS layout)",
-   "type": "row",
-   "panels": []
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "#1F9E3B",
-        "value": null
-       }
-      ]
-     }
-    },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 4,
-    "w": 4,
-    "x": 0,
-    "y": 1
-   },
-   "id": 13,
-   "title": "In Service",
-   "type": "stat",
-   "options": {
-    "colorMode": "value",
-    "graphMode": "area",
-    "justifyMode": "auto",
-    "orientation": "auto",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "fields": "",
-     "values": false
-    },
-    "textMode": "auto",
-    "wideLayout": true
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
+  "__inputs": [
     {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_current_state WHERE state='IN_SERVICE'",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ]
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "#C0392B",
-        "value": null
-       }
-      ]
-     }
+      "name": "DS_ATM-TRANSACTIONS",
+      "label": "ATM-Transactions",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "grafana-postgresql-datasource",
+      "pluginName": "PostgreSQL"
     },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 4,
-    "w": 4,
-    "x": 4,
-    "y": 1
-   },
-   "id": 14,
-   "title": "Out of Service",
-   "type": "stat",
-   "options": {
-    "colorMode": "value",
-    "graphMode": "area",
-    "justifyMode": "auto",
-    "orientation": "auto",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "fields": "",
-     "values": false
-    },
-    "textMode": "auto",
-    "wideLayout": true
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
     {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_current_state WHERE state='OUT_OF_SERVICE'",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
+      "name": "DS_ZABBIX-ATM",
+      "label": "Zabbix-ATM",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "alexanderzobnin-zabbix-datasource",
+      "pluginName": "Zabbix"
     }
-   ]
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "#E67E22",
-        "value": null
-       }
-      ]
-     }
-    },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 4,
-    "w": 4,
-    "x": 8,
-    "y": 1
-   },
-   "id": 15,
-   "title": "Agent Disconnected",
-   "type": "stat",
-   "options": {
-    "colorMode": "value",
-    "graphMode": "area",
-    "justifyMode": "auto",
-    "orientation": "auto",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "fields": "",
-     "values": false
-    },
-    "textMode": "auto",
-    "wideLayout": true
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
+  ],
+  "__elements": {},
+  "__requires": [
     {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_current_state WHERE state='AGENT_DISCONNECTED'",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ]
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "#F39C12",
-        "value": null
-       }
-      ]
-     }
+      "type": "datasource",
+      "id": "alexanderzobnin-zabbix-datasource",
+      "name": "Zabbix",
+      "version": "1.0.0"
     },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 4,
-    "w": 4,
-    "x": 12,
-    "y": 1
-   },
-   "id": 16,
-   "title": "In Supervisor",
-   "type": "stat",
-   "options": {
-    "colorMode": "value",
-    "graphMode": "area",
-    "justifyMode": "auto",
-    "orientation": "auto",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "fields": "",
-     "values": false
-    },
-    "textMode": "auto",
-    "wideLayout": true
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
     {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_current_state WHERE state='IN_SUPERVISOR'",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ]
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "#E67E22",
-        "value": null
-       }
-      ]
-     }
+      "type": "panel",
+      "id": "alexanderzobnin-zabbix-triggers-panel",
+      "name": "Zabbix Problems",
+      "version": ""
     },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 4,
-    "w": 4,
-    "x": 16,
-    "y": 1
-   },
-   "id": 17,
-   "title": "Hardware Faults",
-   "type": "stat",
-   "options": {
-    "colorMode": "value",
-    "graphMode": "area",
-    "justifyMode": "auto",
-    "orientation": "auto",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "fields": "",
-     "values": false
-    },
-    "textMode": "auto",
-    "wideLayout": true
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
     {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_current_state WHERE state='HARDWARE_FAULT'",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ]
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "#8E44AD",
-        "value": null
-       }
-      ]
-     }
+      "type": "panel",
+      "id": "barchart",
+      "name": "Bar chart",
+      "version": ""
     },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 4,
-    "w": 4,
-    "x": 20,
-    "y": 1
-   },
-   "id": 18,
-   "title": "Out of Cash",
-   "type": "stat",
-   "options": {
-    "colorMode": "value",
-    "graphMode": "area",
-    "justifyMode": "auto",
-    "orientation": "auto",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "fields": "",
-     "values": false
-    },
-    "textMode": "auto",
-    "wideLayout": true
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
     {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_current_state WHERE state='OUT_OF_CASH'",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ]
-  },
-  {
-   "collapsed": false,
-   "gridPos": {
-    "h": 1,
-    "w": 24,
-    "x": 0,
-    "y": 5
-   },
-   "id": 19,
-   "title": "State Distribution & Exceptions",
-   "type": "row",
-   "panels": []
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "palette-classic"
-     },
-     "custom": {
-      "hideFrom": {
-       "legend": false,
-       "tooltip": false,
-       "viz": false
-      }
-     },
-     "mappings": []
+      "type": "panel",
+      "id": "bargauge",
+      "name": "Bar gauge",
+      "version": ""
     },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 9,
-    "w": 8,
-    "x": 0,
-    "y": 6
-   },
-   "id": 20,
-   "title": "State Distribution",
-   "type": "piechart",
-   "options": {
-    "legend": {
-     "displayMode": "table",
-     "placement": "bottom",
-     "showLegend": true
-    },
-    "pieType": "donut",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "fields": "",
-     "values": false
-    },
-    "tooltip": {
-     "mode": "single",
-     "sort": "none"
-    },
-    "displayLabels": [
-     "name",
-     "value",
-     "percent"
-    ]
-   },
-   "targets": [
     {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "SELECT s.state AS \"State\", COALESCE(c.cnt,0) AS \"Count\"\nFROM (VALUES ('IN_SERVICE'),('OUT_OF_SERVICE'),('AGENT_DISCONNECTED'),\n             ('IN_SUPERVISOR'),('HARDWARE_FAULT'),('OUT_OF_CASH'),('OFFLINE')) s(state)\nLEFT JOIN (SELECT state, COUNT(*) AS cnt FROM atm_current_state GROUP BY state) c\n  ON c.state = s.state\nORDER BY \"Count\" DESC",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ]
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "custom": {
-      "align": "auto",
-      "cellOptions": {
-       "type": "auto"
-      },
-      "filterable": true,
-      "inspect": false
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "green"
-       },
-       {
-        "color": "red",
-        "value": 80
-       }
-      ]
-     }
+      "type": "panel",
+      "id": "geomap",
+      "name": "Geomap",
+      "version": ""
     },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 9,
-    "w": 5,
-    "x": 8,
-    "y": 6
-   },
-   "id": 21,
-   "title": "Out of Service",
-   "type": "table",
-   "options": {
-    "cellHeight": "sm",
-    "footer": {
-     "countRows": false,
-     "fields": "",
-     "reducer": [
-      "sum"
-     ],
-     "show": false
-    },
-    "showHeader": true,
-    "sortBy": []
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
     {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "SELECT l.atm_name as \"Name\", l.branch as \"Branch\", s.state as \"State\", TO_CHAR(s.state_changed_at AT TIME ZONE 'Africa/Addis_Ababa', 'HH24:MI:SS') as \"Since\", CASE WHEN EXTRACT(EPOCH FROM (NOW() - s.state_changed_at)) < 3600 THEN EXTRACT(EPOCH FROM (NOW() - s.state_changed_at))/60 || ' min' ELSE ROUND(EXTRACT(EPOCH FROM (NOW() - s.state_changed_at))/3600, 1) || ' hrs' END as \"Duration\" FROM atm_current_state s JOIN atm_locations l ON s.atm_id = l.atm_id WHERE s.state = 'OUT_OF_SERVICE' ORDER BY s.state_changed_at ASC",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ]
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "custom": {
-      "align": "auto",
-      "cellOptions": {
-       "type": "auto"
-      },
-      "filterable": true,
-      "inspect": false
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "green"
-       },
-       {
-        "color": "red",
-        "value": 80
-       }
-      ]
-     }
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "10.2.6"
     },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 9,
-    "w": 5,
-    "x": 13,
-    "y": 6
-   },
-   "id": 22,
-   "title": "In Supervisor",
-   "type": "table",
-   "options": {
-    "cellHeight": "sm",
-    "footer": {
-     "countRows": false,
-     "fields": "",
-     "reducer": [
-      "sum"
-     ],
-     "show": false
-    },
-    "showHeader": true,
-    "sortBy": []
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
     {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "SELECT l.atm_name AS \"Name\", l.branch AS \"Alias\", l.atm_id AS \"Terminal ID\", s.state_changed_at AS \"Since\", EXTRACT(EPOCH FROM (NOW()-s.state_changed_at))/60 AS \"Minutes Down\" FROM atm_current_state s JOIN atm_locations l ON s.atm_id=l.atm_id WHERE s.state='IN_SUPERVISOR' ORDER BY s.state_changed_at ASC",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ]
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "custom": {
-      "align": "auto",
-      "cellOptions": {
-       "type": "auto"
-      },
-      "filterable": true,
-      "inspect": false
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "green"
-       },
-       {
-        "color": "red",
-        "value": 80
-       }
-      ]
-     }
+      "type": "datasource",
+      "id": "grafana-postgresql-datasource",
+      "name": "PostgreSQL",
+      "version": "1.0.0"
     },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 9,
-    "w": 6,
-    "x": 18,
-    "y": 6
-   },
-   "id": 23,
-   "title": "Agent Disconnected",
-   "type": "table",
-   "options": {
-    "cellHeight": "sm",
-    "footer": {
-     "countRows": false,
-     "fields": "",
-     "reducer": [
-      "sum"
-     ],
-     "show": false
-    },
-    "showHeader": true,
-    "sortBy": []
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
     {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "SELECT l.atm_name AS \"Name\", l.branch AS \"Alias\", l.atm_id AS \"Terminal ID\", s.state_changed_at AS \"Since\", EXTRACT(EPOCH FROM (NOW()-s.state_changed_at))/60 AS \"Minutes Down\" FROM atm_current_state s JOIN atm_locations l ON s.atm_id=l.atm_id WHERE s.state='AGENT_DISCONNECTED' ORDER BY s.state_changed_at ASC",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ]
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "custom": {
-      "hideFrom": {
-       "legend": false,
-       "tooltip": false,
-       "viz": false
-      }
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "green",
-        "value": null
-       },
-       {
-        "color": "red",
-        "value": 80
-       }
-      ]
-     }
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
     },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 7,
-    "w": 24,
-    "x": 0,
-    "y": 15
-   },
-   "id": 11,
-   "options": {
-    "basemap": {
-     "config": {},
-     "name": "Layer 0",
-     "type": "osm-standard"
-    },
-    "controls": {
-     "mouseWheelZoom": true,
-     "showAttribution": true,
-     "showDebug": false,
-     "showMeasure": false,
-     "showScale": false,
-     "showZoom": true
-    },
-    "layers": [
-     {
-      "config": {
-       "showLegend": true,
-       "style": {
-        "color": {
-         "fixed": "dark-green"
-        },
-        "opacity": 0.4,
-        "rotation": {
-         "fixed": 0,
-         "max": 360,
-         "min": -360,
-         "mode": "mod"
-        },
-        "size": {
-         "fixed": 5,
-         "max": 15,
-         "min": 2
-        },
-        "symbol": {
-         "fixed": "img/icons/marker/circle.svg",
-         "mode": "fixed"
-        },
-        "symbolAlign": {
-         "horizontal": "center",
-         "vertical": "center"
-        },
-        "textConfig": {
-         "fontSize": 12,
-         "offsetX": 0,
-         "offsetY": 0,
-         "textAlign": "center",
-         "textBaseline": "middle"
-        }
-       }
-      },
-      "location": {
-       "mode": "auto"
-      },
-      "name": "Layer 1",
-      "tooltip": true,
-      "type": "markers"
-     }
-    ],
-    "tooltip": {
-     "mode": "details"
-    },
-    "view": {
-     "allLayers": true,
-     "id": "fit",
-     "lat": 9.03,
-     "lon": 38.7578,
-     "zoom": 15
-    }
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
     {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "SELECT\r\n  l.atm_id,\r\n  l.branch,\r\n  l.district,\r\n  l.city,\r\n  l.latitude,\r\n  l.longitude,\r\n  l.vendor,\r\n  l.model,\r\n  COALESCE(t.transactions, 0) as transactions,\r\n  COALESCE(t.success_rate, 0) as success_rate,\r\n  COALESCE(t.atm_status,\r\n    'No Data') as atm_status\r\nFROM atm_locations l\r\nLEFT JOIN (\r\n  SELECT\r\n    atm_id,\r\n    COUNT(*) as transactions,\r\n    ROUND(100.0 * SUM(\r\n      CASE WHEN status='APPROVED'\r\n      THEN 1 ELSE 0 END\r\n    ) / COUNT(*), 1) as success_rate,\r\n    CASE\r\n      WHEN ROUND(100.0 * SUM(\r\n        CASE WHEN status='APPROVED'\r\n        THEN 1 ELSE 0 END\r\n      ) / COUNT(*), 1) >= 95\r\n      THEN 'Healthy'\r\n      WHEN ROUND(100.0 * SUM(\r\n        CASE WHEN status='APPROVED'\r\n        THEN 1 ELSE 0 END\r\n      ) / COUNT(*), 1) >= 80\r\n      THEN 'Degraded'\r\n      ELSE 'Critical'\r\n    END as atm_status\r\n  FROM atm_transactions\r\n  WHERE recorded_at >=\r\n    NOW() - INTERVAL '1 hour'\r\n  GROUP BY atm_id\r\n) t ON l.atm_id = t.atm_id\r\nORDER BY l.atm_id",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ],
-   "title": "ATM Network \u2014 Ethiopia",
-   "type": "geomap"
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "green",
-        "value": null
-       },
-       {
-        "color": "blue",
-        "value": 0
-       }
-      ]
-     }
+      "type": "panel",
+      "id": "table",
+      "name": "Table",
+      "version": ""
     },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 3,
-    "w": 4,
-    "x": 0,
-    "y": 22
-   },
-   "id": 1,
-   "options": {
-    "colorMode": "value",
-    "graphMode": "area",
-    "justifyMode": "auto",
-    "orientation": "auto",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "fields": "",
-     "values": false
-    },
-    "textMode": "auto",
-    "wideLayout": true
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
     {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_transactions",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
     }
-   ],
-   "title": "Total ATMs",
-   "type": "stat"
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "green",
-        "value": null
-       }
-      ]
-     }
-    },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 3,
-    "w": 5,
-    "x": 4,
-    "y": 22
-   },
-   "id": 2,
-   "options": {
-    "colorMode": "value",
-    "graphMode": "area",
-    "justifyMode": "auto",
-    "orientation": "auto",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "fields": "",
-     "values": false
-    },
-    "textMode": "auto",
-    "wideLayout": true
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
-    {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "\r\n-- Total Transactions Today\r\nSELECT COUNT(*) as value FROM atm_transactions\r\nWHERE recorded_at >= CURRENT_DATE\r\n\r\n",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ],
-   "title": "Total Transactions",
-   "type": "stat"
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "red",
-        "value": null
-       },
-       {
-        "color": "yellow",
-        "value": 80
-       },
-       {
-        "color": "green",
-        "value": 95
-       }
-      ]
-     }
-    },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 3,
-    "w": 5,
-    "x": 9,
-    "y": 22
-   },
-   "id": 3,
-   "options": {
-    "colorMode": "value",
-    "graphMode": "area",
-    "justifyMode": "auto",
-    "orientation": "auto",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "fields": "",
-     "values": false
-    },
-    "textMode": "auto",
-    "wideLayout": true
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
-    {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "-- Success Rate Today\r\nSELECT ROUND(100.0 * SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END) / COUNT(*), 1) as value\r\nFROM atm_transactions WHERE recorded_at >= CURRENT_DATE\r\n",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ],
-   "title": "Success Rate",
-   "type": "stat"
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "green",
-        "value": null
-       },
-       {
-        "color": "purple",
-        "value": 80
-       }
-      ]
-     }
-    },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 3,
-    "w": 5,
-    "x": 14,
-    "y": 22
-   },
-   "id": 5,
-   "options": {
-    "colorMode": "value",
-    "graphMode": "area",
-    "justifyMode": "auto",
-    "orientation": "auto",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "fields": "",
-     "values": false
-    },
-    "textMode": "auto",
-    "wideLayout": true
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
-    {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "-- Total Cash Dispensed Today (ETB)\r\nSELECT COALESCE(SUM(amount),0) as value FROM atm_transactions\r\nWHERE status='APPROVED' AND txn_type='WITHDRAWAL'\r\nAND recorded_at >= CURRENT_DATE\r\n",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ],
-   "title": "Cash Dispensed",
-   "type": "stat"
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "green",
-        "value": null
-       },
-       {
-        "color": "red",
-        "value": 0
-       }
-      ]
-     }
-    },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 3,
-    "w": 5,
-    "x": 19,
-    "y": 22
-   },
-   "id": 4,
-   "options": {
-    "colorMode": "value",
-    "graphMode": "area",
-    "justifyMode": "auto",
-    "orientation": "auto",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "fields": "",
-     "values": false
-    },
-    "textMode": "auto",
-    "wideLayout": true
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
-    {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "-- Failed Transactions Today\r\nSELECT COUNT(*) as value FROM atm_transactions\r\nWHERE status IN ('DECLINED','ERROR','TIMEOUT')\r\nAND recorded_at >= CURRENT_DATE\r\n",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ],
-   "title": "Failed Transactions",
-   "type": "stat"
-  },
-  {
-   "datasource": {
-    "type": "alexanderzobnin-zabbix-datasource",
-    "uid": "${DS_ZABBIX-ATM}"
-   },
-   "gridPos": {
-    "h": 10,
-    "w": 24,
-    "x": 0,
-    "y": 25
-   },
-   "id": 6,
-   "options": {
-    "ackEventColor": "rgb(56, 219, 156)",
-    "ackField": true,
-    "ageField": false,
-    "allowDangerousHTML": false,
-    "customLastChangeFormat": false,
-    "descriptionAtNewLine": false,
-    "descriptionField": true,
-    "fontSize": "100%",
-    "highlightBackground": false,
-    "highlightNewEvents": false,
-    "highlightNewerThan": "1h",
-    "hostField": true,
-    "hostGroups": false,
-    "hostProxy": false,
-    "hostTechNameField": false,
-    "lastChangeFormat": "",
-    "layout": "table",
-    "markAckEvents": false,
-    "okEventColor": "rgb(56, 189, 113)",
-    "opdataField": false,
-    "pageSize": 10,
-    "problemTimeline": true,
-    "severityField": true,
-    "showTags": true,
-    "sortProblems": "lastchange",
-    "statusField": true,
-    "statusIcon": false,
-    "triggerSeverity": [
-     {
-      "color": "rgb(108, 108, 108)",
-      "priority": 0,
-      "severity": "Not classified",
-      "show": true
-     },
-     {
-      "color": "rgb(120, 158, 183)",
-      "priority": 1,
-      "severity": "Information",
-      "show": true
-     },
-     {
-      "color": "rgb(175, 180, 36)",
-      "priority": 2,
-      "severity": "Warning",
-      "show": true
-     },
-     {
-      "color": "rgb(255, 137, 30)",
-      "priority": 3,
-      "severity": "Average",
-      "show": true
-     },
-     {
-      "color": "rgb(255, 101, 72)",
-      "priority": 4,
-      "severity": "High",
-      "show": true
-     },
-     {
-      "color": "rgb(215, 0, 0)",
-      "priority": 5,
-      "severity": "Disaster",
-      "show": true
-     }
-    ]
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
-    {
-     "application": {
-      "filter": ""
-     },
-     "countTriggersBy": "",
-     "datasource": {
-      "type": "alexanderzobnin-zabbix-datasource",
-      "uid": "${DS_ZABBIX-ATM}"
-     },
-     "evaltype": "0",
-     "functions": [],
-     "group": {
-      "filter": ""
-     },
-     "host": {
-      "filter": ""
-     },
-     "item": {
-      "filter": ""
-     },
-     "itemTag": {
-      "filter": ""
-     },
-     "macro": {
-      "filter": ""
-     },
-     "options": {
-      "acknowledged": 2,
-      "count": false,
-      "disableDataAlignment": false,
-      "hostProxy": false,
-      "hostsInMaintenance": false,
-      "limit": 1001,
-      "minSeverity": 0,
-      "showDisabledItems": false,
-      "skipEmptyValues": false,
-      "sortProblems": "default",
-      "useTimeRange": false,
-      "useTrends": "default",
-      "useZabbixValueMapping": false
-     },
-     "proxy": {
-      "filter": ""
-     },
-     "queryType": "5",
-     "refId": "A",
-     "resultFormat": "time_series",
-     "schema": 12,
-     "showProblems": "problems",
-     "table": {
-      "skipEmptyValues": false
-     },
-     "tags": {
-      "filter": ""
-     },
-     "textFilter": "",
-     "trigger": {
-      "filter": ""
-     }
-    }
-   ],
-   "title": "Active ATM Alerts",
-   "type": "alexanderzobnin-zabbix-triggers-panel"
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "palette-classic"
-     },
-     "custom": {
-      "axisBorderShow": false,
-      "axisCenteredZero": false,
-      "axisColorMode": "text",
-      "axisLabel": "",
-      "axisPlacement": "auto",
-      "fillOpacity": 80,
-      "gradientMode": "none",
-      "hideFrom": {
-       "legend": false,
-       "tooltip": false,
-       "viz": false
-      },
-      "lineWidth": 1,
-      "scaleDistribution": {
-       "type": "linear"
-      },
-      "thresholdsStyle": {
-       "mode": "off"
-      }
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "green"
-       },
-       {
-        "color": "red",
-        "value": 80
-       }
-      ]
-     }
-    },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 6,
-    "w": 24,
-    "x": 0,
-    "y": 35
-   },
-   "id": 7,
-   "options": {
-    "barRadius": 0,
-    "barWidth": 0.97,
-    "fullHighlight": false,
-    "groupWidth": 0.7,
-    "legend": {
-     "calcs": [],
-     "displayMode": "list",
-     "placement": "bottom",
-     "showLegend": true
-    },
-    "orientation": "auto",
-    "showValue": "auto",
-    "stacking": "none",
-    "tooltip": {
-     "mode": "single",
-     "sort": "none"
-    },
-    "xTickLabelRotation": 0,
-    "xTickLabelSpacing": 0
-   },
-   "targets": [
-    {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "SELECT\r\n  atm_id as \"ATM\",\r\n  branch as \"Branch\",\r\n  COUNT(*) as \"Total\",\r\n  SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END) as \"Approved\",\r\n  SUM(CASE WHEN status='DECLINED' THEN 1 ELSE 0 END) as \"Declined\",\r\n  SUM(CASE WHEN status='ERROR' THEN 1 ELSE 0 END) as \"Errors\"\r\nFROM atm_transactions\r\nWHERE recorded_at >= NOW() - INTERVAL '24 hours'\r\nGROUP BY atm_id, branch\r\nORDER BY atm_id",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ],
-   "title": "Transaction Volume by ATM \u2014 Last 24h",
-   "type": "barchart"
-  },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "custom": {
-      "align": "auto",
-      "cellOptions": {
-       "type": "auto"
-      },
-      "filterable": true,
-      "inspect": false
-     },
-     "mappings": [
+  ],
+  "annotations": {
+    "list": [
       {
-       "options": {
-        "APPROVED": {
-         "color": "green",
-         "index": 0
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "grafana",
+        "uid": "-- Grafana --"
+      },
+      "id": 24,
+      "options": {
+        "mode": "markdown",
+        "content": "[Export fleet status to CSV](/report/availability/csv?days=1)  |  [Export fault report to CSV](/report/error/csv?days=7)  |  [Open EJ Search](/ej-search)"
+      },
+      "pluginVersion": "10.2.6",
+      "title": "Quick Links",
+      "type": "text",
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 2
+      },
+      "id": 12,
+      "title": "ATM State Overview (NetXMS layout)",
+      "type": "row",
+      "panels": []
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#1F9E3B",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 3
+      },
+      "id": 13,
+      "title": "In Service",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_current_state WHERE state='IN_SERVICE'",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
         }
-       },
-       "type": "value"
-      }
-     ],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "green"
-       },
-       {
-        "color": "red",
-        "value": 80
-       }
       ]
-     }
     },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 8,
-    "w": 24,
-    "x": 0,
-    "y": 41
-   },
-   "id": 8,
-   "options": {
-    "cellHeight": "sm",
-    "footer": {
-     "countRows": false,
-     "fields": "",
-     "reducer": [
-      "sum"
-     ],
-     "show": false
-    },
-    "showHeader": true,
-    "sortBy": []
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
     {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "SELECT\r\n  TO_CHAR(recorded_at AT TIME ZONE 'Africa/Addis_Ababa', 'HH24:MI:SS') as \"Time\",\r\n  atm_id as \"ATM\",\r\n  branch as \"Branch\",\r\n  txn_type as \"Type\",\r\n  card_masked as \"Card\",\r\n  COALESCE(amount::text, '-') as \"Amount\",\r\n  status as \"Status\"\r\nFROM atm_transactions\r\nORDER BY recorded_at DESC\r\nLIMIT 100",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#C0392B",
+                "value": null
+              }
+            ]
+          }
         },
-        "type": "groupBy"
-       }
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 3
+      },
+      "id": 14,
+      "title": "Out of Service",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_current_state WHERE state='OUT_OF_SERVICE'",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#E67E22",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 3
+      },
+      "id": 15,
+      "title": "Agent Disconnected",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_current_state WHERE state='AGENT_DISCONNECTED'",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#F39C12",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 3
+      },
+      "id": 16,
+      "title": "In Supervisor",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_current_state WHERE state='IN_SUPERVISOR'",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#E67E22",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 3
+      },
+      "id": 17,
+      "title": "Hardware Faults",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_current_state WHERE state='HARDWARE_FAULT'",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8E44AD",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 3
+      },
+      "id": 18,
+      "title": "Out of Cash",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_current_state WHERE state='OUT_OF_CASH'",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 7
+      },
+      "id": 19,
+      "title": "State Distribution & Exceptions",
+      "type": "row",
+      "panels": []
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      },
+      "id": 20,
+      "title": "State Distribution",
+      "type": "piechart",
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "displayLabels": [
+          "name",
+          "value",
+          "percent"
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT s.state AS \"State\", COALESCE(c.cnt,0) AS \"Count\"\nFROM (VALUES ('IN_SERVICE'),('OUT_OF_SERVICE'),('AGENT_DISCONNECTED'),\n             ('IN_SUPERVISOR'),('HARDWARE_FAULT'),('OUT_OF_CASH'),('OFFLINE')) s(state)\nLEFT JOIN (SELECT state, COUNT(*) AS cnt FROM atm_current_state GROUP BY state) c\n  ON c.state = s.state\nORDER BY \"Count\" DESC",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true,
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 5,
+        "x": 8,
+        "y": 8
+      },
+      "id": 21,
+      "title": "Out of Service",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT l.atm_name as \"Name\", l.branch as \"Branch\", s.state as \"State\", TO_CHAR(s.state_changed_at AT TIME ZONE 'Africa/Addis_Ababa', 'HH24:MI:SS') as \"Since\", CASE WHEN EXTRACT(EPOCH FROM (NOW() - s.state_changed_at)) < 3600 THEN EXTRACT(EPOCH FROM (NOW() - s.state_changed_at))/60 || ' min' ELSE ROUND(EXTRACT(EPOCH FROM (NOW() - s.state_changed_at))/3600, 1) || ' hrs' END as \"Duration\" FROM atm_current_state s JOIN atm_locations l ON s.atm_id = l.atm_id WHERE s.state = 'OUT_OF_SERVICE' ORDER BY s.state_changed_at ASC",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true,
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 5,
+        "x": 13,
+        "y": 8
+      },
+      "id": 22,
+      "title": "In Supervisor",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT l.atm_name AS \"Name\", l.branch AS \"Alias\", l.atm_id AS \"Terminal ID\", s.state_changed_at AS \"Since\", EXTRACT(EPOCH FROM (NOW()-s.state_changed_at))/60 AS \"Minutes Down\" FROM atm_current_state s JOIN atm_locations l ON s.atm_id=l.atm_id WHERE s.state='IN_SUPERVISOR' ORDER BY s.state_changed_at ASC",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true,
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 6,
+        "x": 18,
+        "y": 8
+      },
+      "id": 23,
+      "title": "Agent Disconnected",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT l.atm_name AS \"Name\", l.branch AS \"Alias\", l.atm_id AS \"Terminal ID\", s.state_changed_at AS \"Since\", EXTRACT(EPOCH FROM (NOW()-s.state_changed_at))/60 AS \"Minutes Down\" FROM atm_current_state s JOIN atm_locations l ON s.atm_id=l.atm_id WHERE s.state='AGENT_DISCONNECTED' ORDER BY s.state_changed_at ASC",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "id": 11,
+      "options": {
+        "basemap": {
+          "config": {},
+          "name": "Layer 0",
+          "type": "osm-standard"
+        },
+        "controls": {
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showDebug": false,
+          "showMeasure": false,
+          "showScale": false,
+          "showZoom": true
+        },
+        "layers": [
+          {
+            "config": {
+              "showLegend": true,
+              "style": {
+                "color": {
+                  "fixed": "dark-green"
+                },
+                "opacity": 0.4,
+                "rotation": {
+                  "fixed": 0,
+                  "max": 360,
+                  "min": -360,
+                  "mode": "mod"
+                },
+                "size": {
+                  "fixed": 5,
+                  "max": 15,
+                  "min": 2
+                },
+                "symbol": {
+                  "fixed": "img/icons/marker/circle.svg",
+                  "mode": "fixed"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                },
+                "textConfig": {
+                  "fontSize": 12,
+                  "offsetX": 0,
+                  "offsetY": 0,
+                  "textAlign": "center",
+                  "textBaseline": "middle"
+                }
+              }
+            },
+            "location": {
+              "mode": "auto"
+            },
+            "name": "Layer 1",
+            "tooltip": true,
+            "type": "markers"
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        },
+        "view": {
+          "allLayers": true,
+          "id": "fit",
+          "lat": 9.03,
+          "lon": 38.7578,
+          "zoom": 15
+        }
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\r\n  l.atm_id,\r\n  l.branch,\r\n  l.district,\r\n  l.city,\r\n  l.latitude,\r\n  l.longitude,\r\n  l.vendor,\r\n  l.model,\r\n  COALESCE(t.transactions, 0) as transactions,\r\n  COALESCE(t.success_rate, 0) as success_rate,\r\n  COALESCE(t.atm_status,\r\n    'No Data') as atm_status\r\nFROM atm_locations l\r\nLEFT JOIN (\r\n  SELECT\r\n    atm_id,\r\n    COUNT(*) as transactions,\r\n    ROUND(100.0 * SUM(\r\n      CASE WHEN status='APPROVED'\r\n      THEN 1 ELSE 0 END\r\n    ) / COUNT(*), 1) as success_rate,\r\n    CASE\r\n      WHEN ROUND(100.0 * SUM(\r\n        CASE WHEN status='APPROVED'\r\n        THEN 1 ELSE 0 END\r\n      ) / COUNT(*), 1) >= 95\r\n      THEN 'Healthy'\r\n      WHEN ROUND(100.0 * SUM(\r\n        CASE WHEN status='APPROVED'\r\n        THEN 1 ELSE 0 END\r\n      ) / COUNT(*), 1) >= 80\r\n      THEN 'Degraded'\r\n      ELSE 'Critical'\r\n    END as atm_status\r\n  FROM atm_transactions\r\n  WHERE recorded_at >=\r\n    NOW() - INTERVAL '1 hour'\r\n  GROUP BY atm_id\r\n) t ON l.atm_id = t.atm_id\r\nORDER BY l.atm_id",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
       ],
-      "limit": 50
-     }
+      "title": "ATM Network \u2014 Ethiopia",
+      "type": "geomap"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "blue",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 0,
+        "y": 24
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_transactions",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Total ATMs",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 5,
+        "x": 4,
+        "y": 24
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\r\n-- Total Transactions Today\r\nSELECT COUNT(*) as value FROM atm_transactions\r\nWHERE recorded_at >= CURRENT_DATE\r\n\r\n",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Total Transactions",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 80
+              },
+              {
+                "color": "green",
+                "value": 95
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 5,
+        "x": 9,
+        "y": 24
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "-- Success Rate Today\r\nSELECT ROUND(100.0 * SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END) / COUNT(*), 1) as value\r\nFROM atm_transactions WHERE recorded_at >= CURRENT_DATE\r\n",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Success Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "purple",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 5,
+        "x": 14,
+        "y": 24
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "-- Total Cash Dispensed Today (ETB)\r\nSELECT COALESCE(SUM(amount),0) as value FROM atm_transactions\r\nWHERE status='APPROVED' AND txn_type='WITHDRAWAL'\r\nAND recorded_at >= CURRENT_DATE\r\n",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Cash Dispensed",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 5,
+        "x": 19,
+        "y": 24
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "-- Failed Transactions Today\r\nSELECT COUNT(*) as value FROM atm_transactions\r\nWHERE status IN ('DECLINED','ERROR','TIMEOUT')\r\nAND recorded_at >= CURRENT_DATE\r\n",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Failed Transactions",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "alexanderzobnin-zabbix-datasource",
+        "uid": "${DS_ZABBIX-ATM}"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
+      "id": 6,
+      "options": {
+        "ackEventColor": "rgb(56, 219, 156)",
+        "ackField": true,
+        "ageField": false,
+        "allowDangerousHTML": false,
+        "customLastChangeFormat": false,
+        "descriptionAtNewLine": false,
+        "descriptionField": true,
+        "fontSize": "100%",
+        "highlightBackground": false,
+        "highlightNewEvents": false,
+        "highlightNewerThan": "1h",
+        "hostField": true,
+        "hostGroups": false,
+        "hostProxy": false,
+        "hostTechNameField": false,
+        "lastChangeFormat": "",
+        "layout": "table",
+        "markAckEvents": false,
+        "okEventColor": "rgb(56, 189, 113)",
+        "opdataField": false,
+        "pageSize": 10,
+        "problemTimeline": true,
+        "severityField": true,
+        "showTags": true,
+        "sortProblems": "lastchange",
+        "statusField": true,
+        "statusIcon": false,
+        "triggerSeverity": [
+          {
+            "color": "rgb(108, 108, 108)",
+            "priority": 0,
+            "severity": "Not classified",
+            "show": true
+          },
+          {
+            "color": "rgb(120, 158, 183)",
+            "priority": 1,
+            "severity": "Information",
+            "show": true
+          },
+          {
+            "color": "rgb(175, 180, 36)",
+            "priority": 2,
+            "severity": "Warning",
+            "show": true
+          },
+          {
+            "color": "rgb(255, 137, 30)",
+            "priority": 3,
+            "severity": "Average",
+            "show": true
+          },
+          {
+            "color": "rgb(255, 101, 72)",
+            "priority": 4,
+            "severity": "High",
+            "show": true
+          },
+          {
+            "color": "rgb(215, 0, 0)",
+            "priority": 5,
+            "severity": "Disaster",
+            "show": true
+          }
+        ]
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "application": {
+            "filter": ""
+          },
+          "countTriggersBy": "",
+          "datasource": {
+            "type": "alexanderzobnin-zabbix-datasource",
+            "uid": "${DS_ZABBIX-ATM}"
+          },
+          "evaltype": "0",
+          "functions": [],
+          "group": {
+            "filter": ""
+          },
+          "host": {
+            "filter": ""
+          },
+          "item": {
+            "filter": ""
+          },
+          "itemTag": {
+            "filter": ""
+          },
+          "macro": {
+            "filter": ""
+          },
+          "options": {
+            "acknowledged": 2,
+            "count": false,
+            "disableDataAlignment": false,
+            "hostProxy": false,
+            "hostsInMaintenance": false,
+            "limit": 1001,
+            "minSeverity": 0,
+            "showDisabledItems": false,
+            "skipEmptyValues": false,
+            "sortProblems": "default",
+            "useTimeRange": false,
+            "useTrends": "default",
+            "useZabbixValueMapping": false
+          },
+          "proxy": {
+            "filter": ""
+          },
+          "queryType": "5",
+          "refId": "A",
+          "resultFormat": "time_series",
+          "schema": 12,
+          "showProblems": "problems",
+          "table": {
+            "skipEmptyValues": false
+          },
+          "tags": {
+            "filter": ""
+          },
+          "textFilter": "",
+          "trigger": {
+            "filter": ""
+          }
+        }
+      ],
+      "title": "Active ATM Alerts",
+      "type": "alexanderzobnin-zabbix-triggers-panel"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 37
+      },
+      "id": 7,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\r\n  atm_id as \"ATM\",\r\n  branch as \"Branch\",\r\n  COUNT(*) as \"Total\",\r\n  SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END) as \"Approved\",\r\n  SUM(CASE WHEN status='DECLINED' THEN 1 ELSE 0 END) as \"Declined\",\r\n  SUM(CASE WHEN status='ERROR' THEN 1 ELSE 0 END) as \"Errors\"\r\nFROM atm_transactions\r\nWHERE recorded_at >= NOW() - INTERVAL '24 hours'\r\nGROUP BY atm_id, branch\r\nORDER BY atm_id",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Transaction Volume by ATM \u2014 Last 24h",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true,
+            "inspect": false
+          },
+          "mappings": [
+            {
+              "options": {
+                "APPROVED": {
+                  "color": "green",
+                  "index": 0
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 43
+      },
+      "id": 8,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\r\n  TO_CHAR(recorded_at AT TIME ZONE 'Africa/Addis_Ababa', 'HH24:MI:SS') as \"Time\",\r\n  atm_id as \"ATM\",\r\n  branch as \"Branch\",\r\n  txn_type as \"Type\",\r\n  card_masked as \"Card\",\r\n  COALESCE(amount::text, '-') as \"Amount\",\r\n  status as \"Status\"\r\nFROM atm_transactions\r\nORDER BY recorded_at DESC\r\nLIMIT 100",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Live Transaction Feed",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 10,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 51
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\r\n  DATE_TRUNC('hour', recorded_at) as \"time\",\r\n  atm_id as \"metric\",\r\n  COUNT(*) as \"value\"\r\nFROM atm_transactions\r\nWHERE recorded_at >= NOW() - INTERVAL '24 hours'\r\nGROUP BY 1, 2\r\nORDER BY 1",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Transaction Rate \u2014 Last 24h",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 58
+      },
+      "id": 10,
+      "options": {
+        "displayMode": "gradient",
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\r\n  atm_id as \"ATM\",\r\n  COALESCE(SUM(CASE WHEN txn_type='WITHDRAWAL' AND status='APPROVED'\r\n    THEN amount ELSE 0 END), 0) as \"Cash Dispensed Today (ETB)\"\r\nFROM atm_transactions\r\nWHERE recorded_at >= CURRENT_DATE\r\nGROUP BY atm_id\r\nORDER BY atm_id",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Cash Dispensed Today by ATM",
+      "type": "bargauge"
     }
-   ],
-   "title": "Live Transaction Feed",
-   "type": "table"
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": [
+    "operations",
+    "atm"
+  ],
+  "templating": {
+    "list": []
   },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "palette-classic"
-     },
-     "custom": {
-      "axisBorderShow": false,
-      "axisCenteredZero": false,
-      "axisColorMode": "text",
-      "axisLabel": "",
-      "axisPlacement": "auto",
-      "barAlignment": 0,
-      "drawStyle": "line",
-      "fillOpacity": 0,
-      "gradientMode": "none",
-      "hideFrom": {
-       "legend": false,
-       "tooltip": false,
-       "viz": false
-      },
-      "insertNulls": false,
-      "lineInterpolation": "linear",
-      "lineWidth": 10,
-      "pointSize": 5,
-      "scaleDistribution": {
-       "type": "linear"
-      },
-      "showPoints": "auto",
-      "spanNulls": false,
-      "stacking": {
-       "group": "A",
-       "mode": "none"
-      },
-      "thresholdsStyle": {
-       "mode": "off"
-      }
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "green"
-       },
-       {
-        "color": "red",
-        "value": 80
-       }
-      ]
-     }
-    },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 7,
-    "w": 24,
-    "x": 0,
-    "y": 49
-   },
-   "id": 9,
-   "options": {
-    "legend": {
-     "calcs": [],
-     "displayMode": "list",
-     "placement": "bottom",
-     "showLegend": true
-    },
-    "tooltip": {
-     "mode": "single",
-     "sort": "none"
-    }
-   },
-   "targets": [
-    {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "SELECT\r\n  DATE_TRUNC('hour', recorded_at) as \"time\",\r\n  atm_id as \"metric\",\r\n  COUNT(*) as \"value\"\r\nFROM atm_transactions\r\nWHERE recorded_at >= NOW() - INTERVAL '24 hours'\r\nGROUP BY 1, 2\r\nORDER BY 1",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ],
-   "title": "Transaction Rate \u2014 Last 24h",
-   "type": "timeseries"
+  "time": {
+    "from": "now-6h",
+    "to": "now"
   },
-  {
-   "datasource": {
-    "type": "grafana-postgresql-datasource",
-    "uid": "${DS_ATM-TRANSACTIONS}"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "color": {
-      "mode": "thresholds"
-     },
-     "mappings": [],
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "green"
-       },
-       {
-        "color": "red",
-        "value": 80
-       }
-      ]
-     }
-    },
-    "overrides": []
-   },
-   "gridPos": {
-    "h": 5,
-    "w": 24,
-    "x": 0,
-    "y": 56
-   },
-   "id": 10,
-   "options": {
-    "displayMode": "gradient",
-    "maxVizHeight": 300,
-    "minVizHeight": 16,
-    "minVizWidth": 8,
-    "namePlacement": "auto",
-    "orientation": "horizontal",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "fields": "",
-     "values": false
-    },
-    "showUnfilled": true,
-    "sizing": "auto",
-    "valueMode": "color"
-   },
-   "pluginVersion": "10.2.6",
-   "targets": [
-    {
-     "datasource": {
-      "type": "grafana-postgresql-datasource",
-      "uid": "${DS_ATM-TRANSACTIONS}"
-     },
-     "editorMode": "code",
-     "format": "table",
-     "rawQuery": true,
-     "rawSql": "SELECT\r\n  atm_id as \"ATM\",\r\n  COALESCE(SUM(CASE WHEN txn_type='WITHDRAWAL' AND status='APPROVED'\r\n    THEN amount ELSE 0 END), 0) as \"Cash Dispensed Today (ETB)\"\r\nFROM atm_transactions\r\nWHERE recorded_at >= CURRENT_DATE\r\nGROUP BY atm_id\r\nORDER BY atm_id",
-     "refId": "A",
-     "sql": {
-      "columns": [
-       {
-        "parameters": [],
-        "type": "function"
-       }
-      ],
-      "groupBy": [
-       {
-        "property": {
-         "type": "string"
-        },
-        "type": "groupBy"
-       }
-      ],
-      "limit": 50
-     }
-    }
-   ],
-   "title": "Cash Dispensed Today by ATM",
-   "type": "bargauge"
-  }
- ],
- "refresh": "10s",
- "schemaVersion": 39,
- "tags": [
-  "operations",
-  "atm"
- ],
- "templating": {
-  "list": []
- },
- "time": {
-  "from": "now-6h",
-  "to": "now"
- },
- "timepicker": {
-  "refresh_intervals": [
-   "10s"
-  ]
- },
- "timezone": "Africa/Addis_Ababa",
- "title": "ATM Operations Centre \u2014 Dashen Bank",
- "uid": "c8749efa-b23c-4522-ba19-4c972432c92f",
- "version": 11,
- "weekStart": ""
+  "timepicker": {
+    "refresh_intervals": [
+      "10s"
+    ]
+  },
+  "timezone": "Africa/Addis_Ababa",
+  "title": "ATM Operations Centre \u2014 Dashen Bank",
+  "uid": "c8749efa-b23c-4522-ba19-4c972432c92f",
+  "version": 11,
+  "weekStart": ""
 }

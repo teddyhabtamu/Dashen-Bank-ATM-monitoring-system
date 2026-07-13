@@ -134,7 +134,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\r\n  branch as \"Branch\",\r\n  district as \"District\",\r\n  city as \"City\",\r\n  terminal_id as \"Terminal ID\",\r\n  vendor as \"Vendor\",\r\n  model as \"Model\"\r\nFROM atm_locations\r\nWHERE atm_id = '${selected_atm}'",
+          "rawSql": "SELECT\r\n  l.atm_name as \"Terminal Name\",\r\n  l.branch as \"Branch / Alias\",\r\n  l.atm_id as \"Terminal ID\",\r\n  l.terminal_id as \"TID\",\r\n  l.vendor as \"Vendor\",\r\n  l.model as \"Model\",\r\n  l.district as \"District\",\r\n  l.city as \"City\",\r\n  s.state as \"Current State\",\r\n  TO_CHAR(s.state_changed_at, 'YYYY-MM-DD HH24:MI') as \"State Since\",\r\n  TO_CHAR(s.last_seen, 'YYYY-MM-DD HH24:MI') as \"Last Seen\"\r\nFROM atm_locations l\r\nLEFT JOIN atm_current_state s ON l.atm_id = s.atm_id\r\nWHERE l.atm_id = '${selected_atm}'",
           "refId": "A",
           "sql": {
             "columns": [

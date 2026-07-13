@@ -1738,6 +1738,14 @@ Add a second rule for GRG.
 
 ## 10. Phase 9 — Add Missing NetXMS Features
 
+> **STATUS: ✅ CODE COMPLETE (2026-07-13) — manual re-import steps pending (you).** All four sub-tasks implemented in repo; verify in UI.
+> **10.1:** `Each ATM Detail` drill-down — extended the "ATM Identity card" query to also pull `Current State`, `State Since`, `Last Seen`, `TID` (vendor was already present).
+> **10.2:** Added a "Quick Links" Text panel (markdown) to the top of `ATM Operations Centre` dashboard linking to `/report/availability/csv?days=1`, `/report/error/csv?days=7`, `/ej-search`.
+> **10.3:** New dashboard `ATM Status — City` (table: City/District, Total/In Service/Out of Service/Disconnected, Availability %).
+> **10.4:** Added `/inventory` route to `report-portal/routes.py` (Hardware Inventory view, NCR+GRG, with auth). Adapted doc's `app.py` snippet to the repo's Blueprint style.
+> **Manual steps (on your machine):** re-import the 3 changed dashboards (overwrite): `Each ATM Detail`, `ATM Operations Centre`, and the new `ATM Status — City`. Restart/report rebuild not needed for the route (Flask picks it up on container restart; if running, `docker compose restart report-portal`). Then open `/inventory` on the Report Portal and the new City dashboard in Grafana.
+> **Note:** the 10.2 links are relative (Grafana host). If Grafana and the Report Portal are on different ports/hosts (PoC: 3002 vs 8888), prefix them with the Report Portal base URL, e.g. `http://localhost:8888/ej-search`, `http://localhost:8888/report/availability/csv?days=1`.
+
 ### 10.1 ATM Detail View (Right-click equivalent)
 
 In NetXMS, right-clicking an ATM shows ATM details. In our system, clicking an ATM row in the fleet table opens the drill-down dashboard. Make sure the drill-down dashboard includes all the fields users expect.
