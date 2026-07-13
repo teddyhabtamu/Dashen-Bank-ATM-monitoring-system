@@ -158,9 +158,8 @@ body { background: #F0F2F6; color: #0F172A; }
         {% if session.get('role') in ('admin', 'operator') %}
         <th style="width:36px;padding:8px 6px;text-align:center"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" style="cursor:pointer;width:15px;height:15px"></th>
         {% endif %}
-        <th>ATM ID</th><th>Branch</th><th>District</th><th>City</th><th>Region</th>
-        <th>Latitude</th><th>Longitude</th><th>Terminal ID</th><th>Vendor</th><th>Model</th>
-        <th>Install Date</th><th>Status</th><th>Current State</th><th>Last Seen</th>{% if session.get('role') in ('admin', 'operator') %}<th></th>{% endif %}
+        <th>ATM ID</th><th>Branch</th><th>City</th><th>Vendor</th><th>Model</th>
+        <th>Status</th><th>Current State</th><th>Last Seen</th>{% if session.get('role') in ('admin', 'operator') %}<th></th>{% endif %}
       </tr></thead>
       <tbody>
         {% if atms %}
@@ -171,19 +170,13 @@ body { background: #F0F2F6; color: #0F172A; }
             {% endif %}
             <td>{{ d.atm_id }}</td>
             <td>{{ d.branch or '—' }}</td>
-            <td>{{ d.district or '—' }}</td>
             <td>{{ d.city or '—' }}</td>
-            <td>{{ d.region or '—' }}</td>
-            <td>{{ d.latitude or '—' }}</td>
-            <td>{{ d.longitude or '—' }}</td>
-            <td>{{ d.terminal_id or '—' }}</td>
             <td>
               {% if d.vendor %}
               <span style="background:{{ '#cce5ff' if d.vendor == 'NCR' else '#e2d9f3' }};padding:2px 8px;border-radius:10px;font-size:11px">{{ d.vendor }}</span>
               {% else %}—{% endif %}
             </td>
             <td>{{ d.model or '—' }}</td>
-            <td>{{ d.install_date or '—' }}</td>
             <td>
               {% set status = d.status or 'active' %}
               <span class="badge {{ status }}">{{ status }}</span>
@@ -205,7 +198,7 @@ body { background: #F0F2F6; color: #0F172A; }
           </tr>
           {% endfor %}
         {% else %}
-          <tr><td colspan="14" class="empty">No ATMs registered yet.</td></tr>
+          <tr><td colspan="10" class="empty">No ATMs registered yet.</td></tr>
         {% endif %}
       </tbody>
     </table>
