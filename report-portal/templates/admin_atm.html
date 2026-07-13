@@ -160,7 +160,7 @@ body { background: #F0F2F6; color: #0F172A; }
         {% endif %}
         <th>ATM ID</th><th>Branch</th><th>District</th><th>City</th><th>Region</th>
         <th>Latitude</th><th>Longitude</th><th>Terminal ID</th><th>Vendor</th><th>Model</th>
-        <th>Install Date</th><th>Status</th>{% if session.get('role') in ('admin', 'operator') %}<th></th>{% endif %}
+        <th>Install Date</th><th>Status</th><th>Current State</th><th>Last Seen</th>{% if session.get('role') in ('admin', 'operator') %}<th></th>{% endif %}
       </tr></thead>
       <tbody>
         {% if atms %}
@@ -184,6 +184,11 @@ body { background: #F0F2F6; color: #0F172A; }
               {% set status = d.status or 'active' %}
               <span class="badge {{ status }}">{{ status }}</span>
             </td>
+            <td>
+              {% set live = d.state or 'UNKNOWN' %}
+              <span style="color:{{ 'green' if live=='IN_SERVICE' else 'red' }};font-weight:600">{{ live }}</span>
+            </td>
+            <td>{{ d.last_seen or '—' }}</td>
             {% if session.get('role') in ('admin', 'operator') %}
             <td class="kebab-wrap">
               <button class="kebab-btn" onclick="toggleKebab(event,this)" title="Actions">&#8942;</button>
@@ -242,7 +247,9 @@ body { background: #F0F2F6; color: #0F172A; }
           <span class="atm-card-meta-item"><span class="atm-card-label">Terminal</span> {{ d.terminal_id or '—' }}</span>
           <span class="atm-card-meta-item"><span class="atm-card-label">Vendor</span> {{ d.vendor or '—' }}</span>
           <span class="atm-card-meta-item"><span class="atm-card-label">Model</span> {{ d.model or '—' }}</span>
-          <span class="atm-card-meta-item"><span class="atm-card-label">Install</span> {{ d.install_date or '—' }}</span>
+           <span class="atm-card-meta-item"><span class="atm-card-label">Install</span> {{ d.install_date or '—' }}</span>
+           <span class="atm-card-meta-item"><span class="atm-card-label">State</span> {{ d.state or '—' }}</span>
+           <span class="atm-card-meta-item"><span class="atm-card-label">Last Seen</span> {{ d.last_seen or '—' }}</span>
           {% if d.latitude and d.longitude %}
           <span class="atm-card-meta-item"><span class="atm-card-label">Coords</span> {{ d.latitude }}, {{ d.longitude }}</span>
           {% endif %}

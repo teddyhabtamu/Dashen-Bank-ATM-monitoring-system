@@ -65,17 +65,22 @@ def atm_list():
             total = cur.fetchone()[0]
             total_pages = max(1, (total + per_page - 1) // per_page)
             page = min(page, total_pages)
-            cur.execute("""SELECT * FROM atm_locations
-                           WHERE atm_id ILIKE %s OR branch ILIKE %s
-                           OR district ILIKE %s OR city ILIKE %s OR region ILIKE %s
-                           ORDER BY atm_id LIMIT %s OFFSET %s""",
+            cur.execute("""SELECT l.*, s.state, s.last_seen, s.state_changed_at
+                           FROM atm_locations l
+                           LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id
+                           WHERE l.atm_id ILIKE %s OR l.branch ILIKE %s
+                           OR l.district ILIKE %s OR l.city ILIKE %s OR l.region ILIKE %s
+                           ORDER BY l.atm_id LIMIT %s OFFSET %s""",
                         (like, like, like, like, like, per_page, (page - 1) * per_page))
         else:
             cur.execute("SELECT COUNT(*) FROM atm_locations")
             total = cur.fetchone()[0]
             total_pages = max(1, (total + per_page - 1) // per_page)
             page = min(page, total_pages)
-            cur.execute("SELECT * FROM atm_locations ORDER BY atm_id LIMIT %s OFFSET %s",
+            cur.execute("""SELECT l.*, s.state, s.last_seen, s.state_changed_at
+                           FROM atm_locations l
+                           LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id
+                           ORDER BY l.atm_id LIMIT %s OFFSET %s""",
                         (per_page, (page - 1) * per_page))
 
         cols = [d[0] for d in cur.description]

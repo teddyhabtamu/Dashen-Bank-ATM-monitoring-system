@@ -1742,7 +1742,7 @@ Add a second rule for GRG.
 > **10.1:** `Each ATM Detail` drill-down — extended the "ATM Identity card" query to also pull `Current State`, `State Since`, `Last Seen`, `TID` (vendor was already present).
 > **10.2:** Added a "Quick Links" Text panel (markdown) to the top of `ATM Operations Centre` dashboard linking to `/report/availability/csv?days=1`, `/report/error/csv?days=7`, `/ej-search`.
 > **10.3:** New dashboard `ATM Status — City` (table: City/District, Total/In Service/Out of Service/Disconnected, Availability %).
-> **10.4:** Added `/inventory` route to `report-portal/routes.py` (Hardware Inventory view, NCR+GRG, with auth). Adapted doc's `app.py` snippet to the repo's Blueprint style.
+> **10.4:** Instead of a separate `/inventory` page, consolidated the NetXMS hardware-inventory view into the existing **`/admin/atm`** management console: `atm_list()` now LEFT JOINs `atm_current_state` and the `admin_atm.html` table + mobile cards show **Current State** (green/red) and **Last Seen**. The standalone `/inventory` route was removed to avoid duplication (user decision).
 > **Manual steps (on your machine):** re-import the 3 changed dashboards (overwrite): `Each ATM Detail`, `ATM Operations Centre`, and the new `ATM Status — City`. Restart/report rebuild not needed for the route (Flask picks it up on container restart; if running, `docker compose restart report-portal`). Then open `/inventory` on the Report Portal and the new City dashboard in Grafana.
 > **Note:** the 10.2 links are relative (Grafana host). If Grafana and the Report Portal are on different ports/hosts (PoC: 3002 vs 8888), prefix them with the Report Portal base URL, e.g. `http://localhost:8888/ej-search`, `http://localhost:8888/report/availability/csv?days=1`.
 
