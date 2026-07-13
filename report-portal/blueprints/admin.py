@@ -51,35 +51,48 @@ def fetch_metrics(atm_id):
 
 
 def build_cassettes(vendor, m):
-    """Cassette/module layout with SVG geometry + fill level."""
-    if vendor == 'NCR':
-        keys = ['1.2.0', '1.3.0', '1.4.0', '1.5.0']
-        labels = ['C1', 'C2', 'C3', 'C4']
-        layout = [(20, 110), (150, 110), (20, 205), (150, 205)]
-        sw, sh = 110, 90
-    else:  # GRG — vertical "modules"
-        keys = ['2.1.0', '2.2.0', '2.3.0']
-        labels = ['M1', 'M2', 'M3']
-        layout = [(30, 110), (30, 200), (30, 290)]
-        sw, sh = 240, 80
-    out = []
-    for (lbl, k), (x, y) in zip(zip(labels, keys), layout):
-        val = m.get(k)
+    """Cash-cassette / module layout inside the ATM 'vault' with SVG geometry + fill level.
+    Coordinates are expressed in the 320x540 viewBox used by the detail-page SVG."""
+    # Vault interior area (matches the <rect> drawn in the template)
+    VX, VY, VW, VH = 52, 364, 216, 150
+
+    def slot(key, label, x, y, w, h):
+        val = m.get(key)
         if val is None:
-            out.append({'label': lbl, 'x': x, 'y': y, 'w': sw, 'h': sh,
-                        'pct': None, 'fill_h': 0, 'fill_y': y + sh,
-                        'color': 'grey', 'notes': None})
-            continue
+            return {'label': label, 'x': x, 'y': y, 'w': w, 'h': h,
+                    'pct': None, 'fill_h': 0, 'fill_y': y + h, 'color': 'grey', 'notes': None}
         try:
             val = int(val)
         except (TypeError, ValueError):
             val = 0
         pct = max(0, min(100, round(val / CASSETTE_MAX * 100)))
-        fh = round(sh * pct / 100)
+        fh = round(h * pct / 100)
         color = 'green' if pct > 40 else ('amber' if pct >= 15 else 'red')
-        out.append({'label': lbl, 'x': x, 'y': y, 'w': sw, 'h': sh,
-                    'pct': pct, 'fill_h': fh, 'fill_y': y + sh - fh,
-                    'color': color, 'notes': val})
+        return {'label': label, 'x': x, 'y': y, 'w': w, 'h': h,
+                'pct': pct, 'fill_h': fh, 'fill_y': y + h - fh, 'color': color, 'notes': val}
+
+    out = []
+    if vendor == 'NCR':  # 2 x 2 cassette grid
+        keys = ['1.2.0', '1.3.0', '1.4.0', '1.5.0']
+        labels = ['Cass 1', 'Cass 2', 'Cass 3', 'Cass 4']
+        gap = 12
+        cw = (VW - gap) / 2
+        ch = (VH - gap) / 2
+        for i, (k, lbl) in enumerate(zip(keys, labels)):
+            r, c = divmod(i, 2)
+            x = VX + c * (cw + gap)
+            y = VY + r * (ch + gap)
+            out.append(slot(k, lbl, x, y, cw, ch))
+    else:  # GRG — three module bays side by side
+        keys = ['2.1.0', '2.2.0', '2.3.0']
+        labels = ['Module 1', 'Module 2', 'Module 3']
+        gap = 14
+        cw = (VW - 2 * gap) / 3
+        ch = VH - 14
+        for i, (k, lbl) in enumerate(zip(keys, labels)):
+            x = VX + i * (cw + gap)
+            y = VY + 8
+            out.append(slot(k, lbl, x, y, cw, ch))
     return out
 
 

@@ -13,8 +13,10 @@ body { background: #F0F2F6; color: #0F172A; }
 .kebab-btn:hover{background:#F1F5F9;color:#475569}
 .kebab-menu{display:none;position:absolute;right:0;top:100%;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:4px;z-index:100;min-width:150px;border:1px solid #EEF1F6}
 .kebab-menu.show{display:block}
-.kebab-item{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:none;width:100%;text-align:left;transition:.1s}
+.kebab-item{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:none;width:100%;text-align:left;transition:.1s;text-decoration:none;color:#334155}
 .kebab-item:hover{background:#F8FAFC}
+.kebab-item.view{color:#012169}
+.kebab-item.view:hover{background:#EEF2FF}
 .kebab-item.edit{color:#012169}
 .kebab-item.edit:hover{background:#EEF2FF}
 .kebab-item.delete{color:#DC2626}
@@ -120,7 +122,7 @@ body { background: #F0F2F6; color: #0F172A; }
 .atm-detail-grid > div > span:last-child { font-size: 13px; color: #0F172A; }
 .row-toggle { background: none; border: none; cursor: pointer; color: #94A3B8; font-size: 12px; padding: 2px 4px; margin-right: 4px; transition: transform .15s; line-height: 1; }
 tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
-.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 18px 0 4px; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 4px 0 20px; }
 .summary-card { background: #fff; border: 1px solid #EEF1F6; border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(15,23,42,.04); }
 .sc-val { font-size: 26px; font-weight: 800; color: #0F172A; line-height: 1; }
 .sc-lbl { font-size: 12px; color: #64748B; margin-top: 6px; font-weight: 500; }
@@ -137,14 +139,14 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
   <a href="http://localhost:3002" target="_blank" class="btn-live btn-primary"><i data-lucide="bar-chart-3"></i> Live Dashboards</a>
 </div>
 
+<div class="page-content" data-fields='{{ fields|tojson }}'>
+
 <div class="summary-grid">
   <div class="summary-card"><div class="sc-val">{{ summary.registered }}</div><div class="sc-lbl">Registered ATMs</div></div>
   <div class="summary-card"><div class="sc-val" style="color:#059669">{{ summary.in_service }}</div><div class="sc-lbl">In Service</div></div>
   <div class="summary-card"><div class="sc-val" style="color:#1D4ED8">{{ summary.ncr }}</div><div class="sc-lbl">NCR ATMs</div></div>
   <div class="summary-card"><div class="sc-val" style="color:#7C3AED">{{ summary.grg }}</div><div class="sc-lbl">GRG ATMs</div></div>
 </div>
-
-<div class="page-content" data-fields='{{ fields|tojson }}'>
 
 <div class="card">
   <div class="card-header">
