@@ -70,6 +70,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
       <div class="card">
         <div class="card-header"><h2>ATM Cassette / Module Levels</h2></div>
         <div class="card-body atm-vis">
+          {% if metrics_online and cassettes %}
           <svg viewBox="0 0 320 540" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ATM diagram">
             <defs>
               <linearGradient id="bodyGrad" x1="0" y1="0" x2="0" y2="1">
@@ -87,7 +88,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
             <text x="162" y="44" fill="#012169" font-size="15" font-weight="800" text-anchor="middle" font-family="Inter,sans-serif">DASHEN BANK</text>
             <!-- screen -->
             <rect x="44" y="74" width="232" height="92" rx="12" fill="url(#screenGrad)" stroke="#334155" stroke-width="1"/>
-            <circle cx="252" cy="88" r="4" fill="{% if metrics_online %}#22C55E{% else %}#64748B{% endif %}"/>
+            <circle cx="252" cy="88" r="4" fill="#22C55E"/>
             <text x="160" y="106" fill="#FFFFFF" font-size="16" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">{{ atm.atm_id }}</text>
             {% set st = atm.current_state or 'UNKNOWN' %}
             {% set stcol = '#22C55E' if st == 'IN_SERVICE' else ('#F59E0B' if st == 'IN_SUPERVISOR' else '#EF4444') %}
@@ -120,7 +121,10 @@ table.txn tbody tr:hover{background:#EEF2FF}
             <text x="{{ c.x + c.w / 2 }}" y="{{ c.y + c.h - 11 }}" fill="#E5E7EB" font-size="11" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">{% if c.pct is not none %}{{ c.pct }}%{% else %}No data{% endif %}</text>
             {% endfor %}
           </svg>
-          <div class="atm-cap">{% if metrics_online %}Live telemetry from SNMP simulator{% else %}Live data unavailable (simulator offline){% endif %}</div>
+          <div class="atm-cap">Live telemetry from SNMP simulator</div>
+          {% else %}
+          <div class="no-data" style="padding:60px 12px">Live cassette data unavailable (simulator not reachable).</div>
+          {% endif %}
         </div>
       </div>
     </div>

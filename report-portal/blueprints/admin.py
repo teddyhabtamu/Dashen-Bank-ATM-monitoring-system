@@ -229,8 +229,8 @@ def atm_detail(atm_id):
         vendor = atm.get('vendor')
 
         metrics = fetch_metrics(atm_id)
-        cassettes = build_cassettes(vendor, metrics) if metrics else None
-        hardware = build_hardware(vendor, metrics) if metrics else None
+        cassettes = build_cassettes(vendor, metrics) if metrics else []
+        hardware = build_hardware(vendor, metrics) if metrics else []
 
         with get_db() as conn:
             cur = conn.cursor()
