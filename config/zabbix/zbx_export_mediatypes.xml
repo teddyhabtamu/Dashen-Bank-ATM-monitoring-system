@@ -503,8 +503,9 @@ if (mode === 'recovery') {
                     <subject>ATM Alert: {TRIGGER.NAME} on {HOST.NAME}</subject>
                     <message>{
   &quot;subject&quot;: &quot;{TRIGGER.NAME}&quot;,
-  &quot;host&quot;: &quot;{HOST.NAME}&quot;,
-  &quot;severity&quot;: &quot;{TRIGGER.NSEVERITY}&quot;,
+   &quot;host&quot;: &quot;{HOST.NAME}&quot;,
+   &quot;vendor&quot;: &quot;{$ATM_VENDOR}&quot;,
+   &quot;severity&quot;: &quot;{TRIGGER.NSEVERITY}&quot;,
   &quot;event_date&quot;: &quot;{EVENT.DATE} {EVENT.TIME}&quot;,
   &quot;event_id&quot;: &quot;{EVENT.ID}&quot;,
   &quot;glpi_url&quot;: &quot;http://glpi:80/apirest.php&quot;,
