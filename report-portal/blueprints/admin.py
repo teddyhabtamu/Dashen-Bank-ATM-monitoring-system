@@ -56,18 +56,19 @@ def get_sim_port(atm_id):
 
 
 def assign_sim_port(atm_id, vendor):
-    """Allocate a sim_port for a newly registered ATM (idempotent)."""
+    """Allocate a sim_port for a newly registered ATM (idempotent).
+
+    Uses a single global sequence (MAX(sim_port)+1) shared by NCR and GRG so
+    ports never collide. Legacy ATMs keep their historical ports.
+    """
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            base = 1166 if (vendor or '').upper() == 'GRG' else 1161
             cur.execute("SELECT sim_port FROM atm_locations WHERE atm_id = %s", (atm_id,))
             if cur.fetchone():
                 return  # already has one
-            cur.execute("SELECT COALESCE(MAX(sim_port), %s - 1) "
-                        "FROM atm_locations WHERE vendor = %s AND sim_port IS NOT NULL",
-                        (base, vendor))
-            nxt = (cur.fetchone()[0] or (base - 1)) + 1
+            cur.execute("SELECT COALESCE(MAX(sim_port), 1160) FROM atm_locations")
+            nxt = (cur.fetchone()[0] or 1160) + 1
             cur.execute("UPDATE atm_locations SET sim_port = %s WHERE atm_id = %s", (nxt, atm_id))
             conn.commit()
     except Exception as e:

@@ -14,9 +14,10 @@ DB_NAME = os.environ.get('DB_NAME', 'zabbix')
 DB_USER = os.environ.get('DB_USER', 'zabbix')
 DB_PASS = os.environ.get('DB_PASS', '')
 
-# Port pools per vendor (matches the legacy ATM-001..005 / GRG-001..002 layout)
-NCR_BASE = 1161
-GRG_BASE = 1166
+# Starting port for the global (vendor-agnostic) allocation pool. Legacy ATMs
+# keep their historical ports (NCR 1161-1165, GRG 1166-1167); every newly
+# registered ATM simply takes the next free port so pools never collide.
+PORT_BASE = 1161
 
 
 def get_db():
@@ -31,21 +32,21 @@ def ensure_sim_port_col(conn):
 
 
 def assign_ports(conn):
-    """Allocate a sim_port to any ATM that does not yet have one."""
+    """Allocate a sim_port to any ATM that does not yet have one.
+
+    Uses a single global sequence (MAX(sim_port)+1) so NCR and GRG ports never
+    overlap, regardless of fleet size.
+    """
     with conn.cursor() as cur:
-        for vendor, base in (('NCR', NCR_BASE), ('GRG', GRG_BASE)):
-            cur.execute("SELECT atm_id FROM atm_locations "
-                        "WHERE vendor = %s AND sim_port IS NULL ORDER BY atm_id", (vendor,))
-            rows = cur.fetchall()
-            if not rows:
-                continue
-            cur.execute("SELECT COALESCE(MAX(sim_port), %s - 1) "
-                        "FROM atm_locations WHERE vendor = %s AND sim_port IS NOT NULL",
-                        (base, vendor))
-            nxt = cur.fetchone()[0] + 1
-            for (aid,) in rows:
-                cur.execute("UPDATE atm_locations SET sim_port = %s WHERE atm_id = %s", (nxt, aid))
-                nxt += 1
+        cur.execute("SELECT atm_id FROM atm_locations WHERE sim_port IS NULL ORDER BY atm_id")
+        rows = cur.fetchall()
+        if not rows:
+            return
+        cur.execute("SELECT COALESCE(MAX(sim_port), %s - 1) FROM atm_locations", (PORT_BASE,))
+        nxt = cur.fetchone()[0] + 1
+        for (aid,) in rows:
+            cur.execute("UPDATE atm_locations SET sim_port = %s WHERE atm_id = %s", (nxt, aid))
+            nxt += 1
     conn.commit()
 
 

@@ -10,5 +10,9 @@ COPY transaction_feed.py .
 COPY grg_snmp_simulator.py .
 COPY grg_ej_generator.py .
 COPY state_manager.py .
+COPY common.py .
+COPY sim_engine.py .
+COPY txn_engine.py .
+COPY ej_engine.py .
 
 CMD ["python3", "ej_log_generator.py"]

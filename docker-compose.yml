@@ -327,7 +327,7 @@ services:
       DB_PASS: ${DB_PASS}
       GATEWAY_IP: "172.17.0.1"
     ports:
-      - "1161-1250:1161-1250"
+      - "1161-1300:1161-1300"
     restart: unless-stopped
 
   atm-txn-engine:
