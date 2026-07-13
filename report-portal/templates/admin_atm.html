@@ -111,6 +111,15 @@ body { background: #F0F2F6; color: #0F172A; }
 @media(max-width:480px){
   .atm-card-info { grid-template-columns:1fr; }
 }
+.atm-detail-row { display: none; }
+.atm-detail-row.open { display: table-row; }
+.atm-detail-row > td { background: #F8FAFC; padding: 14px 18px; border-bottom: 1px solid #EEF1F6; }
+.atm-detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 28px; }
+.atm-detail-grid > div { display: flex; flex-direction: column; gap: 2px; }
+.dd-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #94A3B8; font-weight: 600; }
+.atm-detail-grid > div > span:last-child { font-size: 13px; color: #0F172A; }
+.row-toggle { background: none; border: none; cursor: pointer; color: #94A3B8; font-size: 12px; padding: 2px 4px; margin-right: 4px; transition: transform .15s; line-height: 1; }
+tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
 {% endblock %}
 
 {% block body %}
@@ -168,7 +177,9 @@ body { background: #F0F2F6; color: #0F172A; }
             {% if session.get('role') in ('admin', 'operator') %}
             <td style="padding:8px 6px;text-align:center"><input type="checkbox" class="row-checkbox" value="{{ d.atm_id }}" onchange="updateSelection()" style="cursor:pointer;width:15px;height:15px"></td>
             {% endif %}
-            <td>{{ d.atm_id }}</td>
+            <td>
+              <button type="button" class="row-toggle" onclick="toggleRowDetail('{{ d.atm_id }}')" title="Show details" aria-label="Show details">&#9656;</button>{{ d.atm_id }}
+            </td>
             <td>{{ d.branch or '—' }}</td>
             <td>{{ d.city or '—' }}</td>
             <td>
@@ -195,6 +206,20 @@ body { background: #F0F2F6; color: #0F172A; }
               </div>
             </td>
             {% endif %}
+          </tr>
+          <tr class="atm-detail-row" data-atm-id="{{ d.atm_id }}">
+            <td colspan="10">
+              <div class="atm-detail-grid">
+                <div><span class="dd-lbl">District</span><span>{{ d.district or '—' }}</span></div>
+                <div><span class="dd-lbl">Region</span><span>{{ d.region or '—' }}</span></div>
+                <div><span class="dd-lbl">Terminal ID</span><span>{{ d.terminal_id or '—' }}</span></div>
+                <div><span class="dd-lbl">Latitude</span><span>{{ d.latitude or '—' }}</span></div>
+                <div><span class="dd-lbl">Longitude</span><span>{{ d.longitude or '—' }}</span></div>
+                <div><span class="dd-lbl">Install Date</span><span>{{ d.install_date or '—' }}</span></div>
+                <div><span class="dd-lbl">Vendor</span><span>{% if d.vendor %}<span style="background:{{ '#cce5ff' if d.vendor == 'NCR' else '#e2d9f3' }};padding:2px 8px;border-radius:10px;font-size:11px">{{ d.vendor }}</span>{% else %}—{% endif %}</span></div>
+                <div><span class="dd-lbl">Model</span><span>{{ d.model or '—' }}</span></div>
+              </div>
+            </td>
           </tr>
           {% endfor %}
         {% else %}
@@ -410,6 +435,13 @@ body { background: #F0F2F6; color: #0F172A; }
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
+
+    function toggleRowDetail(atmId){
+      var dataRow = document.querySelector('tr[data-atm-id="'+atmId+'"]:not(.atm-detail-row)');
+      var detailRow = document.querySelector('tr.atm-detail-row[data-atm-id="'+atmId+'"]');
+      if(dataRow) dataRow.classList.toggle('expanded');
+      if(detailRow) detailRow.classList.toggle('open');
+    }
 var FIELDS = JSON.parse(document.querySelector('.page-content').dataset.fields);
 
 function openModal(data){
