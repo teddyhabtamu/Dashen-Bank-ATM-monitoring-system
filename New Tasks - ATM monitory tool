@@ -1211,16 +1211,16 @@ docker exec zabbix-db psql -U zabbix -d zabbix \
 
 **Problem:** GRG logs use different field names than NCR. Elasticsearch receives both but Kibana search needs consistent fields.
 
-> **STATUS: 🟡 CODE-SIDE COMPLETE — MANUAL OPENSEARCH STEPS PENDING (you).**
-> The repo's `filebeat.yml` is more advanced than the doc's 6.1: it ships to **OpenSearch** via an **ingest pipeline `atm_ej_parser`** (the doc only described a Filebeat `dissect`). Three fixes committed:
-> - `filebeat.yml`: paths changed `ATM-*.log` → `*.log` so **GRG `GRG-*.log` files are actually collected** (were silently dropped). *(Note: this sandbox couldn't write the root-owned file, so it was staged via `git update-index`; the committed content is correct — verify it landed on your machine after pull.)*
-> - `report-portal/blueprints/ej_search.py`: `_parse_ej_log_line` now detects `VENDOR=GRG` and maps `ACCT_NO→card_masked`, `RESP_CODE→status`, `TXN_CODE→sub_type`, `EVENT→event_type`, `FAULT_CODE→error_code` (the GRG fallback parser was previously broken — empty card/status for GRG).
-> - `config/opensearch/atm_ej_parser.json`: **the missing ingest pipeline**, created. Parses NCR + GRG (txn + fault) via grok, defaults `vendor=NCR`, converts `amount` to float, sets `@timestamp`.
-> **Manual steps you must do (OpenSearch, on your machine):**
-> 1. Load the pipeline: `curl -X PUT "http://localhost:9200/_ingest/pipeline/atm_ej_parser" -H 'Content-Type: application/json' --data-binary @config/opensearch/atm_ej_parser.json` (or Dev Tools in OpenSearch Dashboards).
-> 2. Restart filebeat (`docker compose restart filebeat`) so GRG logs start flowing.
-> 3. Create the data view (doc 6.2): index `atm-ej-live-*` (the doc says `.ds-atm-ej-live-*` — use `atm-ej-live-*`, matching the filebeat index template).
-> 4. Verify: search a GRG card / `VENDOR=GRG` in the EJ search portal and confirm it returns results with card + status.
+> **STATUS: ✅ COMPLETE (verified end-to-end — GRG + NCR EJ search returns structured results in Report Portal, OpenSearch Dashboards, and via `_search`).**
+> The repo's `filebeat.yml` ships to **OpenSearch** via ingest pipeline `atm_ej_parser` (the doc only described a Filebeat `dissect`). Three code fixes committed:
+> - `filebeat.yml`: paths `ATM-*.log` → `*.log` so **GRG `GRG-*.log` are actually collected** (were silently dropped). *(Sandbox root-owns the file; committed content is correct. On your machine `git checkout -- filebeat.yml` restores it, then `sudo chown root:root filebeat.yml` because the container runs as root and refuses a non-root-owned config.)*
+> - `report-portal/blueprints/ej_search.py`: `_parse_ej_log_line` now GRG-aware (`ACCT_NO→card_masked`, `RESP_CODE→status`, `TXN_CODE→sub_type`, `EVENT→event_type`, `FAULT_CODE→error_code`).
+> - `config/opensearch/atm_ej_parser.json`: the missing ingest pipeline (NCR + GRG, grok + `vendor=NCR` default + `amount` float + `@timestamp`).
+> **Bugs found & fixed during verification (committed):**
+> - **Lazy-DATA / no end-anchor bug:** grok matches as a substring, so the FINAL field (`status`, `auth_code`, `fault_desc`) captured empty. Fixed by appending `$` to all three grok patterns. Also widened the optional capture to `AUTH(_CODE)?=` so GRG `AUTH_CODE=` (not just NCR `AUTH=`) is captured.
+> - **`filebeat.yml` working-tree revert:** `git pull` does not overwrite a locally-edited `filebeat.yml`, so the container kept watching `ATM-*.log`. Fixed with `git checkout -- filebeat.yml` + `sudo chown root:root`.
+> - **Docker Desktop/WSL2 bind-mount cache:** after `git checkout` rewrote the inode, `docker compose restart` failed with "no such file". Fixed with `down`+`up` (or Docker Desktop restart).
+> **Manual steps performed (on your machine):** loaded pipeline, `chown`+`up` filebeat, `_update_by_query` re-parsed history, confirmed `status`/`auth_code` populated for GRG. OpenSearch Dashboards Data View `atm-ej-live-*` created (optional, under Management → Data Views, NOT under Index Management).
 
 ### 6.1 Update Filebeat to Parse Both Formats
 
@@ -1294,6 +1294,9 @@ Now Kibana will show both NCR and GRG logs. Users can filter by the `vendor` fie
 ## 7. Phase 6 — Build EJ Search Inside the Report Portal
 
 **This directly replaces the NetXMS right-click "Search in ATM journals" feature.** Users can search EJ logs without opening Kibana.
+
+> **STATUS: ✅ COMPLETE (verified — EJ Search UI at `/ej-search` returns NCR + GRG results from OpenSearch with card/status/auth/amount, plus CSV export; sidebar nav link present in `base.html`).**
+> Implemented as an OpenSearch-backed Flask blueprint (`report-portal/blueprints/ej_search.py` + `templates/ej_search.html`), registered in `app.py:63` — more capable than the doc's simpler PostgreSQL inline version. `_parse_ej_log_line` is GRG-aware. EJ results depend on the Phase 5 `atm_ej_parser` pipeline populating `status`/`auth_code` (fixed during Phase 5 verification).
 
 ### 7.1 Add the EJ Search Route to app.py
 
@@ -1616,6 +1619,11 @@ Test it: Open `http://localhost:8888/ej-search`
 
 ## 8. Phase 7 — Fix Information Delay (Real-Time Improvements)
 
+> **STATUS: ✅ CODE COMPLETE — MANUAL RE-IMPORT STEPS PENDING (you).**
+> Code changes committed: both Zabbix templates (`zbx_export_templates.xml`, `template_grg.xml`) now poll 5 critical items — **ATM Operational Status, Cash — Cassette 1 Notes Remaining, Network — Link Status, Security — Safe Door Status, Security — Cabinet Door Status** — at `10s` (others stay `30s`, per doc). All 6 Grafana dashboards set `refresh: 10s`. Out-of-Service panel (ATM Operations Centre) now shows a `Duration` column (`min`/`hrs`) per doc 8.4.
+> **§8.3 (nodata 300→60) found N/A:** the templates use `last(...)` triggers, not `nodata()` availability triggers, so there was nothing to change — reducing the poll interval (§8.1) is what cuts alert latency. (Optional future: add a `nodata(/template/atm.status,60)` availability trigger.)
+> **Manual steps (on your machine):** re-import both Zabbix templates (tick *Update existing*) and re-import the 6 Grafana dashboard JSONs (overwrite), so the new intervals/refresh take effect.
+
 This directly addresses the biggest complaint: **"information appears very late."**
 
 ### 8.1 Reduce Zabbix Poll Interval
@@ -1685,6 +1693,10 @@ ORDER BY s.state_changed_at ASC
 ---
 
 ## 9. Phase 8 — GLPI Improvements
+
+> **STATUS: ✅ CODE COMPLETE (9.1) — MANUAL RE-IMPORT STEPS PENDING (you).** 9.2 is GLPI-UI-only.
+> **9.1 changes committed:** `zbx_export_mediatypes.xml` (GLPI Ticket media type) — added a `vendor` parameter (`{$ATM_VENDOR}`) + updated the webhook script so ticket content now shows `Vendor`, `Severity`, and `Time`. Also added the `{$ATM_VENDOR}` macro to **both** templates (`NCR` on `zbx_export_templates.xml`, `GRG` on `template_grg.xml`) so the parameter resolves per host (it did not previously exist).
+> **Manual steps (on your machine):** re-import both Zabbix templates (*Update existing*) and re-import/overwrite the **GLPI Ticket** media type from `config/zabbix/zbx_export_mediatypes.xml` (Administration → Media types → Import), so the new macro + vendor parameter/script take effect. Then do 9.2 in GLPI UI.
 
 ### 9.1 Add Vendor to Auto-Created Tickets
 

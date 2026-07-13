@@ -480,6 +480,11 @@
                     <value>1166</value>
                     <description>Default ATM metrics port — override on each host</description>
                 </macro>
+                <macro>
+                    <macro>{$ATM_VENDOR}</macro>
+                    <value>GRG</value>
+                    <description>ATM hardware vendor — consumed by the GLPI Ticket media type</description>
+                </macro>
             </macros>
             <valuemaps>
                 <valuemap>

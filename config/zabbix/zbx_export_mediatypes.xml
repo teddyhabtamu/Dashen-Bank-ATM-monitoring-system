@@ -343,6 +343,10 @@ Dashen Bank ATM Monitoring System &amp;mdash; Automated Alert &amp;mdash; Do not
                     <name>subject</name>
                     <value>{ALERT.SUBJECT}</value>
                 </parameter>
+                <parameter>
+                    <name>vendor</name>
+                    <value>{$ATM_VENDOR}</value>
+                </parameter>
             </parameters>
             <script>var params;
 
@@ -361,6 +365,17 @@ var host          = params.host           || '';
 var event_date    = params.event_date     || '';
 var event_id      = params.event_id       || '';
 var glpi_ticket_id = params.glpi_ticket_id || ''; 
+var severity       = params.severity       || '';
+var vendor         = params.vendor         || 'Unknown';
+
+var severity_map = {
+    '0': 'Not classified',
+    '1': 'Information',
+    '2': 'Warning',
+    '3': 'Average',
+    '4': 'High',
+    '5': 'Disaster'
+};
 
 // Natively maps Zabbix {EVENT.VALUE}: '0' indicates Recovery, '1' indicates Problem
 var mode = 'problem';
@@ -447,7 +462,12 @@ if (mode === 'recovery') {
     var result = glpi_post('/Ticket', {
         input: {
             name: '[ZABBIX-' + event_id + '] ' + subject,
-            content: 'Host: ' + host + '\nProblem: ' + subject + '\nEvent ID: ' + event_id,
+            content: 'Host: ' + host +
+                     '\nVendor: ' + vendor +
+                     '\nProblem: ' + subject +
+                     '\nSeverity: ' + (severity_map[severity] || 'Unknown') +
+                     '\nTime: ' + event_date +
+                     '\nEvent ID: ' + event_id,
             urgency: 3,
             impact: 3,
             priority: 3,
