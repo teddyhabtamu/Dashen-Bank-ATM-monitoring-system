@@ -93,7 +93,13 @@ def simulate(state, vendor, atm_id):
         for k in ('cash_module1', 'cash_module2', 'cash_module3'):
             state[k] = max(0, state[k] - random.randint(0, rate))
         if all(state[f'cash_module{i}'] == 0 for i in range(1, 4)):
-            state['atm_status'] = 2
+            # Out of cash -> cash replenishment (CIT restock), else stay down briefly
+            if r < 0.4:
+                for i in range(1, 4):
+                    state[f'cash_module{i}'] = random.randint(1800, 2500)
+                state['atm_status'] = 1
+            else:
+                state['atm_status'] = 2
         elif state['atm_status'] == 2 and r < 0.05:
             state['atm_status'] = 1
         if r < 0.003:
@@ -116,7 +122,13 @@ def simulate(state, vendor, atm_id):
         for k in ('cassette1', 'cassette2', 'cassette3', 'cassette4'):
             state[k] = max(0, state[k] - random.randint(0, rate))
         if all(state[f'cassette{i}'] == 0 for i in range(1, 5)):
-            state['atm_status'] = 2
+            # Out of cash -> cash replenishment (CIT restock), else stay down briefly
+            if r < 0.4:
+                for i in range(1, 5):
+                    state[f'cassette{i}'] = random.randint(1800, 2500)
+                state['atm_status'] = 1
+            else:
+                state['atm_status'] = 2
         elif state['atm_status'] == 2 and r < 0.05:
             state['atm_status'] = 1
         state['reject_bin'] = min(100, state['reject_bin'] + random.randint(0, 1))
