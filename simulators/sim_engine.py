@@ -153,6 +153,7 @@ class ATMInstance:
 
     def start(self):
         threading.Thread(target=self._sim_loop, daemon=True).start()
+        self.httpd = None
 
         def handler_factory(inst):
             class H(BaseHTTPRequestHandler):
@@ -190,9 +191,25 @@ class ATMInstance:
                         self.end_headers()
             return H
 
-        httpd = ThreadingHTTPServer(('0.0.0.0', self.atm['port']), handler_factory(self))
+        try:
+            httpd = ThreadingHTTPServer(('0.0.0.0', self.atm['port']), handler_factory(self))
+        except OSError as e:
+            # Port already taken (e.g. collision) — skip this cycle; sync()
+            # will retry it next round once the port is free.
+            print(f"[SIM] {self.atm['atm_id']} FAILED to bind :{self.atm['port']} ({e})")
+            return False
+        self.httpd = httpd
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         print(f"[SIM] {self.atm['atm_id']} ({self.atm['vendor']}) serving on :{self.atm['port']}")
+        return True
+
+    def stop(self):
+        if getattr(self, 'httpd', None):
+            try:
+                self.httpd.shutdown()
+                self.httpd.server_close()
+            except Exception:
+                pass
 
     def _sim_loop(self):
         while True:
@@ -213,10 +230,21 @@ def main():
         finally:
             conn.close()
         for a in atms:
-            if a['atm_id'] not in registry:
+            inst = registry.get(a['atm_id'])
+            if inst is None:
                 inst = ATMInstance(a)
-                inst.start()
-                registry[a['atm_id']] = inst
+                if inst.start():
+                    registry[a['atm_id']] = inst
+                # if start() failed to bind, leave it out so sync() retries next cycle
+            elif inst.atm['port'] != a['port']:
+                # DB sim_port changed (e.g. reallocation) -> rebind on the new port
+                print(f"[SIM] {a['atm_id']} port changed "
+                      f"{inst.atm['port']} -> {a['port']}, rebinding")
+                inst.stop()
+                del registry[a['atm_id']]
+                inst = ATMInstance(a)
+                if inst.start():
+                    registry[a['atm_id']] = inst
 
     for _ in range(30):
         try:
