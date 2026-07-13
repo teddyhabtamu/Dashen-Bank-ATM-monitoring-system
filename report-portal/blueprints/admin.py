@@ -3,8 +3,9 @@ blueprints/admin.py
 ATM Admin registration routes.
 """
 import csv, io, re
+import requests
 from datetime import datetime, timezone, timedelta
-from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response, current_app
+from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response, current_app, abort
 from werkzeug.security import generate_password_hash
 from blueprints.auth import login_required, role_required, ROLE_ADMIN, ROLE_OPERATOR, ROLE_VIEWER
 from db import get_db
@@ -24,6 +25,86 @@ def to_eat(dt, fmt='%Y-%m-%d %H:%M'):
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 ROLES = [ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN]
+
+# ─── Simulator metrics (for the visual ATM detail page) ────────────────────────
+GATEWAY_IP = os.environ.get('GATEWAY_IP', '172.17.0.1')
+ATM_PORTS = {
+    'ATM-001': 1161, 'ATM-002': 1162, 'ATM-003': 1163,
+    'ATM-004': 1164, 'ATM-005': 1165,
+    'GRG-001': 1166, 'GRG-002': 1167,
+}
+CASSETTE_MAX = 2500  # notes-per-cassette capacity used for fill %
+
+
+def fetch_metrics(atm_id):
+    """Return the simulator /metrics JSON, or None if unreachable."""
+    port = ATM_PORTS.get(atm_id)
+    if not port:
+        return None
+    try:
+        r = requests.get(f"http://{GATEWAY_IP}:{port}/metrics", timeout=3)
+        if r.status_code == 200:
+            return r.json()
+    except Exception:
+        return None
+    return None
+
+
+def build_cassettes(vendor, m):
+    """Cassette/module layout with SVG geometry + fill level."""
+    if vendor == 'NCR':
+        keys = ['1.2.0', '1.3.0', '1.4.0', '1.5.0']
+        labels = ['C1', 'C2', 'C3', 'C4']
+        layout = [(20, 110), (150, 110), (20, 205), (150, 205)]
+        sw, sh = 110, 90
+    else:  # GRG — vertical "modules"
+        keys = ['2.1.0', '2.2.0', '2.3.0']
+        labels = ['M1', 'M2', 'M3']
+        layout = [(30, 110), (30, 200), (30, 290)]
+        sw, sh = 240, 80
+    out = []
+    for (lbl, k), (x, y) in zip(zip(labels, keys), layout):
+        val = m.get(k)
+        if val is None:
+            out.append({'label': lbl, 'x': x, 'y': y, 'w': sw, 'h': sh,
+                        'pct': None, 'fill_h': 0, 'fill_y': y + sh,
+                        'color': 'grey', 'notes': None})
+            continue
+        try:
+            val = int(val)
+        except (TypeError, ValueError):
+            val = 0
+        pct = max(0, min(100, round(val / CASSETTE_MAX * 100)))
+        fh = round(sh * pct / 100)
+        color = 'green' if pct > 40 else ('amber' if pct >= 15 else 'red')
+        out.append({'label': lbl, 'x': x, 'y': y, 'w': sw, 'h': sh,
+                    'pct': pct, 'fill_h': fh, 'fill_y': y + sh - fh,
+                    'color': color, 'notes': val})
+    return out
+
+
+def build_hardware(vendor, m):
+    """Hardware component status pills. ok=green, warn=amber, error=red."""
+    if vendor == 'NCR':
+        comps = [
+            ('Card reader', 'ok' if m.get('2.1.0') == 1 else 'error'),
+            ('Printer', 'ok' if m.get('3.1.0') == 1 else 'error'),
+            ('Pin pad', 'ok'),
+            ('Retract bin', 'ok' if (m.get('1.6.0') or 0) < 80 else 'warn'),
+            ('Network', 'ok' if m.get('7.1.0') == 1 else 'error'),
+            ('UPS', 'ok' if (m.get('6.3.0') or 0) > 20 else 'error'),
+        ]
+    else:  # GRG
+        comps = [
+            ('Card reader', 'ok' if m.get('3.1.0') == 1 else 'error'),
+            ('Printer', 'ok' if m.get('4.1.0') == 1 else 'error'),
+            ('Pin pad', 'ok'),
+            ('Retract bin', 'ok' if (m.get('2.4.0') or 0) < 80 else 'warn'),
+            ('Network', 'ok' if m.get('8.1.0') == 1 else 'error'),
+            ('UPS', 'ok' if (m.get('7.2.0') or 0) > 20 else 'error'),
+        ]
+    return [{'name': n, 'status': s} for n, s in comps]
+
 
 FIELDS = [
     ('atm_id',      'ATM ID',       'text',   20),
@@ -89,9 +170,96 @@ def atm_list():
 
     atms = [dict(zip(cols, r)) for r in rows]
 
+    # Summary stat row
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("""SELECT
+                (SELECT COUNT(*) FROM atm_locations) as registered,
+                (SELECT COUNT(*) FROM atm_current_state WHERE state = 'IN_SERVICE') as in_service,
+                (SELECT COUNT(*) FROM atm_locations WHERE vendor = 'NCR') as ncr,
+                (SELECT COUNT(*) FROM atm_locations WHERE vendor = 'GRG') as grg""")
+            s = cur.fetchone()
+            cur.close()
+        summary = {'registered': int(s[0] or 0), 'in_service': int(s[1] or 0),
+                   'ncr': int(s[2] or 0), 'grg': int(s[3] or 0)}
+    except Exception:
+        summary = {'registered': total, 'in_service': 0, 'ncr': 0, 'grg': 0}
+
     return render_template('admin_atm.html', atms=atms, atm_count=total,
                            page=page, total_pages=total_pages,
-                           search=search, fields=FIELDS)
+                           search=search, fields=FIELDS, summary=summary)
+
+
+@bp.route('/atm/<atm_id>')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def atm_detail(atm_id):
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT l.*,
+                    COALESCE(s.state, 'UNKNOWN') as current_state,
+                    s.state_changed_at,
+                    s.last_seen AT TIME ZONE 'Africa/Addis_Ababa' as last_seen
+                FROM atm_locations l
+                LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id
+                WHERE l.atm_id = %s
+            """, (atm_id,))
+            cols = [d[0] for d in cur.description]
+            row = cur.fetchone()
+            cur.close()
+        if not row:
+            abort(404)
+        atm = dict(zip(cols, row))
+        vendor = atm.get('vendor')
+
+        metrics = fetch_metrics(atm_id)
+        cassettes = build_cassettes(vendor, metrics) if metrics else None
+        hardware = build_hardware(vendor, metrics) if metrics else None
+
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT COUNT(*),
+                    ROUND(100.0 * SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)
+                        / NULLIF(COUNT(*), 0), 1),
+                    COALESCE(SUM(CASE WHEN status='APPROVED' AND txn_type='WITHDRAWAL'
+                        THEN amount ELSE 0 END), 0)
+                FROM atm_transactions
+                WHERE atm_id = %s AND recorded_at >= NOW() - INTERVAL '24 hours'
+            """, (atm_id,))
+            q = cur.fetchone()
+            total_txns = int(q[0] or 0)
+            success_rate = float(q[1] or 0)
+            cash_today = float(q[2] or 0)
+            cur.execute("""
+                SELECT COUNT(*) FROM atm_transactions
+                WHERE atm_id = %s AND status = 'ERROR'
+                AND recorded_at >= NOW() - INTERVAL '24 hours'
+            """, (atm_id,))
+            active_faults = int(cur.fetchone()[0] or 0)
+            cur.execute("""
+                SELECT
+                    TO_CHAR(recorded_at AT TIME ZONE 'Africa/Addis_Ababa', 'HH24:MI:SS'),
+                    txn_type, card_masked, amount, status, auth_code, error_code
+                FROM atm_transactions
+                WHERE atm_id = %s
+                ORDER BY recorded_at DESC
+                LIMIT 20
+            """, (atm_id,))
+            txns = cur.fetchall()
+            cur.close()
+
+        return render_template('admin_atm_detail.html',
+                               atm=atm, vendor=vendor, cassettes=cassettes,
+                               hardware=hardware, metrics_online=metrics is not None,
+                               total_txns=total_txns, success_rate=success_rate,
+                               cash_today=cash_today, active_faults=active_faults,
+                               txns=txns)
+    except Exception as e:
+        return f'<h1>Error</h1><pre>{e}</pre>', 500
 
 
 @bp.route('/atm/get')
