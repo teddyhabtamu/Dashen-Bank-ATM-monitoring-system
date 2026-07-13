@@ -288,342 +288,77 @@ services:
   # Each block = one real ATM in production
   # To connect real ATM: remove simulator, add real ATM IP to Zabbix
 
-  atm-sim-001:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-sim-001
-    command: python3 atm_snmp_simulator.py
-    environment:
-      ATM_ID: "ATM-001"
-      ATM_TERMINAL_ID: "TID001"
-      ATM_BRANCH: "Addis Ababa Main Branch"
-      SNMP_PORT: "1161"
-    ports:
-      - "1161:1161"
-    restart: unless-stopped
-
-  atm-sim-002:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-sim-002
-    command: python3 atm_snmp_simulator.py
-    environment:
-      ATM_ID: "ATM-002"
-      ATM_TERMINAL_ID: "TID002"
-      ATM_BRANCH: "Bole International Branch"
-      SNMP_PORT: "1162"
-    ports:
-      - "1162:1162"
-    restart: unless-stopped
-
-  atm-sim-003:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-sim-003
-    command: python3 atm_snmp_simulator.py
-    environment:
-      ATM_ID: "ATM-003"
-      ATM_TERMINAL_ID: "TID003"
-      ATM_BRANCH: "Merkato Branch"
-      SNMP_PORT: "1163"
-    ports:
-      - "1163:1163"
-    restart: unless-stopped
-
-  atm-sim-004:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-sim-004
-    command: python3 atm_snmp_simulator.py
-    environment:
-      ATM_ID: "ATM-004"
-      ATM_TERMINAL_ID: "TID004"
-      ATM_BRANCH: "Hawassa Branch"
-      SNMP_PORT: "1164"
-    ports:
-      - "1164:1164"
-    restart: unless-stopped
-
-  atm-sim-005:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-sim-005
-    command: python3 atm_snmp_simulator.py
-    environment:
-      ATM_ID: "ATM-005"
-      ATM_TERMINAL_ID: "TID005"
-      ATM_BRANCH: "Dire Dawa Branch"
-      SNMP_PORT: "1165"
-    ports:
-      - "1165:1165"
-    restart: unless-stopped
-
-  txn-feed-001:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: txn-feed-001
-    command: python3 transaction_feed.py
-    environment:
-      ATM_ID: "ATM-001"
-      ATM_TERMINAL_ID: "TID001"
-      ATM_BRANCH: "Addis Ababa Main Branch"
-      DB_HOST: "postgres"
-      DB_NAME: "zabbix"
-      DB_USER: "zabbix"
-      DB_PASS: ${DB_PASS}
-    depends_on:
-      - postgres
-    restart: unless-stopped
-
-  txn-feed-002:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: txn-feed-002
-    command: python3 transaction_feed.py
-    environment:
-      ATM_ID: "ATM-002"
-      ATM_TERMINAL_ID: "TID002"
-      ATM_BRANCH: "Bole International Branch"
-      DB_HOST: "postgres"
-      DB_NAME: "zabbix"
-      DB_USER: "zabbix"
-      DB_PASS: ${DB_PASS}
-    depends_on:
-      - postgres
-    restart: unless-stopped
-
-  txn-feed-003:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: txn-feed-003
-    command: python3 transaction_feed.py
-    environment:
-      ATM_ID: "ATM-003"
-      ATM_TERMINAL_ID: "TID003"
-      ATM_BRANCH: "Merkato Branch"
-      DB_HOST: "postgres"
-      DB_NAME: "zabbix"
-      DB_USER: "zabbix"
-      DB_PASS: ${DB_PASS}
-    depends_on:
-      - postgres
-    restart: unless-stopped
-
-  txn-feed-004:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: txn-feed-004
-    command: python3 transaction_feed.py
-    environment:
-      ATM_ID: "ATM-004"
-      ATM_TERMINAL_ID: "TID004"
-      ATM_BRANCH: "Hawassa Branch"
-      DB_HOST: "postgres"
-      DB_NAME: "zabbix"
-      DB_USER: "zabbix"
-      DB_PASS: ${DB_PASS}
-    depends_on:
-      - postgres
-    restart: unless-stopped
-
-  txn-feed-005:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: txn-feed-005
-    command: python3 transaction_feed.py
-    environment:
-      ATM_ID: "ATM-005"
-      ATM_TERMINAL_ID: "TID005"
-      ATM_BRANCH: "Dire Dawa Branch"
-      DB_HOST: "postgres"
-      DB_NAME: "zabbix"
-      DB_USER: "zabbix"
-      DB_PASS: ${DB_PASS}
-    depends_on:
-      - postgres
-    restart: unless-stopped
 
 
-  atm-ej-001:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-ej-001
-    command: python3 ej_log_generator.py
-    environment:
-      ATM_ID: "ATM-001"
-      ATM_TERMINAL_ID: "TID001"
-      ATM_BRANCH: "Addis Ababa Main Branch"
-      EJ_LOG_PATH: "/var/log/atm-ej/ATM-001.log"
-    volumes:
-      - ./ej-logs:/var/log/atm-ej
-    restart: unless-stopped
 
-  atm-ej-002:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-ej-002
-    command: python3 ej_log_generator.py
-    environment:
-      ATM_ID: "ATM-002"
-      ATM_TERMINAL_ID: "TID002"
-      ATM_BRANCH: "Bole International Branch"
-      EJ_LOG_PATH: "/var/log/atm-ej/ATM-002.log"
-    volumes:
-      - ./ej-logs:/var/log/atm-ej
-    restart: unless-stopped
 
-  atm-ej-003:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-ej-003
-    command: python3 ej_log_generator.py
-    environment:
-      ATM_ID: "ATM-003"
-      ATM_TERMINAL_ID: "TID003"
-      ATM_BRANCH: "Merkato Branch"
-      EJ_LOG_PATH: "/var/log/atm-ej/ATM-003.log"
-    volumes:
-      - ./ej-logs:/var/log/atm-ej
-    restart: unless-stopped
 
-  atm-ej-004:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-ej-004
-    command: python3 ej_log_generator.py
-    environment:
-      ATM_ID: "ATM-004"
-      ATM_TERMINAL_ID: "TID004"
-      ATM_BRANCH: "Hawassa Branch"
-      EJ_LOG_PATH: "/var/log/atm-ej/ATM-004.log"
-    volumes:
-      - ./ej-logs:/var/log/atm-ej
-    restart: unless-stopped
 
-  atm-ej-005:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-ej-005
-    command: python3 ej_log_generator.py
-    environment:
-      ATM_ID: "ATM-005"
-      ATM_TERMINAL_ID: "TID005"
-      ATM_BRANCH: "Dire Dawa Branch"
-      EJ_LOG_PATH: "/var/log/atm-ej/ATM-005.log"
-    volumes:
-      - ./ej-logs:/var/log/atm-ej
-    restart: unless-stopped
+
+
+
+
+
+
+
+
+
 
   # ─── GRG ATM SIMULATORS ───────────────────────────────
-  grg-sim-001:
+
+
+
+
+
+
+  # ─── MULTI-TENANT SIMULATION ENGINES ───────────────────────
+  # A single engine simulates EVERY ATM in atm_locations (auto-discovered).
+  # ATMs registered in the Report Portal start being simulated automatically.
+  atm-sim-engine:
     build:
       context: ./simulators
       dockerfile: Dockerfile.atm-simulator
-    container_name: grg-sim-001
-    command: python3 grg_snmp_simulator.py
+    container_name: atm-sim-engine
+    command: python3 sim_engine.py
     environment:
-      ATM_ID: "GRG-001"
-      ATM_TERMINAL_ID: "TID006"
-      ATM_BRANCH: "Bole Atlas Branch"
-      SNMP_PORT: "1166"
+      DB_HOST: postgres
+      DB_NAME: zabbix
+      DB_USER: zabbix
+      DB_PASS: ${DB_PASS}
+      GATEWAY_IP: "172.17.0.1"
     ports:
-      - "1166:1166"
+      - "1161-1250:1161-1250"
     restart: unless-stopped
 
-  grg-sim-002:
+  atm-txn-engine:
     build:
       context: ./simulators
       dockerfile: Dockerfile.atm-simulator
-    container_name: grg-sim-002
-    command: python3 grg_snmp_simulator.py
+    container_name: atm-txn-engine
+    command: python3 txn_engine.py
     environment:
-      ATM_ID: "GRG-002"
-      ATM_TERMINAL_ID: "TID007"
-      ATM_BRANCH: "Megenagna Branch"
-      SNMP_PORT: "1167"
-    ports:
-      - "1167:1167"
-    restart: unless-stopped
-
-  grg-ej-001:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: grg-ej-001
-    command: python3 grg_ej_generator.py
-    environment:
-      ATM_ID: "GRG-001"
-      ATM_TERMINAL_ID: "TID006"
-      ATM_BRANCH: "Bole Atlas Branch"
-      EJ_LOG_PATH: "/var/log/atm-ej/GRG-001.log"
-    volumes:
-      - ./ej-logs:/var/log/atm-ej
-    restart: unless-stopped
-
-  grg-ej-002:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: grg-ej-002
-    command: python3 grg_ej_generator.py
-    environment:
-      ATM_ID: "GRG-002"
-      ATM_TERMINAL_ID: "TID007"
-      ATM_BRANCH: "Megenagna Branch"
-      EJ_LOG_PATH: "/var/log/atm-ej/GRG-002.log"
-    volumes:
-      - ./ej-logs:/var/log/atm-ej
-    restart: unless-stopped
-
-  grg-txn-001:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: grg-txn-001
-    command: python3 transaction_feed.py
-    environment:
-      ATM_ID: "GRG-001"
-      ATM_TERMINAL_ID: "TID006"
-      ATM_BRANCH: "Bole Atlas Branch"
-      ATM_VENDOR: "GRG"
-      DB_HOST: "postgres"
-      DB_NAME: "zabbix"
-      DB_USER: "zabbix"
+      DB_HOST: postgres
+      DB_NAME: zabbix
+      DB_USER: zabbix
       DB_PASS: ${DB_PASS}
     depends_on:
       - postgres
     restart: unless-stopped
 
-  grg-txn-002:
+  atm-ej-engine:
     build:
       context: ./simulators
       dockerfile: Dockerfile.atm-simulator
-    container_name: grg-txn-002
-    command: python3 transaction_feed.py
+    container_name: atm-ej-engine
+    command: python3 ej_engine.py
     environment:
-      ATM_ID: "GRG-002"
-      ATM_TERMINAL_ID: "TID007"
-      ATM_BRANCH: "Megenagna Branch"
-      ATM_VENDOR: "GRG"
-      DB_HOST: "postgres"
-      DB_NAME: "zabbix"
-      DB_USER: "zabbix"
+      DB_HOST: postgres
+      DB_NAME: zabbix
+      DB_USER: zabbix
       DB_PASS: ${DB_PASS}
+      EJ_LOG_DIR: /var/log/atm-ej
+    volumes:
+      - ./ej-logs:/var/log/atm-ej
     depends_on:
       - postgres
     restart: unless-stopped

@@ -28,6 +28,7 @@ ROLES = [ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN]
 
 # ─── Simulator metrics (for the visual ATM detail page) ────────────────────────
 GATEWAY_IP = os.environ.get('GATEWAY_IP', '172.17.0.1')
+# Legacy fallback for the 7 original ATMs (before sim_port was stored in the DB).
 ATM_PORTS = {
     'ATM-001': 1161, 'ATM-002': 1162, 'ATM-003': 1163,
     'ATM-004': 1164, 'ATM-005': 1165,
@@ -36,9 +37,46 @@ ATM_PORTS = {
 CASSETTE_MAX = 2500  # notes-per-cassette capacity used for fill %
 
 
+def get_sim_port(atm_id):
+    """Return the simulator port for an ATM (from atm_locations.sim_port)."""
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            try:
+                cur.execute("SELECT sim_port FROM atm_locations WHERE atm_id = %s", (atm_id,))
+            except Exception:
+                # sim_port column may not exist yet on a fresh/old DB
+                return ATM_PORTS.get(atm_id)
+            row = cur.fetchone()
+            if row and row[0]:
+                return int(row[0])
+    except Exception:
+        pass
+    return ATM_PORTS.get(atm_id)
+
+
+def assign_sim_port(atm_id, vendor):
+    """Allocate a sim_port for a newly registered ATM (idempotent)."""
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            base = 1166 if (vendor or '').upper() == 'GRG' else 1161
+            cur.execute("SELECT sim_port FROM atm_locations WHERE atm_id = %s", (atm_id,))
+            if cur.fetchone():
+                return  # already has one
+            cur.execute("SELECT COALESCE(MAX(sim_port), %s - 1) "
+                        "FROM atm_locations WHERE vendor = %s AND sim_port IS NOT NULL",
+                        (base, vendor))
+            nxt = (cur.fetchone()[0] or (base - 1)) + 1
+            cur.execute("UPDATE atm_locations SET sim_port = %s WHERE atm_id = %s", (nxt, atm_id))
+            conn.commit()
+    except Exception as e:
+        print(f"[assign_sim_port] {atm_id}: {e}")
+
+
 def fetch_metrics(atm_id):
     """Return the simulator /metrics JSON, or None if unreachable."""
-    port = ATM_PORTS.get(atm_id)
+    port = get_sim_port(atm_id)
     if not port:
         return None
     try:
@@ -338,6 +376,8 @@ def atm_save():
                 data['install_date'], data['status']
             ))
             conn.commit()
+            # Auto-allocate a simulator port so the new ATM behaves like the others
+            assign_sim_port(data['atm_id'], data['vendor'])
         except Exception as e:
             conn.rollback()
             err_msg = str(e)
@@ -547,6 +587,9 @@ def atm_import():
                 except Exception as e:
                     db_errors.append({'atm_id': row['atm_id'], 'error': str(e)})
             conn.commit()
+            # Auto-allocate simulator ports so imported ATMs behave like the others
+            for row in rows:
+                assign_sim_port(row['atm_id'], row.get('vendor'))
             cur.close()
 
     log_action('ATM_IMPORT', f'Imported {imported}, skipped {len(errors)}, db_errors {len(db_errors)}')

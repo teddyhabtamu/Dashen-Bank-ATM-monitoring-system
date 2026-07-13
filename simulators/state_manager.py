@@ -26,13 +26,8 @@ DB_USER = os.environ.get('DB_USER', 'zabbix')
 DB_PASS = os.environ.get('DB_PASS', 'zabbix_pass')
 GATEWAY_IP = os.environ.get('GATEWAY_IP', '172.17.0.1')
 
-# Port map for simulated ATMs (must match docker-compose SNMP_PORT values).
-# Only simulated ATMs are polled; the rest keep their seeded state.
-ATM_PORTS = {
-    'ATM-001': 1161, 'ATM-002': 1162, 'ATM-003': 1163,
-    'ATM-004': 1164, 'ATM-005': 1165,
-    'GRG-001': 1166, 'GRG-002': 1167,
-}
+# Ports are now read from atm_locations.sim_port (assigned automatically by the
+# multi-tenant sim engine). No hard-coded map needed — every ATM is polled.
 
 
 def get_db():
@@ -84,15 +79,22 @@ def determine_state(atm_id, port, vendor):
 
 
 def update_states():
+    import common
     conn = get_db()
     cur = conn.cursor()
+
+    # Build the live port map from the DB (every ATM with a sim_port).
+    cur.execute("SELECT atm_id, sim_port, vendor FROM atm_locations WHERE sim_port IS NOT NULL")
+    port_map = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+
     cur.execute("SELECT atm_id, vendor FROM atm_locations")
     atms = cur.fetchall()
 
     for atm_id, vendor in atms:
-        port = ATM_PORTS.get(atm_id)
-        if not port:
+        pm = port_map.get(atm_id)
+        if not pm:
             continue  # no simulator for this ATM — keep seeded state
+        port, vendor = pm
 
         new_state = determine_state(atm_id, port, vendor or 'NCR')
 
