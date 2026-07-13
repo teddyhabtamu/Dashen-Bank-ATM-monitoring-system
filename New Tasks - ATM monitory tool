@@ -1887,6 +1887,23 @@ tr:hover td{{background:#f8f9ff;}}
 
 ---
 
+### 10.5 ATM Visual Detail Page (added 2026-07-13) ✅ COMPLETE + VERIFIED
+
+> Built the NetXMS-style per-ATM visual detail page as a proper extension of the existing Report Portal (the spec's `app.py` greenfield route was wrong — duplicated the Blueprint). Reused `atm_locations`, `atm_current_state`, `atm_transactions`, and the live SNMP simulators.
+
+**Backend** (`report-portal/blueprints/admin.py`):
+- New `GET /admin/atm/<atm_id>` route (`atm_detail`): joins `atm_locations` + `atm_current_state`, fetches live data from the simulator `http://172.17.0.1:{port}/metrics` (NCR→1161–1165, GRG→1166–1167; `GATEWAY_IP` env override), computes 24h transaction stats (count, success rate, cash dispensed) and active faults via `atm_transactions`, and returns recent 20 transactions.
+- Helpers `fetch_metrics()`, `build_cassettes()` (vendor-aware NCR/GRG slot geometry, fill % vs `CASSETTE_MAX=2500`), `build_hardware()` (status pills: Card reader / Printer / Pin pad / Retract bin / Network / UPS), and a fleet `summary` dict (Registered / In Service / NCR / GRG) passed into `atm_list()`.
+- Fixed: `import os` added (crashed on first deploy).
+
+**Frontend**:
+- New `report-portal/templates/admin_atm_detail.html`: identity KVs (ATM ID, Terminal ID, District, City, Install Date, SNMP community/version, Last Seen), 4 quick-stat cards (24h txns / success % / cash dispensed ETB / active faults), **SVG ATM diagram** with colour-coded cassette/module fill levels, hardware status pills, and a recent-transactions table. Falls back to "No data" placeholders when the simulator is unreachable.
+- `admin_atm.html`: 4-card summary stat row under the header; new **Name** column; **View Detail** kebab item → `/admin/atm/<atm_id>`. (The "Live Dashboards" button was already present, correctly pointing to `http://localhost:3002`.)
+
+**Verified**: committed + pushed (`8ee26a0`, `b7bc855`); portal restarted; logged in and confirmed `/admin/atm` shows summary cards/Name/View Detail and `/admin/atm/ATM-001` renders 4 NCR cassette slots, 6 hardware pills, recent txns, quick stats — no errors.
+
+---
+
 ## 11. Phase 10 — Before the Server Arrives (Final Checklist)
 
 Work through these in order. Check each one off before the server arrives.
