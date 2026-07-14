@@ -18,6 +18,18 @@ from reportlab.lib.enums import TA_CENTER
 
 bp = Blueprint('report', __name__)
 
+_VENDOR_SQL = """
+    SELECT COALESCE(l.vendor,'Unknown'), COUNT(DISTINCT t.atm_id), COUNT(*),
+        SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END),
+        SUM(CASE WHEN t.status='DECLINED' THEN 1 ELSE 0 END),
+        SUM(CASE WHEN t.status='ERROR' THEN 1 ELSE 0 END),
+        ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2),
+        COALESCE(SUM(CASE WHEN t.status='APPROVED' AND t.txn_type='WITHDRAWAL' THEN t.amount ELSE 0 END),0)
+    FROM atm_transactions t JOIN atm_locations l ON t.atm_id = l.atm_id
+    WHERE t.recorded_at >= NOW() - INTERVAL %s
+    GROUP BY l.vendor ORDER BY 3 DESC
+"""
+
 
 @bp.route('/api/atms')
 @login_required
@@ -577,6 +589,13 @@ def report_full(fmt):
             xl_append_section(ws, '4. ATM Performance Metrics', h4, cur.fetchall())
             cur.close()
 
+            # 5. Vendor Performance
+            cur = conn.cursor()
+            cur.execute(_VENDOR_SQL, (interval_str,))
+            h5 = ['Vendor', 'ATMs', 'Total Txns', 'Approved', 'Declined', 'Errors', 'Success Rate %', 'Cash Dispensed ETB']
+            xl_append_section(ws, '5. Vendor Performance', h5, cur.fetchall())
+            cur.close()
+
             xl_autosize(ws)
 
             log_action('EXPORT', f'Complete report (excel) - days={days}, atm={atm}')
@@ -642,6 +661,14 @@ def report_full(fmt):
             w.writerow(['4. ATM PERFORMANCE METRICS'])
             w.writerow(['ATM', 'Branch', 'Total Transactions', 'Success Rate %', 'Avg Daily Txns', 'Peak Hour', 'Rank'])
             w.writerows([[str(v) if v is not None else '—' for v in r] for r in rows4])
+            w.writerow([])
+
+            cur = conn.cursor()
+            cur.execute(_VENDOR_SQL, [interval_str])
+            rows5 = cur.fetchall(); cur.close()
+            w.writerow(['5. VENDOR PERFORMANCE'])
+            w.writerow(['Vendor', 'ATMs', 'Total Txns', 'Approved', 'Declined', 'Errors', 'Success Rate %', 'Cash Dispensed ETB'])
+            w.writerows([[str(v) if v is not None else '—' for v in r] for r in rows5])
             w.writerow([])
             w.writerow(['Dashen Bank ATM Monitoring System | Confidential Management Report'])
 
@@ -731,6 +758,14 @@ def report_full(fmt):
                 story += [PageBreak(),
                           Paragraph('<b><font color="#012169">4. ATM Performance Metrics</font></b>', style_sec),
                           mktable(['ATM', 'Branch', 'Total Transactions', 'Success Rate %', 'Avg Daily Txns', 'Peak Hour', 'Rank'], res4),
+                          Spacer(1, 0.8 * cm)]
+
+            # 5. Vendor Performance
+            cur.execute(_VENDOR_SQL, [interval_str])
+            res5 = cur.fetchall()
+            if res5:
+                story += [Paragraph('<b><font color="#012169">5. Vendor Performance</font></b>', style_sec),
+                          mktable(['Vendor', 'ATMs', 'Total Txns', 'Approved', 'Declined', 'Errors', 'Success Rate %', 'Cash Dispensed ETB'], res5),
                           Spacer(1, 0.8 * cm)]
 
             story.append(Paragraph(
