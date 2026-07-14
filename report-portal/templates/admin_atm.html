@@ -158,7 +158,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
   <a href="http://localhost:3002" target="_blank" class="btn-live btn-primary"><i data-lucide="bar-chart-3"></i> Live Dashboards</a>
 </div>
 
-<div class="page-content" data-fields='{{ fields|tojson }}'>
+<div class="page-content" data-fields='{{ fields|tojson }}' data-vendors='{{ vendor_options|tojson }}'>
 
 <div class="summary-grid">
   <div class="summary-card"><div class="sc-val">{{ summary.registered }}</div><div class="sc-lbl">Registered ATMs</div></div>
@@ -397,7 +397,16 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
           {% set optional = name == 'atm_name' %}
           <div class="form-group" data-field="{{ name }}">
             <label>{{ label }} {% if not optional %}<span class="required">*</span>{% endif %}</label>
-            {% if typ == 'select' %}
+            {% if name == 'vendor' %}
+              <select name="vendor" id="field-vendor" required onchange="onVendorChange(this)">
+                <option value="">-- Select --</option>
+                {% for opt in vendor_options %}
+                  <option value="{{ opt }}">{{ opt }}</option>
+                {% endfor %}
+                <option value="__new__">+ Add new vendor…</option>
+              </select>
+              <input type="text" id="field-vendor-new" placeholder="Enter new vendor name" maxlength="{{ maxlen or 50 }}" style="display:none;margin-top:8px">
+            {% elif typ == 'select' %}
               <select name="{{ name }}" id="field-{{ name }}" required>
                 <option value="">-- Select --</option>
                 {% for opt in ['active','inactive'] %}
@@ -473,6 +482,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
         <span style="color:#CBD5E1">|</span>
         <span style="font-size:12px;color:#64748B"><span id="importValidCount">0</span> valid</span>
         <span style="font-size:12px;color:#DC2626" id="importErrorCountLabel"><span id="importErrorCount">0</span> with errors</span>
+        <span style="font-size:12px;color:#B45309" id="importWarnCountLabel"><span id="importWarnCount">0</span> warnings</span>
         <span style="color:#CBD5E1">|</span>
         <span style="font-size:12px;color:#64748B"><span id="importTotalCount">0</span> total rows</span>
         <div style="flex:1"></div>
@@ -527,6 +537,8 @@ function applyFilter(){
       if(detailRow) detailRow.classList.toggle('open');
     }
 var FIELDS = JSON.parse(document.querySelector('.page-content').dataset.fields);
+var KNOWN_VENDORS = JSON.parse(document.querySelector('.page-content').dataset.vendors || '["NCR","GRG"]');
+var KNOWN_VENDORS_UC = KNOWN_VENDORS.map(function(v){ return String(v).toUpperCase(); });
 
 function openModal(data){
   clearErrors();
@@ -542,9 +554,24 @@ function openModal(data){
     if(typ === 'select') el.value = val;
     else el.value = val;
   });
+  // Reset the "add new vendor" input each time the modal opens.
+  var vNew = document.getElementById('field-vendor-new');
+  if(vNew){ vNew.value = ''; vNew.style.display = 'none'; }
   syncCustomSelects();
   lucide.createIcons();
   initFlatpickr();
+}
+
+function onVendorChange(sel){
+  var vNew = document.getElementById('field-vendor-new');
+  if(!vNew) return;
+  if(sel.value === '__new__'){
+    vNew.style.display = '';
+    vNew.focus();
+  } else {
+    vNew.style.display = 'none';
+    vNew.value = '';
+  }
 }
 function syncCustomSelects(){
   document.querySelectorAll('select').forEach(function(sel){
@@ -731,6 +758,13 @@ document.getElementById('atmForm').addEventListener('submit', function(e){
 
   var errors = {};
   var formData = new FormData(this);
+
+  // Resolve "Add new vendor" into the actual typed value before validation.
+  var vendorSel = document.getElementById('field-vendor');
+  if(vendorSel && vendorSel.value === '__new__'){
+    var newVendor = (document.getElementById('field-vendor-new').value || '').trim();
+    formData.set('vendor', newVendor);
+  }
 
   FIELDS.forEach(function(f){
     var field = f[0];
@@ -946,20 +980,31 @@ function validateRow(row){
   return errs;
 }
 
+function warnRow(row){
+  var warns = {};
+  if(row.vendor && KNOWN_VENDORS_UC.indexOf(row.vendor.toUpperCase()) === -1){
+    warns.vendor = 'Unknown vendor "' + row.vendor + '" — will be simulated with NCR schema. Known: ' + KNOWN_VENDORS.join(', ');
+  }
+  return warns;
+}
+
 function renderPreviewTable(fileName){
   var validCount = 0;
   var errorCount = 0;
+  var warnCount = 0;
   var rowsWithErrors = [];
 
   for(var i = 0; i < _importRows.length; i++){
     var errs = validateRow(_importRows[i]);
     _importRows[i]._errors = errs;
+    _importRows[i]._warnings = warnRow(_importRows[i]);
     _importRows[i]._rowNum = i + 1;
     if(Object.keys(errs).length > 0){
       errorCount++;
       rowsWithErrors.push(i);
     } else {
       validCount++;
+      if(Object.keys(_importRows[i]._warnings).length > 0) warnCount++;
     }
   }
 
@@ -980,8 +1025,10 @@ function renderPreviewTable(fileName){
   document.getElementById('importFileName').textContent = fileName;
   document.getElementById('importValidCount').textContent = newCount + ' new · ' + updateCount + ' update';
   document.getElementById('importErrorCount').textContent = errorCount;
+  document.getElementById('importWarnCount').textContent = warnCount;
   document.getElementById('importTotalCount').textContent = _importRows.length;
   document.getElementById('importErrorCountLabel').style.display = errorCount > 0 ? '' : 'none';
+  document.getElementById('importWarnCountLabel').style.display = warnCount > 0 ? '' : 'none';
   document.getElementById('importUploadCount').textContent = validCount + ' (' + newCount + ' new, ' + updateCount + ' updates)';
   document.getElementById('importUploadBtn').disabled = validCount === 0;
 
@@ -1030,7 +1077,10 @@ function renderPreviewTable(fileName){
   for(var i = 0; i < visibleRows.length; i++){
     var row = visibleRows[i];
     var tr = document.createElement('tr');
-    if(Object.keys(row._errors).length > 0) tr.style.background = '#FEF2F2';
+    var hasErr = Object.keys(row._errors).length > 0;
+    var hasWarn = Object.keys(row._warnings || {}).length > 0;
+    if(hasErr) tr.style.background = '#FEF2F2';
+    else if(hasWarn) tr.style.background = '#FFFBEB';
 
     var numTd = document.createElement('td');
     numTd.textContent = row._rowNum;
@@ -1039,8 +1089,10 @@ function renderPreviewTable(fileName){
 
     var typeTd = document.createElement('td');
     typeTd.style.cssText = 'text-align:center;padding:4px';
-    if(row._errors && Object.keys(row._errors).length > 0){
+    if(hasErr){
       typeTd.innerHTML = '<span style="display:inline-block;font-size:9px;font-weight:600;padding:1px 6px;border-radius:3px;background:#FEF2F2;color:#DC2626">Error</span>';
+    } else if(hasWarn){
+      typeTd.innerHTML = '<span style="display:inline-block;font-size:9px;font-weight:600;padding:1px 6px;border-radius:3px;background:#FFFBEB;color:#B45309">Warn</span>';
     } else if(row._exists){
       typeTd.innerHTML = '<span style="display:inline-block;font-size:9px;font-weight:600;padding:1px 6px;border-radius:3px;background:#EFF6FF;color:#1D4ED8">Update</span>';
     } else {
@@ -1060,6 +1112,13 @@ function renderPreviewTable(fileName){
         dot.textContent = '!';
         dot.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#DC2626;color:#fff;font-size:9px;font-weight:700;margin-left:4px;flex-shrink:0';
         td.appendChild(dot);
+      } else if(row._warnings && row._warnings[COLS[c]]){
+        td.style.cssText += ';background:#FFFBEB;color:#B45309;border-bottom:2px solid #F59E0B;cursor:help';
+        td.title = row._warnings[COLS[c]];
+        var wdot = document.createElement('span');
+        wdot.textContent = '!';
+        wdot.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#F59E0B;color:#fff;font-size:9px;font-weight:700;margin-left:4px;flex-shrink:0';
+        td.appendChild(wdot);
       }
       tr.appendChild(td);
     }

@@ -238,7 +238,12 @@ def atm_list():
         region_options = [r[0] for r in cur.fetchall()]
         cur.execute("SELECT DISTINCT city FROM atm_locations WHERE city IS NOT NULL ORDER BY city")
         city_options = [r[0] for r in cur.fetchall()]
+        cur.execute("SELECT DISTINCT vendor FROM atm_locations WHERE vendor IS NOT NULL AND vendor <> '' ORDER BY vendor")
+        db_vendors = [r[0] for r in cur.fetchall()]
         cur.close()
+
+    # Known Dashen vendors first, then any others already in the DB.
+    vendor_options = list(dict.fromkeys(['NCR', 'GRG'] + db_vendors))
 
     atms = [dict(zip(cols, r)) for r in rows]
 
@@ -264,7 +269,8 @@ def atm_list():
                            page=page, total_pages=total_pages,
                            search=search, fields=FIELDS, summary=summary,
                            f_vendor=vendor, f_status=status, f_region=region, f_city=city,
-                           filter_options={'regions': region_options, 'cities': city_options})
+                           filter_options={'regions': region_options, 'cities': city_options},
+                           vendor_options=vendor_options)
 
 
 @bp.route('/atm/<atm_id>')
