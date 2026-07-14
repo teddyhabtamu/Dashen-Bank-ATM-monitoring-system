@@ -65,7 +65,8 @@ def assign_sim_port(atm_id, vendor):
         with get_db() as conn:
             cur = conn.cursor()
             cur.execute("SELECT sim_port FROM atm_locations WHERE atm_id = %s", (atm_id,))
-            if cur.fetchone():
+            row = cur.fetchone()
+            if row and row[0]:
                 return  # already has one
             cur.execute("SELECT COALESCE(MAX(sim_port), 1160) FROM atm_locations")
             nxt = (cur.fetchone()[0] or 1160) + 1

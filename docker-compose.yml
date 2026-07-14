@@ -332,9 +332,9 @@ services:
       DB_PASS: ${DB_PASS}
       GATEWAY_IP: "172.17.0.1"
       SIM_PORT_MIN: "1161"
-      SIM_PORT_MAX: "2500"
+      SIM_PORT_MAX: "1260"
     ports:
-      - "1161-2500:1161-2500"
+      - "1161-1260:1161-1260"
     depends_on:
       postgres:
         condition: service_healthy

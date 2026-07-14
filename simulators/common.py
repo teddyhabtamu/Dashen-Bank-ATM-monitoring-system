@@ -41,10 +41,12 @@ def _used_ports(conn):
         return {r[0]: r[1] for r in cur.fetchall()}
 
 
-def _free_port(used):
-    """First port in [PORT_MIN, PORT_MAX] not present in `used` values."""
+def _free_port(used_ports):
+    """First port in [PORT_MIN, PORT_MAX] not in `used_ports` (a set/collection
+    of port numbers)."""
+    used_ports = set(used_ports)
     for p in range(PORT_MIN, PORT_MAX + 1):
-        if p not in used.values():
+        if p not in used_ports:
             return p
     return None
 
@@ -65,7 +67,7 @@ def repair_duplicate_ports(conn):
         else:
             seen.add(port)
     for aid in duplicates:
-        free = _free_port(used)
+        free = _free_port(used.values())
         if free is None:
             print(f"[PORTS] No free port in range {PORT_MIN}-{PORT_MAX} for duplicate {aid}")
             continue

@@ -307,7 +307,12 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
             {% endif %}
             <div class="atm-card-id">{{ d.atm_id }}</div>
           </div>
-          <span class="badge {{ status }}">{{ status.capitalize() }}</span>
+          {% if status != 'active' %}
+          <span class="retired-tag" title="Retired — excluded from the monitored fleet">Retired</span>
+          {% else %}
+          {% set live = d.state or 'UNKNOWN' %}
+          <span style="color:{{ 'green' if live=='IN_SERVICE' else 'red' }};font-weight:600;font-size:12px">{{ live }}</span>
+          {% endif %}
         </div>
         <div class="atm-card-info">
           <div class="atm-card-detail">
@@ -343,12 +348,13 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
           <span class="atm-card-meta-item"><span class="atm-card-label">Coords</span> {{ d.latitude }}, {{ d.longitude }}</span>
           {% endif %}
         </div>
-        {% if session.get('role') in ('admin', 'operator') %}
         <div class="atm-card-actions">
+          <a class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;text-decoration:none" href="/admin/atm/{{ d.atm_id }}"><i data-lucide="eye" style="width:14px;height:14px"></i> View</a>
+          {% if session.get('role') in ('admin', 'operator') %}
           <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px" onclick="editATM('{{ d.atm_id }}')"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
           <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;color:#DC2626;border-color:#FECACA" onclick="deleteATM('{{ d.atm_id }}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
+          {% endif %}
         </div>
-        {% endif %}
       </div>
       {% endfor %}
     {% else %}
@@ -1126,13 +1132,28 @@ function uploadImport(){
 
     var imported = data.imported || 0;
     var skipped = data.skipped || 0;
+    var dbErrors = data.db_errors || [];
+
+    if(imported === 0 && dbErrors.length > 0){
+      var detail = dbErrors.slice(0, 5).map(function(e){
+        return '<div style="margin-top:4px"><b>' + escapeHtml(e.atm_id) + '</b>: ' + escapeHtml(e.error) + '</div>';
+      }).join('');
+      if(dbErrors.length > 5) detail += '<div style="margin-top:4px">… and ' + (dbErrors.length - 5) + ' more</div>';
+      el.innerHTML = '<div class="modal-alert error" style="display:block">' +
+        dbErrors.length + ' row(s) failed to save:' + detail + '</div>';
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="upload" style="width:14px;height:14px"></i> Upload valid rows';
+      lucide.createIcons();
+      return;
+    }
 
     closeImportModal();
 
     if(imported > 0){
       var msg = imported + ' ATM' + (imported !== 1 ? 's' : '') + ' imported successfully';
       if(skipped > 0) msg += ' (' + skipped + ' skipped)';
-      showToast(msg, 'success');
+      if(dbErrors.length > 0) msg += ', ' + dbErrors.length + ' failed to save';
+      showToast(msg, dbErrors.length > 0 ? 'warning' : 'success');
       setTimeout(function(){ location.reload(); }, 1200);
     } else {
       showToast('No rows were imported. Check your file and try again.', 'warning');
