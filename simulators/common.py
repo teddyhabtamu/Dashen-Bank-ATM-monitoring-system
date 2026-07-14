@@ -17,7 +17,11 @@ DB_PASS = os.environ.get('DB_PASS', '')
 # Starting port for the global (vendor-agnostic) allocation pool. Legacy ATMs
 # keep their historical ports (NCR 1161-1165, GRG 1166-1167); every newly
 # registered ATM simply takes the next free port so pools never collide.
-PORT_BASE = 1161
+# Global allocation pool. The whole fleet shares one contiguous port range so
+# NCR and GRG ports can never collide. This MUST match the published port range
+# in docker-compose.yml (atm-sim-engine `ports`).
+PORT_MIN = int(os.environ.get('SIM_PORT_MIN', '1161'))
+PORT_MAX = int(os.environ.get('SIM_PORT_MAX', '2500'))
 
 
 def get_db():
@@ -31,22 +35,65 @@ def ensure_sim_port_col(conn):
     conn.commit()
 
 
-def assign_ports(conn):
-    """Allocate a sim_port to any ATM that does not yet have one.
+def _used_ports(conn):
+    with conn.cursor() as cur:
+        cur.execute("SELECT atm_id, sim_port FROM atm_locations WHERE sim_port IS NOT NULL")
+        return {r[0]: r[1] for r in cur.fetchall()}
 
-    Uses a single global sequence (MAX(sim_port)+1) so NCR and GRG ports never
-    overlap, regardless of fleet size.
+
+def _free_port(used):
+    """First port in [PORT_MIN, PORT_MAX] not present in `used` values."""
+    for p in range(PORT_MIN, PORT_MAX + 1):
+        if p not in used.values():
+            return p
+    return None
+
+
+def repair_duplicate_ports(conn):
+    """Guarantee every sim_port is unique; reassign duplicates to free ports.
+
+    assign_ports() never reuses a port, but a manual edit or a CSV/SQL import
+    that writes sim_port can introduce collisions. Two ATMs sharing a port
+    means only one can ever bind -> the other reads AGENT_DISCONNECTED forever.
     """
+    used = _used_ports(conn)
+    seen = set()
+    duplicates = []
+    for aid, port in used.items():
+        if port in seen:
+            duplicates.append(aid)   # second+ ATM on the same port -> reassign
+        else:
+            seen.add(port)
+    for aid in duplicates:
+        free = _free_port(used)
+        if free is None:
+            print(f"[PORTS] No free port in range {PORT_MIN}-{PORT_MAX} for duplicate {aid}")
+            continue
+        with conn.cursor() as cur:
+            cur.execute("UPDATE atm_locations SET sim_port = %s WHERE atm_id = %s", (free, aid))
+        used[aid] = free
+        print(f"[PORTS] Reassigned duplicate {aid} -> {free}")
+
+
+def assign_ports(conn):
+    """Allocate a sim_port to any ATM lacking one, using the first free port in
+    [PORT_MIN, PORT_MAX] so ports stay unique and within the docker-published
+    range regardless of fleet size."""
+    repair_duplicate_ports(conn)
     with conn.cursor() as cur:
         cur.execute("SELECT atm_id FROM atm_locations WHERE sim_port IS NULL ORDER BY atm_id")
         rows = cur.fetchall()
         if not rows:
             return
-        cur.execute("SELECT COALESCE(MAX(sim_port), %s - 1) FROM atm_locations", (PORT_BASE,))
-        nxt = cur.fetchone()[0] + 1
+        used = set(_used_ports(conn).values())
         for (aid,) in rows:
-            cur.execute("UPDATE atm_locations SET sim_port = %s WHERE atm_id = %s", (nxt, aid))
-            nxt += 1
+            free = _free_port(used)
+            if free is None:
+                print(f"[PORTS] OUT OF PORTS: cannot allocate sim_port for {aid} "
+                      f"(range {PORT_MIN}-{PORT_MAX} exhausted)")
+                break
+            cur.execute("UPDATE atm_locations SET sim_port = %s WHERE atm_id = %s", (free, aid))
+            used.add(free)
     conn.commit()
 
 

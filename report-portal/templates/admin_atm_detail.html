@@ -11,7 +11,11 @@
 .kv .k{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#94A3B8;font-weight:600}
 .kv .v{font-size:13px;color:#0F172A;font-weight:500}
 .state-badge{padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;color:#fff;display:inline-block}
-.state-green{background:#059669}.state-amber{background:#B45309}.state-red{background:#DC2626}
+.state-green{background:#059669}.state-amber{background:#B45309}.state-red{background:#DC2626}.state-grey{background:#64748B}
+.retired-banner{display:flex;align-items:flex-start;gap:10px;background:#F1F5F9;border:1px solid #CBD5E1;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#475569;line-height:1.5}
+.retired-banner svg{width:18px;height:18px;color:#64748B;flex-shrink:0;margin-top:1px}
+.retired-banner b{color:#0F172A}
+.retired-note{font-size:11px;color:#94A3B8;margin-top:6px}
 .vendor-badge{padding:4px 12px;border-radius:12px;font-size:11px;font-weight:700;display:inline-block}
 .vendor-NCR{background:#DBEAFE;color:#1D4ED8}.vendor-GRG{background:#EDE9FE;color:#7C3AED}
 .badge-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
@@ -49,7 +53,13 @@ table.txn tbody tr:hover{background:#EEF2FF}
     <p class="page-subtitle">{{ atm.atm_id }} · {{ atm.branch }}{% if atm.city %} · {{ atm.city }}{% endif %}</p>
     <div class="badge-row">
       {% set st = atm.current_state or 'UNKNOWN' %}
+      {% set is_retired = (atm.status or 'active') != 'active' %}
+      {% if is_retired %}
+      <span class="state-badge state-grey">RETIRED</span>
+      <span class="vendor-badge" style="background:#EEF2FF;color:#64748B">Last state: {{ st }}</span>
+      {% else %}
       <span class="state-badge {% if st == 'IN_SERVICE' %}state-green{% elif st == 'IN_SUPERVISOR' %}state-amber{% else %}state-red{% endif %}">{{ st }}</span>
+      {% endif %}
       <span class="vendor-badge vendor-{{ atm.vendor }}">{{ atm.vendor or '—' }}</span>
       {% if atm.model %}<span class="vendor-badge" style="background:#EEF2FF;color:#012169">{{ atm.model }}</span>{% endif %}
     </div>
@@ -61,6 +71,12 @@ table.txn tbody tr:hover{background:#EEF2FF}
 </div>
 
 <div class="page-content">
+  {% if (atm.status or 'active') != 'active' %}
+  <div class="retired-banner">
+    <i data-lucide="archive"></i>
+    <div><b>This ATM is retired</b> and excluded from the monitored fleet — it no longer counts toward dashboards, alerts, or fleet KPIs. The live-looking data below is its <b>last known</b> state captured before retirement, shown here for historical reference only.</div>
+  </div>
+  {% endif %}
 
   <div class="stat-row">
     <div class="stat-card"><div class="stat-val">{{ total_txns }}</div><div class="stat-lbl">Transactions (24h)</div></div>
@@ -68,6 +84,9 @@ table.txn tbody tr:hover{background:#EEF2FF}
     <div class="stat-card"><div class="stat-val">{{ '{:,.0f}'.format(cash_today) }} <span style="font-size:13px;color:#64748B">ETB</span></div><div class="stat-lbl">Cash Dispensed (24h)</div></div>
     <div class="stat-card"><div class="stat-val" style="color:{% if active_faults > 0 %}#DC2626{% else %}#059669{% endif %}">{{ active_faults }}</div><div class="stat-lbl">Active Faults (24h)</div></div>
   </div>
+  {% if (atm.status or 'active') != 'active' %}
+  <div class="retired-note" style="margin:-14px 0 24px">Retired ATM — figures above reflect the last 24h before retirement, not current activity.</div>
+  {% endif %}
 
   <div class="detail-cols">
     <div class="detail-left">
@@ -125,7 +144,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
             <text x="{{ c.x + c.w / 2 }}" y="{{ c.y + c.h - 11 }}" fill="#E5E7EB" font-size="11" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">{% if c.pct is not none %}{{ c.pct }}%{% else %}No data{% endif %}</text>
             {% endfor %}
           </svg>
-          <div class="atm-cap">Live telemetry from SNMP simulator</div>
+          <div class="atm-cap">{% if (atm.status or 'active') != 'active' %}Last known telemetry (retired ATM){% else %}Live telemetry from SNMP simulator{% endif %}</div>
           {% else %}
           <div class="no-data" style="padding:60px 12px">Live cassette data unavailable (simulator not reachable).</div>
           {% endif %}

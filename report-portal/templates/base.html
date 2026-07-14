@@ -159,6 +159,11 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .cust-opt{padding:8px 10px;font-size:12px;color:#0F172A;cursor:pointer;transition:background .1s}
 .cust-opt:hover{background:#EEF2FF;color:#012169}
 .cust-opt.sel{background:#F0F2F6;color:#012169;font-weight:600}
+.cust-search{padding:8px 10px;border-bottom:1px solid #EEF1F6;position:sticky;top:0;background:#fff}
+.cust-search input{width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;transition:border-color .2s,box-shadow .2s}
+.cust-search input:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
+.cust-empty{padding:10px;font-size:12px;color:#94A3B8;text-align:center;display:none}
+.cust-drop.has-search{max-height:240px}
 /* ── FLATPICKR THEME ── */
 .flatpickr-calendar{background:#fff;border:1px solid #E4E9F1;box-shadow:0 8px 32px rgba(1,33,105,.1);border-radius:8px;font-family:'Inter',sans-serif;margin-top:4px}
 .flatpickr-calendar.arrowTop:before,.flatpickr-calendar.arrowTop:after{display:none}
@@ -561,6 +566,35 @@ function initCustomSelects(){
     var drop=document.createElement('div');
     drop.className='cust-drop';
     wrap.appendChild(drop);
+    if(sel.length>6){
+      drop.classList.add('has-search');
+      var searchWrap=document.createElement('div');
+      searchWrap.className='cust-search';
+      var searchInput=document.createElement('input');
+      searchInput.type='text';
+      searchInput.placeholder='Search…';
+      searchInput.setAttribute('autocomplete','off');
+      searchWrap.appendChild(searchInput);
+      drop.appendChild(searchWrap);
+      var emptyMsg=document.createElement('div');
+      emptyMsg.className='cust-empty';
+      emptyMsg.textContent='No matches';
+      drop.appendChild(emptyMsg);
+      searchInput.addEventListener('click',function(e){e.stopPropagation();});
+      searchInput.addEventListener('input',function(){
+        var q=this.value.trim().toLowerCase();
+        var visible=0;
+        drop.querySelectorAll('.cust-opt').forEach(function(o){
+          var match=o.textContent.toLowerCase().indexOf(q)>-1;
+          o.style.display=match?'':'none';
+          if(match)visible++;
+        });
+        emptyMsg.style.display=visible?'none':'block';
+      });
+      trig.addEventListener('click',function(){
+        setTimeout(function(){ searchInput.value=''; searchInput.dispatchEvent(new Event('input')); searchInput.focus(); }, 0);
+      });
+    }
     for(var i=0;i<sel.length;i++){
       (function(idx){
         var o=document.createElement('div');

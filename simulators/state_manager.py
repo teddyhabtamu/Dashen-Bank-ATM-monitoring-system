@@ -36,46 +36,62 @@ def get_db():
         user=DB_USER, password=DB_PASS)
 
 
-def _fetch(port, oid, timeout=3):
-    url = f"http://{GATEWAY_IP}:{port}/oid/{oid}"
-    with urllib.request.urlopen(url, timeout=timeout) as r:
-        return int(r.read().decode().strip())
+def _fetch(port, oid, timeout=8, retries=2):
+    """Fetch an OID value with a retry. A single slow-but-alive simulator
+    should not be reported as AGENT_DISCONNECTED."""
+    last = None
+    for _ in range(retries + 1):
+        try:
+            url = f"http://{GATEWAY_IP}:{port}/oid/{oid}"
+            with urllib.request.urlopen(url, timeout=timeout) as r:
+                return int(r.read().decode().strip())
+        except Exception as e:
+            last = e
+            time.sleep(0.3)
+    if last is not None:
+        raise last
+    raise ValueError("no response")
 
 
 def determine_state(atm_id, port, vendor):
-    """Derive ATM state from simulator OIDs (same logic the GRG/NCR templates poll)."""
+    """Derive ATM state from simulator OIDs.
+
+    IMPORTANT: the simulator (sim_engine.py) models every non-GRG vendor with the
+    NCR OID schema, so we must use the exact same rule — GRG -> GRG OIDs,
+    everything else (NCR/Diebold/Wincor/...) -> NCR OIDs. A mismatched branch is
+    what produced spurious AGENT_DISCONNECTED for 3rd-party vendors.
+    """
     try:
-        base = f"http://{GATEWAY_IP}:{port}"
-        status = int(urllib.request.urlopen(f"{base}/oid/1.1.0", timeout=3).read())
-
-        if vendor == 'NCR':
-            cash1 = _fetch(port, '1.2.0')
-            cash2 = _fetch(port, '1.3.0')
-            cash_jam = _fetch(port, '1.7.0')
-            card = _fetch(port, '2.1.0')
-            net = _fetch(port, '7.1.0')
-        else:  # GRG
-            cash1 = _fetch(port, '2.1.0')
-            cash2 = _fetch(port, '2.2.0')
-            cash_jam = _fetch(port, '2.5.0')
-            card = _fetch(port, '3.1.0')
-            net = _fetch(port, '8.1.0')
-
-        if net == 2:
-            return 'OFFLINE'
-        elif status == 2:
-            return 'OUT_OF_SERVICE'
-        elif status == 4:
-            return 'IN_SUPERVISOR'
-        elif cash1 == 0 and cash2 == 0:
-            return 'OUT_OF_CASH'
-        elif cash_jam == 1 or card == 2:
-            return 'HARDWARE_FAULT'
-        elif status == 1:
-            return 'IN_SERVICE'
-        return 'UNKNOWN'
-    except (urllib.error.URLError, urllib.error.HTTPError, ValueError, OSError):
+        status = _fetch(port, '1.1.0')   # reachability gate
+    except Exception:
         return 'AGENT_DISCONNECTED'
+
+    def metric(oid, default=0):
+        try:
+            return _fetch(port, oid)
+        except Exception:
+            return default   # one missing OID should not disconnect the whole ATM
+
+    if vendor == 'GRG':
+        cash1 = metric('2.1.0'); cash2 = metric('2.2.0'); cash_jam = metric('2.5.0')
+        card = metric('3.1.0'); net = metric('8.1.0')
+    else:  # NCR and all other vendors share the NCR OID schema
+        cash1 = metric('1.2.0'); cash2 = metric('1.3.0'); cash_jam = metric('1.7.0')
+        card = metric('2.1.0'); net = metric('7.1.0')
+
+    if net == 2:
+        return 'OFFLINE'
+    elif status == 2:
+        return 'OUT_OF_SERVICE'
+    elif status == 4:
+        return 'IN_SUPERVISOR'
+    elif cash1 == 0 and cash2 == 0:
+        return 'OUT_OF_CASH'
+    elif cash_jam == 1 or card == 2:
+        return 'HARDWARE_FAULT'
+    elif status == 1:
+        return 'IN_SERVICE'
+    return 'UNKNOWN'
 
 
 def update_states():

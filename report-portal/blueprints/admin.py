@@ -160,6 +160,7 @@ def build_hardware(vendor, m):
 
 FIELDS = [
     ('atm_id',      'ATM ID',       'text',   20),
+    ('atm_name',    'Name',         'text',   100),
     ('branch',      'Branch',       'text',   100),
     ('district',    'District',     'text',   100),
     ('city',        'City',         'text',   100),
@@ -246,7 +247,9 @@ def atm_list():
             cur = conn.cursor()
             cur.execute("""SELECT
                 (SELECT COUNT(*) FROM atm_locations) as registered,
-                (SELECT COUNT(*) FROM atm_current_state WHERE state = 'IN_SERVICE') as in_service,
+                (SELECT COUNT(*) FROM atm_current_state s
+                    JOIN atm_locations l ON l.atm_id = s.atm_id
+                    WHERE s.state = 'IN_SERVICE' AND l.status = 'active') as in_service,
                 (SELECT COUNT(*) FROM atm_locations WHERE vendor = 'NCR') as ncr,
                 (SELECT COUNT(*) FROM atm_locations WHERE vendor = 'GRG') as grg""")
             s = cur.fetchone()
@@ -363,6 +366,10 @@ def atm_save():
         v = request.form.get(f, '').strip()
         data[f] = v if v else None
 
+    # Name is optional in the form; default it so the Name column is never blank.
+    if not data.get('atm_name'):
+        data['atm_name'] = data.get('branch') or data.get('atm_id')
+
     errors = _validate(data)
     if errors:
         if is_ajax:
@@ -375,10 +382,11 @@ def atm_save():
         try:
             cur.execute("""
                 INSERT INTO atm_locations
-                    (atm_id, branch, district, city, region, latitude, longitude,
+                    (atm_id, atm_name, branch, district, city, region, latitude, longitude,
                      terminal_id, vendor, model, install_date, status)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (atm_id) DO UPDATE SET
+                    atm_name     = EXCLUDED.atm_name,
                     branch       = EXCLUDED.branch,
                     district     = EXCLUDED.district,
                     city         = EXCLUDED.city,
@@ -391,7 +399,7 @@ def atm_save():
                     install_date = EXCLUDED.install_date,
                     status       = EXCLUDED.status
             """, (
-                data['atm_id'], data['branch'], data['district'], data['city'],
+                data['atm_id'], data['atm_name'], data['branch'], data['district'], data['city'],
                 data['region'], data['latitude'], data['longitude'],
                 data['terminal_id'], data['vendor'], data['model'],
                 data['install_date'], data['status']
@@ -580,12 +588,14 @@ def atm_import():
             cur = conn.cursor()
             for row in rows:
                 try:
+                    name = row.get('atm_name') or row.get('branch') or row.get('atm_id')
                     cur.execute("""
                         INSERT INTO atm_locations
-                            (atm_id, branch, district, city, region, latitude, longitude,
+                            (atm_id, atm_name, branch, district, city, region, latitude, longitude,
                              terminal_id, vendor, model, install_date, status)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         ON CONFLICT (atm_id) DO UPDATE SET
+                            atm_name     = EXCLUDED.atm_name,
                             branch       = EXCLUDED.branch,
                             district     = EXCLUDED.district,
                             city         = EXCLUDED.city,
@@ -598,7 +608,7 @@ def atm_import():
                             install_date = EXCLUDED.install_date,
                             status       = EXCLUDED.status
                     """, (
-                        row['atm_id'], row.get('branch'), row.get('district'),
+                        row['atm_id'], name, row.get('branch'), row.get('district'),
                         row.get('city'), row.get('region'), row.get('latitude'),
                         row.get('longitude'), row.get('terminal_id'),
                         row.get('vendor'), row.get('model'),

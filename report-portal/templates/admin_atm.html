@@ -22,10 +22,17 @@ body { background: #F0F2F6; color: #0F172A; }
 .kebab-item.delete{color:#DC2626}
 .kebab-item.delete:hover{background:#FEF2F2}
 .empty { text-align: center; padding: 48px; color: #94A3B8; font-size: 14px; }
-.filter-bar{display:flex;gap:8px;padding:10px 24px;border-bottom:1px solid #EEF1F6;background:#F8FAFC;flex-wrap:wrap}
+.filter-bar{display:flex;gap:10px;padding:12px 24px;border-bottom:1px solid #EEF1F6;background:#F8FAFC;flex-wrap:wrap;align-items:center}
+.filter-bar .filter-label{font-size:11px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:.04em;margin-right:2px;align-self:center}
+.filter-bar .cust-select{width:auto;min-width:150px;flex:0 0 auto}
+.filter-bar .cust-trigger{width:100%;padding:7px 10px 7px 12px;font-size:12px;border-radius:6px;transition:border-color .2s,box-shadow .2s}
+.filter-bar .cust-trigger:hover{border-color:#CBD5E1}
+.filter-bar .cust-trigger:focus-within,.filter-bar .cust-trigger.open{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
 .filter-bar select{padding:6px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;background:#fff;color:#334155;cursor:pointer;transition:border-color .2s;min-width:120px}
 .filter-bar select:focus{border-color:#012169}
 .filter-bar select:hover{border-color:#CBD5E1}
+.filter-spacer{flex:1 1 auto}
+.filter-bar .filter-reset{margin-left:auto}
 .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:2000;display:none;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 .modal-overlay.show{display:flex}
 .modal{background:#fff;border-radius:14px;width:640px;max-width:94vw;max-height:88vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.2);animation:modalIn .25s ease}
@@ -68,6 +75,10 @@ body { background: #F0F2F6; color: #0F172A; }
   .card-header > div:last-child > button i{width:14px;height:14px;flex-shrink:0}
   .card-header > div:last-child a.clear-btn{padding:8px 12px;font-size:12px;flex:none}
   .kebab-btn{padding:8px !important;min-width:36px;min-height:36px}
+  .filter-bar{padding:10px 16px !important;gap:8px}
+  .filter-bar .cust-select{flex:1 1 140px;min-width:0;width:auto}
+  .filter-bar .filter-label{display:none}
+  .filter-bar .filter-reset{flex:0 0 100%;justify-content:center;margin-left:0}
   div[style*="justify-content:space-between"][style*="padding:12px 24px"]{flex-direction:column;gap:8px;padding:10px 16px !important}
   div[style*="justify-content:space-between"][style*="padding:12px 24px"] > div:last-child{flex-wrap:wrap;justify-content:center}
   .modal{width:100% !important;max-width:98vw !important;margin:0 8px}
@@ -119,6 +130,10 @@ body { background: #F0F2F6; color: #0F172A; }
 }
 .atm-detail-row { display: none; }
 .atm-detail-row.open { display: table-row; }
+tr.retired td{color:#94A3B8;background:#F8FAFC}
+tr.retired:hover td{background:#F1F5F9}
+.retired-tag{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700;background:#E2E8F0;color:#64748B}
+.state-cell .retired-tag{color:#64748B}
 .atm-detail-row > td { background: #F8FAFC; padding: 14px 18px; border-bottom: 1px solid #EEF1F6; }
 .atm-detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 28px; }
 .atm-detail-grid > div { display: flex; flex-direction: column; gap: 2px; }
@@ -171,13 +186,14 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
     </div>
   </div>
   <div class="filter-bar">
+    <span class="filter-label">Filter by</span>
     <select name="vendor" onchange="applyFilter()">
       <option value="">All Vendors</option>
       <option value="NCR" {{ 'selected' if f_vendor=='NCR' }}>NCR</option>
       <option value="GRG" {{ 'selected' if f_vendor=='GRG' }}>GRG</option>
     </select>
     <select name="status" onchange="applyFilter()">
-      <option value="">All Statuses</option>
+      <option value="">All Monitored</option>
       <option value="active" {{ 'selected' if f_status=='active' }}>Active</option>
       <option value="inactive" {{ 'selected' if f_status=='inactive' }}>Inactive</option>
     </select>
@@ -189,6 +205,9 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
       <option value="">All Cities</option>
       {% for c in filter_options.cities %}<option value="{{ c }}" {{ 'selected' if f_city==c }}>{{ c }}</option>{% endfor %}
     </select>
+    {% if search or f_vendor or f_status or f_region or f_city %}
+    <a href="/admin/atm" class="btn btn-outline filter-reset" style="padding:7px 12px;font-size:12px"><i data-lucide="x" style="width:14px;height:14px"></i> Clear Filters</a>
+    {% endif %}
   </div>
     <div style="overflow:visible">
       {% if session.get('role') in ('admin', 'operator') %}
@@ -207,12 +226,12 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
         <th style="width:36px;padding:8px 6px;text-align:center"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" style="cursor:pointer;width:15px;height:15px"></th>
         {% endif %}
         <th>ATM ID</th><th>Name</th><th>Branch</th><th>City</th><th>Vendor</th><th>Model</th>
-        <th>Status</th><th>Current State</th><th>Last Seen</th>{% if session.get('role') in ('admin', 'operator') %}<th></th>{% endif %}
+         <th>Monitored</th><th>Current State</th><th>Last Seen</th>{% if session.get('role') in ('admin', 'operator') %}<th></th>{% endif %}
       </tr></thead>
       <tbody>
         {% if atms %}
           {% for d in atms %}
-          <tr data-atm-id="{{ d.atm_id }}" style="--i: {{ loop.index0 }}">
+           <tr data-atm-id="{{ d.atm_id }}" style="--i: {{ loop.index0 }}" {% if (d.status or 'active') != 'active' %}class="retired"{% endif %}>
             {% if session.get('role') in ('admin', 'operator') %}
             <td style="padding:8px 6px;text-align:center"><input type="checkbox" class="row-checkbox" value="{{ d.atm_id }}" onchange="updateSelection()" style="cursor:pointer;width:15px;height:15px"></td>
             {% endif %}
@@ -230,11 +249,16 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
             <td>{{ d.model or '—' }}</td>
             <td>
               {% set status = d.status or 'active' %}
-              <span class="badge {{ status }}">{{ status }}</span>
+              <span class="badge {{ status }}">{{ status.capitalize() }}</span>
             </td>
-            <td>
+            <td class="state-cell">
+              {% set status = d.status or 'active' %}
+              {% if status != 'active' %}
+              <span class="retired-tag" title="Retired — excluded from the monitored fleet">Retired</span>
+              {% else %}
               {% set live = d.state or 'UNKNOWN' %}
               <span style="color:{{ 'green' if live=='IN_SERVICE' else 'red' }};font-weight:600">{{ live }}</span>
+              {% endif %}
             </td>
             <td>{{ d.last_seen.strftime('%Y-%m-%d %H:%M') if d.last_seen else '—' }}</td>
             {% if session.get('role') in ('admin', 'operator') %}
@@ -283,7 +307,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
             {% endif %}
             <div class="atm-card-id">{{ d.atm_id }}</div>
           </div>
-          <span class="badge {{ status }}">{{ status }}</span>
+          <span class="badge {{ status }}">{{ status.capitalize() }}</span>
         </div>
         <div class="atm-card-info">
           <div class="atm-card-detail">
@@ -313,7 +337,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
            </span>
           <span class="atm-card-meta-item"><span class="atm-card-label">Model</span> {{ d.model or '—' }}</span>
            <span class="atm-card-meta-item"><span class="atm-card-label">Install</span> {{ d.install_date or '—' }}</span>
-           <span class="atm-card-meta-item"><span class="atm-card-label">State</span> {{ d.state or '—' }}</span>
+           <span class="atm-card-meta-item"><span class="atm-card-label">State</span> {% if (d.status or 'active') != 'active' %}<span style="color:#64748B;font-weight:600">Retired</span>{% else %}{{ d.state or '—' }}{% endif %}</span>
            <span class="atm-card-meta-item"><span class="atm-card-label">Last Seen</span> {{ d.last_seen.strftime('%Y-%m-%d %H:%M') if d.last_seen else '—' }}</span>
           {% if d.latitude and d.longitude %}
           <span class="atm-card-meta-item"><span class="atm-card-label">Coords</span> {{ d.latitude }}, {{ d.longitude }}</span>
@@ -364,8 +388,9 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
       <div class="modal-alert" id="formAlert"></div>
       <div class="form-grid">
         {% for name, label, typ, maxlen in fields %}
+          {% set optional = name == 'atm_name' %}
           <div class="form-group" data-field="{{ name }}">
-            <label>{{ label }} <span class="required">*</span></label>
+            <label>{{ label }} {% if not optional %}<span class="required">*</span>{% endif %}</label>
             {% if typ == 'select' %}
               <select name="{{ name }}" id="field-{{ name }}" required>
                 <option value="">-- Select --</option>
@@ -377,6 +402,8 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
               <input type="text" name="{{ name }}" id="field-{{ name }}" class="flatpickr-date" placeholder="YYYY-MM-DD" required>
             {% elif typ == 'number' %}
               <input type="number" name="{{ name }}" id="field-{{ name }}" step="any" required>
+            {% elif optional %}
+              <input type="text" name="{{ name }}" id="field-{{ name }}" maxlength="{{ maxlen or '' }}" placeholder="Defaults to Branch if left blank">
             {% else %}
               <input type="text" name="{{ name }}" id="field-{{ name }}" maxlength="{{ maxlen or '' }}" required>
             {% endif %}

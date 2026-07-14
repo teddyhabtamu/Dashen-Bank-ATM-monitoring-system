@@ -12,6 +12,7 @@ import time
 import random
 import json
 import threading
+import urllib.request
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 import common
@@ -162,8 +163,10 @@ class ATMInstance:
         self.atm = atm
         self.state = grg_state() if atm['vendor'] == 'GRG' else ncr_state()
         self.oid = GRG_OID if atm['vendor'] == 'GRG' else NCR_OID
+        self._stop = threading.Event()
+        self.httpd = None
 
-    def start(self):
+    def start(self, retries=6, delay=1.0):
         threading.Thread(target=self._sim_loop, daemon=True).start()
         self.httpd = None
 
@@ -203,19 +206,28 @@ class ATMInstance:
                         self.end_headers()
             return H
 
-        try:
-            httpd = ThreadingHTTPServer(('0.0.0.0', self.atm['port']), handler_factory(self))
-        except OSError as e:
-            # Port already taken (e.g. collision) — skip this cycle; sync()
-            # will retry it next round once the port is free.
-            print(f"[SIM] {self.atm['atm_id']} FAILED to bind :{self.atm['port']} ({e})")
-            return False
-        self.httpd = httpd
-        threading.Thread(target=httpd.serve_forever, daemon=True).start()
-        print(f"[SIM] {self.atm['atm_id']} ({self.atm['vendor']}) serving on :{self.atm['port']}")
-        return True
+        last_err = None
+        for attempt in range(1, retries + 1):
+            try:
+                httpd = ThreadingHTTPServer(('0.0.0.0', self.atm['port']), handler_factory(self))
+            except OSError as e:
+                # Port held by a lingering process (e.g. just-restarted engine).
+                # Retry with backoff instead of silently dropping the ATM.
+                last_err = e
+                print(f"[SIM] {self.atm['atm_id']} bind :{self.atm['port']} failed "
+                      f"(attempt {attempt}/{retries}): {e}")
+                time.sleep(delay)
+                continue
+            self.httpd = httpd
+            threading.Thread(target=httpd.serve_forever, daemon=True).start()
+            print(f"[SIM] {self.atm['atm_id']} ({self.atm['vendor']}) serving on :{self.atm['port']}")
+            return True
+        print(f"[SIM] {self.atm['atm_id']} FAILED to bind :{self.atm['port']} "
+              f"after {retries} attempts ({last_err})")
+        return False
 
     def stop(self):
+        self._stop.set()
         if getattr(self, 'httpd', None):
             try:
                 self.httpd.shutdown()
@@ -223,8 +235,19 @@ class ATMInstance:
             except Exception:
                 pass
 
+    def healthy(self):
+        """True if this ATM's HTTP server is actually answering."""
+        if not getattr(self, 'httpd', None):
+            return False
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{self.atm['port']}/health",
+                                        timeout=2) as r:
+                return r.status == 200
+        except Exception:
+            return False
+
     def _sim_loop(self):
-        while True:
+        while not self._stop.is_set():
             try:
                 simulate(self.state, self.atm['vendor'], self.atm['atm_id'])
             except Exception as e:
@@ -241,6 +264,15 @@ def main():
             atms = common.refresh(conn)
         finally:
             conn.close()
+
+        # Self-heal: any previously-registered ATM whose server stopped
+        # answering gets torn down so it is recreated (and re-bound) below.
+        for aid, inst in list(registry.items()):
+            if not inst.healthy():
+                print(f"[SIM] {aid} health check failed — restarting simulator")
+                inst.stop()
+                del registry[aid]
+
         for a in atms:
             inst = registry.get(a['atm_id'])
             if inst is None:
