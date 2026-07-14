@@ -67,20 +67,31 @@ automatically:
 
 ### 1. ATM Location Data
 
-- [ ] If the Report Portal admin page exists (Priority 4 in
-      `docs/local-progress-plan.md`): fill in the form at
-      `/admin/atm` with the ATM's details
-- [ ] If not yet built, insert manually:
+- [ ] **Preferred:** fill in the form at `/admin/atm` in the Report
+      Portal (or bulk-import a CSV — see `sample_atm_import.csv`). The
+      **Name** field is optional and defaults to the branch if left
+      blank; **Vendor** is a dropdown (NCR / GRG, plus any existing
+      vendors) with a "+ Add new vendor…" option. A free `sim_port`
+      is assigned automatically so the simulator picks the ATM up
+      without a manual restart.
+- [ ] If inserting manually, always name the columns (the table has
+      grown past the old positional layout):
   ```bash
   docker exec zabbix-db psql -U zabbix -d zabbix << 'SQL'
-  INSERT INTO atm_locations VALUES
-  ('ATM-0XX','<Branch Name>',
-   '<District>','<City>','<Region>',
-   <latitude>,<longitude>,'<Terminal ID>','<Vendor>','<Model>',
-   '<install_date>','active')
+  INSERT INTO atm_locations
+    (atm_id, atm_name, branch, district, city, region,
+     latitude, longitude, terminal_id, vendor, model,
+     install_date, status)
+  VALUES
+    ('ATM-0XX','<Name (optional)>','<Branch Name>',
+     '<District>','<City>','<Region>',
+     <latitude>,<longitude>,'<Terminal ID>','<Vendor>','<Model>',
+     '<install_date>','active')
   ON CONFLICT (atm_id) DO NOTHING;
   SQL
   ```
+  > A manual `INSERT` does not assign `sim_port`. Prefer the admin
+  > form/CSV import so port allocation stays automatic.
 - [ ] Confirm the ATM appears correctly positioned on the Grafana
       geo-map
 - [ ] Confirm it appears in the ATM Fleet Overview table with correct

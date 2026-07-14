@@ -71,6 +71,7 @@ Everything in our system must handle both. The user should never need to know wh
 > - 2.4 `atm_transactions`: added `vendor` + `fault_type`, created `idx_atm_txn_fault_type` / `idx_atm_txn_vendor`, backfilled `vendor` for all 96,203 rows.
 > - 2.5 `atm_current_state` created + 24 rows seeded (IN_SERVICE).
 > - Re-backed-up (`atm_custom_tables.sql`) + committed/pushed. **No manual UI steps in Phase 1.**
+> - **UPDATE (2026-07-14):** `atm_name` widened from `VARCHAR(20)` to `VARCHAR(100)` (short names truncated on import → silent "No rows imported"). Also added `sim_port` (auto-assigned per ATM). The `1161-1260` range below was shrunk from `1161-2500`: publishing 1340 ports corrupted docker state / timed out on start.
 
 **Why first:** Everything else — dashboards, simulators, reports — reads from the database. If the database schema is wrong, everything built on top of it is wrong.
 
@@ -92,7 +93,7 @@ ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS model VARCHAR(50);
 ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS snmp_community VARCHAR(50) DEFAULT 'public';
 ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS snmp_version VARCHAR(5) DEFAULT 'v2c';
 ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS ej_log_format VARCHAR(20);
-ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS atm_name VARCHAR(20);
+ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS atm_name VARCHAR(100);
 
 -- Update existing simulated ATMs to be NCR
 UPDATE atm_locations SET 

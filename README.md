@@ -312,6 +312,24 @@ then prints row counts to verify.
 
 To add more users, log in as **admin** and visit **Admin → User Management** in the sidebar. You can create, delete, and reset passwords for operator/viewer/admin accounts through the web UI.
 
+### Managing ATMs from the Portal
+
+Admins and operators manage the fleet under **Admin → ATMs** (`/admin/atm`):
+
+- **Add / edit ATMs** — the **Name** field is optional (defaults to the
+  branch name when blank). **Vendor** is a dropdown (NCR / GRG plus any
+  vendors already in the database) with a "+ Add new vendor…" option.
+- **Auto port allocation** — each new or imported ATM is automatically
+  assigned a free `sim_port` (range `1161-1260`), so the simulator picks
+  it up without a manual restart.
+- **CSV import** — bulk-import ATMs; see `sample_atm_import.csv` for the
+  format. Rows with an unknown vendor still import but are flagged with a
+  warning (they are simulated with the NCR schema).
+- **State vs. status** — the list and detail pages show each ATM's live
+  **current state** (or a *Retired* tag when inactive), and the detail
+  view is Dashen-branded for export. The card view is mobile-friendly
+  with a **View** action available to all roles.
+
 ---
 
 ## Windows-only: Expose ports for phone/other devices
