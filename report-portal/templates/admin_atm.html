@@ -22,6 +22,10 @@ body { background: #F0F2F6; color: #0F172A; }
 .kebab-item.delete{color:#DC2626}
 .kebab-item.delete:hover{background:#FEF2F2}
 .empty { text-align: center; padding: 48px; color: #94A3B8; font-size: 14px; }
+.filter-bar{display:flex;gap:8px;padding:10px 24px;border-bottom:1px solid #EEF1F6;background:#F8FAFC;flex-wrap:wrap}
+.filter-bar select{padding:6px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;background:#fff;color:#334155;cursor:pointer;transition:border-color .2s;min-width:120px}
+.filter-bar select:focus{border-color:#012169}
+.filter-bar select:hover{border-color:#CBD5E1}
 .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:2000;display:none;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 .modal-overlay.show{display:flex}
 .modal{background:#fff;border-radius:14px;width:640px;max-width:94vw;max-height:88vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.2);animation:modalIn .25s ease}
@@ -152,12 +156,12 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
   <div class="card-header">
     <h2>Registered ATMs ({{ atm_count }})</h2>
     <div style="display:flex;gap:8px;align-items:center">
-      <form method="get" action="/admin/atm" id="searchForm" style="display:flex;gap:6px;align-items:center">
+      <form method="get" action="/admin/atm" id="searchForm" style="display:flex;gap:6px;align-items:center" onsubmit="event.preventDefault(); applyFilter();">
         <input type="text" name="search" placeholder="Search ATM ID, branch, city…" value="{{ search }}" maxlength="100"
                style="padding:7px 12px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;width:220px;transition:border-color .2s"
                onfocus="this.style.borderColor='#012169'" onblur="this.style.borderColor='#E4E9F1'">
-        <button type="submit" class="btn btn-outline" style="padding:7px 12px"><i data-lucide="search" style="width:14px;height:14px"></i></button>
-        {% if search %}<a href="/admin/atm" class="btn btn-outline clear-btn" style="padding:7px 12px">Clear</a>{% endif %}
+        <button type="submit" class="btn btn-outline" style="padding:7px 12px" onclick="event.preventDefault(); applyFilter();"><i data-lucide="search" style="width:14px;height:14px"></i></button>
+        {% if search or f_vendor or f_status or f_region or f_city %}<a href="/admin/atm" class="btn btn-outline clear-btn" style="padding:7px 12px">Clear</a>{% endif %}
       </form>
       <a id="atmExportBtn" href="/admin/atm/csv" class="btn btn-outline"><i data-lucide="download" style="width:14px;height:14px"></i> Export CSV</a>
       {% if session.get('role') in ('admin', 'operator') %}
@@ -165,6 +169,26 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
       <button class="btn btn-primary" onclick="openModal()"><i data-lucide="plus" style="width:14px;height:14px"></i> Add New ATM</button>
       {% endif %}
     </div>
+  </div>
+  <div class="filter-bar">
+    <select name="vendor" onchange="applyFilter()">
+      <option value="">All Vendors</option>
+      <option value="NCR" {{ 'selected' if f_vendor=='NCR' }}>NCR</option>
+      <option value="GRG" {{ 'selected' if f_vendor=='GRG' }}>GRG</option>
+    </select>
+    <select name="status" onchange="applyFilter()">
+      <option value="">All Statuses</option>
+      <option value="active" {{ 'selected' if f_status=='active' }}>Active</option>
+      <option value="inactive" {{ 'selected' if f_status=='inactive' }}>Inactive</option>
+    </select>
+    <select name="region" onchange="applyFilter()">
+      <option value="">All Regions</option>
+      {% for r in filter_options.regions %}<option value="{{ r }}" {{ 'selected' if f_region==r }}>{{ r }}</option>{% endfor %}
+    </select>
+    <select name="city" onchange="applyFilter()">
+      <option value="">All Cities</option>
+      {% for c in filter_options.cities %}<option value="{{ c }}" {{ 'selected' if f_city==c }}>{{ c }}</option>{% endfor %}
+    </select>
   </div>
     <div style="overflow:visible">
       {% if session.get('role') in ('admin', 'operator') %}
@@ -308,19 +332,20 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
     {% endif %}
   </div>
 
+  {% macro qs(page) %}/admin/atm?page={{ page }}{% if search %}&search={{ search }}{% endif %}{% if f_vendor %}&vendor={{ f_vendor }}{% endif %}{% if f_status %}&status={{ f_status }}{% endif %}{% if f_region %}&region={{ f_region }}{% endif %}{% if f_city %}&city={{ f_city }}{% endif %}{% endmacro %}
   {% if total_pages > 1 %}
   <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-top:1px solid #EEF1F6">
     <div style="font-size:12px;color:#64748B">Page {{ page }} of {{ total_pages }}</div>
     <div style="display:flex;gap:6px">
       {% if page > 1 %}
-      <a href="/admin/atm?page={{ page - 1 }}{% if search %}&search={{ search }}{% endif %}" class="btn btn-outline pagi-btn" style="padding:6px 12px;font-size:11px">&larr; Previous</a>
+      <a href="{{ qs(page - 1) }}" class="btn btn-outline pagi-btn" style="padding:6px 12px;font-size:11px">&larr; Previous</a>
       {% endif %}
       {% for p in range([1, page-2]|max, [total_pages, page+2]|min + 1) %}
-      <a href="/admin/atm?page={{ p }}{% if search %}&search={{ search }}{% endif %}" class="btn btn-outline pagi-btn{% if p == page %} pagi-active{% endif %}"
+      <a href="{{ qs(p) }}" class="btn btn-outline pagi-btn{% if p == page %} pagi-active{% endif %}"
          style="padding:6px 10px;font-size:11px;min-width:32px">{{ p }}</a>
       {% endfor %}
       {% if page < total_pages %}
-      <a href="/admin/atm?page={{ page + 1 }}{% if search %}&search={{ search }}{% endif %}" class="btn btn-outline pagi-btn" style="padding:6px 12px;font-size:11px">Next &rarr;</a>
+      <a href="{{ qs(page + 1) }}" class="btn btn-outline pagi-btn" style="padding:6px 12px;font-size:11px">Next &rarr;</a>
       {% endif %}
     </div>
   </div>
@@ -452,6 +477,15 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
+
+function applyFilter(){
+  var params = new URLSearchParams();
+  ['search','vendor','status','region','city'].forEach(function(k){
+    var el = document.querySelector('[name="'+k+'"]');
+    if(el && el.value) params.set(k, el.value);
+  });
+  window.location = '/admin/atm?' + params.toString();
+}
 
     function toggleRowDetail(atmId){
       var dataRow = document.querySelector('tr[data-atm-id="'+atmId+'"]:not(.atm-detail-row)');

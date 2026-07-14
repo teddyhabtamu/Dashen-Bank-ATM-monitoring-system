@@ -179,6 +179,10 @@ FIELDS = [
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_list():
     search = request.args.get('search', '').strip()
+    vendor = request.args.get('vendor', '').strip()
+    status = request.args.get('status', '').strip()
+    region = request.args.get('region', '').strip()
+    city = request.args.get('city', '').strip()
     per_page = 50
 
     try:
@@ -189,35 +193,49 @@ def atm_list():
     with get_db() as conn:
         cur = conn.cursor()
 
+        clauses = []
+        params = []
         if search:
             like = f'%{search}%'
-            cur.execute("""SELECT COUNT(*) FROM atm_locations
-                           WHERE atm_id ILIKE %s OR branch ILIKE %s
-                           OR district ILIKE %s OR city ILIKE %s OR region ILIKE %s""",
-                        (like, like, like, like, like))
-            total = cur.fetchone()[0]
-            total_pages = max(1, (total + per_page - 1) // per_page)
-            page = min(page, total_pages)
-            cur.execute("""SELECT l.*, s.state, s.last_seen AT TIME ZONE 'Africa/Addis_Ababa' as last_seen, s.state_changed_at
-                           FROM atm_locations l
-                           LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id
-                           WHERE l.atm_id ILIKE %s OR l.branch ILIKE %s
-                           OR l.district ILIKE %s OR l.city ILIKE %s OR l.region ILIKE %s
-                           ORDER BY l.atm_id LIMIT %s OFFSET %s""",
-                        (like, like, like, like, like, per_page, (page - 1) * per_page))
-        else:
-            cur.execute("SELECT COUNT(*) FROM atm_locations")
-            total = cur.fetchone()[0]
-            total_pages = max(1, (total + per_page - 1) // per_page)
-            page = min(page, total_pages)
-            cur.execute("""SELECT l.*, s.state, s.last_seen AT TIME ZONE 'Africa/Addis_Ababa' as last_seen, s.state_changed_at
-                           FROM atm_locations l
-                           LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id
-                           ORDER BY l.atm_id LIMIT %s OFFSET %s""",
-                        (per_page, (page - 1) * per_page))
+            clauses.append("(l.atm_id ILIKE %s OR l.branch ILIKE %s "
+                           "OR l.district ILIKE %s OR l.city ILIKE %s OR l.region ILIKE %s)")
+            params.extend([like, like, like, like, like])
+        if vendor:
+            clauses.append("l.vendor = %s")
+            params.append(vendor)
+        if status:
+            clauses.append("l.status = %s")
+            params.append(status)
+        if region:
+            clauses.append("l.region = %s")
+            params.append(region)
+        if city:
+            clauses.append("l.city = %s")
+            params.append(city)
+
+        where = "WHERE " + " AND ".join(clauses) if clauses else ""
+
+        cur.execute(f"SELECT COUNT(*) FROM atm_locations l {where}", params)
+        total = cur.fetchone()[0]
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        page = min(page, total_pages)
+
+        cur.execute(f"""SELECT l.*, s.state, s.last_seen AT TIME ZONE 'Africa/Addis_Ababa' as last_seen,
+                               s.state_changed_at
+                        FROM atm_locations l
+                        LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id
+                        {where}
+                        ORDER BY l.atm_id LIMIT %s OFFSET %s""",
+                    params + [per_page, (page - 1) * per_page])
 
         cols = [d[0] for d in cur.description]
         rows = cur.fetchall()
+
+        # Fetch distinct filter options from the DB for the dropdowns
+        cur.execute("SELECT DISTINCT region FROM atm_locations WHERE region IS NOT NULL ORDER BY region")
+        region_options = [r[0] for r in cur.fetchall()]
+        cur.execute("SELECT DISTINCT city FROM atm_locations WHERE city IS NOT NULL ORDER BY city")
+        city_options = [r[0] for r in cur.fetchall()]
         cur.close()
 
     atms = [dict(zip(cols, r)) for r in rows]
@@ -240,7 +258,9 @@ def atm_list():
 
     return render_template('admin_atm.html', atms=atms, atm_count=total,
                            page=page, total_pages=total_pages,
-                           search=search, fields=FIELDS, summary=summary)
+                           search=search, fields=FIELDS, summary=summary,
+                           f_vendor=vendor, f_status=status, f_region=region, f_city=city,
+                           filter_options={'regions': region_options, 'cities': city_options})
 
 
 @bp.route('/atm/<atm_id>')
