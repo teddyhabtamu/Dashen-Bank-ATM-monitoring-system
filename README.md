@@ -46,14 +46,28 @@ docker ps --format "table {{.Names}}\t{{.Status}}" | grep -v "Exited"
 ## Step 3 — Import Zabbix configuration
 
 1. Open `http://localhost:8080` (`Admin` / `zabbix`)
-2. **Configuration → Templates → Import**
-   → select `config/zabbix/template_dashen_atm_hardware.xml`
-3. **Configuration → Hosts → Import**
-   → select `config/zabbix/hosts_all_atms.xml`
-4. **Administration → Media types → Import**
-   → select `config/zabbix/media_types.xml`
-5. **Configuration → Actions → Import**
-   → select `config/zabbix/actions.xml`
+2. **Data collection → Templates → Import**
+   → select `config/zabbix/zbx_export_templates.xml` (NCR)
+   → then `config/zabbix/template_grg.xml` (GRG)
+3. **Data collection → Hosts → Import**
+   → select `config/zabbix/zbx_export_hosts.xml`
+4. **Alerts → Media types → Import**
+   → select `config/zabbix/zbx_export_mediatypes.xml`
+   (includes the **GLPI Ticket** webhook)
+5. **Create the trigger action** (auto-creates GLPI tickets):
+   ```bash
+   python3 scripts/setup_zabbix_actions.py
+   ```
+   > Zabbix 6.4 cannot export/import **actions** as XML, so this step is
+   > a small idempotent API script instead of a file import. It links
+   > ATM triggers (severity ≥ High) to the GLPI Ticket media type. Safe
+   > to re-run — it skips if the action already exists.
+
+> **Ticket lifecycle (RCA):** a fired trigger auto-creates a GLPI
+> ticket; when the alert clears, the ticket is moved to **Pending** with
+> a recovery note — it is **not** auto-closed. An engineer must document
+> a Root Cause Analysis (RCA) and record a solution before closing, per
+> the BRD's incident-management requirement.
 
 ---
 

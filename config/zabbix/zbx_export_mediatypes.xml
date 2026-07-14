@@ -442,20 +442,25 @@ if (mode === 'recovery') {
         return 'RECOVERY SKIPPED: Tag macro link not populated for event context: ' + event_id;
     }
 
-    /* Post Solution Details */
-    glpi_post('/Ticket/' + tid + '/ITILSolution', {
+    /* Device recovered — record it, but DO NOT auto-close.
+       BRD Req 12: a Root Cause Analysis (RCA) must be documented before
+       a ticket is closed. Automation only moves the ticket to Pending. */
+    glpi_post('/Ticket/' + tid + '/ITILFollowup', {
         input: {
-            items_id:        tid,
-            itemtype:        'Ticket',
-            solutiontypes_id: 0,
-            content: 'AUTOMATICALLY RESOLVED BY ZABBIX\n\nEvent ID: ' + event_id + '\nResolved at: ' + event_date
+            items_id: tid,
+            itemtype: 'Ticket',
+            content: 'DEVICE RECOVERY DETECTED BY ZABBIX\n\nEvent ID: ' + event_id +
+                     '\nRecovered at: ' + event_date +
+                     '\n\nThe underlying alert has cleared. This ticket has been set to PENDING. ' +
+                     'It must NOT be closed until a Root Cause Analysis (RCA) has been documented ' +
+                     'and a solution recorded by the assigned engineer.'
         }
     });
 
-    /* Close Ticket */
-    glpi_put('/Ticket/' + tid, { input: { status: 5 } });
+    /* Move to Pending (status 4) — awaiting RCA + manual closure */
+    glpi_put('/Ticket/' + tid, { input: { status: 4 } });
     kill();
-    return 'RECOVERY SUCCESS: Closed Ticket #' + tid;
+    return 'RECOVERY LOGGED: Ticket #' + tid + ' set to PENDING (RCA required before closure)';
 
 } else { 
     /* PROBLEM GENERATION BLOCK */
@@ -513,6 +518,25 @@ if (mode === 'recovery') {
   &quot;glpi_user&quot;: &quot;glpi&quot;,
   &quot;glpi_password&quot;: &quot;DashenGLPI2024&quot;,
   &quot;glpi_ticket_id&quot;: &quot;{EVENT.TAGS.glpi_id}&quot;
+}</message>
+                </message_template>
+                <message_template>
+                    <event_source>TRIGGERS</event_source>
+                    <operation_mode>RECOVERY</operation_mode>
+                    <subject>ATM Recovery: {TRIGGER.NAME} on {HOST.NAME}</subject>
+                    <message>{
+  &quot;subject&quot;: &quot;{TRIGGER.NAME}&quot;,
+   &quot;host&quot;: &quot;{HOST.NAME}&quot;,
+   &quot;vendor&quot;: &quot;{$ATM_VENDOR}&quot;,
+   &quot;severity&quot;: &quot;{TRIGGER.NSEVERITY}&quot;,
+  &quot;event_date&quot;: &quot;{EVENT.DATE} {EVENT.TIME}&quot;,
+  &quot;event_id&quot;: &quot;{EVENT.ID}&quot;,
+  &quot;glpi_url&quot;: &quot;http://glpi:80/apirest.php&quot;,
+  &quot;app_token&quot;: &quot;W8xhdcEKO984RGfM6GNcomjREIJ7FXfUVERqovDn&quot;,
+  &quot;glpi_user&quot;: &quot;glpi&quot;,
+  &quot;glpi_password&quot;: &quot;DashenGLPI2024&quot;,
+  &quot;glpi_ticket_id&quot;: &quot;{EVENT.TAGS.glpi_id}&quot;,
+  &quot;mode&quot;: &quot;recovery&quot;
 }</message>
                 </message_template>
             </message_templates>
