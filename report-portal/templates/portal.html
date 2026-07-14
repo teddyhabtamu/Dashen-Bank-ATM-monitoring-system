@@ -511,6 +511,40 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
       </div>
     </div>
 
+    <!-- Vendor Performance -->
+    <div class="report-card">
+      <div class="card-accent"></div>
+      <div class="card-content">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <div class="card-icon"><i data-lucide="layers" style="width:22px;height:22px;"></i></div>
+          <h3>Vendor Performance Report</h3>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
+        </div>
+        <div class="card-body-inner">
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Reporting Period</label>
+              <div class="custom-select">
+                <select id="vendor-days">
+                  <option value="7" selected>Last 7 Days</option>
+                  <option value="30">Last 30 Days</option>
+                  <option value="90">Last 90 Days</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="gen('vendor','excel','vendor-days')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('vendor','pdf','vendor-days')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-ghost" onclick="gen('vendor','csv','vendor-days')"><i data-lucide="file"></i> CSV</button>
+            <div class="loading-wrapper" id="lw-vendor">
+              <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ATM Availability -->
     <div class="report-card">
       <div class="card-accent"></div>
@@ -631,7 +665,8 @@ function gen(type, fmt, daysId, atmId) {
   const lw   = document.getElementById('lw-'+type);
   const url  = `/report/${type}/${fmt}?days=${days}&atm=${atm}`;
   const names = { transaction:'Transaction', cash:'Cash Level', error:'Error & Incident',
-                  performance:'Performance', availability:'Availability', full:'Complete Report' };
+                  performance:'Performance', vendor:'Vendor Performance',
+                  availability:'Availability', full:'Complete Report' };
   lw.classList.add('active');
 
   fetch(url)

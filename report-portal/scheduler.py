@@ -131,6 +131,7 @@ REPORT_TYPE_LABELS = {
     'cash': 'Cash Level & Dispensing',
     'error': 'Error & Incident',
     'performance': 'ATM Performance',
+    'vendor': 'Vendor Performance',
     'availability': 'ATM Availability',
     'full': 'Complete Management Report',
 }

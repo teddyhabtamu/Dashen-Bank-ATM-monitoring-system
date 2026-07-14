@@ -315,6 +315,65 @@ def report_performance(fmt):
         return csv_send(headers, rows, 'Performance', title=title, days=days, atm='all')
 
 
+# ─── VENDOR PERFORMANCE ───────────────────────────────────────────────────────────
+
+@bp.route('/report/vendor/<fmt>')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def report_vendor(fmt):
+    days = int(request.args.get('days', 7))
+
+    with get_db() as conn:
+        cur = conn.cursor()
+        sql = """
+            SELECT
+                COALESCE(l.vendor, 'Unknown')                                 AS "Vendor",
+                COUNT(DISTINCT t.atm_id)                                       AS "ATMs",
+                COUNT(*)                                                       AS "Total Txns",
+                SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)          AS "Approved",
+                SUM(CASE WHEN t.status='DECLINED' THEN 1 ELSE 0 END)          AS "Declined",
+                SUM(CASE WHEN t.status='ERROR'    THEN 1 ELSE 0 END)          AS "Errors",
+                ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)
+                    /NULLIF(COUNT(*),0),2)                                     AS "Success Rate",
+                ROUND(COUNT(*)/NULLIF(COUNT(DISTINCT t.atm_id),0)/%s::numeric,1)
+                                                                              AS "Avg Daily Txns/ATM",
+                COALESCE(SUM(CASE WHEN t.status='APPROVED' AND t.txn_type='WITHDRAWAL'
+                    THEN t.amount ELSE 0 END),0)                              AS "Cash Dispensed ETB"
+            FROM atm_transactions t
+            JOIN atm_locations l ON t.atm_id = l.atm_id
+            WHERE t.recorded_at >= NOW() - INTERVAL %s
+            GROUP BY l.vendor
+            ORDER BY 3 DESC
+        """
+        cur.execute(sql, (days, f"{days} days"))
+        rows = cur.fetchall(); headers = [d[0] for d in cur.description]
+        cur.close()
+
+    title = 'Vendor Performance Report'
+    if fmt == 'excel':
+        wb = openpyxl.Workbook(); wb.remove(wb.active)
+        xl_build_sheet(wb, 'Vendor', title, days, 'all', headers, rows)
+        log_action('EXPORT', f'Vendor report (excel) - days={days}')
+        return xl_send(wb, 'Vendor')
+    elif fmt == 'pdf':
+        total_txns = sum(r[2] for r in rows)
+        approved = sum(r[3] for r in rows)
+        rate = round(approved / total_txns * 100, 1) if total_txns else 0
+        cash = sum(r[8] for r in rows)
+        best = max(rows, key=lambda r: (r[6] or 0))[0] if rows else 'N/A'
+        kpis = [
+            ('Vendors', str(len(rows))),
+            ('Total Transactions', f'{total_txns:,}'),
+            ('Overall Success Rate', f'{rate}%'),
+            ('Top Vendor (by success)', str(best)),
+        ]
+        log_action('EXPORT', f'Vendor report (pdf) - days={days}')
+        return pdf_send(title, headers, rows, days, 'all', 'Vendor', kpis=kpis)
+    else:
+        log_action('EXPORT', f'Vendor report (csv) - days={days}')
+        return csv_send(headers, rows, 'Vendor', title=title, days=days, atm='all')
+
+
 # ─── ATM AVAILABILITY ───────────────────────────────────────────────────────────
 
 @bp.route('/report/availability/<fmt>')
