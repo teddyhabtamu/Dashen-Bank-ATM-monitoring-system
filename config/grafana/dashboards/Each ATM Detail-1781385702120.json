@@ -222,7 +222,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\r\n  TO_CHAR(recorded_at AT TIME ZONE\r\n    'Africa/Addis_Ababa',\r\n    'HH24:MI:SS') as \"Time\",\r\n  txn_type as \"Type\",\r\n  card_masked as \"Card\",\r\n  COALESCE(amount::text, '-')\r\n    as \"Amount (ETB)\",\r\n  status as \"Status\",\r\n  COALESCE(auth_code, '-') as \"Auth\",\r\n  COALESCE(error_code, '-') as \"Error\",\r\n  source as \"Source\"\r\nFROM atm_transactions\r\nWHERE atm_id = '${selected_atm}'\r\nORDER BY recorded_at DESC\r\nLIMIT 50",
+          "rawSql": "SELECT\r\n  TO_CHAR(recorded_at AT TIME ZONE\r\n    'Africa/Addis_Ababa',\r\n    'HH24:MI:SS') as \"Time\",\r\n  txn_type as \"Type\",\r\n  card_masked as \"Card\",\r\n  COALESCE(amount::text, '-')\r\n    as \"Amount (ETB)\",\r\n  status as \"Status\",\r\n  COALESCE(auth_code, '-') as \"Auth\",\r\n  COALESCE(f.display_name, t.error_code, '-') as \"Error\",\r\n  source as \"Source\"\r\nFROM atm_transactions t\r\nLEFT JOIN fault_type_map f ON t.error_code = f.raw_fault_code\r\nWHERE atm_id = '${selected_atm}'\r\nORDER BY recorded_at DESC\r\nLIMIT 50",
           "refId": "A",
           "sql": {
             "columns": [
@@ -243,7 +243,7 @@
           }
         }
       ],
-      "title": "Recent Transactions — ${selected_atm}",
+      "title": "Recent Transactions \u2014 ${selected_atm}",
       "type": "table"
     },
     {
@@ -354,7 +354,7 @@
           }
         }
       ],
-      "title": "Transaction History — ${selected_atm}",
+      "title": "Transaction History \u2014 ${selected_atm}",
       "type": "timeseries"
     },
     {
@@ -549,7 +549,7 @@
           }
         }
       ],
-      "title": "Transaction Types — Last 24h",
+      "title": "Transaction Types \u2014 Last 24h",
       "type": "piechart"
     },
     {
