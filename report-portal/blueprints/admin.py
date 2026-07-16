@@ -336,8 +336,10 @@ def atm_detail(atm_id):
             cur.execute("""
                 SELECT
                     TO_CHAR(recorded_at AT TIME ZONE 'Africa/Addis_Ababa', 'HH24:MI:SS'),
-                    txn_type, card_masked, amount, status, auth_code, error_code
-                FROM atm_transactions
+                    txn_type, card_masked, amount, status, auth_code,
+                    COALESCE(f.display_name, t.error_code) AS error_label
+                FROM atm_transactions t
+                LEFT JOIN fault_type_map f ON t.error_code = f.raw_fault_code
                 WHERE atm_id = %s
                 ORDER BY recorded_at DESC
                 LIMIT 20

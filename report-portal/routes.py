@@ -186,14 +186,38 @@ def report_cash(fmt):
         return csv_send(headers, rows, 'Cash', title=title, days=days, atm=atm)
 
 
-ERROR_DESCRIPTIONS = {
-    '3A7F': 'Cash Jam',
-    'B2C1': 'Card Read Error',
-    '44AA': 'Network Timeout',
+# In-memory cache of error_code -> human label, seeded from the DB
+# fault_type_map (vendor-agnostic) so every surface (dashboards, reports,
+# detail page) shows the same readable fault name. Falls back to a small
+# built-in map if the table is unreachable.
+_FAULT_LABELS = {
+    '3A7F': 'Dispenser',
+    'B2C1': 'Card Reader',
+    '44AA': 'Network',
+    '9E3D': 'Dispenser',
+    'FF01': 'Receipt Printer',
 }
 
+
+def _load_fault_labels():
+    """Populate _FAULT_LABELS from fault_type_map (one query, cached)."""
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT DISTINCT raw_fault_code, display_name "
+                        "FROM fault_type_map")
+            for code, label in cur.fetchall():
+                if code and label:
+                    _FAULT_LABELS[code] = label
+            cur.close()
+    except Exception:
+        pass
+
+
 def _describe_error(code):
-    return ERROR_DESCRIPTIONS.get(code, 'Unknown')
+    if not _FAULT_LABELS or '9E3D' not in _FAULT_LABELS:
+        _load_fault_labels()
+    return _FAULT_LABELS.get(code, code or 'Unknown')
 
 # ─── ERROR & INCIDENT ────────────────────────────────────────────────────────────
 
