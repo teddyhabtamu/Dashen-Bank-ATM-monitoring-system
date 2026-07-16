@@ -41,6 +41,8 @@ table.txn tbody tr:nth-child(even){background:#F8FAFC}
 table.txn tbody tr:hover{background:#EEF2FF}
 .st-APPROVED{color:#059669;font-weight:700}.st-DECLINED{color:#B45309;font-weight:700}
 .st-ERROR{color:#DC2626;font-weight:700}.st-TIMEOUT{color:#94A3B8;font-weight:700}
+.auth-badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#ECFDF5;color:#059669;border:1px solid #A7F3D0;white-space:nowrap}
+.auth-cell .st-ERROR,.auth-cell{font-size:12px}
 .no-data{text-align:center;color:#94A3B8;font-size:13px;padding:32px 12px}
 @media(max-width:980px){.detail-cols{grid-template-columns:1fr}.stat-row{grid-template-columns:repeat(2,1fr)}}
 {% endblock %}
@@ -196,7 +198,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
     <div class="card-header"><h2>Recent Transactions</h2></div>
     <div class="card-body" style="padding:0;overflow-x:auto">
       <table class="txn">
-        <thead><tr><th>Time</th><th>Type</th><th>Card</th><th>Amount (ETB)</th><th>Status</th><th>Auth / Error</th></tr></thead>
+        <thead><tr><th>Time</th><th>Type</th><th>Card</th><th>Amount (ETB)</th><th>Status</th><th>Auth / Fault</th></tr></thead>
         <tbody>
           {% if txns %}
           {% for t in txns %}
@@ -206,7 +208,13 @@ table.txn tbody tr:hover{background:#EEF2FF}
             <td>{{ t[2] or '—' }}</td>
             <td>{% if t[3] is not none %}{{ '%.2f'|format(t[3]) }}{% else %}—{% endif %}</td>
             <td class="st-{{ t[4] }}">{{ t[4] }}</td>
-            <td>{% if t[5] %}{{ t[5] }}{% elif t[6] %}{{ t[6] }}{% else %}—{% endif %}</td>
+            <td class="auth-cell">
+              {% if t[5] %}
+                <span class="auth-badge" title="Authorization reference from the issuer">Auth {{ t[5] }}</span>
+              {% elif t[6] %}
+                {{ t[6] }}
+              {% else %}—{% endif %}
+            </td>
           </tr>
           {% endfor %}
           {% else %}
