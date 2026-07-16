@@ -137,21 +137,32 @@ def build_cassettes(vendor, m):
 
 
 def build_hardware(vendor, m):
-    """Hardware component status pills. ok=green, warn=amber, error=red."""
+    """Hardware component status pills. ok=green, warn=amber, error=red.
+
+    The components shown here MUST mirror the OIDs that drive the overall
+    ATM state in `state_manager.determine_state` (cash_jam + card_reader),
+    otherwise the detail page disagrees with the HARDWARE_FAULT badge.
+    """
     if vendor == 'NCR':
+        cash_jam = m.get('1.7.0') or 0
+        card = m.get('2.1.0') or 0
         comps = [
-            ('Card reader', 'ok' if m.get('2.1.0') == 1 else 'error'),
+            ('Card reader', 'ok' if card == 1 else ('error' if card == 2 else 'error')),
             ('Printer', 'ok' if m.get('3.1.0') == 1 else 'error'),
             ('Pin pad', 'ok'),
+            ('Cash jam', 'error' if cash_jam == 1 else 'ok'),
             ('Retract bin', 'ok' if (m.get('1.6.0') or 0) < 80 else 'warn'),
             ('Network', 'ok' if m.get('7.1.0') == 1 else 'error'),
             ('UPS', 'ok' if (m.get('6.3.0') or 0) > 20 else 'error'),
         ]
     else:  # GRG
+        cash_jam = m.get('2.5.0') or 0
+        card = m.get('3.1.0') or 0
         comps = [
-            ('Card reader', 'ok' if m.get('3.1.0') == 1 else 'error'),
+            ('Card reader', 'ok' if card == 1 else ('error' if card == 2 else 'error')),
             ('Printer', 'ok' if m.get('4.1.0') == 1 else 'error'),
             ('Pin pad', 'ok'),
+            ('Cash jam', 'error' if cash_jam == 1 else 'ok'),
             ('Retract bin', 'ok' if (m.get('2.4.0') or 0) < 80 else 'warn'),
             ('Network', 'ok' if m.get('8.1.0') == 1 else 'error'),
             ('UPS', 'ok' if (m.get('7.2.0') or 0) > 20 else 'error'),
