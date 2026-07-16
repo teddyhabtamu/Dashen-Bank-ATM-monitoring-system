@@ -346,6 +346,56 @@ Admins and operators manage the fleet under **Admin → ATMs** (`/admin/atm`):
 
 ---
 
+## Post-Deploy Manual Steps (read this after Step 2)
+
+The `setup_new_machine.sh` script builds images from the current source,
+but a few things **must be done by hand** on every fresh clone/machine
+because they are either environment-specific or cannot be captured in
+the repo. Do these in order:
+
+1. **Build the simulator images after cloning**
+   The ATM engines (`atm-sim-engine`, `atm-txn-engine`, `atm-ej-engine`,
+   `state-manager`) are baked from the `simulators/` folder. The setup
+   script builds them, but if you ever pull updated source (e.g. after a
+   `git pull` that changes `simulators/*.py`) you must rebuild:
+   ```bash
+   docker compose build atm-sim-engine atm-txn-engine atm-ej-engine state-manager
+   docker compose up -d
+   ```
+   > In particular, retired/inactive ATMs are filtered out of the
+   > simulation at the code level (`common.load_atms` requires
+   > `status='active'`). If you regress to an old image they would
+   > resume producing transactions — keep the images rebuilt.
+
+2. **Create the Zabbix trigger action (GLPI ticketing)**
+   Zabbix 6.4 cannot import actions from XML, so run the idempotent
+   helper (also Step 3 #5):
+   ```bash
+   python3 scripts/setup_zabbix_actions.py
+   ```
+
+3. **Seed GLPI structure**
+   On a fresh GLPI DB, seed ticket categories, support groups and SLAs:
+   ```bash
+   python3 glpi_setup.py
+   ```
+
+4. **Set the GLPI App Token** (also Step 5)
+   The `app_token` in the `GLPI Ticket` media type is installation-
+   specific. After creating the GLPI API client, copy its token into
+   Zabbix → **Alerts → Media types → GLPI Ticket → app_token** (it
+   appears in both the media type parameters and the message template).
+
+5. **Reload Zabbix config cache** after any media-type / action change:
+   ```bash
+   docker exec zabbix-server zabbix_server -R config_cache_reload
+   ```
+
+> Steps 2–4 are also covered inline in Steps 3–5 above; this section is
+> the consolidated checklist so a new cloneer doesn't miss them.
+
+---
+
 ## Windows-only: Expose ports for phone/other devices
 
 In **Admin PowerShell** (re-run after every reboot, or use the
