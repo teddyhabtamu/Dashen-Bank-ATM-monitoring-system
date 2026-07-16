@@ -64,18 +64,73 @@ def init_db(conn):
     conn.commit()
 
 
-def insert_one(conn, atm):
+# Cash-dispensing transaction types are the ones blocked by a dispenser /
+# cash-level fault. Non-cash inquiries can still succeed during a jam.
+CASH_TXN_TYPES = {'WITHDRAWAL', 'TRANSFER', 'CARDLESS_TXN'}
+
+
+def load_states(conn):
+    """Bulk-load current ATM states once per cycle (cheap even at 2,500 ATMs).
+
+    Returns {atm_id: state}. ATMs with no row are treated as IN_SERVICE.
+    """
+    states = {}
+    with conn.cursor() as cur:
+        cur.execute("SELECT atm_id, state FROM atm_current_state")
+        for aid, st in cur.fetchall():
+            states[aid] = st
+    return states
+
+
+def _decide_outcome(txn_type, state):
+    """Return (status, error_code, fault_type) biased by the ATM's health.
+
+    The logic mirrors reality so the transaction feed stays consistent with
+    the ATM's reported state:
+      * HARDWARE_FAULT / OUT_OF_CASH -> cash dispensing txns fail with a
+        DISPENSER fault; balance/mini-statement still succeed.
+      * AGENT_DISCONNECTED / OFFLINE -> nearly everything fails (timeout /
+        network); a rare success mimics a flapping link.
+      * IN_SERVICE / IN_SUPERVISOR / others -> normal random mix.
+    It is a bias, not a hard 100% block, to stay realistic.
+    """
+    is_cash = txn_type in CASH_TXN_TYPES
+
+    if state in ('HARDWARE_FAULT', 'OUT_OF_CASH'):
+        if is_cash:
+            # Dispenser cannot hand out cash -> hardware error.
+            return 'ERROR', '9E3D', 'DISPENSER'
+        return None  # fall through to normal mix for non-cash txns
+
+    if state in ('AGENT_DISCONNECTED', 'OFFLINE'):
+        # Link/agent down: mostly fail, rare success.
+        if random.random() < 0.92:
+            if is_cash or random.random() < 0.5:
+                return 'TIMEOUT', '44AA', 'NETWORK'
+            return 'ERROR', '44AA', 'NETWORK'
+        return None
+
+    return None  # IN_SERVICE etc. -> normal
+
+
+def insert_one(conn, atm, state=None):
     txn_types = ['WITHDRAWAL', 'BALANCE_INQ', 'MINI_STATEMENT', 'TRANSFER', 'CARDLESS_TXN']
     weights = [0.55, 0.25, 0.10, 0.07, 0.03]
     txn_type = random.choices(txn_types, weights=weights)[0]
-    status = random.choices(['APPROVED', 'DECLINED', 'TIMEOUT', 'ERROR'],
-                             weights=[0.85, 0.08, 0.04, 0.03])[0]
+
+    forced = _decide_outcome(txn_type, state)
+    if forced:
+        status, err, fault_type = forced
+    else:
+        status = random.choices(['APPROVED', 'DECLINED', 'TIMEOUT', 'ERROR'],
+                                 weights=[0.85, 0.08, 0.04, 0.03])[0]
+        err = random.choice(['3A7F', 'B2C1', '44AA']) if status == 'ERROR' else None
+        fault_type = NCR_FAULT_MAP.get(err) if err else None
+
     card = random.choice(CARD_POOL)
     amount = random.choice([100, 200, 500, 1000, 2000, 5000, 10000]) \
         if txn_type in ('WITHDRAWAL', 'TRANSFER') else None
     auth = str(random.randint(100000, 999999)) if status == 'APPROVED' else None
-    err = random.choice(['3A7F', 'B2C1', '44AA']) if status == 'ERROR' else None
-    fault_type = NCR_FAULT_MAP.get(err) if err else None
     with conn.cursor() as cur:
         cur.execute("""
             INSERT INTO atm_transactions
@@ -109,6 +164,9 @@ def main():
     while True:
         try:
             atms = common.refresh(conn)
+            # Bulk-load current states once per cycle so transactions stay
+            # consistent with each ATM's reported health.
+            states = load_states(conn)
             hour = time.localtime().tm_hour
             for atm in atms:
                 if hour in (8, 9, 12, 13, 17, 18):
@@ -117,8 +175,9 @@ def main():
                     n = random.randint(0, 1)
                 else:
                     n = random.randint(0, 2)
+                atm_state = states.get(atm['atm_id'])
                 for _ in range(n):
-                    insert_one(conn, atm)
+                    insert_one(conn, atm, atm_state)
             if hour in (8, 9, 12, 13, 17, 18):
                 sleep_time = random.uniform(5, 15)
             elif hour in (0, 1, 2, 3, 4):
