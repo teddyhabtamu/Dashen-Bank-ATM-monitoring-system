@@ -100,10 +100,17 @@ def assign_ports(conn):
 
 
 def load_atms(conn):
-    """Return all ATMs that have a sim_port assigned, as dicts."""
+    """Return only active ATMs that have a sim_port assigned.
+
+    Retired/inactive ATMs must not generate traffic (no metrics, no
+    transactions), so they are excluded here — this filters both the
+    hardware simulator and the transaction feed.
+    """
     with conn.cursor() as cur:
         cur.execute("SELECT atm_id, vendor, branch, terminal_id, sim_port "
-                    "FROM atm_locations WHERE sim_port IS NOT NULL ORDER BY atm_id")
+                    "FROM atm_locations "
+                    "WHERE sim_port IS NOT NULL AND status = 'active' "
+                    "ORDER BY atm_id")
         cols = ['atm_id', 'vendor', 'branch', 'terminal_id', 'port']
         return [dict(zip(cols, r)) for r in cur.fetchall()]
 
