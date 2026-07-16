@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+.git/
+node_modules/
+report-portal/
+config/
+docs/
+*.md
+.DS_Store

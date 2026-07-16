@@ -11,9 +11,10 @@ services:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U zabbix"]
-      interval: 5s
+      interval: 2s
       timeout: 3s
-      retries: 10
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
   zabbix-server:
@@ -324,7 +325,7 @@ services:
       context: ./simulators
       dockerfile: Dockerfile.atm-simulator
     container_name: atm-sim-engine
-    command: python3 sim_engine.py
+    command: python3 -u sim_engine.py
     environment:
       DB_HOST: postgres
       DB_NAME: zabbix
@@ -335,9 +336,10 @@ services:
       SIM_PORT_MAX: "1260"
     ports:
       - "1161-1260:1161-1260"
+      - "1161-1260:1161-1260/udp"
     depends_on:
       postgres:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
 
   atm-txn-engine:

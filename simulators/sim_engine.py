@@ -221,6 +221,15 @@ class ATMInstance:
             self.httpd = httpd
             threading.Thread(target=httpd.serve_forever, daemon=True).start()
             print(f"[SIM] {self.atm['atm_id']} ({self.atm['vendor']}) serving on :{self.atm['port']}")
+            # Also serve the same OID values over real SNMP (UDP, same port) so
+            # Zabbix can poll with SNMP-agent items (production-accurate path).
+            try:
+                import snmp_agent
+                snmp_agent.start_snmp(
+                    self.atm['atm_id'], self.atm['port'], self.oid, self.state
+                )
+            except Exception as e:
+                print(f"[SIM] {self.atm['atm_id']} SNMP start skipped: {e}")
             return True
         print(f"[SIM] {self.atm['atm_id']} FAILED to bind :{self.atm['port']} "
               f"after {retries} attempts ({last_err})")
