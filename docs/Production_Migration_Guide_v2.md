@@ -1,10 +1,23 @@
 # Dashen Bank — ATM Monitoring System
-# Production Migration Guide v2
+# Production Migration Guide v2 (Revised 2026-07-16)
 
-## From PoC (Single Laptop / 5 Simulated ATMs) to Production (5 VMs / 2,700 Real ATMs)
+## From PoC (Single Laptop / Simulated ATMs) to Production (5 VMs / Real NCR + GRG ATMs)
 
-**Based on:** Server Infrastructure Specification (June 2026)
-**Target:** Production — RHEL 9, 5 VMs, 2,300–2,700 ATMs, 3-Year Data Retention
+**Based on:** Server Infrastructure Specification (June 2026) + Collection Strategy decision (`docs/collection-strategy.md`)
+**Target:** Production — RHEL 9, 5 VMs, real Dashen ATM fleet (NCR + GRG only), 3-Year Data Retention
+
+---
+
+# 0. Read This First — Two Corrections to the Original Guide
+
+This v2 guide was written assuming the PoC used SNMP against the simulators. **That assumption is wrong and must be corrected before you trust any Phase 4–8 step:**
+
+1. **The PoC simulators are collected over HTTP, not SNMP.** The Zabbix templates use `HTTP agent` items hitting `http://172.17.0.1:{$ATM_PORT}/oid/...`. Real ATMs must be collected over **SNMP** (UDP 161). So the production cutover is *not* "only change the address" — it is "change item type HTTP→SNMP **and** re-map OIDs to the real NCR/GRG MIB trees." See §8.1 and `docs/collection-strategy.md` §4.
+   - **Mitigation (do this during the build phase, not at cutover):** make the simulators emit **real SNMP** (e.g. `snmp-simulator` / `snmp4arts`) so the Zabbix items are SNMP-native from day one. Then production is truly "point Zabbix at real ATMs."
+
+2. **Fleet size is inconsistent between planning docs.** This guide says 2,300–2,700 ATMs; `New Tasks` says ~1,300 (NCR 800–900 + GRG 400–500). **Reconcile to a single official count** with the ATM/Channel Support team before finalizing VM sizing and proxy count. Capacity numbers below use the 2,300–2,700 figure as the upper bound; if the real count is ~1,300, VM specs can be halved.
+
+3. **Full-fleet cutover in 2 months is not realistic.** This guide's Phase order implies a big-bang move. In practice: build the platform + connect a **pilot wave (10–50 ATMs)** over SNMP, run **parallel to NetXMS**, validate, then phase the rest. See §8.7 (Parallel Run) and `docs/collection-strategy.md` §5.
 
 ---
 
@@ -12,18 +25,16 @@
 
 ## 1.1 What This Guide Does
 
-This guide takes the ATM Monitoring System — currently running on your laptop with 5 simulated ATMs (all in one Docker Compose file) — and moves it onto Dashen Bank's production infrastructure: **5 separate RHEL 9 virtual machines** serving **2,300–2,700 real ATMs**.
+This guide takes the ATM Monitoring System — currently running on your laptop with simulated ATMs (all in one Docker Compose file) — and moves it onto Dashen Bank's production infrastructure: **5 separate RHEL 9 virtual machines** serving the real Dashen ATM fleet.
 
-This is a **complete rewrite** of the original production migration guide because the infrastructure is fundamentally different:
+The infrastructure differs fundamentally from the PoC:
 
-| **Original Guide Assumed** | **Actual Production Spec** |
+| **PoC Assumed** | **Production Spec** |
 |---|---|
-| 1 server (Ubuntu 22.04) | 5 VMs (RHEL 9) |
-| 8 CPU / 32 GB RAM total | 60 vCPU / 184 GB RAM total |
-| 500 GB disk total | 3.5 TB storage total |
-| 20–30 ATMs | 2,300–2,700 ATMs |
-| All services in one Docker Compose | Services split across 5 VMs |
-| PostgreSQL in a container | Dedicated PostgreSQL VM (64 GB RAM, 1 TB) |
+| 1 laptop (Docker Compose) | 5 VMs (RHEL 9) |
+| ~40 services in one compose | Services split across 5 VMs |
+| Simulated ATMs over HTTP | Real NCR/GRG ATMs over SNMP |
+| 5–22 ATMs | Real fleet (reconcile count — see §0.2) |
 | 90-day retention | 3-year data retention |
 
 ## 1.2 Who This Guide Is For
@@ -1386,19 +1397,23 @@ Repeat the import steps from UAT (section 5.3) on the production Zabbix (VM1):
 
 This is the most technically important phase. You will take one real ATM and make Zabbix display its real hardware status in the same Grafana dashboards.
 
-## 8.1 Understanding the Change
+## 8.1 Understanding the Change (READ CAREFULLY)
 
-In the PoC, Zabbix items use **HTTP agent** type, polling URLs like:
+**The PoC simulators are collected over HTTP today, NOT SNMP.** Zabbix items use `HTTP agent` type, polling URLs like:
 ```
 http://172.17.0.1:1161/oid/1.1.0
 ```
 
-For real ATMs, items must use **SNMP agent** type, polling UDP port 161:
+For real ATMs, items must use **SNMP agent** type, polling UDP port 161 against the real vendor MIB:
 ```
-SNMP GET 10.10.1.50:161 .1.3.6.1.4.1.37513.1.1.0
+SNMP GET 10.10.1.50:161 .1.3.6.1.4.1.37513.1.1.0   (real NCR OID — NOT the sim's 1.1.0)
 ```
 
-The item **names**, **triggers**, **value maps**, and **Grafana dashboards** do not change. Only the item type and target address change.
+Two things change, not one:
+1. **Item type:** `HTTP agent` → `SNMP agent`.
+2. **OID/transport:** the sim's `1.1.0`-style OIDs are *shaped like* NCR/GRG but are **not** the real MIB trees. You must re-map each item to the **real** NCR/GRG OID obtained from the vendor MIB (see §8.2). The item **names**, **triggers**, **value maps**, and **Grafana dashboards** stay identical.
+
+> **Best practice (do during build, before cutover):** make the simulators emit **real SNMP** so the Zabbix templates are SNMP-native from day one. If you do this, Phase 4 becomes "clone template, point at real ATM IP, set community" — no item-type rewrite. If you skip it, you rewrite ~30 items per template (NCR + GRG) at cutover. See `docs/collection-strategy.md` §4.
 
 ## 8.2 SNMP Walk the Test ATM
 
@@ -1542,6 +1557,17 @@ If yes, change the host interface from SNMPv2 to SNMPv3:
 - **Privacy passphrase:** (set by ATM team)
 
 The item-level configuration (OIDs, types) does not change — only the interface authentication settings.
+
+## 8.7 Pilot Wave + Parallel Run (DO NOT big-bang)
+
+Full-fleet cutover in the first 2 months is not realistic (vendor coordination, field work, validation). Instead:
+
+1. **Pilot wave (10–50 ATMs):** connect a small, representative set (mix of NCR + GRG, several branches) over SNMP per §8.2–8.6.
+2. **Run parallel to NetXMS** for at least 2–4 weeks. Daily compare: does our system show the same status/cash/faults as NetXMS for these ATMs? Fix discrepancies before expanding.
+3. **Phased expansion:** after the pilot is trusted, onboard the rest in waves (e.g. by region/district). Each wave repeats §8.2–8.6.
+4. **Keep simulators + NetXMS running** until the pilot is validated. Do not decommission (see Phase 9) until one full quarter of stable real-ATM operation.
+
+This is the only safe path to "a system better than the current one" — you prove it on real data before touching the whole fleet.
 
 ---
 
@@ -1882,15 +1908,21 @@ docker exec zabbix-db psql -U zabbix -d zabbix -c "SELECT COUNT(*) FROM atm_loca
 
 ---
 
-# 12. Phase 8 — Scale to Full Fleet (Auto-Discovery)
+# 12. Phase 8 — Scale to Full Fleet (Proxies + Auto-Discovery)
 
-Manually creating hosts for 2,700 ATMs is not feasible. Use Zabbix auto-discovery.
+Manually creating hosts for thousands of ATMs is not feasible, and SNMP-polling thousands of ATMs every ≤5s from a single Zabbix server will overwhelm it. **You must use Zabbix proxies** (regional collectors) — this is the scale fix the PoC's per-port HTTP model cannot provide.
+
+## 12.0 Zabbix Proxy Topology (REQUIRED for scale)
+
+- Deploy **1 Zabbix proxy per region/zone** (number depends on reconciled fleet size — see §0.2). Each proxy polls the ATMs in its zone over SNMP and forwards to VM1.
+- This also solves the **per-port problem**: the PoC publishes one Docker port per ATM (1161–1260 ≈ 100 ATMs). That model cannot scale. With SNMP + proxies, ATMs are polled on the standard UDP 161; no per-ATM published port is needed. Recommended long-term model: **single SNMP listener per zone (proxy) + ATM identified by IP/community/index**, not one port per ATM.
+- Proxy sizing: a proxy handles ~500–1,000 SNMP hosts comfortably at 10–30s intervals. Size proxy count = ceil(fleet / 800).
 
 ## 12.1 Create the Discovery Rule
 
 1. **Configuration → Discovery → Create discovery rule**
 2. **Name:** `Dashen ATM Network Scan`
-3. **IP range:** The ATM network subnet (ask IT), e.g., `10.10.1.1-254`
+3. **IP range:** The ATM network subnet(s) (ask IT), e.g., `10.10.1.1-254` per branch/zone
 4. **Checks → Add → Type:** SNMPv2 agent
    - **Port:** 161
    - **OID:** The operational status OID from your snmpwalk (e.g., `.1.3.6.1.4.1.37513.1.1.0`)
@@ -1908,14 +1940,16 @@ Manually creating hosts for 2,700 ATMs is not feasible. Use Zabbix auto-discover
    - Add host
    - Add to host group "Dashen Bank ATMs"
    - Link template "Dashen Bank ATM Hardware - SNMP (Real)"
+   - Assign to the correct proxy (by zone)
 5. **Enable**
 
 ## 12.3 What Auto-Discovery Does Not Do
 
 Auto-discovery handles Zabbix host creation only. For each newly discovered ATM, you still need:
-- **Location data** → Enter via admin form at `http://10.200.1.4:8888/admin/atm`
+- **Location data** → Enter via admin form at `http://10.200.1.4:8888/admin/atm` (or bulk import, Phase 7)
 - **EJ log shipping** → Configure per ATM (or use the centralized method from Phase 5)
 - **ISO 8583 transactions** → Automatic (the gateway is switch-wide, not per-ATM)
+- **Proxy assignment** → Set per zone so load is distributed
 
 ---
 

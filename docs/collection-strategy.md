@@ -50,12 +50,35 @@ Our built stack is **Zabbix 6.4 + simulators that mimic SNMP-shaped OIDs over HT
 
 ---
 
-## 4. Open decision
+## 4. Decision (refined, 2026-07-16)
 
-The production collection path (NetXMS reuse vs full Zabbix replacement) is **not yet finalized**. The recommendation is to treat NetXMS as the telemetry source of truth and layer our presentation/analytics/ticketing on top, retaining Zabbix only for surrounding IT infrastructure monitoring. The simulators are dev/demo artifacts, not the production collection mechanism.
+**Chosen path: keep the current SNMP-oriented design for the build phase; perform real production migration (SNMP against actual NCR/GRG ATMs) once the bank provides the server and real ATM access.** This is the pragmatic middle ground and is honest about the gap.
+
+Critical correction to the current build: **today the simulators are collected over HTTP, not SNMP.** The Zabbix templates use `HTTP agent` items hitting `http://172.17.0.1:{$ATM_PORT}/oid/...`. That is *not* SNMP. For the "SNMP now, real SNMP later" plan to be clean, the simulators must emit **real SNMP** (e.g. `snmp4arts` / `snmp-simulator`) so the exact Zabbix item type (SNMP agent, real OIDs) used in production is exercised in development. Otherwise the production cutover requires rewriting every Zabbix item from HTTP → SNMP and re-mapping OIDs — wasted rework.
+
+What stays identical across sim → real: item **names**, **triggers**, **value maps**, **Grafana dashboards**, **report portal**. Only the item **type** (HTTP → SNMP) and the **OID/transport** change.
+
+### Pre-production gates (must be done before fleet cutover)
+1. **Simulators speak real SNMP**, not HTTP — so Zabbix items are SNMP-native from day one.
+2. **Scale model fixed:** the current per-ATM published-port model (docker-compose publishes ~100 ports; code range 1161–2500) cannot reach 2,000–2,500 ATMs. Must move to **Zabbix proxies** + a **single-port / path-routed** collection model (one listener, ATM identified by path/community/index), not one published port per ATM.
+3. **Real NCR + GRG MIBs obtained and compiled** into Zabbix; sim OIDs must map to the real vendor OID trees (the sim's `1.1.0` style is *shaped like* NCR/GRG but is not the real MIB).
+4. **OID mapping table** built (sim OID ↔ real vendor OID ↔ Zabbix item) and committed.
+
+### Honest capability gaps vs NetXMS (must be stated to stakeholders)
+- **ATM screen screenshot / screencast:** not available over SNMP. NetXMS agent does this. Mitigation: not in BRD scope; accept the gap or source via vendor console.
+- **Link-loss data caching:** SNMP polling silently gaps during ATM outages. NetXMS agent caches and replays. Mitigation: accept brief gaps, or rely on EJ feed from the Switch for the transaction record.
+- **Remote actions (reboot, card eject):** not in BRD scope; SNMP alone cannot. Accept.
+
+### Fleet-size inconsistency to resolve
+- `New Tasks` doc assumes **NCR ~800–900 + GRG ~400–500 ≈ 1,300 ATMs**.
+- `Production_Migration_Guide_v2` assumes **2,300–2,700 ATMs**.
+- These two planning documents must be reconciled to a single official fleet count before capacity planning (VM sizing, proxy count) is finalized.
 
 ---
 
 ## 5. Build & deployment feasibility (2-month horizon)
 
-See section "Feasibility" notes in project tracking. Summary: the **portal/reports/analytics/ticketing layer is achievable in 2 months**; the **production ATM data-collection cutover for all 2,000–2,500 real ATMs is the critical-path risk** and depends on the collection-strategy decision above.
+- **Achievable in 2 months (high confidence):** the presentation/analytics layer — report portal, Grafana dashboards, GLPI ticketing + RCA automation, vendor-performance reports, human-readable fault mapping, EJ search. This is the differentiator and is largely done.
+- **Achievable in 2 months as a pilot:** connect a **subset** of real ATMs (10–50) over SNMP and prove end-to-end on the production VMs.
+- **NOT achievable in 2 months:** full fleet cutover of all real ATMs. Reasons: (a) agent/SNMP onboarding across remote branches is an operations project requiring vendor coordination and field work; (b) the scale/proxy/OID work above is a prerequisite; (c) parallel-run validation against NetXMS is needed before trusting the new system. Recommend phased waves, not big-bang.
+- **Stakeholder expectation:** the system delivered in 2 months should be framed as "production-ready platform + pilot on real ATMs, better than current on reporting/analytics," not "all ATMs migrated."
