@@ -80,20 +80,41 @@ def repair_duplicate_ports(conn):
 def assign_ports(conn):
     """Allocate a sim_port to any ATM lacking one, using the first free port in
     [PORT_MIN, PORT_MAX] so ports stay unique and within the docker-published
-    range regardless of fleet size."""
+    range regardless of fleet size.
+
+    Inactive/retired ATMs keep their port (so reactivation is instant) but do
+    not consume the pool permanently: if the range is exhausted when a new ATM
+    needs a port, a port is reclaimed from the oldest inactive ATM first. This
+    prevents a slow port leak from long-term fleet churn without needing a
+    manual rebuild to reactivate a recently retired ATM.
+    """
     repair_duplicate_ports(conn)
     with conn.cursor() as cur:
         cur.execute("SELECT atm_id FROM atm_locations WHERE sim_port IS NULL ORDER BY atm_id")
-        rows = cur.fetchall()
-        if not rows:
+        pending = cur.fetchall()
+        if not pending:
             return
         used = set(_used_ports(conn).values())
-        for (aid,) in rows:
+        for (aid,) in pending:
             free = _free_port(used)
             if free is None:
-                print(f"[PORTS] OUT OF PORTS: cannot allocate sim_port for {aid} "
-                      f"(range {PORT_MIN}-{PORT_MAX} exhausted)")
-                break
+                # Pool exhausted — reclaim a port from an inactive ATM.
+                cur.execute("""
+                    SELECT atm_id, sim_port FROM atm_locations
+                    WHERE status <> 'active' AND sim_port IS NOT NULL
+                    ORDER BY sim_port LIMIT 1
+                """)
+                reclaim = cur.fetchone()
+                if reclaim:
+                    old_aid, old_port = reclaim
+                    cur.execute("UPDATE atm_locations SET sim_port = NULL WHERE atm_id = %s", (old_aid,))
+                    used.discard(old_port)
+                    free = _free_port(used)
+                    print(f"[PORTS] Reclaimed port {old_port} from inactive {old_aid} for new {aid}")
+                if free is None:
+                    print(f"[PORTS] OUT OF PORTS: cannot allocate sim_port for {aid} "
+                          f"(range {PORT_MIN}-{PORT_MAX} exhausted)")
+                    break
             cur.execute("UPDATE atm_locations SET sim_port = %s WHERE atm_id = %s", (free, aid))
             used.add(free)
     conn.commit()
