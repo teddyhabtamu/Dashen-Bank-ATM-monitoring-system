@@ -56,7 +56,8 @@ def init_db(conn):
                 iso_processing_code VARCHAR(10),
                 iso_stan VARCHAR(20),
                 source VARCHAR(20) DEFAULT 'SIMULATOR',
-                vendor VARCHAR(20)
+                vendor VARCHAR(20),
+                fault_type VARCHAR(50)
             )
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_atm_txn_atm_id ON atm_transactions(atm_id)")

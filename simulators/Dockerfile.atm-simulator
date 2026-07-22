@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir psycopg2-binary "pysnmp==6.2.6"
+RUN pip install --no-cache-dir psycopg2-binary "pysnmp==6.2.6" requests
 
 COPY atm_snmp_simulator.py .
 COPY ej_log_generator.py .

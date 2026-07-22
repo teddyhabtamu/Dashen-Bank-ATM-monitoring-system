@@ -9,7 +9,7 @@ template polls, so the Grafana state dashboards stay accurate (fixes the
 
 Fixes vs the original dev-guide version:
   * uses stdlib urllib (no extra pip dependency in the simulator image)
-  * DB_PASS comes from ${DB_PASS} (not hard-coded "zabbix_pass")
+  * DB_PASS comes from ${DB_PASS} (empty fallback fails safely)
   * GATEWAY_IP defaults to 172.17.0.1 to match the Zabbix item URLs
   * GRG-aware OID tree (2.x cash / 3.x card / 8.x net) like the GRG template
 """
@@ -23,7 +23,7 @@ from datetime import datetime
 DB_HOST = os.environ.get('DB_HOST', 'postgres')
 DB_NAME = os.environ.get('DB_NAME', 'zabbix')
 DB_USER = os.environ.get('DB_USER', 'zabbix')
-DB_PASS = os.environ.get('DB_PASS', 'zabbix_pass')
+DB_PASS = os.environ.get('DB_PASS', '')
 GATEWAY_IP = os.environ.get('GATEWAY_IP', '172.17.0.1')
 
 # Ports are now read from atm_locations.sim_port (assigned automatically by the

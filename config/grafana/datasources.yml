@@ -8,7 +8,7 @@ datasources:
     jsonData:
       username: Admin
     secureJsonData:
-      password: zabbix
+      password: ${ZABBIX_WEB_PASSWORD}
 
   - name: ATM-Transactions
     type: postgres
@@ -16,7 +16,7 @@ datasources:
     database: zabbix
     user: zabbix
     secureJsonData:
-      password: zabbix_pass
+      password: ${DB_PASS}
     jsonData:
       sslmode: disable
       postgresVersion: 1500
