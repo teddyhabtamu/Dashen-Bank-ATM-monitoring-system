@@ -1,5 +1,18 @@
 # Dashen Bank ATM Monitoring System
 
+## Fleet Overview
+
+The system manages **1,227 ATMs** across **14 districts** in Ethiopia.
+
+| Vendor | Count |
+|--------|-------|
+| **GRG** (tech24et) | 798 (65%) |
+| **NCR** (Moti engineering) | 429 (35%) |
+
+Polling: SNMPv2c (`dashen_sim` community) via Dashen private OID root
+`1.3.6.1.4.1.99999`. Templates pre-loaded: `Dashen Bank ATM Hardware`
+(NCR) and `Dashen Bank ATM Hardware - GRG`.
+
 ## Prerequisites
 - Ubuntu 22.04 LTS (or WSL2 on Windows)
 - Git
@@ -34,7 +47,9 @@ This takes 5–10 minutes. It:
 - Creates required directories (`ej-logs`, `reports`, `config/`)
 - Builds all Docker images
 - Starts all services (`docker compose up -d`)
-- Restores the PostgreSQL database from backup
+- Restores the PostgreSQL database from backup (1,227 ATMs)
+- Imports NCR/GRG SNMP templates into Zabbix
+- Registers all 1,201 ATMs as Zabbix hosts with correct SNMP interfaces
 
 Verify everything is running:
 ```bash
@@ -43,25 +58,48 @@ docker ps --format "table {{.Names}}\t{{.Status}}" | grep -v "Exited"
 
 ---
 
-## Step 3 — Import Zabbix configuration
+## Step 3 — Verify Zabbix configuration
 
-1. Open `http://localhost:8080` (`Admin` / `zabbix`)
-2. **Data collection → Templates → Import**
-   → select `config/zabbix/zbx_export_templates.xml` (NCR)
-   → then `config/zabbix/template_grg.xml` (GRG)
-3. **Data collection → Hosts → Import**
-   → select `config/zabbix/zbx_export_hosts.xml`
-4. **Alerts → Media types → Import**
-   → select `config/zabbix/zbx_export_mediatypes.xml`
-   (includes the **GLPI Ticket** webhook)
-5. **Create the trigger action** (auto-creates GLPI tickets):
-   ```bash
-   python3 scripts/setup_zabbix_actions.py
-   ```
-   > Zabbix 6.4 cannot export/import **actions** as XML, so this step is
-   > a small idempotent API script instead of a file import. It links
-   > ATM triggers (severity ≥ High) to the GLPI Ticket media type. Safe
-   > to re-run — it skips if the action already exists.
+The setup script already imported templates and registered hosts. Verify:
+
+```bash
+# Check templates are loaded
+python3 -c "
+import requests
+r = requests.post('http://localhost:8080/api_jsonrpc.php', json={
+    'jsonrpc': '2.0', 'method': 'user.login',
+    'params': {'username': 'Admin', 'password': 'zabbix'}, 'id': 1
+}, timeout=10)
+auth = r.json()['result']
+for name in ['Dashen Bank ATM Hardware', 'Dashen Bank ATM Hardware - GRG']:
+    r = requests.post('http://localhost:8080/api_jsonrpc.php', json={
+        'jsonrpc': '2.0', 'method': 'template.get',
+        'params': {'output': ['templateid', 'name'], 'filter': {'name': [name]},
+                   'selectHosts': ['hostid']},
+        'auth': auth, 'id': 2
+    }, timeout=10)
+    t = r.json().get('result', [{}])[0]
+    print(f\"{t.get('name')}: {len(t.get('hosts', []))} hosts\")
+"
+```
+
+If templates/hosts are missing, re-run the sync script:
+```bash
+python3 scripts/sync_atms_to_zabbix.py --apply --import-templates
+```
+
+Then **Alerts → Media types → Import**
+→ select `config/zabbix/zbx_export_mediatypes.xml`
+(includes the **GLPI Ticket** webhook)
+
+**Create the trigger action** (auto-creates GLPI tickets):
+```bash
+python3 scripts/setup_zabbix_actions.py
+```
+> Zabbix 6.4 cannot export/import **actions** as XML, so this step is
+> a small idempotent API script instead of a file import. It links
+> ATM triggers (severity ≥ High) to the GLPI Ticket media type. Safe
+> to re-run — it skips if the action already exists.
 
 > **Ticket lifecycle (RCA):** a fired trigger auto-creates a GLPI
 > ticket; when the alert clears, the ticket is moved to **Pending** with
@@ -95,9 +133,13 @@ If dashboards did not load automatically:
 
 ## Step 6 — Install and configure the Zabbix Agent (on the host/WSL)
 
+The 22 synthetic ATMs (ATM-001 through ATM-115) use agent-based
+monitoring for local-machine checks. The real fleet (1,201 ATMs)
+is polled via SNMP and does not need a local agent.
+
 ATM-001 uses a real Zabbix Agent installed directly on the host
 (WSL Ubuntu), not a container — it represents the "local machine"
-ATM. ATM-002 through ATM-005 use HTTP agent items against the
+ATM. The other synthetic ATMs use HTTP agent items against the
 simulator containers and do **not** need this.
 
 ### 6.1 — Install the Zabbix repository and agent package
@@ -308,7 +350,7 @@ then prints row counts to verify.
 ## Service URLs
 
 | Service | URL | Login |
-|---|---|---|
+|---|---|---|---|
 | Zabbix | http://localhost:8080 | Admin/zabbix |
 | Grafana | http://localhost:3002 | admin/dashen2024 |
 | OpenSearch Dashboards | http://localhost:5601 | admin / admin |
@@ -369,7 +411,7 @@ the repo. Do these in order:
 
 2. **Create the Zabbix trigger action (GLPI ticketing)**
    Zabbix 6.4 cannot import actions from XML, so run the idempotent
-   helper (also Step 3 #5):
+   helper (also Step 3):
    ```bash
    python3 scripts/setup_zabbix_actions.py
    ```

@@ -33,9 +33,12 @@ cd "$PROJECT_DIR"
 required_files=(
     "docker-compose.yml"
     "filebeat.yml"
-    "simulators/ej_log_generator.py"
-    "simulators/transaction_feed.py"
-    "simulators/atm_snmp_simulator.py"
+    "simulators/sim_engine.py"
+    "simulators/txn_engine.py"
+    "simulators/ej_engine.py"
+    "simulators/snmp_agent.py"
+    "simulators/state_manager.py"
+    "simulators/common.py"
     "simulators/Dockerfile.atm-simulator"
     "report-portal/app.py"
     "report-portal/Dockerfile"
@@ -62,8 +65,9 @@ echo "Directories OK"
 # Step 4 - Build Docker images
 echo ""
 echo "Step 4: Building Docker images..."
-docker compose build --no-cache \
-  atm-sim-001 report-portal iso8583-gateway
+docker compose build \
+  atm-sim-engine atm-txn-engine atm-ej-engine state-manager \
+  report-portal iso8583-gateway
 echo "Build OK"
 
 # Step 5 - Start all services
@@ -144,7 +148,7 @@ echo ""
 echo "Access your system:"
 echo ""
 echo "  Zabbix:       http://localhost:8080"
-echo "  Grafana:      http://localhost:3001"
+echo   "  Grafana:      http://localhost:3002"
 echo "  OpenSearch Dashboards: http://localhost:5601"
 echo "  GLPI:         http://localhost:8082"
 echo "  Report Portal: http://localhost:8888"
@@ -156,10 +160,19 @@ echo "  Grafana: admin / dashen2024"
 echo "  GLPI:    glpi / DashenGLPI2024"
 echo "  pgAdmin: admin@dashenbank.com / dashen2024"
 echo ""
-echo "IMPORTANT: You still need to manually import:"
-echo "  1. Zabbix template from config/zabbix/"
-echo "  2. Zabbix hosts from config/zabbix/"
-echo "  3. Zabbix media types from config/zabbix/"
-echo "  4. GLPI webhook configuration"
+# Step 8 — Import Zabbix templates and register ATM hosts
+echo ""
+echo "Step 8: Importing Zabbix templates and registering ATM hosts..."
+echo "  (may take 2-3 minutes for 1,200+ ATMs)"
+python3 scripts/sync_atms_to_zabbix.py --apply --import-templates || {
+    echo "  WARNING: Zabbix host sync failed. You can re-run later:"
+    echo "  python3 scripts/sync_atms_to_zabbix.py --apply --import-templates"
+}
+echo ""
+
+echo ""
+echo "IMPORTANT: You still need to manually configure:"
+echo "  1. GLPI webhook (see README Step 5)"
+echo "  2. Zabbix Agent on host/WSL (see README Step 6)"
 echo ""
 echo "See README.md for complete steps."

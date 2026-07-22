@@ -53,11 +53,16 @@ VENDOR_CONSTRAINTS = [
 ]
 
 
+SCHEMA_MIGRATIONS = [
+    "ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45)",
+]
+
+
 def init_audit_schema():
     index_queries = [
         AUDIT_TABLE_SQL,
         USERS_TABLE_SQL,
-    ] + USERS_MIGRATIONS + VENDOR_CONSTRAINTS + [
+    ] + USERS_MIGRATIONS + SCHEMA_MIGRATIONS + VENDOR_CONSTRAINTS + [
         "CREATE INDEX IF NOT EXISTS idx_audit_performed ON audit_log(performed_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_audit_username  ON audit_log(username)",
         "CREATE INDEX IF NOT EXISTS idx_audit_action    ON audit_log(action)",
