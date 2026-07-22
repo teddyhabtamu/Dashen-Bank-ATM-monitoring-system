@@ -56,10 +56,9 @@ def _fetch(port, oid, timeout=8, retries=2):
 def determine_state(atm_id, port, vendor):
     """Derive ATM state from simulator OIDs.
 
-    IMPORTANT: the simulator (sim_engine.py) models every non-GRG vendor with the
-    NCR OID schema, so we must use the exact same rule — GRG -> GRG OIDs,
-    everything else (NCR/Diebold/Wincor/...) -> NCR OIDs. A mismatched branch is
-    what produced spurious AGENT_DISCONNECTED for 3rd-party vendors.
+    Dashen Bank only deploys NCR and GRG ATMs. The simulator models every
+    non-GRG vendor as NCR, so we use the same rule — GRG -> GRG OIDs,
+    everything else -> NCR OIDs.
     """
     try:
         status = _fetch(port, '1.1.0')   # reachability gate

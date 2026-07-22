@@ -30,12 +30,34 @@ USERS_MIGRATIONS = [
     "ALTER TABLE app_users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'viewer'",
 ]
 
+# Vendor constraints — enforced server-side; duplicates are ignored.
+VENDOR_CONSTRAINTS = [
+    """DO $$ BEGIN
+        ALTER TABLE atm_locations
+            ADD CONSTRAINT chk_atm_locations_vendor
+            CHECK (vendor IS NOT NULL AND vendor IN ('NCR', 'GRG'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$""",
+    """DO $$ BEGIN
+        ALTER TABLE atm_transactions
+            ADD CONSTRAINT chk_atm_transactions_vendor
+            CHECK (vendor IS NULL OR vendor IN ('NCR', 'GRG'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$""",
+    """DO $$ BEGIN
+        ALTER TABLE fault_type_map
+            ADD CONSTRAINT chk_fault_type_map_vendor
+            CHECK (vendor IN ('NCR', 'GRG'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$""",
+]
+
 
 def init_audit_schema():
     index_queries = [
         AUDIT_TABLE_SQL,
         USERS_TABLE_SQL,
-    ] + USERS_MIGRATIONS + [
+    ] + USERS_MIGRATIONS + VENDOR_CONSTRAINTS + [
         "CREATE INDEX IF NOT EXISTS idx_audit_performed ON audit_log(performed_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_audit_username  ON audit_log(username)",
         "CREATE INDEX IF NOT EXISTS idx_audit_action    ON audit_log(action)",

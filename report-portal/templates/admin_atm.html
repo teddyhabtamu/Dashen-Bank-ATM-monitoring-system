@@ -983,7 +983,7 @@ function validateRow(row){
 function warnRow(row){
   var warns = {};
   if(row.vendor && KNOWN_VENDORS_UC.indexOf(row.vendor.toUpperCase()) === -1){
-    warns.vendor = 'Unknown vendor "' + row.vendor + '" — will be simulated with NCR schema. Known: ' + KNOWN_VENDORS.join(', ');
+    errs.vendor = 'Must be NCR or GRG (Dashen only deploys NCR and GRG ATMs)';
   }
   return warns;
 }

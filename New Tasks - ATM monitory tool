@@ -31,7 +31,7 @@
 - [✅] GRG template `config/zabbix/template_grg.xml` (proper OID remap, not naive sed).
 - [🔶] State manager keeps `atm_current_state` live (polls sims; in prod reads Zabbix API).
 - [⬜] **STRATEGIC FIX:** make simulators emit **real SNMP** (not HTTP) so Zabbix templates become SNMP-native. This is the single most important pre-cutover task — see `collection-strategy.md` §4. Without it, production cutover rewrites ~60 items.
-- [⬜] Drop sim emission of non-Dashen vendors (Diebold/Wincor/Test/NULL) — Dashen is NCR+GRG only; keeps data honest.
+- [✅] Drop non-Dashen vendors (Diebold/Wincor/Test/NULL) — CSV cleaned, DB constraints added, data migrated.
 
 ## 3. Zabbix templates (✅ NCR + GRG, 🔶 interval re-import)
 - [✅] Two templates (NCR + GRG) with identical item names, vendor-aware OIDs, triggers, value maps.

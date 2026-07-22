@@ -688,6 +688,9 @@ def _validate(data):
             errors['install_date'] = 'Use YYYY-MM-DD format'
     if data.get('status') and data['status'] not in ('active', 'inactive'):
         errors['status'] = 'Must be active or inactive'
+    KNOWN_VENDORS = ('NCR', 'GRG')
+    if data.get('vendor') and data['vendor'] not in KNOWN_VENDORS:
+        errors['vendor'] = f'Must be one of {", ".join(KNOWN_VENDORS)} (Dashen only deploys NCR and GRG)'
     return errors
 
 
