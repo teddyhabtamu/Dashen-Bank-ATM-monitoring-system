@@ -8,16 +8,22 @@
 
 ---
 
-# 0. Read This First — Two Corrections to the Original Guide
+# 0. Read This First — Corrections & Re-prioritization
 
 This v2 guide was written assuming the PoC used SNMP against the simulators. **That assumption is wrong and must be corrected before you trust any Phase 4–8 step:**
 
 1. **The PoC simulators are collected over HTTP, not SNMP.** The Zabbix templates use `HTTP agent` items hitting `http://172.17.0.1:{$ATM_PORT}/oid/...`. Real ATMs must be collected over **SNMP** (UDP 161). So the production cutover is *not* "only change the address" — it is "change item type HTTP→SNMP **and** re-map OIDs to the real NCR/GRG MIB trees." See §8.1 and `docs/collection-strategy.md` §4.
    - **Mitigation (do this during the build phase, not at cutover):** make the simulators emit **real SNMP** (e.g. `snmp-simulator` / `snmp4arts`) so the Zabbix items are SNMP-native from day one. Then production is truly "point Zabbix at real ATMs."
 
-2. **Fleet size is inconsistent between planning docs.** This guide says 2,300–2,700 ATMs; `New Tasks` says ~1,300 (NCR 800–900 + GRG 400–500). **Reconcile to a single official count** with the ATM/Channel Support team before finalizing VM sizing and proxy count. Capacity numbers below use the 2,300–2,700 figure as the upper bound; if the real count is ~1,300, VM specs can be halved.
+2. **Fleet size is inconsistent between planning docs.** This guide says 2,300–2,700 ATMs; Abinet's inventory says ~1,200 ATMs (798 GRG + 429 NCR). The inventory has been reconciled — the count is ~1,200, not 2,300–2,700. VM specs in this guide use the upper bound; with ~1,200 ATMs the current specs are even more comfortable.
 
 3. **Full-fleet cutover in 2 months is not realistic.** This guide's Phase order implies a big-bang move. In practice: build the platform + connect a **pilot wave (10–50 ATMs)** over SNMP, run **parallel to NetXMS**, validate, then phase the rest. See §8.7 (Parallel Run) and `docs/collection-strategy.md` §5.
+
+4. **Zabbix proxies are deferred to Phase 2.** The original proxy-topology design (8 proxies across 14 districts) was premature. Based on senior engineer review:
+   - A single Zabbix server with the documented specs (16 vCPU + 64 GB PostgreSQL) easily handles 1,200 ATMs × 40 items = 48,000 items.
+   - Proxies add procurement, installation, configuration, security, and monitoring overhead that would jeopardize the 45-day timeline.
+   - Initial rollout is **centralized**. Proxies are considered only if real performance monitoring proves they're needed.
+   - See `docs/proxy-topology.md` (updated) and `docs/uat-pilot-checklist.md` for the revised approach.
 
 ---
 
@@ -207,6 +213,57 @@ Open a ticket with the ATM vendor support team for:
 2. **SNMP community string** — Must be bank-specific, not "public".
 3. **EJ log file paths and format** — Exact path on the ATM OS (e.g., `C:\Program Files\NCR\APTRA\Journal\`), naming convention, log format (pipe-delimited, fixed-width, etc.).
 4. **Existing EJ collection process** — Does the bank already collect EJ files centrally? If yes, we point Filebeat there instead of per-ATM installs.
+
+---
+
+# 3.5 Revised 45-Day Priorities (per Senior Engineer Review)
+
+The original phase ordering (deploy VMs → import templates → connect ATMs) assumed the main risk was infrastructure deployment. Based on senior engineer review, the **highest risks are elsewhere**. This section reorders the work.
+
+## Priority 1 — Validate One Real ATM End-to-End (Highest Risk)
+
+Before deploying any VMs or splitting compose files, validate that a real ATM can be monitored:
+
+1. Get **one real ATM IP** and its SNMP community string from the ATM/Channel Support team
+2. From the sandbox (or any Linux machine): `snmpwalk -v2c -c <community> <atm-ip> .1.3.6.1.4.1.37513` (NCR) or similar vendor OID
+3. Map real OIDs to our sim OIDs — build the translation table
+4. Confirm the real ATM responds to SNMP at all (some vendors disable SNMP by default)
+
+**If this fails, nothing else matters.** The entire collection model depends on SNMP working against real NCR/GRG hardware.
+
+## Priority 2 — Confirm SNMP Credentials and Network Path
+
+1. Verify SNMP community string with the bank (is it v2c? v3? one community across all ATMs or per-vendor?)
+2. Request firewall rules: UDP 161 from the Zabbix server IP to ATM subnet(s)
+3. Test reachability to a representative ATM from the UAT VM1 (not just sandbox)
+
+## Priority 3 — Pilot 20–50 ATMs Across Different Districts
+
+Once 1 ATM works, expand to a pilot set covering multiple districts, vendors (NCR + GRG), and network paths. Validate:
+- Polling intervals are achievable (30s for critical items)
+- Timeout rates (expect some unreachable ATMs)
+- Template OID mappings work across the fleet
+- No district has systematic connectivity issues
+
+## Priority 4 — Scale to Full Fleet
+
+Only after the pilot is stable. This means:
+- Import all 1,200+ hosts into Zabbix
+- Tune polling intervals (critical items 30s, normal hourly, static daily)
+- Monitor server load (CPU, DB connections, disk I/O)
+- Build the operational dashboard (online/offline, cash low, alerts, availability %)
+
+## What This Means for the Phase Order
+
+The original Phase 0–8 ordering in this guide is still valid as a **reference**, but the **actual sequence** should be:
+
+1. **Validate 1 real ATM** (wasn't in original plan — now top priority)
+2. **Deploy UAT VMs** (Phase 1 — to have a proper test environment)
+3. **Pilot 20–50 ATMs** (was §8.7, now moves earlier)
+4. **Deploy Production VMs** (Phase 2)
+5. **Scale to full fleet**
+
+Proxies (§2.2 in proxy-topology.md) are removed from this timeline entirely — they are a Phase 2 consideration after the centralized deployment is stable.
 
 ---
 

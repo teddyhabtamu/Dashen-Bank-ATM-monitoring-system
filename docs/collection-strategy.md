@@ -60,7 +60,7 @@ What stays identical across sim → real: item **names**, **triggers**, **value 
 
 ### Pre-production gates (must be done before fleet cutover)
 1. **Simulators speak real SNMP**, not HTTP — so Zabbix items are SNMP-native from day one.
-2. **Scale model fixed:** the current per-ATM published-port model (docker-compose publishes ~100 ports; code range 1161–2500) cannot reach 2,000–2,500 ATMs. Must move to **Zabbix proxies** + a **single-port / path-routed** collection model (one listener, ATM identified by path/community/index), not one published port per ATM.
+2. **Collection model:** The sandbox uses per-ATM published ports (1161–1260) for simulation only. In production, all real ATMs use **UDP 161** — no port mapping needed. With ~1,200 ATMs and our server specs (16 vCPU + 64 GB PostgreSQL), **centralized polling is the initial deployment**. Zabbix proxies are deferred to Phase 2 — see `docs/proxy-topology.md`.
 3. **Real NCR + GRG MIBs obtained and compiled** into Zabbix; sim OIDs must map to the real vendor OID trees (the sim's `1.1.0` style is *shaped like* NCR/GRG but is not the real MIB).
 4. **OID mapping table** built (sim OID ↔ real vendor OID ↔ Zabbix item) and committed.
 
@@ -69,10 +69,10 @@ What stays identical across sim → real: item **names**, **triggers**, **value 
 - **Link-loss data caching:** SNMP polling silently gaps during ATM outages. NetXMS agent caches and replays. Mitigation: accept brief gaps, or rely on EJ feed from the Switch for the transaction record.
 - **Remote actions (reboot, card eject):** not in BRD scope; SNMP alone cannot. Accept.
 
-### Fleet-size inconsistency to resolve
-- `New Tasks` doc assumes **NCR ~800–900 + GRG ~400–500 ≈ 1,300 ATMs**.
-- `Production_Migration_Guide_v2` assumes **2,300–2,700 ATMs**.
-- These two planning documents must be reconciled to a single official fleet count before capacity planning (VM sizing, proxy count) is finalized.
+### Fleet-size inconsistency (resolved 2026-07-25)
+- Abinet's inventory Excel confirmed **1,202 ATMs** (798 GRG + 429 NCR).
+- This reconciles the earlier discrepancy between "~1,300" and "2,300–2,700".
+- Capacity planning and VM sizing use this confirmed count.
 
 ---
 
