@@ -61,6 +61,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
       <span class="vendor-badge" style="background:#EEF2FF;color:#64748B">Last state: {{ st }}</span>
       {% else %}
       <span class="state-badge {% if st == 'IN_SERVICE' %}state-green{% elif st == 'IN_SUPERVISOR' %}state-amber{% else %}state-red{% endif %}">{{ st }}</span>
+      {% if atm.get('live') %}<span class="vendor-badge" style="background:#DCFCE7;color:#166534;font-size:10px">LIVE</span>{% endif %}
       {% endif %}
       <span class="vendor-badge vendor-{{ atm.vendor }}">{{ atm.vendor or '—' }}</span>
       {% if atm.model %}<span class="vendor-badge" style="background:#EEF2FF;color:#012169">{{ atm.model }}</span>{% endif %}

@@ -258,9 +258,10 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
               {% else %}
               {% set live = d.state or 'UNKNOWN' %}
               <span style="color:{{ 'green' if live=='IN_SERVICE' else 'red' }};font-weight:600">{{ live }}</span>
+              {% if d.live %}<span title="Live from simulator" style="margin-left:4px;font-size:9px;color:green;border:1px solid green;border-radius:8px;padding:1px 5px;vertical-align:middle">LIVE</span>{% endif %}
               {% endif %}
             </td>
-            <td>{{ d.last_seen.strftime('%Y-%m-%d %H:%M') if d.last_seen else '—' }}</td>
+            <td>{{ 'Now' if d.live else (d.last_seen.strftime('%Y-%m-%d %H:%M') if d.last_seen else '—') }}</td>
             {% if session.get('role') in ('admin', 'operator') %}
             <td class="kebab-wrap">
               <button class="kebab-btn" onclick="toggleKebab(event,this)" title="Actions">&#8942;</button>

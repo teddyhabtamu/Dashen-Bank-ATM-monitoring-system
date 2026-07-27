@@ -2,7 +2,7 @@
 blueprints/admin.py
 ATM Admin registration routes.
 """
-import csv, io, re, os
+import csv, io, re, os, concurrent.futures
 import requests
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response, current_app, abort
@@ -88,6 +88,64 @@ def fetch_metrics(atm_id):
     except Exception:
         return None
     return None
+
+
+def determine_live_state(vendor, metrics):
+    """Derive ATM state from live metrics (mirrors state_manager.determine_state)."""
+    if not metrics:
+        return None
+    def m(oid, default=0):
+        v = metrics.get(oid)
+        return int(v) if v is not None else default
+    status = m('1.1.0')
+    if vendor == 'GRG':
+        cash1 = m('2.1.0'); cash2 = m('2.2.0')
+        cash_jam = m('2.5.0')
+        card = m('3.1.0')
+        net = m('8.1.0')
+    else:
+        cash1 = m('1.2.0'); cash2 = m('1.3.0')
+        cash_jam = m('1.7.0')
+        card = m('2.1.0')
+        net = m('7.1.0')
+    if net == 2:
+        return 'OFFLINE'
+    if status == 2:
+        return 'OUT_OF_SERVICE'
+    if status == 4:
+        return 'IN_SUPERVISOR'
+    if cash1 == 0 and cash2 == 0:
+        return 'OUT_OF_CASH'
+    if cash_jam == 1 or card == 2:
+        return 'HARDWARE_FAULT'
+    if status == 1:
+        return 'IN_SERVICE'
+    return 'UNKNOWN'
+
+
+def batch_fetch_live_states(atms):
+    """Fetch live metrics for a list of ATM dicts in parallel.
+    Returns dict: {atm_id: (state, datetime)} for reachable ATMs only.
+    """
+    def fetch_one(atm):
+        atm_id = atm['atm_id']
+        vendor = atm.get('vendor', 'NCR')
+        port = get_sim_port(atm_id)
+        if not port:
+            return (atm_id, None, None)
+        try:
+            r = requests.get(f"http://{GATEWAY_IP}:{port}/metrics", timeout=2)
+            if r.status_code == 200:
+                state = determine_live_state(vendor, r.json())
+                if state:
+                    return (atm_id, state, datetime.now(timezone.utc))
+        except Exception:
+            pass
+        return (atm_id, None, None)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
+        results = list(ex.map(fetch_one, atms))
+    return {r[0]: (r[1], r[2]) for r in results if r[1] is not None}
 
 
 def build_cassettes(vendor, m):
@@ -258,6 +316,17 @@ def atm_list():
 
     atms = [dict(zip(cols, r)) for r in rows]
 
+    # Override state/last_seen with live sim-engine data (parallel fetch)
+    live_states = batch_fetch_live_states(atms)
+    for atm in atms:
+        ls = live_states.get(atm['atm_id'])
+        if ls:
+            atm['state'] = ls[0]
+            atm['last_seen'] = ls[1]
+            atm['live'] = True
+        else:
+            atm['live'] = False
+
     # Summary stat row
     try:
         with get_db() as conn:
@@ -311,6 +380,15 @@ def atm_detail(atm_id):
         metrics = fetch_metrics(atm_id)
         cassettes = build_cassettes(vendor, metrics) if metrics else []
         hardware = build_hardware(vendor, metrics) if metrics else []
+
+        # Override current_state with live data for consistency
+        if metrics:
+            live_state = determine_live_state(vendor, metrics)
+            if live_state:
+                atm['current_state'] = live_state
+                atm['live'] = True
+        elif 'live' not in atm:
+            atm['live'] = False
 
         with get_db() as conn:
             cur = conn.cursor()

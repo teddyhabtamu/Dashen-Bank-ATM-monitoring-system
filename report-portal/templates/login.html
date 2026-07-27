@@ -3,116 +3,384 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Login — Dashen Bank ATM Monitoring</title>
+<title>Sign In — Report Portal</title>
 <link rel="icon" type="image/png" href="/static/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{
-  font-family:'Inter',sans-serif;font-size:14px;line-height:1.5;
-  -webkit-font-smoothing:antialiased;
-  background:linear-gradient(135deg,#F0F2F6 0%,#E2E8F0 100%);
-  color:#0F172A;min-height:100vh;
-  display:flex;align-items:center;justify-content:center;
-  padding:20px;
-}
-.login-card{
-  background:#fff;border-radius:16px;width:400px;max-width:100%;
-  box-shadow:0 24px 80px rgba(1,33,105,.12);
-  padding:40px 36px 36px;
-  animation:cardIn .4s ease;
-}
-@keyframes cardIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
-.login-logo{text-align:center;margin-bottom:32px}
-.login-logo img{width:48px;height:48px;object-fit:contain}
-.login-logo h1{font-size:18px;font-weight:800;color:#012169;margin-top:12px;letter-spacing:-.3px}
-.login-logo p{font-size:12px;color:#64748B;margin-top:2px;font-weight:500}
-.form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:18px}
-.form-group label{font-size:11px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.5px}
-.form-group input{
-  padding:10px 14px;border:1px solid #E4E9F1;border-radius:8px;
-  font-size:14px;font-family:inherit;outline:none;
-  transition:border-color .2s,box-shadow .2s;width:100%
-}
-.form-group input:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.08)}
-.form-group input.error{border-color:#DC2626;background:#FEF2F2}
-.pw-wrap{position:relative;display:flex;align-items:center}
-.pw-wrap input{padding-right:36px}
-.pw-toggle{position:absolute;right:8px;background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:#94A3B8;display:flex;align-items:center;transition:.15s;line-height:1}
-.pw-toggle:hover{color:#475569;background:#F1F5F9}
-.btn{
-  display:flex;align-items:center;justify-content:center;gap:8px;
-  width:100%;padding:11px 20px;border-radius:8px;border:none;
-  font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;
-  transition:.2s;margin-top:8px
-}
-.btn-primary{background:#012169;color:#fff}
-.btn-primary:hover{background:#273274;box-shadow:0 4px 16px rgba(1,33,105,.25)}
-.btn-primary:disabled{background:#94A3B8;cursor:not-allowed;box-shadow:none}
-.alert-card{
-  border-radius:8px;padding:12px 16px;display:flex;align-items:flex-start;gap:10px;
-  margin-bottom:20px;animation:alertIn .3s ease;
-}
-@keyframes alertIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
-.alert-card.error{background:#FEF2F2;border:1px solid #FECACA}
-.alert-icon{width:18px;height:18px;flex-shrink:0;margin-top:1px;color:#DC2626}
-.alert-message{font-size:13px;color:#DC2626;font-weight:500;line-height:1.4}
-.footer{text-align:center;margin-top:24px;font-size:11px;color:#94A3B8}
-@media(max-width:480px){
-  .login-card{padding:28px 20px 24px}
-  body{padding:12px}
-  .login-logo h1{font-size:16px}
-  .login-logo p{font-size:11px}
-}
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+  html, body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #FFFFFF;
+    color: #0F172A;
+    min-height: 100vh;
+  }
+
+  .split-screen {
+    display: flex;
+    min-height: 100vh;
+    width: 100%;
+  }
+
+  /* ── LEFT: Brand Panel ── */
+  .brand-panel {
+    flex: 1;
+    background: #FFFFFF;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 64px 80px;
+    position: relative;
+  }
+
+  .brand-panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: radial-gradient(#012169 1px, transparent 1px);
+    background-size: 24px 24px;
+    opacity: 0.035;
+  }
+
+  .brand-inner {
+    position: relative;
+    z-index: 1;
+    max-width: 440px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .brand-logo {
+    width: 112px;
+    height: 112px;
+    object-fit: contain;
+    margin-bottom: 32px;
+    display: inline-block;
+  }
+
+  .brand-title {
+    font-size: 28px;
+    font-weight: 800;
+    color: #012169;
+    letter-spacing: -0.4px;
+    margin-bottom: 8px;
+  }
+
+  .brand-subtitle {
+    font-size: 18px;
+    font-weight: 500;
+    color: #475569;
+    margin-bottom: 6px;
+  }
+
+  .brand-org {
+    font-size: 15px;
+    font-weight: 400;
+    color: #94A3B8;
+  }
+
+  /* ── RIGHT: Login Panel ── */
+  .login-panel {
+    flex: 1;
+    background: #012169;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+  }
+
+  .login-card {
+    width: 100%;
+    max-width: 440px;
+    padding: 8px 0;
+    animation: fadeUp 0.45s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .login-heading {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+
+  .login-heading h2 {
+    font-size: 26px;
+    font-weight: 700;
+    color: #FFFFFF;
+    letter-spacing: -0.3px;
+    margin-bottom: 6px;
+  }
+
+  .login-heading p {
+    font-size: 15px;
+    color: rgba(255,255,255,0.75);
+    font-weight: 400;
+  }
+
+  /* ── Error Alert ── */
+  .alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: rgba(254, 202, 202, 0.12);
+    border: 1px solid rgba(254, 202, 202, 0.3);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 24px;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .alert-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    color: #FCA5A5;
+  }
+
+  .alert-text {
+    font-size: 14px;
+    color: #FCA5A5;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  /* ── Form Controls ── */
+  .field {
+    margin-bottom: 22px;
+  }
+
+  .field-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.8);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 8px;
+  }
+
+  .input {
+    display: block;
+    width: 100%;
+    padding: 13px 16px;
+    font-size: 14px;
+    font-family: inherit;
+    color: #0F172A;
+    background: rgba(255,255,255,0.88);
+    border: 2px solid transparent;
+    border-radius: 11px;
+    outline: none;
+    transition: all 0.18s ease;
+    -webkit-appearance: none;
+  }
+
+  .input:focus {
+    background: #FFFFFF;
+    border-color: rgba(255,255,255,0.6);
+    box-shadow: 0 0 0 4px rgba(255,255,255,0.12);
+  }
+
+  .input::placeholder {
+    color: #94A3B8;
+    font-weight: 400;
+  }
+
+  .pw-wrapper {
+    position: relative;
+  }
+
+  .pw-wrapper .input {
+    padding-right: 48px;
+  }
+
+  .pw-toggle {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+    color: #94A3B8;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .pw-toggle:hover {
+    color: #475569;
+    background: rgba(255,255,255,0.7);
+  }
+
+  /* ── Button ── */
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px 20px;
+    border: none;
+    border-radius: 11px;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    margin-top: 8px;
+    -webkit-appearance: none;
+  }
+
+  .btn-primary {
+    background: #FFFFFF;
+    color: #012169;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+
+  .btn-primary:hover {
+    background: #F1F5F9;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  }
+
+  .btn-primary:disabled {
+    background: rgba(255,255,255,0.35);
+    color: rgba(255,255,255,0.5);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+  }
+
+  /* ── Footer ── */
+  .footer-note {
+    text-align: center;
+    margin-top: 36px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 0.3px;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 1024px) {
+    .split-screen { flex-direction: column; }
+    .brand-panel {
+      padding: 48px 48px 40px;
+      min-height: 45vh;
+    }
+    .login-panel {
+      padding: 48px 48px 64px;
+      min-height: 55vh;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .brand-panel { padding: 40px 32px 32px; }
+    .login-panel { padding: 40px 32px 56px; }
+    .brand-logo { width: 88px; height: 88px; }
+    .brand-title { font-size: 24px; }
+    .brand-subtitle { font-size: 16px; }
+    .brand-org { font-size: 14px; }
+  }
+
+  @media (max-width: 480px) {
+    .brand-panel { padding: 32px 20px 24px; }
+    .login-panel { padding: 32px 20px 48px; }
+    .brand-logo { width: 72px; height: 72px; margin-bottom: 24px; }
+    .brand-title { font-size: 20px; }
+    .brand-subtitle { font-size: 14px; }
+    .brand-org { font-size: 13px; }
+    .login-heading { margin-bottom: 32px; }
+    .login-heading h2 { font-size: 22px; }
+    .login-heading p { font-size: 14px; }
+    .field { margin-bottom: 18px; }
+    .input { padding: 12px 14px; font-size: 14px; }
+    .btn { padding: 13px 16px; font-size: 14px; }
+  }
 </style>
 </head>
 <body>
-<div class="login-card">
-  <div class="login-logo">
-    <img src="https://cdn.brandfetch.io/idNZ7JoLsG/w/150/h/149/theme/dark/logo.png?c=1dxbfHSJFAPEGdCLU4o5B" alt="Dashen Bank">
-    <h1>ATM Monitoring System</h1>
-    <p>Report Portal</p>
-  </div>
-
-  {% if error %}
-  <div class="alert-card error">
-    <i data-lucide="alert-circle" class="alert-icon"></i>
-    <div class="alert-message">{{ error }}</div>
-  </div>
-  {% endif %}
-
-  <form method="post" action="/login?next={{ next }}" id="loginForm">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="form-group">
-      <label>Username</label>
-      <input type="text" name="username" id="username" placeholder="Enter your username" autocomplete="username" required autofocus>
+<div class="split-screen">
+  <div class="brand-panel">
+    <div class="brand-inner">
+      <img src="/static/logo.png" alt="Dashen Bank" class="brand-logo">
+      <h1 class="brand-title">Report Portal</h1>
+      <p class="brand-subtitle">ATM Monitoring &amp; Reporting System</p>
+      <p class="brand-org">Dashen Bank S.C.</p>
     </div>
-    <div class="form-group">
-      <label>Password</label>
-      <div class="pw-wrap">
-        <input type="password" name="password" id="password" placeholder="Enter your password" autocomplete="current-password" required>
-        <button type="button" class="pw-toggle" onclick="togglePW('password',this)" tabindex="-1" aria-label="Toggle password visibility">
-          <i data-lucide="eye" style="width:16px;height:16px"></i>
-        </button>
+  </div>
+
+  <div class="login-panel">
+    <div class="login-card">
+      <div class="login-heading">
+        <h2>Welcome Back</h2>
+        <p>Sign in to continue.</p>
       </div>
-    </div>
-    <button type="submit" class="btn btn-primary" id="loginBtn">
-      <i data-lucide="log-in" style="width:16px;height:16px"></i> Sign In
-    </button>
-  </form>
 
-  <div class="footer">Dashen Bank S.C. &mdash; Authorized Personnel Only</div>
+      {% if error %}
+      <div class="alert">
+        <i data-lucide="alert-circle" class="alert-icon"></i>
+        <div class="alert-text">{{ error }}</div>
+      </div>
+      {% endif %}
+
+      <form method="post" action="/login?next={{ next }}" id="loginForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="field">
+          <label class="field-label" for="username">Username</label>
+          <input type="text" name="username" id="username" class="input" placeholder="e.g. admin" autocomplete="username" required autofocus>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="password">Password</label>
+          <div class="pw-wrapper">
+            <input type="password" name="password" id="password" class="input" placeholder="Enter your password" autocomplete="current-password" required>
+            <button type="button" class="pw-toggle" onclick="togglePW('password',this)" tabindex="-1" aria-label="Toggle password visibility">
+              <i data-lucide="eye" style="width:20px;height:20px"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="loginBtn">
+          <i data-lucide="log-in" style="width:18px;height:18px"></i>
+          Sign In
+        </button>
+      </form>
+
+      <p class="footer-note">Authorized Personnel Only</p>
+    </div>
+  </div>
 </div>
 
 <script>
 lucide.createIcons();
 
-function togglePW(id, btn){
+function togglePW(id, btn) {
   var inp = document.getElementById(id);
   var icon = btn.querySelector('[data-lucide]');
-  if(inp.type === 'password'){
+  if (inp.type === 'password') {
     inp.type = 'text';
     icon.setAttribute('data-lucide', 'eye-off');
   } else {
@@ -122,13 +390,13 @@ function togglePW(id, btn){
   lucide.createIcons();
 }
 
-document.getElementById('loginForm').addEventListener('submit', function(e){
+document.getElementById('loginForm').addEventListener('submit', function(e) {
   var btn = document.getElementById('loginBtn');
   btn.disabled = true;
-  btn.innerHTML = '<i data-lucide="loader-2" style="width:16px;height:16px"></i> Signing In...';
+  btn.innerHTML = '<i data-lucide="loader-2" style="width:18px;height:18px"></i> Signing In...';
   lucide.createIcons();
   var spn = btn.querySelector('svg');
-  if(spn) spn.style.animation = 'spin 1s linear infinite';
+  if (spn) spn.style.animation = 'spin 1s linear infinite';
 });
 </script>
 </body>
