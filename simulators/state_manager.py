@@ -95,31 +95,37 @@ def determine_state(atm_id, port, vendor):
 
 def update_states():
     import common
-    conn = get_db()
-    cur = conn.cursor()
 
-    # Build the live port map from the DB (every ATM with a sim_port).
-    cur.execute("SELECT atm_id, sim_port, vendor FROM atm_locations WHERE sim_port IS NOT NULL")
-    port_map = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+    # Phase 1: read fleet
+    conn1 = get_db()
+    cur1 = conn1.cursor()
+    cur1.execute("SELECT atm_id, sim_port, vendor FROM atm_locations WHERE sim_port IS NOT NULL")
+    port_map = {r[0]: (r[1], r[2]) for r in cur1.fetchall()}
+    cur1.execute("SELECT atm_id, vendor FROM atm_locations")
+    atms = cur1.fetchall()
+    conn1.close()
 
-    cur.execute("SELECT atm_id, vendor FROM atm_locations")
-    atms = cur.fetchall()
-
+    # Phase 2: determine states (no DB connection held — HTTP calls may be slow)
+    results = []
     for atm_id, vendor in atms:
         pm = port_map.get(atm_id)
         if not pm:
-            continue  # no simulator for this ATM — keep seeded state
-        port, vendor = pm
-
+            continue
+        port, _ = pm
         new_state = determine_state(atm_id, port, vendor or 'NCR')
+        results.append((atm_id, vendor or 'NCR', new_state))
 
-        cur.execute("SELECT state FROM atm_current_state WHERE atm_id = %s", (atm_id,))
-        row = cur.fetchone()
+    # Phase 3: write results in a short transaction
+    conn2 = get_db()
+    cur2 = conn2.cursor()
+    for atm_id, vendor, new_state in results:
+        cur2.execute("SELECT state FROM atm_current_state WHERE atm_id = %s", (atm_id,))
+        row = cur2.fetchone()
         current_state = row[0] if row else None
 
         if current_state != new_state:
             print(f"[STATE CHANGE] {atm_id}: {current_state} -> {new_state}")
-            cur.execute("""
+            cur2.execute("""
                 INSERT INTO atm_current_state
                     (atm_id, state, previous_state, state_changed_at, last_seen, updated_at)
                 VALUES (%s, %s, %s, NOW(), NOW(), NOW())
@@ -131,15 +137,14 @@ def update_states():
                     updated_at = NOW()
             """, (atm_id, new_state, current_state))
         else:
-            cur.execute("""
+            cur2.execute("""
                 UPDATE atm_current_state
                 SET last_seen = NOW(), updated_at = NOW()
                 WHERE atm_id = %s
             """, (atm_id,))
 
-    conn.commit()
-    cur.close()
-    conn.close()
+    conn2.commit()
+    conn2.close()
 
 
 print("ATM State Manager started — updating every 30 seconds")

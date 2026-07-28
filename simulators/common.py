@@ -78,22 +78,14 @@ def repair_duplicate_ports(conn):
 
 
 def assign_ports(conn):
-    """Allocate a sim_port to any ATM lacking one, using the first free port in
-    [PORT_MIN, PORT_MAX] so ports stay unique and within the docker-published
-    range regardless of fleet size.
-
-    Inactive/retired ATMs keep their port (so reactivation is instant) but do
-    not consume the pool permanently: if the range is exhausted when a new ATM
-    needs a port, a port is reclaimed from the oldest inactive ATM first. This
-    prevents a slow port leak from long-term fleet churn without needing a
-    manual rebuild to reactivate a recently retired ATM.
+    """Allocate a sim_port to every active ATM, reclaiming ports from
+    inactive/retired ATMs so the pool stays within [PORT_MIN, PORT_MAX].
     """
     repair_duplicate_ports(conn)
     with conn.cursor() as cur:
-        cur.execute("SELECT atm_id FROM atm_locations WHERE sim_port IS NULL ORDER BY atm_id")
+        cur.execute("UPDATE atm_locations SET sim_port = NULL WHERE status <> 'active'")
+        cur.execute("SELECT atm_id FROM atm_locations WHERE sim_port IS NULL AND status = 'active' ORDER BY atm_id")
         pending = cur.fetchall()
-        if not pending:
-            return
         used = set(_used_ports(conn).values())
         for (aid,) in pending:
             free = _free_port(used)

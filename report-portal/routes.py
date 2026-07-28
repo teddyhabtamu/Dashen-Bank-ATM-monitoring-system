@@ -27,6 +27,7 @@ _VENDOR_SQL = """
         COALESCE(SUM(CASE WHEN t.status='APPROVED' AND t.txn_type='WITHDRAWAL' THEN t.amount ELSE 0 END),0)
     FROM atm_transactions t JOIN atm_locations l ON t.atm_id = l.atm_id
     WHERE t.recorded_at >= NOW() - INTERVAL %s
+      AND l.status = 'active'
     GROUP BY l.vendor ORDER BY 3 DESC
 """
 
@@ -54,12 +55,14 @@ def api_stats():
             cur = conn.cursor()
             cur.execute("""
                 SELECT COUNT(*),
-                    ROUND(100.0*SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),1),
-                    COALESCE(SUM(CASE WHEN status='APPROVED' AND txn_type='WITHDRAWAL'
-                        AND recorded_at>=CURRENT_DATE THEN amount ELSE 0 END),0),
-                    (SELECT COUNT(*) FROM atm_locations)
-                FROM atm_transactions
-                WHERE recorded_at >= NOW() - INTERVAL '7 days'
+                    ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),1),
+                    COALESCE(SUM(CASE WHEN t.status='APPROVED' AND t.txn_type='WITHDRAWAL'
+                        AND t.recorded_at>=CURRENT_DATE THEN t.amount ELSE 0 END),0),
+                    (SELECT COUNT(*) FROM atm_locations WHERE status = 'active')
+                FROM atm_transactions t
+                JOIN atm_locations l ON t.atm_id = l.atm_id
+                WHERE t.recorded_at >= NOW() - INTERVAL '7 days'
+                  AND l.status = 'active'
             """)
             r = cur.fetchone(); cur.close()
         return jsonify({'total_txns': int(r[0]), 'success_rate': float(r[1]), 'cash_today': float(r[2]), 'atm_count': int(r[3])})
@@ -80,24 +83,26 @@ def report_transaction(fmt):
         cur = conn.cursor()
         sql = """
             SELECT
-                atm_id                                                        AS "ATM",
-                branch                                                        AS "Branch",
+                t.atm_id                                                      AS "ATM",
+                l.branch                                                      AS "Branch",
                 COUNT(*)                                                      AS "Total Txns",
-                SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)           AS "Approved",
-                SUM(CASE WHEN status='DECLINED' THEN 1 ELSE 0 END)           AS "Declined",
-                SUM(CASE WHEN status='ERROR'    THEN 1 ELSE 0 END)           AS "Errors",
-                ROUND(100.0*SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)
+                SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)         AS "Approved",
+                SUM(CASE WHEN t.status='DECLINED' THEN 1 ELSE 0 END)         AS "Declined",
+                SUM(CASE WHEN t.status='ERROR'    THEN 1 ELSE 0 END)         AS "Errors",
+                ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)
                     /NULLIF(COUNT(*),0),2)                                    AS "Success Rate",
-                COALESCE(SUM(CASE WHEN status='APPROVED' AND txn_type='WITHDRAWAL'
+                COALESCE(SUM(CASE WHEN t.status='APPROVED' AND txn_type='WITHDRAWAL'
                     THEN amount ELSE 0 END),0)                               AS "Cash Dispensed ETB"
-            FROM atm_transactions
-            WHERE recorded_at >= NOW() - INTERVAL %s
+            FROM atm_transactions t
+            JOIN atm_locations l ON t.atm_id = l.atm_id
+            WHERE t.recorded_at >= NOW() - INTERVAL %s
+              AND l.status = 'active'
         """
         params = [f"{days} days"]
         if atm != 'all':
-            sql += " AND atm_id = %s"
+            sql += " AND t.atm_id = %s"
             params.append(atm)
-        sql += " GROUP BY atm_id, branch ORDER BY atm_id"
+        sql += " GROUP BY t.atm_id, l.branch ORDER BY t.atm_id"
 
         cur.execute(sql, params)
         rows = cur.fetchall(); headers = [d[0] for d in cur.description]
@@ -142,21 +147,23 @@ def report_cash(fmt):
         cur = conn.cursor()
         sql = """
             SELECT
-                atm_id                             AS "ATM",
-                branch                             AS "Branch",
-                COALESCE(SUM(amount),0)            AS "Total Dispensed ETB",
-                COALESCE(ROUND(AVG(amount),2),0)   AS "Avg Withdrawal ETB",
-                COUNT(*)                           AS "Withdrawal Count",
-                COALESCE(MAX(amount),0)            AS "Largest Withdrawal ETB"
-            FROM atm_transactions
-            WHERE status='APPROVED' AND txn_type='WITHDRAWAL'
-            AND recorded_at >= NOW() - INTERVAL %s
+                t.atm_id                             AS "ATM",
+                l.branch                             AS "Branch",
+                COALESCE(SUM(amount),0)              AS "Total Dispensed ETB",
+                COALESCE(ROUND(AVG(amount),2),0)     AS "Avg Withdrawal ETB",
+                COUNT(*)                             AS "Withdrawal Count",
+                COALESCE(MAX(amount),0)              AS "Largest Withdrawal ETB"
+            FROM atm_transactions t
+            JOIN atm_locations l ON t.atm_id = l.atm_id
+            WHERE t.status='APPROVED' AND t.txn_type='WITHDRAWAL'
+            AND t.recorded_at >= NOW() - INTERVAL %s
+              AND l.status = 'active'
         """
         params = [f"{days} days"]
         if atm != 'all':
-            sql += " AND atm_id = %s"
+            sql += " AND t.atm_id = %s"
             params.append(atm)
-        sql += " GROUP BY atm_id, branch ORDER BY 3 DESC"
+        sql += " GROUP BY t.atm_id, l.branch ORDER BY 3 DESC"
 
         cur.execute(sql, params)
         rows = cur.fetchall(); headers = [d[0] for d in cur.description]
@@ -232,21 +239,23 @@ def report_error(fmt):
         cur = conn.cursor()
         sql = """
             SELECT
-                atm_id      AS "ATM",
-                branch      AS "Branch",
-                error_code  AS "Error Code",
-                COUNT(*)    AS "Occurrences",
-                TO_CHAR(MIN(recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') AS "First Seen",
-                TO_CHAR(MAX(recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') AS "Last Seen"
-            FROM atm_transactions
-            WHERE status='ERROR' AND error_code IS NOT NULL
-            AND recorded_at >= NOW() - INTERVAL %s
+                t.atm_id      AS "ATM",
+                l.branch      AS "Branch",
+                t.error_code  AS "Error Code",
+                COUNT(*)      AS "Occurrences",
+                TO_CHAR(MIN(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') AS "First Seen",
+                TO_CHAR(MAX(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') AS "Last Seen"
+            FROM atm_transactions t
+            JOIN atm_locations l ON t.atm_id = l.atm_id
+            WHERE t.status='ERROR' AND t.error_code IS NOT NULL
+            AND t.recorded_at >= NOW() - INTERVAL %s
+              AND l.status = 'active'
         """
         params = [f"{days} days"]
         if atm != 'all':
-            sql += " AND atm_id = %s"
+            sql += " AND t.atm_id = %s"
             params.append(atm)
-        sql += " GROUP BY atm_id, branch, error_code ORDER BY 4 DESC"
+        sql += " GROUP BY t.atm_id, l.branch, t.error_code ORDER BY 4 DESC"
 
         cur.execute(sql, params)
         rows = cur.fetchall(); headers = [d[0] for d in cur.description]
@@ -296,22 +305,26 @@ def report_performance(fmt):
         cur = conn.cursor()
         sql = """
             WITH stats AS (
-                SELECT atm_id, branch,
+                SELECT t.atm_id, l.branch,
                     COUNT(*) AS total,
-                    ROUND(100.0*SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)
+                    ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)
                         /NULLIF(COUNT(*),0),2) AS rate,
                     ROUND(COUNT(*)/%s::numeric,1) AS daily
-                FROM atm_transactions
-                WHERE recorded_at >= NOW() - INTERVAL %s
-                GROUP BY atm_id, branch
+                FROM atm_transactions t
+                JOIN atm_locations l ON t.atm_id = l.atm_id
+                WHERE t.recorded_at >= NOW() - INTERVAL %s
+                  AND l.status = 'active'
+                GROUP BY t.atm_id, l.branch
             ),
             peaks AS (
-                SELECT DISTINCT ON (atm_id) atm_id,
-                    EXTRACT(HOUR FROM recorded_at) AS hr, COUNT(*) AS cnt
-                FROM atm_transactions
-                WHERE recorded_at >= NOW() - INTERVAL %s
-                GROUP BY atm_id, EXTRACT(HOUR FROM recorded_at)
-                ORDER BY atm_id, cnt DESC
+                SELECT DISTINCT ON (t.atm_id) t.atm_id,
+                    EXTRACT(HOUR FROM t.recorded_at) AS hr, COUNT(*) AS cnt
+                FROM atm_transactions t
+                JOIN atm_locations l ON t.atm_id = l.atm_id
+                WHERE t.recorded_at >= NOW() - INTERVAL %s
+                  AND l.status = 'active'
+                GROUP BY t.atm_id, EXTRACT(HOUR FROM t.recorded_at)
+                ORDER BY t.atm_id, cnt DESC
             )
             SELECT s.atm_id AS "ATM", s.branch AS "Branch",
                 s.total AS "Total Transactions",
@@ -426,13 +439,14 @@ def report_availability(fmt):
                 SELECT
                     t.atm_id,
                     l.branch,
-                    DATE_TRUNC('hour', recorded_at) as hour,
+                    DATE_TRUNC('hour', t.recorded_at) as hour,
                     COUNT(*) as txn_count
                 FROM atm_transactions t
                 JOIN atm_locations l ON t.atm_id = l.atm_id
-                WHERE recorded_at >= NOW() - INTERVAL %s
+                WHERE t.recorded_at >= NOW() - INTERVAL %s
+                  AND l.status = 'active'
             """ + (" AND t.atm_id = %s" if atm != 'all' else "") + """
-                GROUP BY t.atm_id, l.branch, DATE_TRUNC('hour', recorded_at)
+                GROUP BY t.atm_id, l.branch, DATE_TRUNC('hour', t.recorded_at)
             ),
             total_hours AS (
                 SELECT %s * 24 as expected_hours
@@ -533,17 +547,20 @@ def report_full(fmt):
             # 1. Transactions
             cur = conn.cursor()
             sql1 = """
-                SELECT atm_id, branch, COUNT(*),
-                    SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN status='DECLINED' THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN status='ERROR'    THEN 1 ELSE 0 END),
-                    ROUND(100.0*SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2),
-                    COALESCE(SUM(CASE WHEN status='APPROVED' AND txn_type='WITHDRAWAL' THEN amount ELSE 0 END),0)
-                FROM atm_transactions WHERE recorded_at >= NOW() - INTERVAL %s
+                SELECT t.atm_id, l.branch, COUNT(*),
+                    SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN t.status='DECLINED' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN t.status='ERROR'    THEN 1 ELSE 0 END),
+                    ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2),
+                    COALESCE(SUM(CASE WHEN t.status='APPROVED' AND t.txn_type='WITHDRAWAL' THEN t.amount ELSE 0 END),0)
+                FROM atm_transactions t
+                JOIN atm_locations l ON t.atm_id = l.atm_id
+                WHERE t.recorded_at >= NOW() - INTERVAL %s
+                  AND l.status = 'active'
             """
             p1 = [interval_str]
-            if atm != 'all': sql1 += " AND atm_id = %s"; p1.append(atm)
-            sql1 += " GROUP BY atm_id, branch ORDER BY atm_id"
+            if atm != 'all': sql1 += " AND t.atm_id = %s"; p1.append(atm)
+            sql1 += " GROUP BY t.atm_id, l.branch ORDER BY t.atm_id"
             cur.execute(sql1, p1)
             h1 = ['ATM', 'Branch', 'Total Txns', 'Approved', 'Declined', 'Errors', 'Success Rate %', 'Cash Dispensed ETB']
             xl_append_section(ws, '1. Transaction Summary', h1, cur.fetchall())
@@ -552,14 +569,17 @@ def report_full(fmt):
             # 2. Cash
             cur = conn.cursor()
             sql2 = """
-                SELECT atm_id, branch, COALESCE(SUM(amount),0),
-                    COALESCE(ROUND(AVG(amount),2),0), COUNT(*), COALESCE(MAX(amount),0)
-                FROM atm_transactions WHERE status='APPROVED' AND txn_type='WITHDRAWAL'
-                AND recorded_at >= NOW() - INTERVAL %s
+                SELECT t.atm_id, l.branch, COALESCE(SUM(t.amount),0),
+                    COALESCE(ROUND(AVG(t.amount),2),0), COUNT(*), COALESCE(MAX(t.amount),0)
+                FROM atm_transactions t
+                JOIN atm_locations l ON t.atm_id = l.atm_id
+                WHERE t.status='APPROVED' AND t.txn_type='WITHDRAWAL'
+                AND t.recorded_at >= NOW() - INTERVAL %s
+                  AND l.status = 'active'
             """
             p2 = [interval_str]
-            if atm != 'all': sql2 += " AND atm_id = %s"; p2.append(atm)
-            sql2 += " GROUP BY atm_id, branch ORDER BY 3 DESC"
+            if atm != 'all': sql2 += " AND t.atm_id = %s"; p2.append(atm)
+            sql2 += " GROUP BY t.atm_id, l.branch ORDER BY 3 DESC"
             cur.execute(sql2, p2)
             h2 = ['ATM', 'Branch', 'Total Dispensed ETB', 'Avg Withdrawal ETB', 'Withdrawal Count', 'Largest Withdrawal ETB']
             xl_append_section(ws, '2. Cash Level & Dispensing', h2, cur.fetchall())
@@ -568,15 +588,18 @@ def report_full(fmt):
             # 3. Errors
             cur = conn.cursor()
             sql3 = """
-                SELECT atm_id, branch, error_code, COUNT(*),
-                    TO_CHAR(MIN(recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI'),
-                    TO_CHAR(MAX(recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI')
-                FROM atm_transactions WHERE status='ERROR' AND error_code IS NOT NULL
-                AND recorded_at >= NOW() - INTERVAL %s
+                SELECT t.atm_id, l.branch, t.error_code, COUNT(*),
+                    TO_CHAR(MIN(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI'),
+                    TO_CHAR(MAX(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI')
+                FROM atm_transactions t
+                JOIN atm_locations l ON t.atm_id = l.atm_id
+                WHERE t.status='ERROR' AND t.error_code IS NOT NULL
+                AND t.recorded_at >= NOW() - INTERVAL %s
+                  AND l.status = 'active'
             """
             p3 = [interval_str]
-            if atm != 'all': sql3 += " AND atm_id = %s"; p3.append(atm)
-            sql3 += " GROUP BY atm_id, branch, error_code ORDER BY 4 DESC"
+            if atm != 'all': sql3 += " AND t.atm_id = %s"; p3.append(atm)
+            sql3 += " GROUP BY t.atm_id, l.branch, t.error_code ORDER BY 4 DESC"
             cur.execute(sql3, p3)
             rows3 = cur.fetchall()
             h3 = ['ATM', 'Branch', 'Error Code', 'Description', 'Occurrences', 'First Seen', 'Last Seen']
@@ -590,18 +613,24 @@ def report_full(fmt):
             cur = conn.cursor()
             sql4 = """
                 WITH stats AS (
-                    SELECT atm_id, branch, COUNT(*) AS total,
-                        ROUND(100.0*SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2) AS rate,
+                    SELECT t.atm_id, l.branch, COUNT(*) AS total,
+                        ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2) AS rate,
                         ROUND(COUNT(*)/%s::numeric,1) AS daily
-                    FROM atm_transactions WHERE recorded_at >= NOW() - INTERVAL %s
-                    GROUP BY atm_id, branch
+                    FROM atm_transactions t
+                    JOIN atm_locations l ON t.atm_id = l.atm_id
+                    WHERE t.recorded_at >= NOW() - INTERVAL %s
+                      AND l.status = 'active'
+                    GROUP BY t.atm_id, l.branch
                 ),
                 peaks AS (
-                    SELECT DISTINCT ON (atm_id) atm_id,
-                        EXTRACT(HOUR FROM recorded_at) AS hr, COUNT(*) AS cnt
-                    FROM atm_transactions WHERE recorded_at >= NOW() - INTERVAL %s
-                    GROUP BY atm_id, EXTRACT(HOUR FROM recorded_at)
-                    ORDER BY atm_id, cnt DESC
+                    SELECT DISTINCT ON (t.atm_id) t.atm_id,
+                        EXTRACT(HOUR FROM t.recorded_at) AS hr, COUNT(*) AS cnt
+                    FROM atm_transactions t
+                    JOIN atm_locations l ON t.atm_id = l.atm_id
+                    WHERE t.recorded_at >= NOW() - INTERVAL %s
+                      AND l.status = 'active'
+                    GROUP BY t.atm_id, EXTRACT(HOUR FROM t.recorded_at)
+                    ORDER BY t.atm_id, cnt DESC
                 )
                 SELECT s.atm_id, s.branch, s.total, s.rate, s.daily,
                     CONCAT(p.hr::int,':00-',(p.hr::int+1),':00'),
@@ -635,15 +664,15 @@ def report_full(fmt):
 
             sections = [
                 ('1. TRANSACTION SUMMARY',
-                 "SELECT atm_id, branch, COUNT(*), SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END), SUM(CASE WHEN status='DECLINED' THEN 1 ELSE 0 END), SUM(CASE WHEN status='ERROR' THEN 1 ELSE 0 END), ROUND(100.0*SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2), COALESCE(SUM(CASE WHEN status='APPROVED' AND txn_type='WITHDRAWAL' THEN amount ELSE 0 END),0) FROM atm_transactions WHERE recorded_at >= NOW() - INTERVAL %s GROUP BY atm_id, branch ORDER BY atm_id",
+                 "SELECT t.atm_id, l.branch, COUNT(*), SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END), SUM(CASE WHEN t.status='DECLINED' THEN 1 ELSE 0 END), SUM(CASE WHEN t.status='ERROR' THEN 1 ELSE 0 END), ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2), COALESCE(SUM(CASE WHEN t.status='APPROVED' AND t.txn_type='WITHDRAWAL' THEN t.amount ELSE 0 END),0) FROM atm_transactions t JOIN atm_locations l ON t.atm_id = l.atm_id WHERE t.recorded_at >= NOW() - INTERVAL %s AND l.status = 'active' GROUP BY t.atm_id, l.branch ORDER BY t.atm_id",
                  [interval_str],
                  ['ATM', 'Branch', 'Total Txns', 'Approved', 'Declined', 'Errors', 'Success Rate %', 'Cash Dispensed ETB']),
                 ('2. CASH LEVEL & DISPENSING',
-                 "SELECT atm_id, branch, COALESCE(SUM(amount),0), COALESCE(ROUND(AVG(amount),2),0), COUNT(*), COALESCE(MAX(amount),0) FROM atm_transactions WHERE status='APPROVED' AND txn_type='WITHDRAWAL' AND recorded_at >= NOW() - INTERVAL %s GROUP BY atm_id, branch ORDER BY 3 DESC",
+                 "SELECT t.atm_id, l.branch, COALESCE(SUM(t.amount),0), COALESCE(ROUND(AVG(t.amount),2),0), COUNT(*), COALESCE(MAX(t.amount),0) FROM atm_transactions t JOIN atm_locations l ON t.atm_id = l.atm_id WHERE t.status='APPROVED' AND t.txn_type='WITHDRAWAL' AND t.recorded_at >= NOW() - INTERVAL %s AND l.status = 'active' GROUP BY t.atm_id, l.branch ORDER BY 3 DESC",
                  [interval_str],
                  ['ATM', 'Branch', 'Total Dispensed ETB', 'Avg Withdrawal ETB', 'Withdrawal Count', 'Largest Withdrawal ETB']),
                 ('3. ERROR & INCIDENT LOG',
-                 "SELECT atm_id, branch, error_code, COUNT(*), TO_CHAR(MIN(recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI'), TO_CHAR(MAX(recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') FROM atm_transactions WHERE status='ERROR' AND error_code IS NOT NULL AND recorded_at >= NOW() - INTERVAL %s GROUP BY atm_id, branch, error_code ORDER BY 4 DESC",
+                 "SELECT t.atm_id, l.branch, t.error_code, COUNT(*), TO_CHAR(MIN(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI'), TO_CHAR(MAX(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') FROM atm_transactions t JOIN atm_locations l ON t.atm_id = l.atm_id WHERE t.status='ERROR' AND t.error_code IS NOT NULL AND t.recorded_at >= NOW() - INTERVAL %s AND l.status = 'active' GROUP BY t.atm_id, l.branch, t.error_code ORDER BY 4 DESC",
                  [interval_str],
                  ['ATM', 'Branch', 'Error Code', 'Occurrences', 'First Seen', 'Last Seen']),
             ]
@@ -666,15 +695,18 @@ def report_full(fmt):
             cur = conn.cursor()
             sql4 = """
                 WITH stats AS (
-                    SELECT atm_id, branch, COUNT(*) AS total,
-                        ROUND(100.0*SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2) AS rate,
+                    SELECT t.atm_id, l.branch, COUNT(*) AS total,
+                        ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2) AS rate,
                         ROUND(COUNT(*)/%s::numeric,1) AS daily
-                    FROM atm_transactions WHERE recorded_at >= NOW() - INTERVAL %s GROUP BY atm_id, branch
+                    FROM atm_transactions t JOIN atm_locations l ON t.atm_id = l.atm_id
+                    WHERE t.recorded_at >= NOW() - INTERVAL %s AND l.status = 'active'
+                    GROUP BY t.atm_id, l.branch
                 ),
                 peaks AS (
-                    SELECT DISTINCT ON (atm_id) atm_id, EXTRACT(HOUR FROM recorded_at) AS hr, COUNT(*) AS cnt
-                    FROM atm_transactions WHERE recorded_at >= NOW() - INTERVAL %s
-                    GROUP BY atm_id, EXTRACT(HOUR FROM recorded_at) ORDER BY atm_id, cnt DESC
+                    SELECT DISTINCT ON (t.atm_id) t.atm_id, EXTRACT(HOUR FROM t.recorded_at) AS hr, COUNT(*) AS cnt
+                    FROM atm_transactions t JOIN atm_locations l ON t.atm_id = l.atm_id
+                    WHERE t.recorded_at >= NOW() - INTERVAL %s AND l.status = 'active'
+                    GROUP BY t.atm_id, EXTRACT(HOUR FROM t.recorded_at) ORDER BY t.atm_id, cnt DESC
                 )
                 SELECT s.atm_id, s.branch, s.total, s.rate, s.daily,
                     CONCAT(p.hr::int,':00-',(p.hr::int+1),':00'), RANK() OVER (ORDER BY s.total DESC)
@@ -734,21 +766,21 @@ def report_full(fmt):
             cur = conn.cursor()
 
             # 1. Transaction Summary
-            s1_sql = "SELECT atm_id, branch, COUNT(*), SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END), SUM(CASE WHEN status='DECLINED' THEN 1 ELSE 0 END), SUM(CASE WHEN status='ERROR' THEN 1 ELSE 0 END), ROUND(100.0*SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2), COALESCE(SUM(CASE WHEN status='APPROVED' AND txn_type='WITHDRAWAL' THEN amount ELSE 0 END),0) FROM atm_transactions WHERE recorded_at >= NOW() - INTERVAL %s GROUP BY atm_id, branch ORDER BY atm_id"
+            s1_sql = "SELECT t.atm_id, l.branch, COUNT(*), SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END), SUM(CASE WHEN t.status='DECLINED' THEN 1 ELSE 0 END), SUM(CASE WHEN t.status='ERROR' THEN 1 ELSE 0 END), ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2), COALESCE(SUM(CASE WHEN t.status='APPROVED' AND t.txn_type='WITHDRAWAL' THEN t.amount ELSE 0 END),0) FROM atm_transactions t JOIN atm_locations l ON t.atm_id = l.atm_id WHERE t.recorded_at >= NOW() - INTERVAL %s AND l.status = 'active' GROUP BY t.atm_id, l.branch ORDER BY t.atm_id"
             cur.execute(s1_sql, [interval_str])
             story += [Paragraph('<b><font color="#012169">1. Transaction Summary</font></b>', style_sec),
                       mktable(['ATM', 'Branch', 'Total Txns', 'Approved', 'Declined', 'Errors', 'Success Rate %', 'Cash Dispensed ETB'], cur.fetchall()),
                       Spacer(1, 0.8 * cm)]
 
             # 2. Cash Level
-            s2_sql = "SELECT atm_id, branch, COALESCE(SUM(amount),0), COALESCE(ROUND(AVG(amount),2),0), COUNT(*), COALESCE(MAX(amount),0) FROM atm_transactions WHERE status='APPROVED' AND txn_type='WITHDRAWAL' AND recorded_at >= NOW() - INTERVAL %s GROUP BY atm_id, branch ORDER BY 3 DESC"
+            s2_sql = "SELECT t.atm_id, l.branch, COALESCE(SUM(t.amount),0), COALESCE(ROUND(AVG(t.amount),2),0), COUNT(*), COALESCE(MAX(t.amount),0) FROM atm_transactions t JOIN atm_locations l ON t.atm_id = l.atm_id WHERE t.status='APPROVED' AND t.txn_type='WITHDRAWAL' AND t.recorded_at >= NOW() - INTERVAL %s AND l.status = 'active' GROUP BY t.atm_id, l.branch ORDER BY 3 DESC"
             cur.execute(s2_sql, [interval_str])
             story += [Paragraph('<b><font color="#012169">2. Cash Level & Dispensing</font></b>', style_sec),
                       mktable(['ATM', 'Branch', 'Total Dispensed ETB', 'Avg Withdrawal ETB', 'Withdrawal Count', 'Largest Withdrawal ETB'], cur.fetchall()),
                       Spacer(1, 0.8 * cm)]
 
             # 3. Error & Incident
-            s3_sql = "SELECT atm_id, branch, error_code, COUNT(*), TO_CHAR(MIN(recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI'), TO_CHAR(MAX(recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') FROM atm_transactions WHERE status='ERROR' AND error_code IS NOT NULL AND recorded_at >= NOW() - INTERVAL %s GROUP BY atm_id, branch, error_code ORDER BY 4 DESC"
+            s3_sql = "SELECT t.atm_id, l.branch, t.error_code, COUNT(*), TO_CHAR(MIN(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI'), TO_CHAR(MAX(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') FROM atm_transactions t JOIN atm_locations l ON t.atm_id = l.atm_id WHERE t.status='ERROR' AND t.error_code IS NOT NULL AND t.recorded_at >= NOW() - INTERVAL %s AND l.status = 'active' GROUP BY t.atm_id, l.branch, t.error_code ORDER BY 4 DESC"
             cur.execute(s3_sql, [interval_str])
             res3 = cur.fetchall()
             if res3:
@@ -762,15 +794,18 @@ def report_full(fmt):
             # 4. Performance Metrics
             s4_sql = """
                 WITH stats AS (
-                    SELECT atm_id, branch, COUNT(*) AS total,
-                        ROUND(100.0*SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2) AS rate,
+                    SELECT t.atm_id, l.branch, COUNT(*) AS total,
+                        ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2) AS rate,
                         ROUND(COUNT(*)/%s::numeric,1) AS daily
-                    FROM atm_transactions WHERE recorded_at >= NOW() - INTERVAL %s GROUP BY atm_id, branch
+                    FROM atm_transactions t JOIN atm_locations l ON t.atm_id = l.atm_id
+                    WHERE t.recorded_at >= NOW() - INTERVAL %s AND l.status = 'active'
+                    GROUP BY t.atm_id, l.branch
                 ),
                 peaks AS (
-                    SELECT DISTINCT ON (atm_id) atm_id, EXTRACT(HOUR FROM recorded_at) AS hr, COUNT(*) AS cnt
-                    FROM atm_transactions WHERE recorded_at >= NOW() - INTERVAL %s
-                    GROUP BY atm_id, EXTRACT(HOUR FROM recorded_at) ORDER BY atm_id, cnt DESC
+                    SELECT DISTINCT ON (t.atm_id) t.atm_id, EXTRACT(HOUR FROM t.recorded_at) AS hr, COUNT(*) AS cnt
+                    FROM atm_transactions t JOIN atm_locations l ON t.atm_id = l.atm_id
+                    WHERE t.recorded_at >= NOW() - INTERVAL %s AND l.status = 'active'
+                    GROUP BY t.atm_id, EXTRACT(HOUR FROM t.recorded_at) ORDER BY t.atm_id, cnt DESC
                 )
                 SELECT s.atm_id, s.branch, s.total, s.rate, s.daily,
                     CONCAT(p.hr::int,':00-',(p.hr::int+1),':00'), RANK() OVER (ORDER BY s.total DESC)

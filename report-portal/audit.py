@@ -55,6 +55,7 @@ VENDOR_CONSTRAINTS = [
 
 SCHEMA_MIGRATIONS = [
     "ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45)",
+    "ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS sim_port INTEGER",
 ]
 
 
