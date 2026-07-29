@@ -1,18 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="csrf-token" content="{{ csrf_token() }}">
-<title>{% block title %}Dashen Bank{% endblock %}</title>
-<link rel="icon" type="image/png" href="/static/logo.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="/static/inter.css" rel="stylesheet">
-<link rel="stylesheet" href="/static/flatpickr.min.css">
-<script src="/static/lucide.js"></script>
-{% block extra_head %}{% endblock %}
-<link rel="stylesheet" href="/static/style.css">
-<style>
+/* ── Dashen Bank ATM Monitoring — Shared CSS ── */
+/* ── Phase 3: Extracted from base.html ── */
+
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;background:#F0F2F6;color:#0F172A;min-height:100vh}
 
@@ -191,6 +179,7 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .flatpickr-day.inRange,.flatpickr-day.prevMonthDay.inRange,.flatpickr-day.nextMonthDay.inRange{background:#EEF2FF;border-color:#EEF2FF;color:#012169}
 .flatpickr-day.startRange,.flatpickr-day.endRange,.flatpickr-day.startRange:hover,.flatpickr-day.endRange:hover{background:#012169;border-color:#012169;color:#fff}
 .flatpickr-day.flatpickr-disabled,.flatpickr-day.flatpickr-disabled:hover{color:#CBD5E1}
+
 /* ── SHARED BUTTON ── */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:none;transition:.2s}
 .btn-primary{background:#012169;color:#fff}
@@ -201,15 +190,18 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .btn-gold:hover{background:#C49A00}
 .btn-live{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:6px;font-size:12px;font-weight:600;text-decoration:none;margin-left:auto;flex-shrink:0;white-space:nowrap}
 .btn-live svg{width:15px;height:15px}
+
 /* ── SHARED CARD ── */
 .card{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(1,33,105,.04);border:1px solid #EEF1F6;margin-bottom:24px;animation:fadeSlideUp .4s ease}
 .card-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;background:#FAFBFC;border-bottom:1px solid #EEF1F6;overflow:hidden;border-radius:12px 12px 0 0}
 .card-header h2{font-size:15px;font-weight:700}
+
 /* ── SHARED FORM ── */
 .form-group{display:flex;flex-direction:column;gap:4px}
 .form-group label{font-size:10px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.6px}
 .form-group input,.form-group select{padding:8px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;transition:border-color .2s;width:100%}
 .form-group input:focus,.form-group select:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
+
 /* ── SHARED TABLE ── */
 table{width:100%;border-collapse:collapse;font-size:12px}
 th{background:#012169;color:#fff;font-weight:600;padding:10px 12px;text-align:left;white-space:nowrap}
@@ -217,12 +209,14 @@ td{padding:8px 12px;border-bottom:1px solid #EEF1F6}
 tr:nth-child(even){background:#F8FAFC}
 tr:hover{background:#EEF2FF}
 tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0.03s)}
+
 /* ── SHARED BADGE ── */
 .badge{padding:2px 8px;border-radius:100px;font-size:10px;font-weight:600}
 .badge.active,.badge.APPROVED{background:rgba(5,150,105,.1);color:#059669}
 .badge.inactive,.badge.DECLINED{background:rgba(220,38,38,.08);color:#DC2626}
 .badge.TIMEOUT,.badge.ERROR{background:rgba(217,119,6,.1);color:#D97706}
-/* ── ALERT CARDS (shared error/success/warning/info component) ── */
+
+/* ── ALERT CARDS ── */
 .alert-card {
   border-radius:10px; padding:18px 22px;
   display:flex; align-items:flex-start; gap:14px;
@@ -298,367 +292,4 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
   .page-header-icon svg{width:16px;height:16px}
   .card-header{padding:12px 14px}
   .card-header h2{font-size:13px}
-  .toast-container{top:8px;right:8px;left:8px}
-  .toast{padding:10px 14px}
 }
-{% block extra_style %}{% endblock %}
-</style>
-</head>
-<body>
-
-<header class="top-bar">
-  <div class="top-bar-left">
-    <button class="hamburger" id="hamburger" onclick="toggleMobile()" aria-label="Toggle menu">
-      <i data-lucide="menu"></i>
-    </button>
-  </div>
-    <div class="top-bar-right">
-      <a href="http://localhost:3002" target="_blank" class="top-bar-link">
-        <i data-lucide="bar-chart-3"></i> Live Dashboards
-      </a>
-    </div>
-</header>
-
-<div class="sidebar" id="sidebar">
-  <div class="sidebar-brand">
-    <img src="/static/brand-logo.png" alt="Dashen Bank" class="sidebar-logo">
-    <div class="sidebar-brand-text">
-      <span class="name">Dashen Bank</span>
-      <span class="sub">ATM Monitoring</span>
-    </div>
-    <div class="sidebar-actions">
-      <button class="sidebar-collapse-btn" onclick="toggleCollapse()" title="Collapse sidebar">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="collapse-icon"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><polyline points="13 9 16 12 13 15"/></svg>
-      </button>
-      <button class="sidebar-close" id="sidebarClose" onclick="closeMobile()" aria-label="Close menu">
-        <i data-lucide="x"></i>
-      </button>
-    </div>
-  </div>
-  <nav class="sidebar-nav">
-    <div class="nav-section-label">Navigation</div>
-    <a href="/" class="nav-item {% if request.path == '/' %}active{% endif %}">
-      <i data-lucide="layout-dashboard"></i>
-      <span>Dashboard</span>
-    </a>
-    <a href="/admin/atm" class="nav-item {% if request.path.startswith('/admin/atm') %}active{% endif %}">
-      <i data-lucide="settings"></i>
-      <span>ATM Registration</span>
-    </a>
-    <a href="/ej-search" class="nav-item {% if request.path.startswith('/ej-search') %}active{% endif %}">
-      <i data-lucide="file-search"></i>
-      <span>EJ Search</span>
-    </a>
-    <a href="/admin/anomalies" class="nav-item {% if request.path.startswith('/admin/anomalies') %}active{% endif %}">
-      <i data-lucide="bell"></i>
-      <span>Alert Management</span>
-    </a>
-    {% if session.get('role') == 'admin' %}
-    <a href="/admin/schedules" class="nav-item {% if request.path.startswith('/admin/schedules') %}active{% endif %}">
-      <i data-lucide="calendar"></i>
-      <span>Schedule Reports</span>
-    </a>
-    <a href="/admin/audit" class="nav-item {% if request.path.startswith('/admin/audit') %}active{% endif %}">
-      <i data-lucide="history"></i>
-      <span>Audit Log</span>
-    </a>
-    <a href="/admin/users" class="nav-item {% if request.path.startswith('/admin/users') %}active{% endif %}">
-      <i data-lucide="users"></i>
-      <span>User Management</span>
-    </a>
-    {% endif %}
-    <div class="nav-section-label" style="margin-top:8px">Quick Links</div>
-    <a href="http://localhost:3002" target="_blank" class="nav-item">
-      <i data-lucide="bar-chart-3"></i>
-      <span>Live Dashboards</span>
-    </a>
-    <a href="http://localhost:8080" target="_blank" class="nav-item">
-      <i data-lucide="server"></i>
-      <span>Zabbix</span>
-    </a>
-  </nav>
-  <div class="sidebar-support">
-    {% if session.get('logged_in') %}
-    <div class="profile-section">
-      <div class="profile-trigger" onclick="toggleProfile()">
-        <div class="profile-avatar">
-          <i data-lucide="user" size="13"></i>
-        </div>
-        <span class="profile-name">{{ session.get('username', 'User') }}</span>
-        <i data-lucide="chevron-down" class="profile-chevron"></i>
-      </div>
-      <div class="profile-dropdown" id="profileDropdown">
-        <div style="padding:6px 12px 2px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:4px">
-          <div style="font-size:12px;font-weight:600;color:rgba(255,255,255,.7)">{{ session.get('username', 'User') }}</div>
-          <div style="font-size:10px;color:rgba(255,255,255,.35);text-transform:capitalize">{{ session.get('role', 'user') }}</div>
-        </div>
-        <a href="https://dashenbanksc.com/frequently-asked-questions/#:~:text=Our%20Customer%20Service%20Team%20is,via%206333%20for%20any%20support." target="_blank" class="profile-item">
-          <i data-lucide="help-circle"></i>
-          <span>Support</span>
-        </a>
-        <a href="javascript:void(0)" class="profile-item logout" onclick="document.getElementById('logoutModal').classList.add('show')">
-          <i data-lucide="log-out"></i>
-          <span>Logout</span>
-        </a>
-      </div>
-    </div>
-    {% endif %}
-  </div>
-</div>
-
-<div class="overlay" id="overlay" onclick="closeMobile()"></div>
-
-<div class="toast-container" id="toastContainer">
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-    {% for category, message in messages %}
-    <div class="toast {{ category }}">
-      <i data-lucide="{{ 'alert-circle' if category == 'error' else 'check-circle-2' if category == 'success' else 'alert-triangle' if category == 'warning' else 'info' }}" class="toast-icon"></i>
-      <div class="toast-content">
-        <div class="toast-title">{{ category|title if category != 'error' else 'Error' }}</div>
-        <div class="toast-message">{{ message }}</div>
-      </div>
-      <button class="toast-close" onclick="this.closest('.toast').remove()"><i data-lucide="x" style="width:14px;height:14px"></i></button>
-    </div>
-    {% endfor %}
-  {% endif %}
-{% endwith %}
-</div>
-
-<div class="main-content">
-{% if error %}
-<div class="page-content">
-  <div class="alert-card error">
-    <i data-lucide="alert-circle" class="alert-icon"></i>
-    <div class="alert-content">
-      <div class="alert-title">Access Denied</div>
-      <div class="alert-message">{{ error }}</div>
-    </div>
-  </div>
-</div>
-{% endif %}
-{% block body %}{% endblock %}
-</div>
-
-<script>
-// Fix external links to use current hostname
-document.querySelectorAll('[href*="localhost"]').forEach(function(el){
-  el.href = el.href.replace('localhost', window.location.hostname);
-});
-
-// ── SIDEBAR COLLAPSE ──
-(function(){
-  var saved = localStorage.getItem('sidebarCollapsed');
-  if(saved === 'true') {
-    document.getElementById('sidebar').classList.add('collapsed');
-    var icon = document.querySelector('.collapse-icon polyline');
-    if(icon) icon.setAttribute('points', '10 9 15 12 10 15');
-  }
-  lucide.createIcons();
-})();
-
-function toggleCollapse(){
-  var s = document.getElementById('sidebar');
-  s.classList.toggle('collapsed');
-  var icon = s.querySelector('.collapse-icon polyline');
-  if(icon) icon.setAttribute('points', s.classList.contains('collapsed') ? '10 9 15 12 10 15' : '16 15 11 12 16 9');
-  localStorage.setItem('sidebarCollapsed', s.classList.contains('collapsed'));
-}
-
-// ── MOBILE ──
-function toggleMobile(){
-  var s = document.getElementById('sidebar');
-  if(s.classList.contains('open')) return closeMobile();
-  s.classList.remove('collapsed');
-  s.classList.add('open');
-  document.getElementById('overlay').classList.add('show');
-  document.body.style.overflow = 'hidden';
-}
-function closeMobile(){
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('overlay').classList.remove('show');
-  document.body.style.overflow = '';
-}
-document.querySelectorAll('.sidebar-nav .nav-item').forEach(function(el){
-  el.addEventListener('click', function(){
-    if(window.innerWidth <= 768 && !this.getAttribute('target')) closeMobile();
-  });
-});
-document.addEventListener('keydown', function(e){
-  if(e.key === 'Escape' && document.getElementById('overlay').classList.contains('show')) closeMobile();
-});
-
-// ── PROFILE DROPDOWN ──
-function toggleProfile(){
-  var d = document.getElementById('profileDropdown');
-  var c = document.querySelector('.profile-chevron');
-  var isOpen = d.classList.toggle('open');
-  if(c) c.classList.toggle('open', isOpen);
-}
-document.addEventListener('click', function(e){
-  var section = document.querySelector('.profile-section');
-  if(section && !section.contains(e.target)){
-    document.getElementById('profileDropdown').classList.remove('open');
-    document.querySelector('.profile-chevron')?.classList.remove('open');
-  }
-});
-
-// ── CSRF Helper ──
-function getCSRF(){
-  var m = document.querySelector('meta[name="csrf-token"]');
-  return m ? m.getAttribute('content') : '';
-}
-(function(){
-  var _fetch = window.fetch;
-  window.fetch = function(url, opts){
-    opts = opts || {};
-    var m = (opts.method || 'GET').toUpperCase();
-    if(m === 'POST' || m === 'PUT' || m === 'DELETE' || m === 'PATCH'){
-      opts.headers = opts.headers || {};
-      if(!opts.headers['X-CSRFToken']) opts.headers['X-CSRFToken'] = getCSRF();
-    }
-    return _fetch(url, opts);
-  };
-})();
-
-// ── TOAST NOTIFICATION ──
-function showToast(msg, type, duration) {
-  type = type || 'error';
-  duration = duration || 5000;
-  var container = document.getElementById('toastContainer');
-  var icons = { error: 'alert-circle', success: 'check-circle-2', warning: 'alert-triangle', info: 'info' };
-  var titles = { error: 'Error', success: 'Success', warning: 'Warning', info: 'Info' };
-  var toast = document.createElement('div');
-  toast.className = 'toast ' + type;
-  toast.innerHTML = [
-    '<i data-lucide="' + (icons[type] || 'alert-circle') + '" class="toast-icon"></i>',
-    '<div class="toast-content">',
-    '  <div class="toast-title">' + (titles[type] || 'Notice') + '</div>',
-    '  <div class="toast-message">' + msg + '</div>',
-    '</div>',
-    '<button class="toast-close" onclick="this.closest(\'.toast\').remove()"><i data-lucide="x" style="width:14px;height:14px"></i></button>'
-  ].join('');
-  container.appendChild(toast);
-  lucide.createIcons();
-  setTimeout(function(){
-    toast.style.transition = 'opacity .3s, transform .3s';
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateX(100px)';
-    setTimeout(function(){ if(toast.parentNode) toast.parentNode.removeChild(toast); }, 300);
-  }, duration);
-}
-
-// Auto-hide flash messages after 6 seconds
-(function(){
-  var toasts = document.querySelectorAll('#toastContainer > .toast');
-  toasts.forEach(function(t){
-    setTimeout(function(){
-      t.style.transition = 'opacity .3s, transform .3s';
-      t.style.opacity = '0';
-      t.style.transform = 'translateX(100px)';
-      setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 300);
-    }, 6000);
-  });
-})();
-
-// ── CUSTOM SELECTS ──
-function initCustomSelects(){
-  document.querySelectorAll('select').forEach(function(sel){
-    if(sel.closest('.cust-select'))return;
-    var wrap=document.createElement('div');
-    wrap.className='cust-select';
-    sel.parentNode.insertBefore(wrap,sel);
-    wrap.appendChild(sel);
-    var trig=document.createElement('div');
-    trig.className='cust-trigger';
-    trig.textContent=sel.options[sel.selectedIndex].text;
-    wrap.appendChild(trig);
-    var drop=document.createElement('div');
-    drop.className='cust-drop';
-    wrap.appendChild(drop);
-    if(sel.length>6){
-      drop.classList.add('has-search');
-      var searchWrap=document.createElement('div');
-      searchWrap.className='cust-search';
-      var searchInput=document.createElement('input');
-      searchInput.type='text';
-      searchInput.placeholder='Search…';
-      searchInput.setAttribute('autocomplete','off');
-      searchWrap.appendChild(searchInput);
-      drop.appendChild(searchWrap);
-      var emptyMsg=document.createElement('div');
-      emptyMsg.className='cust-empty';
-      emptyMsg.textContent='No matches';
-      drop.appendChild(emptyMsg);
-      searchInput.addEventListener('click',function(e){e.stopPropagation();});
-      searchInput.addEventListener('input',function(){
-        var q=this.value.trim().toLowerCase();
-        var visible=0;
-        drop.querySelectorAll('.cust-opt').forEach(function(o){
-          var match=o.textContent.toLowerCase().indexOf(q)>-1;
-          o.style.display=match?'':'none';
-          if(match)visible++;
-        });
-        emptyMsg.style.display=visible?'none':'block';
-      });
-      trig.addEventListener('click',function(){
-        setTimeout(function(){ searchInput.value=''; searchInput.dispatchEvent(new Event('input')); searchInput.focus(); }, 0);
-      });
-    }
-    for(var i=0;i<sel.length;i++){
-      (function(idx){
-        var o=document.createElement('div');
-        o.className='cust-opt'+(idx===sel.selectedIndex?' sel':'');
-        o.textContent=sel.options[idx].text;
-        o.addEventListener('click',function(){
-          sel.selectedIndex=idx;
-          trig.textContent=sel.options[idx].text;
-          drop.querySelectorAll('.cust-opt').forEach(function(c){c.classList.remove('sel')});
-          o.classList.add('sel');
-          trig.classList.remove('open');
-          drop.classList.remove('show');
-          sel.dispatchEvent(new Event('change'));
-        });
-        drop.appendChild(o);
-      })(i);
-    }
-    trig.addEventListener('click',function(e){
-      e.stopPropagation();
-      var already=drop.classList.contains('show');
-      document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});
-      document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')});
-      if(!already){
-        var rect=trig.getBoundingClientRect();
-        if(window.innerHeight-rect.bottom<180){drop.classList.add('up');trig.classList.add('up')}
-        else{drop.classList.remove('up');trig.classList.remove('up')}
-        drop.classList.add('show');trig.classList.add('open');
-      }
-    });
-  });
-  document.addEventListener('click',function(){
-    document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});
-    document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')});
-  });
-}
-initCustomSelects();
-</script>
-<div class="modal-overlay" id="logoutModal" onclick="if(event.target===this)this.classList.remove('show')">
-  <div class="modal-confirm">
-    <div class="modal-confirm-icon">
-      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-    </div>
-    <h3>Confirm Logout</h3>
-    <p>Are you sure you want to log out of Report Portal?</p>
-    <div class="modal-confirm-actions">
-      <button class="btn btn-outline" onclick="document.getElementById('logoutModal').classList.remove('show')">Cancel</button>
-      <a href="/logout" class="btn btn-danger" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        Logout
-      </a>
-    </div>
-  </div>
-</div>
-
-{% block extra_scripts %}{% endblock %}
-</body>
-</html>

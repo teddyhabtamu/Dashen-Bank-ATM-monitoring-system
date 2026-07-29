@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>404 — Dashen Bank ATM Monitoring</title>
+<title>Error — Dashen Bank ATM Monitoring</title>
 <link rel="icon" type="image/png" href="/static/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -33,7 +33,7 @@ body{
 .logo-wrap{text-align:center;margin-bottom:24px}
 .logo-wrap img{width:48px;height:48px;object-fit:contain}
 .error-code-wrap{position:relative;margin-bottom:8px}
-.error-code{font-size:96px;font-weight:800;color:#012169;line-height:1;letter-spacing:-6px;position:relative;z-index:1}
+.error-code{font-size:96px;font-weight:800;color:#DC2626;line-height:1;letter-spacing:-6px;position:relative;z-index:1}
 .error-code-bg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:220px;font-weight:900;color:#F1F4F9;line-height:1;letter-spacing:-12px;user-select:none;pointer-events:none;z-index:0}
 .error-accent{width:40px;height:3px;background:#FDD79A;border-radius:2px;margin:12px auto 20px}
 h1{font-size:17px;font-weight:700;color:#0F172A;margin-bottom:8px}
@@ -49,8 +49,6 @@ p{font-size:13px;color:#64748B;margin-bottom:28px;line-height:1.7;max-width:380p
 .btn-primary:hover{background:#273274;box-shadow:0 4px 16px rgba(1,33,105,.25);transform:translateY(-1px)}
 .btn-outline{background:transparent;color:#475569;border:1px solid #E4E9F1}
 .btn-outline:hover{background:#F8FAFC;border-color:#CBD5E1;transform:translateY(-1px)}
-.btn-ghost{background:transparent;color:#64748B;border:none;padding:10px 16px}
-.btn-ghost:hover{background:#F1F5F9;color:#475569;border-radius:10px}
 .footer{text-align:center;margin-top:28px;font-size:11px;color:#94A3B8;border-top:1px solid #EEF1F6;padding-top:20px}
 .links{display:flex;justify-content:center;gap:20px;margin-top:8px;flex-wrap:wrap}
 .links a{font-size:11px;color:#64748B;text-decoration:none;display:flex;align-items:center;gap:5px;transition:.15s}
@@ -72,19 +70,18 @@ p{font-size:13px;color:#64748B;margin-bottom:28px;line-height:1.7;max-width:380p
     <img src="/static/brand-logo.png" alt="Dashen Bank">
   </div>
   <div class="error-code-wrap">
-    <div class="error-code-bg">404</div>
-    <div class="error-code">404</div>
+    <div class="error-code-bg">500</div>
+    <div class="error-code">500</div>
   </div>
   <div class="error-accent"></div>
-  <h1>This page is off the grid</h1>
-  <p>The page you're looking for doesn't exist or has been moved.<br>Let's get you back to somewhere familiar.</p>
+  <h1>Something went wrong</h1>
+  <p>An unexpected error occurred while loading this page. Our team has been notified. Please try again or contact support.</p>
   <div class="actions">
-    <a href="/" class="btn btn-primary"><i data-lucide="layout-dashboard" style="width:15px;height:15px"></i> Dashboard</a>
-    <a href="/ej-search" class="btn btn-outline"><i data-lucide="file-search" style="width:15px;height:15px"></i> EJ Search</a>
-    <a href="/admin/atm" class="btn btn-outline"><i data-lucide="settings" style="width:15px;height:15px"></i> ATMs</a>
+    <a href="/admin/atm" class="btn btn-primary"><i data-lucide="layout-dashboard" style="width:15px;height:15px"></i> Back to ATMs</a>
+    <a href="/" class="btn btn-outline"><i data-lucide="home" style="width:15px;height:15px"></i> Dashboard</a>
   </div>
   <div class="footer">
-    Dashen Bank S.C. &mdash; ATM Monitoring System
+    Dashen Bank S.C. — ATM Monitoring System
     <div class="links">
       <a href="/"><i data-lucide="home" style="width:12px;height:12px"></i> Home</a>
       <a href="javascript:history.back()"><i data-lucide="arrow-left" style="width:12px;height:12px"></i> Go Back</a>

@@ -27,7 +27,7 @@ bp = Blueprint('admin', __name__, url_prefix='/admin')
 ROLES = [ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN]
 
 # ─── Simulator metrics (for the visual ATM detail page) ────────────────────────
-GATEWAY_IP = os.environ.get('GATEWAY_IP', '172.17.0.1')
+GATEWAY_IP = os.environ.get('GATEWAY_IP', 'atm-sim-engine')
 # Legacy fallback for the 7 original ATMs (before sim_port was stored in the DB).
 ATM_PORTS = {
     'ATM-001': 1161, 'ATM-002': 1162, 'ATM-003': 1163,
@@ -76,9 +76,10 @@ def assign_sim_port(atm_id, vendor):
         print(f"[assign_sim_port] {atm_id}: {e}")
 
 
-def fetch_metrics(atm_id):
+def fetch_metrics(atm_id, port=None):
     """Return the simulator /metrics JSON, or None if unreachable."""
-    port = get_sim_port(atm_id)
+    if port is None:
+        port = get_sim_port(atm_id)
     if not port:
         return None
     try:
@@ -130,7 +131,7 @@ def batch_fetch_live_states(atms):
     def fetch_one(atm):
         atm_id = atm['atm_id']
         vendor = atm.get('vendor', 'NCR')
-        port = get_sim_port(atm_id)
+        port = atm.get('sim_port')
         if not port:
             return (atm_id, None, None)
         try:
@@ -377,7 +378,7 @@ def atm_detail(atm_id):
         atm = dict(zip(cols, row))
         vendor = atm.get('vendor')
 
-        metrics = fetch_metrics(atm_id)
+        metrics = fetch_metrics(atm_id, port=atm.get('sim_port'))
         cassettes = build_cassettes(vendor, metrics) if metrics else []
         hardware = build_hardware(vendor, metrics) if metrics else []
 
@@ -432,7 +433,9 @@ def atm_detail(atm_id):
                                cash_today=cash_today, active_faults=active_faults,
                                txns=txns)
     except Exception as e:
-        return f'<h1>Error</h1><pre>{e}</pre>', 500
+        import logging
+        logging.getLogger(__name__).error('ATM detail error: %s', e, exc_info=True)
+        return render_template('error_500.html'), 500
 
 
 @bp.route('/atm/get')

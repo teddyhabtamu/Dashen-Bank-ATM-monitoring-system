@@ -1,4 +1,5 @@
 import os
+import time
 import logging
 from functools import wraps
 from flask import Blueprint, render_template, request, redirect, session, url_for, current_app
@@ -14,6 +15,21 @@ bp = Blueprint('auth', __name__)
 ADMIN_USER = os.environ.get('ADMIN_USER', 'admin')
 ADMIN_PASS = os.environ.get('ADMIN_PASS', '')
 INTERNAL_API_KEY = os.environ.get('INTERNAL_API_KEY', '')
+
+# Rate limiting: {ip: [(timestamp, attempt_count)]}
+_login_attempts = {}
+RATE_LIMIT = int(os.environ.get('LOGIN_RATE_LIMIT', '5'))
+RATE_WINDOW = int(os.environ.get('LOGIN_RATE_WINDOW', '60'))  # seconds
+
+def _is_rate_limited(ip):
+    """Check if an IP has exceeded the login rate limit."""
+    now = time.time()
+    # Clean up old entries
+    _login_attempts[ip] = [t for t in _login_attempts.get(ip, []) if now - t < RATE_WINDOW]
+    if len(_login_attempts[ip]) >= RATE_LIMIT:
+        return True
+    _login_attempts[ip].append(now)
+    return False
 
 
 def _is_internal():
@@ -60,8 +76,6 @@ def init_admin_user():
 
 
 def _check_password(username, password):
-    if username == ADMIN_USER and password == ADMIN_PASS:
-        return True
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -138,6 +152,12 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username', '')
         password = request.form.get('password', '')
+
+        # Rate limiting
+        if _is_rate_limited(request.remote_addr):
+            logger.warning('Rate limited login attempt from %s', request.remote_addr)
+            error = f'Too many login attempts. Please wait {RATE_WINDOW} seconds.'
+            return render_template('login.html', error=error, next=next_page)
 
         if not ADMIN_PASS:
             logger.error('Login failed: ADMIN_PASS not set on server')

@@ -274,6 +274,15 @@ def main():
         finally:
             conn.close()
 
+        active_ids = {a['atm_id'] for a in atms}
+
+        # Remove threads for ATMs that are no longer active
+        for aid in list(registry.keys()):
+            if aid not in active_ids:
+                print(f"[SIM] Removing inactive ATM {aid} from registry")
+                registry[aid].stop()
+                del registry[aid]
+
         # Self-heal: any previously-registered ATM whose server stopped
         # answering gets torn down so it is recreated (and re-bound) below.
         for aid, inst in list(registry.items()):

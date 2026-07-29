@@ -60,35 +60,39 @@ SCHEMA_MIGRATIONS = [
 
 
 def init_audit_schema():
-    index_queries = [
-        AUDIT_TABLE_SQL,
-        USERS_TABLE_SQL,
-    ] + USERS_MIGRATIONS + SCHEMA_MIGRATIONS + VENDOR_CONSTRAINTS + [
-        "CREATE INDEX IF NOT EXISTS idx_audit_performed ON audit_log(performed_at DESC)",
-        "CREATE INDEX IF NOT EXISTS idx_audit_username  ON audit_log(username)",
-        "CREATE INDEX IF NOT EXISTS idx_audit_action    ON audit_log(action)",
-        # Composite indexes for atm_transactions (performance)
-        "CREATE INDEX IF NOT EXISTS idx_txn_atm_time        ON atm_transactions(atm_id, recorded_at DESC)",
-        "CREATE INDEX IF NOT EXISTS idx_txn_status_type_time ON atm_transactions(status, txn_type, recorded_at DESC)",
-        "CREATE INDEX IF NOT EXISTS idx_txn_recorded_status  ON atm_transactions(recorded_at DESC, status)",
-        "CREATE INDEX IF NOT EXISTS idx_txn_type_status      ON atm_transactions(txn_type, status, recorded_at DESC)",
-        "CREATE INDEX IF NOT EXISTS idx_txn_branch_time      ON atm_transactions(branch, recorded_at DESC)",
-        "CREATE INDEX IF NOT EXISTS idx_txn_card_time        ON atm_transactions(card_masked, recorded_at DESC)",
-        # Composite indexes for atm_locations
-        "CREATE INDEX IF NOT EXISTS idx_loc_branch           ON atm_locations(branch)",
-        "CREATE INDEX IF NOT EXISTS idx_loc_status           ON atm_locations(status)",
-        "CREATE INDEX IF NOT EXISTS idx_loc_region_city      ON atm_locations(region, city)",
-        "CREATE INDEX IF NOT EXISTS idx_loc_terminal         ON atm_locations(terminal_id)",
-        # Anomalies
-        "CREATE INDEX IF NOT EXISTS idx_anomaly_severity     ON atm_anomalies(severity, detected_at DESC)",
-    ]
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            for q in index_queries:
-                cur.execute(q)
-            conn.commit()
-            cur.close()
+            cur.execute("SELECT pg_try_advisory_lock(999888777)")
+            got_lock = cur.fetchone()[0]
+            if not got_lock:
+                cur.close()
+                logger.info('Schema init skipped (another container holds the lock)')
+                return
+            try:
+                for q in [
+                    AUDIT_TABLE_SQL, USERS_TABLE_SQL,
+                ] + USERS_MIGRATIONS + SCHEMA_MIGRATIONS + VENDOR_CONSTRAINTS + [
+                    "CREATE INDEX IF NOT EXISTS idx_audit_performed ON audit_log(performed_at DESC)",
+                    "CREATE INDEX IF NOT EXISTS idx_audit_username  ON audit_log(username)",
+                    "CREATE INDEX IF NOT EXISTS idx_audit_action    ON audit_log(action)",
+                    "CREATE INDEX IF NOT EXISTS idx_txn_atm_time        ON atm_transactions(atm_id, recorded_at DESC)",
+                    "CREATE INDEX IF NOT EXISTS idx_txn_status_type_time ON atm_transactions(status, txn_type, recorded_at DESC)",
+                    "CREATE INDEX IF NOT EXISTS idx_txn_recorded_status  ON atm_transactions(recorded_at DESC, status)",
+                    "CREATE INDEX IF NOT EXISTS idx_txn_type_status      ON atm_transactions(txn_type, status, recorded_at DESC)",
+                    "CREATE INDEX IF NOT EXISTS idx_txn_branch_time      ON atm_transactions(branch, recorded_at DESC)",
+                    "CREATE INDEX IF NOT EXISTS idx_txn_card_time        ON atm_transactions(card_masked, recorded_at DESC)",
+                    "CREATE INDEX IF NOT EXISTS idx_loc_branch           ON atm_locations(branch)",
+                    "CREATE INDEX IF NOT EXISTS idx_loc_status           ON atm_locations(status)",
+                    "CREATE INDEX IF NOT EXISTS idx_loc_region_city      ON atm_locations(region, city)",
+                    "CREATE INDEX IF NOT EXISTS idx_loc_terminal         ON atm_locations(terminal_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_anomaly_severity     ON atm_anomalies(severity, detected_at DESC)",
+                ]:
+                    cur.execute(q)
+                conn.commit()
+            finally:
+                cur.execute("SELECT pg_advisory_unlock(999888777)")
+                cur.close()
         logger.info('Database schema verified (audit_log + indexes)')
     except Exception as e:
         logger.error('Failed to init schema: %s', e)

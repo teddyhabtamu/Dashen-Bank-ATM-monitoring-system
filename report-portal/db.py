@@ -7,6 +7,8 @@ Returns a thin wrapper whose .close() returns the connection to the pool.
 """
 import os
 import logging
+import threading
+import time
 from psycopg2 import pool
 
 logger = logging.getLogger(__name__)
@@ -16,8 +18,8 @@ DB_PORT = int(os.environ.get('DB_PORT', 5432))
 DB_NAME = os.environ.get('DB_NAME', 'zabbix')
 DB_USER = os.environ.get('DB_USER', 'zabbix')
 DB_PASS = os.environ.get('DB_PASS', '')
-DB_POOL_MIN = int(os.environ.get('DB_POOL_MIN', 2))
-DB_POOL_MAX = int(os.environ.get('DB_POOL_MAX', 20))
+DB_POOL_MIN = int(os.environ.get('DB_POOL_MIN', 5))
+DB_POOL_MAX = int(os.environ.get('DB_POOL_MAX', 30))
 
 _config = {
     'host': DB_HOST,
@@ -28,17 +30,20 @@ _config = {
 }
 
 _pool = None
+_pool_lock = threading.Lock()
 
 
 def _get_pool():
     global _pool
     if _pool is None:
-        try:
-            _pool = pool.ThreadedConnectionPool(DB_POOL_MIN, DB_POOL_MAX, **_config)
-            logger.info('DB pool created (min=%d, max=%d)', DB_POOL_MIN, DB_POOL_MAX)
-        except Exception as e:
-            logger.critical('Failed to create DB pool: %s', e)
-            raise
+        with _pool_lock:
+            if _pool is None:
+                try:
+                    _pool = pool.ThreadedConnectionPool(DB_POOL_MIN, DB_POOL_MAX, **_config)
+                    logger.info('DB pool created (min=%d, max=%d)', DB_POOL_MIN, DB_POOL_MAX)
+                except Exception as e:
+                    logger.critical('Failed to create DB pool: %s', e)
+                    raise
     return _pool
 
 
@@ -77,5 +82,15 @@ class _PooledConnection:
 
 def get_db():
     p = _get_pool()
-    raw = p.getconn()
-    return _PooledConnection(raw, p)
+    try:
+        raw = p.getconn()
+    except pool.PoolError as e:
+        logger.warning('Connection pool exhausted, waiting 1s and retrying: %s', e)
+        time.sleep(1)
+        raw = p.getconn()
+    conn = _PooledConnection(raw, p)
+    cur = conn.cursor()
+    cur.execute("SET statement_timeout = '30s'")
+    cur.execute("SET lock_timeout = '5s'")
+    cur.close()
+    return conn

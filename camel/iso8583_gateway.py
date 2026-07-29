@@ -63,18 +63,7 @@ RESPONSE_CODES = {
     'B2': ('ERROR', 'B2C1'),
 }
 
-ATMS = [
-    {'id': 'ATM-001', 'tid': 'TID001',
-     'branch': 'Addis Ababa Main Branch'},
-    {'id': 'ATM-002', 'tid': 'TID002',
-     'branch': 'Bole International Branch'},
-    {'id': 'ATM-003', 'tid': 'TID003',
-     'branch': 'Merkato Branch'},
-    {'id': 'ATM-004', 'tid': 'TID004',
-     'branch': 'Hawassa Branch'},
-    {'id': 'ATM-005', 'tid': 'TID005',
-     'branch': 'Dire Dawa Branch'},
-]
+ATMS = []  # Dynamic: loaded from database
 
 CARDS = [
     '4000000000001234',
@@ -90,6 +79,18 @@ def get_db():
         host=DB_HOST, dbname=DB_NAME,
         user=DB_USER, password=DB_PASS
     )
+
+def load_atms_from_db(conn):
+    """Load ATM list from database (dynamic, not hardcoded)."""
+    global ATMS
+    with conn.cursor() as cur:
+        cur.execute("SELECT atm_id, terminal_id, branch FROM atm_locations WHERE status = 'active'")
+        rows = cur.fetchall()
+        ATMS = [{'id': r[0], 'tid': r[1], 'branch': r[2]} for r in rows]
+    if ATMS:
+        print(f"Loaded {len(ATMS)} ATMs from database")
+    else:
+        print("Warning: No ATMs found in database")
 
 def store_transaction(conn, txn):
     """
@@ -384,6 +385,9 @@ for attempt in range(30):
 if not conn:
     print("Cannot connect to database. Exiting.")
     exit(1)
+
+# Load ATMs from database (dynamic)
+load_atms_from_db(conn)
 
 print(f"\nISO 8583 Gateway ready")
 print(f"Writing to: atm_transactions table")

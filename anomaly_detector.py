@@ -266,7 +266,10 @@ def write_zabbix_files(cur):
     """)
     per_atm = {row[0]: row[1] for row in cur.fetchall()}
 
-    for atm_id in ['ATM-001','ATM-002','ATM-003','ATM-004','ATM-005']:
+    # Write per-ATM files for all active ATMs (dynamic, not hardcoded)
+    cur.execute("SELECT atm_id FROM atm_locations WHERE status = 'active'")
+    active_atms = [row[0] for row in cur.fetchall()]
+    for atm_id in active_atms:
         cnt = per_atm.get(atm_id, 0)
         safe = atm_id.replace('-', '_').lower()
         with open(f'/tmp/zabbix_{safe}_anomalies', 'w') as f:

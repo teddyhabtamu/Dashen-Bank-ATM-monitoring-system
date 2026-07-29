@@ -102,12 +102,16 @@ services:
     environment:
       - discovery.type=single-node
       - DISABLE_SECURITY_PLUGIN=true
-      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - OPENSEARCH_JAVA_OPTS=-Xms256m -Xmx256m
       - compatibility.override_main_response_version=true
     ports:
       - "9200:9200"
     volumes:
       - opensearch-data:/usr/share/opensearch/data
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     restart: unless-stopped
 
   opensearch-dashboards:
@@ -197,7 +201,11 @@ services:
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASS: ${ADMIN_PASS:-admin123}
       FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-}
-      FLASK_DEBUG: 1
+      FLASK_DEBUG: 0
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     volumes:
       - ./report-portal:/app:rw
     ports:
@@ -340,6 +348,7 @@ services:
       GATEWAY_IP: "172.17.0.1"
       SIM_PORT_MIN: "1161"
       SIM_PORT_MAX: "1260"
+      MAX_SIMULATED_ATMS: "10"
     ports:
       - "1161-1260:1161-1260"
       - "1161-1260:1161-1260/udp"
@@ -359,6 +368,7 @@ services:
       DB_NAME: zabbix
       DB_USER: zabbix
       DB_PASS: ${DB_PASS}
+      MAX_SIMULATED_ATMS: "10"
     depends_on:
       postgres:
         condition: service_healthy
@@ -376,6 +386,7 @@ services:
       DB_USER: zabbix
       DB_PASS: ${DB_PASS}
       EJ_LOG_DIR: /var/log/atm-ej
+      MAX_SIMULATED_ATMS: "10"
     volumes:
       - ./ej-logs:/var/log/atm-ej
     depends_on:
@@ -396,6 +407,7 @@ services:
       DB_USER: zabbix
       DB_PASS: ${DB_PASS}
       GATEWAY_IP: "172.17.0.1"
+      MAX_SIMULATED_ATMS: "10"
     depends_on:
       postgres:
         condition: service_healthy

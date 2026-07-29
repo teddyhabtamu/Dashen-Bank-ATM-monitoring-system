@@ -84,6 +84,16 @@ def create_app():
                             response.status_code, dt * 1000)
         return response
 
+    @app.after_request
+    def set_security_headers(response):
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        if not FLASK_DEBUG:
+            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        return response
+
     @app.errorhandler(403)
     def forbidden(e):
         flash('Access denied. You do not have permission for this page.', 'error')
@@ -92,6 +102,12 @@ def create_app():
     @app.errorhandler(404)
     def not_found(e):
         return render_template('404.html'), 404
+
+    @app.errorhandler(500)
+    def internal_error(e):
+        import logging
+        logging.getLogger(__name__).error('500 error: %s', e, exc_info=True)
+        return render_template('error_500.html'), 500
 
     @app.route('/health')
     def health():
@@ -104,4 +120,4 @@ app = create_app()
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(REPORT_PORTAL_PORT), debug=FLASK_DEBUG)
+    app.run(host='0.0.0.0', port=int(REPORT_PORTAL_PORT), debug=FLASK_DEBUG, threaded=True)

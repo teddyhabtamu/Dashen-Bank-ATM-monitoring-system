@@ -8,7 +8,7 @@ from flask import Blueprint, render_template, request, Response
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from db import get_db
 from audit import log_action
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -89,12 +89,12 @@ def _build_must(keyword, card, date_from, date_to, atm_id,
         must.append({"range": {"@timestamp": {"lte": f"{date_to}T23:59:59"}}})
     if atm_id:
         must.append({"bool": {"should": [
-            {"term":         {"atm_id.keyword": atm_id}},
+            {"term":         {"atm_id": atm_id}},
             {"match_phrase": {"message":        atm_id}},
         ], "minimum_should_match": 1}})
     if event_type:
         must.append({"bool": {"should": [
-            {"term":         {"event_type.keyword": event_type}},
+            {"term":         {"event_type": event_type}},
             {"match_phrase": {"message":            event_type}},
         ], "minimum_should_match": 1}})
     if status:
@@ -120,10 +120,15 @@ def _build_must(keyword, card, date_from, date_to, atm_id,
     return must
 
 
+EAT = timezone(timedelta(hours=3))
+
 def _fmt_ts(ts):
     if ts and 'T' in ts:
         try:
-            return datetime.fromisoformat(ts.replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M:%S')
+            dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(EAT).strftime('%Y-%m-%d %H:%M:%S')
         except Exception:
             pass
     return ts
@@ -216,11 +221,16 @@ def ej_search():
             log_action('EJ_SEARCH', f'keyword={keyword}, card={card}, atm={atm_id}, event={event_type}, status={status}, amount={min_amount}-{max_amount}, auth={auth_code}, results={total}')
 
     # ATM dropdown from database
-    with get_db() as conn:
-        cur  = conn.cursor()
-        cur.execute("SELECT atm_id, branch FROM atm_locations ORDER BY atm_id")
-        db_atms = cur.fetchall()
-        cur.close()
+    db_atms = []
+    try:
+        with get_db() as conn:
+            cur  = conn.cursor()
+            cur.execute("SELECT atm_id, branch FROM atm_locations ORDER BY atm_id")
+            db_atms = cur.fetchall()
+            cur.close()
+    except Exception as e:
+        logger.warning('Failed to load ATMs for EJ search: %s', e)
+        error = f'Failed to load ATM list: {e}' if not error else error
 
     return render_template(
         'ej_search.html',

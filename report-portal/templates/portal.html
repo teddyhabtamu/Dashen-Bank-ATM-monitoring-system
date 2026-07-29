@@ -32,6 +32,31 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
 
 
 
+/* ── CHARTS ── */
+.charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-bottom: 28px; }
+.chart-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
+  padding: 20px 22px;
+  transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+}
+.chart-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--border); }
+.chart-card .chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.chart-card .chart-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.chart-card .chart-subtitle { font-size: 11px; color: var(--text-tertiary); }
+.chart-canvas-wrap { position: relative; width: 100%; height: 220px; }
+.chart-canvas-wrap canvas { width: 100% !important; height: 100% !important; }
+.chart-card-wide { grid-column: 1 / -1; }
+.chart-card-wide .chart-canvas-wrap { height: 280px; }
+
+/* ── VENDOR BAR ── */
+.vendor-bar-wrap { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.vendor-bar-track { flex: 1; height: 8px; border-radius: 4px; background: var(--border-light); overflow: hidden; }
+.vendor-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+.vendor-bar-label { font-size: 11px; color: var(--text-tertiary); font-weight: 500; min-width: 40px; text-align: right; }
+
 /* ── BREADCRUMB ── */
 /* ── MAIN ── */
 .main-container { padding: 20px 36px 48px; }
@@ -208,7 +233,7 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
 }
 
 /* ── RESPONSIVE ── */
-@media(max-width:1024px){ .kpi-grid { grid-template-columns: repeat(3,1fr); } }
+@media(max-width:1024px){ .kpi-grid { grid-template-columns: repeat(3,1fr); } .charts-grid { grid-template-columns: 1fr; } }
 @media(max-width:768px){
   .main-container { padding: 12px 16px 32px; }
   .kpi-grid { grid-template-columns: repeat(2,1fr); gap: 10px; }
@@ -244,6 +269,9 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
   .kpi-card:last-child { grid-column:1/-1; }
   .btn-live { width:100%; justify-content:center; margin-top:4px; margin-left:0; }
   .page-header { flex-wrap:wrap; }
+  .charts-grid { grid-template-columns: 1fr; gap: 10px; }
+  .chart-card .chart-canvas-wrap { height: 180px; }
+  .chart-card-wide .chart-canvas-wrap { height: 220px; }
 }
 @media(max-width:480px){
   .kpi-grid { grid-template-columns: repeat(2,1fr); gap: 8px; }
@@ -320,6 +348,73 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
       </div>
       <div class="kpi-value" style="font-size:20px;color:var(--text-primary);line-height:28px;" id="kpi-time">&mdash;</div>
       <div class="kpi-footer">Auto-sync active</div>
+    </div>
+  </div>
+
+  <!-- Charts Section -->
+  <div class="section-divider">
+    <div class="divider-badge"><i data-lucide="trending-up"></i> Analytics & Trends</div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Transaction Volume</div>
+          <div class="chart-subtitle">Daily transaction count — last 7 days</div>
+        </div>
+      </div>
+      <div class="chart-canvas-wrap">
+        <canvas id="chart-txn-volume"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Success Rate Trend</div>
+          <div class="chart-subtitle">Daily approval rate — last 7 days</div>
+        </div>
+      </div>
+      <div class="chart-canvas-wrap">
+        <canvas id="chart-success-rate"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">ATM Status Distribution</div>
+          <div class="chart-subtitle">Current fleet status breakdown</div>
+        </div>
+      </div>
+      <div class="chart-canvas-wrap">
+        <canvas id="chart-atm-status"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Vendor Performance</div>
+          <div class="chart-subtitle">NCR vs GRG — success rate comparison</div>
+        </div>
+      </div>
+      <div class="chart-canvas-wrap">
+        <canvas id="chart-vendor-comparison"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card chart-card-wide">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Cash Dispensed Trend</div>
+          <div class="chart-subtitle">Daily cash withdrawn (ETB) — last 7 days</div>
+        </div>
+      </div>
+      <div class="chart-canvas-wrap">
+        <canvas id="chart-cash-trend"></canvas>
+      </div>
     </div>
   </div>
 
@@ -593,6 +688,7 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="/static/chart.umd.min.js"></script>
 <script>
 lucide.createIcons();
 
@@ -659,6 +755,161 @@ async function loadATMs() {
   }
 }
 
+// ── CHARTS ──────────────────────────────────────────────────────────────────
+const chartColors = {
+  navy: '#012169',
+  blue: '#273274',
+  gold: '#FDD79A',
+  success: '#059669',
+  danger: '#DC2626',
+  warning: '#D97706',
+  info: '#2563EB',
+  muted: '#94A3B8',
+  surface: '#F0F2F6',
+};
+
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: true, position: 'top', labels: { font: { family: 'Inter', size: 11 }, boxWidth: 12, padding: 12 } },
+    tooltip: { backgroundColor: '#012169', titleFont: { family: 'Inter', size: 12 }, bodyFont: { family: 'Inter', size: 11 }, cornerRadius: 8, padding: 10 },
+  },
+};
+
+let txnVolumeChart = null;
+let successRateChart = null;
+let atmStatusChart = null;
+let vendorComparisonChart = null;
+let cashTrendChart = null;
+
+async function loadCharts() {
+  try {
+    const r = await fetch('/api/charts');
+    if (!r.ok) throw new Error('Server returned ' + r.status);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+
+    // Transaction Volume — Line Chart
+    const txnCtx = document.getElementById('chart-txn-volume').getContext('2d');
+    if (txnVolumeChart) txnVolumeChart.destroy();
+    txnVolumeChart = new Chart(txnCtx, {
+      type: 'line',
+      data: {
+        labels: d.txn_volume.labels,
+        datasets: [{
+          label: 'Transactions',
+          data: d.txn_volume.data,
+          borderColor: chartColors.navy,
+          backgroundColor: 'rgba(1,33,105,0.08)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 4,
+          pointBackgroundColor: chartColors.navy,
+          borderWidth: 2,
+        }]
+      },
+      options: { ...chartDefaults, scales: { y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.04)' } }, x: { grid: { display: false } } } }
+    });
+
+    // Success Rate — Area Chart
+    const srCtx = document.getElementById('chart-success-rate').getContext('2d');
+    if (successRateChart) successRateChart.destroy();
+    successRateChart = new Chart(srCtx, {
+      type: 'line',
+      data: {
+        labels: d.success_rate.labels,
+        datasets: [{
+          label: 'Success Rate %',
+          data: d.success_rate.data,
+          borderColor: chartColors.success,
+          backgroundColor: 'rgba(5,150,105,0.1)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 4,
+          pointBackgroundColor: chartColors.success,
+          borderWidth: 2,
+        }]
+      },
+      options: { ...chartDefaults, scales: { y: { beginAtZero: false, min: 50, max: 100, grid: { color: 'rgba(0,0,0,0.04)' } }, x: { grid: { display: false } } } }
+    });
+
+    // ATM Status — Doughnut Chart
+    const statusCtx = document.getElementById('chart-atm-status').getContext('2d');
+    if (atmStatusChart) atmStatusChart.destroy();
+    const statusColors = {
+      'IN_SERVICE': chartColors.success,
+      'OUT_OF_SERVICE': chartColors.danger,
+      'OUT_OF_CASH': chartColors.warning,
+      'HARDWARE_FAULT': chartColors.danger,
+      'OFFLINE': chartColors.muted,
+      'AGENT_DISCONNECTED': chartColors.muted,
+      'UNKNOWN': '#CBD5E1',
+    };
+    const statusLabels = d.atm_status.labels;
+    const statusData = d.atm_status.data;
+    const statusBg = statusLabels.map(l => statusColors[l] || chartColors.muted);
+    atmStatusChart = new Chart(statusCtx, {
+      type: 'doughnut',
+      data: {
+        labels: statusLabels,
+        datasets: [{ data: statusData, backgroundColor: statusBg, borderWidth: 2, borderColor: '#fff' }]
+      },
+      options: {
+        ...chartDefaults,
+        cutout: '65%',
+        plugins: {
+          ...chartDefaults.plugins,
+          legend: { display: true, position: 'bottom', labels: { font: { family: 'Inter', size: 11 }, boxWidth: 12, padding: 10 } },
+        },
+      },
+    });
+
+    // Vendor Comparison — Bar Chart
+    const vendorCtx = document.getElementById('chart-vendor-comparison').getContext('2d');
+    if (vendorComparisonChart) vendorComparisonChart.destroy();
+    vendorComparisonChart = new Chart(vendorCtx, {
+      type: 'bar',
+      data: {
+        labels: d.vendor_comparison.labels,
+        datasets: [{
+          label: 'Success Rate %',
+          data: d.vendor_comparison.data,
+          backgroundColor: [chartColors.navy, chartColors.gold],
+          borderRadius: 6,
+          barThickness: 40,
+        }]
+      },
+      options: { ...chartDefaults, scales: { y: { beginAtZero: false, min: 50, max: 100, grid: { color: 'rgba(0,0,0,0.04)' } }, x: { grid: { display: false } } } }
+    });
+
+    // Cash Trend — Bar Chart
+    const cashCtx = document.getElementById('chart-cash-trend').getContext('2d');
+    if (cashTrendChart) cashTrendChart.destroy();
+    cashTrendChart = new Chart(cashCtx, {
+      type: 'bar',
+      data: {
+        labels: d.cash_trend.labels,
+        datasets: [{
+          label: 'Cash Dispensed (ETB)',
+          data: d.cash_trend.data,
+          backgroundColor: 'rgba(253,215,154,0.6)',
+          borderColor: chartColors.gold,
+          borderWidth: 1,
+          borderRadius: 6,
+          barThickness: 36,
+        }]
+      },
+      options: { ...chartDefaults, scales: { y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.04)' } }, x: { grid: { display: false } } } }
+    });
+
+  } catch(e) {
+    showToast('Could not load charts: ' + e.message, 'error', 8000);
+  }
+}
+
+// ── END CHARTS ─────────────────────────────────────────────────────────────
+
 function gen(type, fmt, daysId, atmId) {
   const days = document.getElementById(daysId).value;
   const atm  = atmId ? document.getElementById(atmId).value : 'all';
@@ -707,6 +958,7 @@ function toggleAccordion(header){
 
 loadKPIs();
 loadATMs();
+loadCharts();
 setInterval(loadKPIs, 30000);
 </script>
 {% endblock %}

@@ -96,22 +96,21 @@ def determine_state(atm_id, port, vendor):
 def update_states():
     import common
 
-    # Phase 1: read fleet
+    # Phase 1: read fleet (only active ATMs with sim_port)
     conn1 = get_db()
     cur1 = conn1.cursor()
-    cur1.execute("SELECT atm_id, sim_port, vendor FROM atm_locations WHERE sim_port IS NOT NULL")
+    cur1.execute("SELECT atm_id, sim_port, vendor FROM atm_locations WHERE sim_port IS NOT NULL AND status = 'active'")
     port_map = {r[0]: (r[1], r[2]) for r in cur1.fetchall()}
-    cur1.execute("SELECT atm_id, vendor FROM atm_locations")
-    atms = cur1.fetchall()
+    atms = list(port_map.keys())
     conn1.close()
 
     # Phase 2: determine states (no DB connection held — HTTP calls may be slow)
     results = []
-    for atm_id, vendor in atms:
+    for atm_id in atms:
         pm = port_map.get(atm_id)
         if not pm:
             continue
-        port, _ = pm
+        port, vendor = pm
         new_state = determine_state(atm_id, port, vendor or 'NCR')
         results.append((atm_id, vendor or 'NCR', new_state))
 

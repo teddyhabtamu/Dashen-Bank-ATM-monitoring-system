@@ -3,6 +3,7 @@ from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPE
 from audit import log_action
 import openpyxl, io, os, csv
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from db import get_db
 from helpers import (xl_header, xl_style_row, xl_style_data_rows, xl_autosize,
                      xl_send, xl_build_sheet, xl_append_section, csv_send, pdf_send, mktable,
@@ -66,6 +67,99 @@ def api_stats():
             """)
             r = cur.fetchone(); cur.close()
         return jsonify({'total_txns': int(r[0]), 'success_rate': float(r[1]), 'cash_today': float(r[2]), 'atm_count': int(r[3])})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def _fetch_query(sql, params=None):
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, params or ())
+        rows = cur.fetchall()
+        cur.close()
+        return rows
+
+
+@bp.route('/api/charts')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def api_charts():
+    try:
+        TXN_VOL = """
+            SELECT DATE(recorded_at) as day, COUNT(*) as cnt
+            FROM atm_transactions
+            WHERE recorded_at >= NOW() - INTERVAL '7 days'
+            GROUP BY DATE(recorded_at)
+            ORDER BY day
+        """
+        SR = """
+            SELECT DATE(recorded_at) as day,
+                ROUND(100.0*SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),1) as rate
+            FROM atm_transactions
+            WHERE recorded_at >= NOW() - INTERVAL '7 days'
+            GROUP BY DATE(recorded_at)
+            ORDER BY day
+        """
+        STATUS = """
+            SELECT COALESCE(state, 'UNKNOWN') as state, COUNT(*) as cnt
+            FROM atm_current_state
+            GROUP BY state
+            ORDER BY cnt DESC
+        """
+        VENDOR = """
+            SELECT COALESCE(l.vendor, 'Unknown') as vendor,
+                ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),1) as rate
+            FROM atm_transactions t
+            JOIN atm_locations l ON t.atm_id = l.atm_id
+            WHERE t.recorded_at >= NOW() - INTERVAL '7 days'
+              AND l.status = 'active'
+            GROUP BY l.vendor
+            ORDER BY 2 DESC
+        """
+        CASH = """
+            SELECT DATE(recorded_at) as day,
+                COALESCE(SUM(CASE WHEN status='APPROVED' AND txn_type='WITHDRAWAL' THEN amount ELSE 0 END),0) as cash
+            FROM atm_transactions
+            WHERE recorded_at >= NOW() - INTERVAL '7 days'
+            GROUP BY DATE(recorded_at)
+            ORDER BY day
+        """
+
+        with ThreadPoolExecutor(max_workers=5) as ex:
+            f_txn = ex.submit(_fetch_query, TXN_VOL)
+            f_sr = ex.submit(_fetch_query, SR)
+            f_status = ex.submit(_fetch_query, STATUS)
+            f_vendor = ex.submit(_fetch_query, VENDOR)
+            f_cash = ex.submit(_fetch_query, CASH)
+
+        txn_rows = f_txn.result()
+        sr_rows = f_sr.result()
+        status_rows = f_status.result()
+        vendor_rows = f_vendor.result()
+        cash_rows = f_cash.result()
+
+        return jsonify({
+            'txn_volume': {
+                'labels': [str(r[0]) for r in txn_rows],
+                'data': [int(r[1]) for r in txn_rows],
+            },
+            'success_rate': {
+                'labels': [str(r[0]) for r in sr_rows],
+                'data': [float(r[1]) for r in sr_rows],
+            },
+            'atm_status': {
+                'labels': [str(r[0]) for r in status_rows],
+                'data': [int(r[1]) for r in status_rows],
+            },
+            'vendor_comparison': {
+                'labels': [str(r[0]) for r in vendor_rows],
+                'data': [float(r[1]) for r in vendor_rows],
+            },
+            'cash_trend': {
+                'labels': [str(r[0]) for r in cash_rows],
+                'data': [float(r[1]) for r in cash_rows],
+            },
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

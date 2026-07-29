@@ -7,6 +7,7 @@ Replaces the old per-ATM hard-coded ATM_PORTS maps. Every ATM in
 start behaving like the others with zero manual wiring.
 """
 import os
+import time
 import psycopg2
 
 DB_HOST = os.environ.get('DB_HOST', 'postgres')
@@ -14,14 +15,15 @@ DB_NAME = os.environ.get('DB_NAME', 'zabbix')
 DB_USER = os.environ.get('DB_USER', 'zabbix')
 DB_PASS = os.environ.get('DB_PASS', '')
 
-# Starting port for the global (vendor-agnostic) allocation pool. Legacy ATMs
-# keep their historical ports (NCR 1161-1165, GRG 1166-1167); every newly
-# registered ATM simply takes the next free port so pools never collide.
-# Global allocation pool. The whole fleet shares one contiguous port range so
-# NCR and GRG ports can never collide. This MUST match the published port range
-# in docker-compose.yml (atm-sim-engine `ports`).
+# Maximum number of ATMs to simulate (0 = unlimited)
+MAX_SIMULATED_ATMS = int(os.environ.get('MAX_SIMULATED_ATMS', '0'))
+
+# Starting port for the global (vendor-agnostic) allocation pool.
 PORT_MIN = int(os.environ.get('SIM_PORT_MIN', '1161'))
 PORT_MAX = int(os.environ.get('SIM_PORT_MAX', '2500'))
+
+# Lock timeout for deadlock avoidance (seconds)
+LOCK_TIMEOUT = 5
 
 
 def get_db():
@@ -29,10 +31,20 @@ def get_db():
                              user=DB_USER, password=DB_PASS)
 
 
+DDL_LOCK_KEY = 999888776
+
 def ensure_sim_port_col(conn):
     with conn.cursor() as cur:
-        cur.execute("ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS sim_port INTEGER")
-    conn.commit()
+        cur.execute("SELECT pg_try_advisory_lock(%s)", (DDL_LOCK_KEY,))
+        got_lock = cur.fetchone()[0]
+        if not got_lock:
+            return
+        try:
+            cur.execute("SET lock_timeout TO '3s'")
+            cur.execute("ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS sim_port INTEGER")
+            conn.commit()
+        finally:
+            cur.execute("SELECT pg_advisory_unlock(%s)", (DDL_LOCK_KEY,))
 
 
 def _used_ports(conn):
@@ -42,8 +54,6 @@ def _used_ports(conn):
 
 
 def _free_port(used_ports):
-    """First port in [PORT_MIN, PORT_MAX] not in `used_ports` (a set/collection
-    of port numbers)."""
     used_ports = set(used_ports)
     for p in range(PORT_MIN, PORT_MAX + 1):
         if p not in used_ports:
@@ -51,81 +61,65 @@ def _free_port(used_ports):
     return None
 
 
-def repair_duplicate_ports(conn):
-    """Guarantee every sim_port is unique; reassign duplicates to free ports.
-
-    assign_ports() never reuses a port, but a manual edit or a CSV/SQL import
-    that writes sim_port can introduce collisions. Two ATMs sharing a port
-    means only one can ever bind -> the other reads AGENT_DISCONNECTED forever.
-    """
-    used = _used_ports(conn)
-    seen = set()
-    duplicates = []
-    for aid, port in used.items():
-        if port in seen:
-            duplicates.append(aid)   # second+ ATM on the same port -> reassign
-        else:
-            seen.add(port)
-    for aid in duplicates:
-        free = _free_port(used.values())
-        if free is None:
-            print(f"[PORTS] No free port in range {PORT_MIN}-{PORT_MAX} for duplicate {aid}")
-            continue
-        with conn.cursor() as cur:
-            cur.execute("UPDATE atm_locations SET sim_port = %s WHERE atm_id = %s", (free, aid))
-        used[aid] = free
-        print(f"[PORTS] Reassigned duplicate {aid} -> {free}")
-
-
 def assign_ports(conn):
-    """Allocate a sim_port to every active ATM, reclaiming ports from
-    inactive/retired ATMs so the pool stays within [PORT_MIN, PORT_MAX].
-    """
-    repair_duplicate_ports(conn)
-    with conn.cursor() as cur:
-        cur.execute("UPDATE atm_locations SET sim_port = NULL WHERE status <> 'active'")
-        cur.execute("SELECT atm_id FROM atm_locations WHERE sim_port IS NULL AND status = 'active' ORDER BY atm_id")
-        pending = cur.fetchall()
-        used = set(_used_ports(conn).values())
-        for (aid,) in pending:
-            free = _free_port(used)
-            if free is None:
-                # Pool exhausted — reclaim a port from an inactive ATM.
-                cur.execute("""
-                    SELECT atm_id, sim_port FROM atm_locations
-                    WHERE status <> 'active' AND sim_port IS NOT NULL
-                    ORDER BY sim_port LIMIT 1
-                """)
-                reclaim = cur.fetchone()
-                if reclaim:
-                    old_aid, old_port = reclaim
-                    cur.execute("UPDATE atm_locations SET sim_port = NULL WHERE atm_id = %s", (old_aid,))
-                    used.discard(old_port)
+    """Allocate a sim_port to every active ATM, with deadlock retry."""
+    for attempt in range(3):
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SET lock_timeout TO %s", (LOCK_TIMEOUT * 1000,))
+                cur.execute("UPDATE atm_locations SET sim_port = NULL WHERE status <> 'active'")
+                cur.execute("SELECT atm_id FROM atm_locations WHERE sim_port IS NULL AND status = 'active' ORDER BY atm_id")
+                pending = cur.fetchall()
+                used = set(_used_ports(conn).values())
+                for (aid,) in pending:
                     free = _free_port(used)
-                    print(f"[PORTS] Reclaimed port {old_port} from inactive {old_aid} for new {aid}")
-                if free is None:
-                    print(f"[PORTS] OUT OF PORTS: cannot allocate sim_port for {aid} "
-                          f"(range {PORT_MIN}-{PORT_MAX} exhausted)")
-                    break
-            cur.execute("UPDATE atm_locations SET sim_port = %s WHERE atm_id = %s", (free, aid))
-            used.add(free)
-    conn.commit()
+                    if free is None:
+                        cur.execute("""
+                            SELECT atm_id, sim_port FROM atm_locations
+                            WHERE status <> 'active' AND sim_port IS NOT NULL
+                            ORDER BY sim_port LIMIT 1
+                        """)
+                        reclaim = cur.fetchone()
+                        if reclaim:
+                            old_aid, old_port = reclaim
+                            cur.execute("UPDATE atm_locations SET sim_port = NULL WHERE atm_id = %s", (old_aid,))
+                            used.discard(old_port)
+                            free = _free_port(used)
+                        if free is None:
+                            print(f"[PORTS] OUT OF PORTS: range {PORT_MIN}-{PORT_MAX} exhausted")
+                            break
+                    cur.execute("UPDATE atm_locations SET sim_port = %s WHERE atm_id = %s", (free, aid))
+                    used.add(free)
+            conn.commit()
+            return
+        except psycopg2.errors.DeadlockDetected:
+            print(f"[PORTS] Deadlock on assign_ports (attempt {attempt+1}/3), retrying...")
+            time.sleep(1)
+            try:
+                conn.rollback()
+            except Exception:
+                conn = get_db()
+        except Exception as e:
+            print(f"[PORTS] assign_ports error: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            break
 
 
 def load_atms(conn):
-    """Return only active ATMs that have a sim_port assigned.
-
-    Retired/inactive ATMs must not generate traffic (no metrics, no
-    transactions), so they are excluded here — this filters both the
-    hardware simulator and the transaction feed.
-    """
+    """Return only active ATMs that have a sim_port assigned."""
     with conn.cursor() as cur:
         cur.execute("SELECT atm_id, vendor, branch, terminal_id, sim_port "
                     "FROM atm_locations "
                     "WHERE sim_port IS NOT NULL AND status = 'active' "
                     "ORDER BY atm_id")
         cols = ['atm_id', 'vendor', 'branch', 'terminal_id', 'port']
-        return [dict(zip(cols, r)) for r in cur.fetchall()]
+        atms = [dict(zip(cols, r)) for r in cur.fetchall()]
+    if MAX_SIMULATED_ATMS > 0:
+        atms = atms[:MAX_SIMULATED_ATMS]
+    return atms
 
 
 def refresh(conn):

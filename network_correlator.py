@@ -32,14 +32,8 @@ CHECK_INTERVAL    = int(os.environ.get('CHECK_INTERVAL',    '120'))  # seconds
 LATENCY_THRESHOLD = float(os.environ.get('LATENCY_THRESHOLD','200')) # ms
 LOSS_THRESHOLD    = float(os.environ.get('LOSS_THRESHOLD',  '10'))   # percent
 
-# ATM → Zabbix hostname mapping
-ATM_HOST_MAP = {
-    'ATM-001': os.environ.get('ZABBIX_HOST_ATM001', 'ATM-001-Addis-Main'),
-    'ATM-002': os.environ.get('ZABBIX_HOST_ATM002', 'ATM-002-Bole-Branch'),
-    'ATM-003': os.environ.get('ZABBIX_HOST_ATM003', 'ATM-003-Merkato-Branch'),
-    'ATM-004': os.environ.get('ZABBIX_HOST_ATM004', 'ATM-004-Hawassa-Branch'),
-    'ATM-005': os.environ.get('ZABBIX_HOST_ATM005', 'ATM-005-DireDawa-Branch'),
-}
+# ATM → Zabbix hostname mapping (dynamic, loaded from DB)
+ATM_HOST_MAP = {}
 
 def get_db():
     return psycopg2.connect(
@@ -47,6 +41,16 @@ def get_db():
         user=DB_USER, password=DB_PASS,
         connect_timeout=10
     )
+
+def load_atm_host_map(conn):
+    """Load ATM-to-Zabbix-host mapping from database (dynamic, not hardcoded)."""
+    global ATM_HOST_MAP
+    with conn.cursor() as cur:
+        cur.execute("SELECT atm_id, branch FROM atm_locations WHERE status = 'active'")
+        for atm_id, branch in cur.fetchall():
+            if atm_id not in ATM_HOST_MAP:
+                ATM_HOST_MAP[atm_id] = atm_id  # Default: ATM ID is the Zabbix hostname
+    log.info(f"Loaded ATM host map: {len(ATM_HOST_MAP)} ATMs")
 
 def init_schema(conn):
     with conn.cursor() as cur:
@@ -223,15 +227,11 @@ def generate_simulated_metrics(conn):
         """)
         rows = cur.fetchall()
 
-        branch_map = {
-            'ATM-001': 'Addis Ababa Main Branch',
-            'ATM-002': 'Bole International Branch',
-            'ATM-003': 'Merkato Branch',
-            'ATM-004': 'Hawassa Branch',
-            'ATM-005': 'Dire Dawa Branch',
-        }
+        # Load branch map dynamically from database
+        cur.execute("SELECT atm_id, branch FROM atm_locations WHERE status = 'active'")
+        branch_map = {row[0]: row[1] for row in cur.fetchall()}
 
-        for atm_id in ['ATM-001','ATM-002','ATM-003','ATM-004','ATM-005']:
+        for atm_id in branch_map.keys():
             branch = branch_map.get(atm_id, atm_id)
 
             # Base latency: 20-80ms normal

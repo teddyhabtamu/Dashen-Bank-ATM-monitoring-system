@@ -127,6 +127,14 @@ def main():
             conn = common.get_db()
             atms = common.refresh(conn)
             conn.close()
+            active_ids = {atm['atm_id'] for atm in atms}
+
+            # Remove threads for ATMs that are no longer active
+            for aid in list(registry.keys()):
+                if aid not in active_ids:
+                    print(f"[EJ] Removing inactive ATM {aid} from registry")
+                    del registry[aid]
+
             for atm in atms:
                 if atm['atm_id'] not in registry:
                     t = threading.Thread(target=run_atm, args=(atm,), daemon=True)
