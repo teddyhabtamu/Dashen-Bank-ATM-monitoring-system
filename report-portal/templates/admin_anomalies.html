@@ -415,8 +415,10 @@ function closeAckModal() {
 
 function confirmAcknowledge() {
   if (!pendingAck) return;
-  var payload = pendingAck.type === 'bulk' ? {ids: pendingAck.ids} : {id: pendingAck.ids[0]};
-  var url = pendingAck.type === 'bulk' ? '/admin/anomalies/bulk-acknowledge' : '/admin/anomalies/acknowledge';
+  var type = pendingAck.type;
+  var ids = pendingAck.ids;
+  var payload = type === 'bulk' ? {ids: ids} : {id: ids[0]};
+  var url = type === 'bulk' ? '/admin/anomalies/bulk-acknowledge' : '/admin/anomalies/acknowledge';
   closeAckModal();
   fetch(url, {
     method: 'POST',
@@ -426,7 +428,7 @@ function confirmAcknowledge() {
   .then(function(r){ return r.json(); })
   .then(function(d){
     if (d.success) {
-      showToast(pendingAck.type === 'bulk' ? d.updated + ' anomalies acknowledged.' : 'Anomaly #' + pendingAck.ids[0] + ' acknowledged.', 'success');
+      showToast(type === 'bulk' ? d.updated + ' anomalies acknowledged.' : 'Anomaly #' + ids[0] + ' acknowledged.', 'success');
       setTimeout(function(){ location.reload(); }, 800);
     } else {
       showToast(d.message || 'Failed to acknowledge.', 'error');

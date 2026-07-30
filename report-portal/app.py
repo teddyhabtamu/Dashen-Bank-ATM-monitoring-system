@@ -23,6 +23,7 @@ def create_app():
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
         PERMANENT_SESSION_LIFETIME=timedelta(hours=4),
+        TEMPLATES_AUTO_RELOAD=True,
         # Flask-WTF CSRF config (4 lines)
         WTF_CSRF_ENABLED=True,
         WTF_CSRF_TIME_LIMIT=None,
