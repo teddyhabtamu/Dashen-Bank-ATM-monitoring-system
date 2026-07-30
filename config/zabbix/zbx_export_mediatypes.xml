@@ -463,7 +463,78 @@ if (mode === 'recovery') {
     return 'RECOVERY LOGGED: Ticket #' + tid + ' set to PENDING (RCA required before closure)';
 
 } else { 
-    /* PROBLEM GENERATION BLOCK */
+    /* PROBLEM GENERATION BLOCK — Smart Routing */
+    var subject_lc = subject.toLowerCase();
+
+    /* Routing table: [keyword, category_id, group_id, sla_id]
+       First match wins; order matters — put specific patterns first. */
+    var routes = [
+        ['cash empty',             7, 3, 1],
+        ['cash out',               7, 3, 1],
+        ['cash low',               6, 3, 3],
+        ['cash jam',               8, 1, 2],
+        ['card reader error',      8, 1, 2],
+        ['card shutter failure',   8, 1, 2],
+        ['shutter failure',        8, 1, 2],
+        ['journal printer fault',  8, 1, 2],
+        ['journal printer',        8, 1, 2],
+        ['receipt printer fault',  8, 1, 2],
+        ['receipt printer',        8, 1, 2],
+        ['receipt paper out',      8, 1, 3],
+        ['receipt paper low',      8, 1, 3],
+        ['reject bin',             8, 1, 3],
+        ['printer fault',          8, 1, 2],
+        ['critical temperature',   8, 1, 2],
+        ['high temperature',       8, 1, 2],
+        ['camera 1 fault',        11, 1, 3],
+        ['camera 2 fault',        11, 1, 3],
+        ['camera fault',          11, 1, 3],
+        ['camera storage',        11, 1, 3],
+        ['network link down',      9, 4, 2],
+        ['network link',           9, 4, 2],
+        ['packet loss',            9, 4, 2],
+        ['high network latency',   9, 4, 2],
+        ['latency',                9, 4, 2],
+        ['main power failure',    12, 1, 2],
+        ['main power',            12, 1, 2],
+        ['power failure',         12, 1, 2],
+        ['ups battery critical',  12, 1, 2],
+        ['ups battery low',       12, 1, 3],
+        ['ups on battery',        12, 1, 3],
+        ['card capture',          14, 2, 1],
+        ['high card capture',     14, 2, 1],
+        ['cabinet door open',     14, 2, 1],
+        ['safe door open',        14, 2, 1],
+        ['safe door',             14, 2, 1],
+        ['intrusion alert',       14, 2, 1],
+        ['vibration alert',       14, 2, 1],
+        ['out of service',         5, 1, 1],
+        ['partial service',        5, 1, 3],
+        ['supervisor',             5, 1, 3],
+        ['maintenance mode',       5, 1, 3],
+        ['transaction failure',   10, 2, 2],
+        ['transaction anomaly',   10, 2, 2],
+        ['software error',        13, 1, 2],
+    ];
+
+    var cat_id = 10, grp_id = 2, sla_id = 3; // Default: Transaction Anomaly, Ops Center, Medium SLA
+    for (var i = 0; i &lt; routes.length; i++) {
+        if (subject_lc.indexOf(routes[i][0]) !== -1) {
+            cat_id = routes[i][1];
+            grp_id = routes[i][2];
+            sla_id = routes[i][3];
+            break;
+        }
+    }
+
+    /* Severity → priority / urgency / impact mapping
+       Zabbix: 0=NC, 1=Info, 2=Warning, 3=Average, 4=High, 5=Disaster */
+    var sev = parseInt(severity, 10) || 0;
+    var prior_map = {0:2, 1:2, 2:2, 3:3, 4:4, 5:5};
+    var urg_imp_map = {0:2, 1:2, 2:2, 3:3, 4:4, 5:4};
+    var priority = prior_map[sev] || 3;
+    var urg_imp = urg_imp_map[sev] || 3;
+
     var result = glpi_post('/Ticket', {
         input: {
             name: '[ZABBIX-' + event_id + '] ' + subject,
@@ -473,14 +544,14 @@ if (mode === 'recovery') {
                      '\nSeverity: ' + (severity_map[severity] || 'Unknown') +
                      '\nTime: ' + event_date +
                      '\nEvent ID: ' + event_id,
-            urgency: 3,
-            impact: 3,
-            priority: 3,
+            urgency: urg_imp,
+            impact: urg_imp,
+            priority: priority,
             type: 1,
             status: 1,
-            itilcategories_id: 5,
-            slas_id_ttr: 3,
-            _groups_id_assign: 2
+            itilcategories_id: cat_id,
+            slas_id_ttr: sla_id,
+            _groups_id_assign: grp_id
         }
     });
 
