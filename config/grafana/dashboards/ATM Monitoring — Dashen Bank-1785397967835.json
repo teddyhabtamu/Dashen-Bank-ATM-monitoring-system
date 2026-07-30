@@ -153,6 +153,7 @@
           }
         }
       ],
+      "transparent": true,
       "type": "text"
     },
     {
@@ -298,6 +299,7 @@
         }
       ],
       "title": "ATM Status Overview",
+      "transparent": true,
       "type": "alexanderzobnin-zabbix-triggers-panel"
     },
     {
@@ -414,6 +416,7 @@
         }
       ],
       "title": "Memory Available — ATM-001",
+      "transparent": true,
       "type": "gauge"
     },
     {
@@ -434,7 +437,7 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 0,
+            "fillOpacity": 25,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -452,7 +455,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -463,15 +466,12 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
-                "value": 0
-              },
-              {
-                "color": "green",
-                "value": 1
+                "value": 80
               }
             ]
           }
@@ -488,9 +488,9 @@
       "options": {
         "legend": {
           "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "displayMode": "hidden",
+          "placement": "right",
+          "showLegend": false
         },
         "tooltip": {
           "mode": "single",
@@ -552,6 +552,7 @@
         }
       ],
       "title": "ATMs Uptime",
+      "transparent": true,
       "type": "timeseries"
     },
     {
@@ -603,7 +604,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "green",
@@ -697,6 +699,7 @@
         }
       ],
       "title": "CPU Load — ATM-001",
+      "transparent": true,
       "type": "timeseries"
     },
     {
@@ -817,6 +820,7 @@
         }
       ],
       "title": "Cash Level — ATM-001",
+      "transparent": true,
       "type": "bargauge"
     },
     {
@@ -837,7 +841,7 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 0,
+            "fillOpacity": 25,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -855,7 +859,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -887,9 +891,9 @@
       "options": {
         "legend": {
           "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "displayMode": "hidden",
+          "placement": "right",
+          "showLegend": false
         },
         "tooltip": {
           "mode": "single",
@@ -951,6 +955,7 @@
         }
       ],
       "title": "ATM Network",
+      "transparent": true,
       "type": "timeseries"
     }
   ],
@@ -968,6 +973,6 @@
   "timezone": "",
   "title": "ATM Monitoring — Dashen Bank",
   "uid": "dfd9042c-7754-400b-88df-556e2b0c6e9f",
-  "version": 18,
+  "version": 10,
   "weekStart": ""
 }

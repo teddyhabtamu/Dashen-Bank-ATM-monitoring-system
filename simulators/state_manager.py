@@ -38,7 +38,7 @@ def get_db():
 
 def _fetch(port, oid, timeout=8, retries=2):
     """Fetch an OID value with a retry. A single slow-but-alive simulator
-    should not be reported as AGENT_DISCONNECTED."""
+    should not be reported as UNREACHABLE."""
     last = None
     for _ in range(retries + 1):
         try:
@@ -63,7 +63,7 @@ def determine_state(atm_id, port, vendor):
     try:
         status = _fetch(port, '1.1.0')   # reachability gate
     except Exception:
-        return 'AGENT_DISCONNECTED'
+        return 'UNREACHABLE'
 
     def metric(oid, default=0):
         try:

@@ -843,7 +843,8 @@ async function loadCharts() {
       'OUT_OF_CASH': chartColors.warning,
       'HARDWARE_FAULT': chartColors.danger,
       'OFFLINE': chartColors.muted,
-      'AGENT_DISCONNECTED': chartColors.muted,
+      'UNREACHABLE': chartColors.muted,
+      'INACTIVE': '#94A3B8',
       'UNKNOWN': '#CBD5E1',
     };
     const statusLabels = d.atm_status.labels;

@@ -505,6 +505,21 @@ def atm_save():
                 data['terminal_id'], data['vendor'], data['model'],
                 data['install_date'], data['status']
             ))
+            # Seed initial state; inactive ATMs get a dedicated state
+            if data['status'] == 'inactive':
+                cur.execute("""
+                    INSERT INTO atm_current_state (atm_id, state, last_seen, updated_at)
+                    VALUES (%s, 'INACTIVE', NOW(), NOW())
+                    ON CONFLICT (atm_id) DO UPDATE SET state = 'INACTIVE', updated_at = NOW()
+                """, (data['atm_id'],))
+            else:
+                cur.execute("""
+                    INSERT INTO atm_current_state (atm_id, state, last_seen, updated_at)
+                    VALUES (%s, 'UNKNOWN', NOW(), NOW())
+                    ON CONFLICT (atm_id) DO UPDATE
+                        SET state = CASE WHEN atm_current_state.state = 'INACTIVE' THEN 'UNKNOWN' ELSE atm_current_state.state END,
+                            updated_at = NOW()
+                """, (data['atm_id'],))
             conn.commit()
             # Auto-allocate a simulator port so the new ATM behaves like the others
             assign_sim_port(data['atm_id'], data['vendor'])
@@ -545,6 +560,12 @@ def atm_delete():
     with get_db() as conn:
         cur = conn.cursor()
         try:
+            cur.execute("DELETE FROM atm_current_state WHERE atm_id = %s", (atm_id,))
+            cur.execute("DELETE FROM atm_transactions WHERE atm_id = %s", (atm_id,))
+            cur.execute("DELETE FROM atm_anomalies WHERE atm_id = %s", (atm_id,))
+            cur.execute("DELETE FROM atm_network_correlation WHERE atm_id = %s", (atm_id,))
+            cur.execute("DELETE FROM atm_network_events WHERE atm_id = %s", (atm_id,))
+            cur.execute("DELETE FROM atm_network_metrics WHERE atm_id = %s", (atm_id,))
             cur.execute("DELETE FROM atm_locations WHERE atm_id = %s", (atm_id,))
             if cur.rowcount == 0:
                 if is_ajax:
@@ -584,6 +605,12 @@ def atm_bulk_delete():
         cur = conn.cursor()
         try:
             placeholders = ','.join(['%s'] * len(ids))
+            cur.execute(f"DELETE FROM atm_current_state WHERE atm_id IN ({placeholders})", ids)
+            cur.execute(f"DELETE FROM atm_transactions WHERE atm_id IN ({placeholders})", ids)
+            cur.execute(f"DELETE FROM atm_anomalies WHERE atm_id IN ({placeholders})", ids)
+            cur.execute(f"DELETE FROM atm_network_correlation WHERE atm_id IN ({placeholders})", ids)
+            cur.execute(f"DELETE FROM atm_network_events WHERE atm_id IN ({placeholders})", ids)
+            cur.execute(f"DELETE FROM atm_network_metrics WHERE atm_id IN ({placeholders})", ids)
             cur.execute(f"DELETE FROM atm_locations WHERE atm_id IN ({placeholders})", ids)
             deleted = cur.rowcount
             conn.commit()

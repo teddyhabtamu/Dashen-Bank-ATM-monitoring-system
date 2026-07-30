@@ -33,14 +33,14 @@
     },
     {
       "type": "panel",
-      "id": "barchart",
-      "name": "Bar chart",
+      "id": "bargauge",
+      "name": "Bar gauge",
       "version": ""
     },
     {
       "type": "panel",
-      "id": "bargauge",
-      "name": "Bar gauge",
+      "id": "dashlist",
+      "name": "Dashboard list",
       "version": ""
     },
     {
@@ -60,6 +60,12 @@
       "id": "grafana-postgresql-datasource",
       "name": "PostgreSQL",
       "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "piechart",
+      "name": "Pie chart",
+      "version": ""
     },
     {
       "type": "panel",
@@ -108,20 +114,28 @@
         "type": "grafana",
         "uid": "-- Grafana --"
       },
-      "id": 24,
-      "options": {
-        "mode": "markdown",
-        "content": "[Export fleet status to CSV](/report/availability/csv?days=1)  |  [Export fault report to CSV](/report/error/csv?days=7)  |  [Open EJ Search](/ej-search)"
-      },
-      "pluginVersion": "10.2.6",
-      "title": "Quick Links",
-      "type": "text",
       "gridPos": {
-        "h": 2,
+        "h": 6,
         "w": 24,
         "x": 0,
         "y": 0
-      }
+      },
+      "id": 24,
+      "options": {
+        "includeVars": false,
+        "keepTime": false,
+        "maxItems": 10,
+        "query": "",
+        "showHeadings": true,
+        "showRecentlyViewed": false,
+        "showSearch": false,
+        "showStarred": true,
+        "tags": []
+      },
+      "pluginVersion": "10.2.6",
+      "title": "Quick Links",
+      "transparent": true,
+      "type": "dashlist"
     },
     {
       "collapsed": false,
@@ -129,12 +143,12 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 2
+        "y": 6
       },
       "id": 12,
+      "panels": [],
       "title": "ATM State Overview (NetXMS layout)",
-      "type": "row",
-      "panels": []
+      "type": "row"
     },
     {
       "datasource": {
@@ -163,11 +177,9 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 3
+        "y": 7
       },
       "id": 13,
-      "title": "In Service",
-      "type": "stat",
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -213,7 +225,10 @@
             "limit": 50
           }
         }
-      ]
+      ],
+      "title": "In Service",
+      "transparent": true,
+      "type": "stat"
     },
     {
       "datasource": {
@@ -242,11 +257,9 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 3
+        "y": 7
       },
       "id": 14,
-      "title": "Out of Service",
-      "type": "stat",
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -292,7 +305,10 @@
             "limit": 50
           }
         }
-      ]
+      ],
+      "title": "Out of Service",
+      "transparent": true,
+      "type": "stat"
     },
     {
       "datasource": {
@@ -321,11 +337,9 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 3
+        "y": 7
       },
       "id": 15,
-      "title": "Agent Disconnected",
-      "type": "stat",
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -351,7 +365,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_current_state WHERE state='AGENT_DISCONNECTED'",
+          "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_current_state WHERE state='INACTIVE'",
           "refId": "A",
           "sql": {
             "columns": [
@@ -371,7 +385,10 @@
             "limit": 50
           }
         }
-      ]
+      ],
+      "title": "Retired ATMs",
+      "transparent": true,
+      "type": "stat"
     },
     {
       "datasource": {
@@ -400,11 +417,9 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 3
+        "y": 7
       },
       "id": 16,
-      "title": "In Supervisor",
-      "type": "stat",
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -450,7 +465,10 @@
             "limit": 50
           }
         }
-      ]
+      ],
+      "title": "In Supervisor",
+      "transparent": true,
+      "type": "stat"
     },
     {
       "datasource": {
@@ -479,11 +497,9 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 3
+        "y": 7
       },
       "id": 17,
-      "title": "Hardware Faults",
-      "type": "stat",
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -529,7 +545,10 @@
             "limit": 50
           }
         }
-      ]
+      ],
+      "title": "Hardware Faults",
+      "transparent": true,
+      "type": "stat"
     },
     {
       "datasource": {
@@ -558,11 +577,9 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 3
+        "y": 7
       },
       "id": 18,
-      "title": "Out of Cash",
-      "type": "stat",
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -608,7 +625,10 @@
             "limit": 50
           }
         }
-      ]
+      ],
+      "title": "Out of Cash",
+      "transparent": true,
+      "type": "stat"
     },
     {
       "collapsed": false,
@@ -616,12 +636,12 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 7
+        "y": 11
       },
       "id": 19,
+      "panels": [],
       "title": "State Distribution & Exceptions",
-      "type": "row",
-      "panels": []
+      "type": "row"
     },
     {
       "datasource": {
@@ -648,16 +668,19 @@
         "h": 9,
         "w": 8,
         "x": 0,
-        "y": 8
+        "y": 12
       },
       "id": 20,
-      "title": "State Distribution",
-      "type": "piechart",
       "options": {
+        "displayLabels": [
+          "percent"
+        ],
         "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
+          "calcs": [],
+          "displayMode": "hidden",
+          "placement": "right",
+          "showLegend": false,
+          "values": []
         },
         "pieType": "donut",
         "reduceOptions": {
@@ -665,17 +688,12 @@
             "lastNotNull"
           ],
           "fields": "",
-          "values": false
+          "values": true
         },
         "tooltip": {
           "mode": "single",
           "sort": "none"
-        },
-        "displayLabels": [
-          "name",
-          "value",
-          "percent"
-        ]
+        }
       },
       "targets": [
         {
@@ -686,7 +704,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT s.state AS \"State\", COALESCE(c.cnt,0) AS \"Count\"\nFROM (VALUES ('IN_SERVICE'),('OUT_OF_SERVICE'),('AGENT_DISCONNECTED'),\n             ('IN_SUPERVISOR'),('HARDWARE_FAULT'),('OUT_OF_CASH'),('OFFLINE')) s(state)\nLEFT JOIN (SELECT state, COUNT(*) AS cnt FROM atm_current_state GROUP BY state) c\n  ON c.state = s.state\nORDER BY \"Count\" DESC",
+          "rawSql": "SELECT s.state AS \"State\", COALESCE(c.cnt,0) AS \"Count\"\nFROM (VALUES ('IN_SERVICE'),('OUT_OF_SERVICE'),('UNREACHABLE'),\n             ('IN_SUPERVISOR'),('HARDWARE_FAULT'),('OUT_OF_CASH'),('OFFLINE'),\n             ('INACTIVE'),('UNKNOWN')) s(state)\nLEFT JOIN (SELECT state, COUNT(*) AS cnt FROM atm_current_state GROUP BY state) c\n  ON c.state = s.state\nORDER BY \"Count\" DESC",
           "refId": "A",
           "sql": {
             "columns": [
@@ -706,7 +724,10 @@
             "limit": 50
           }
         }
-      ]
+      ],
+      "title": "State Distribution",
+      "transparent": true,
+      "type": "piechart"
     },
     {
       "datasource": {
@@ -731,7 +752,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -746,15 +768,14 @@
         "h": 9,
         "w": 5,
         "x": 8,
-        "y": 8
+        "y": 12
       },
       "id": 21,
-      "title": "Out of Service",
-      "type": "table",
       "options": {
         "cellHeight": "sm",
         "footer": {
           "countRows": false,
+          "enablePagination": true,
           "fields": "",
           "reducer": [
             "sum"
@@ -794,7 +815,10 @@
             "limit": 50
           }
         }
-      ]
+      ],
+      "title": "Out of Service",
+      "transparent": true,
+      "type": "table"
     },
     {
       "datasource": {
@@ -819,7 +843,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -834,11 +859,9 @@
         "h": 9,
         "w": 5,
         "x": 13,
-        "y": 8
+        "y": 12
       },
       "id": 22,
-      "title": "In Supervisor",
-      "type": "table",
       "options": {
         "cellHeight": "sm",
         "footer": {
@@ -882,7 +905,10 @@
             "limit": 50
           }
         }
-      ]
+      ],
+      "title": "In Supervisor",
+      "transparent": true,
+      "type": "table"
     },
     {
       "datasource": {
@@ -907,7 +933,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -922,11 +949,9 @@
         "h": 9,
         "w": 6,
         "x": 18,
-        "y": 8
+        "y": 12
       },
       "id": 23,
-      "title": "Agent Disconnected",
-      "type": "table",
       "options": {
         "cellHeight": "sm",
         "footer": {
@@ -950,7 +975,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT l.atm_name AS \"Name\", l.branch AS \"Alias\", l.atm_id AS \"Terminal ID\", s.state_changed_at AS \"Since\", EXTRACT(EPOCH FROM (NOW()-s.state_changed_at))/60 AS \"Minutes Down\" FROM atm_current_state s JOIN atm_locations l ON s.atm_id=l.atm_id WHERE s.state='AGENT_DISCONNECTED' ORDER BY s.state_changed_at ASC",
+          "rawSql": "SELECT l.atm_name AS \"Name\", l.branch AS \"Alias\", l.atm_id AS \"Terminal ID\", 'INACTIVE' AS \"Status\" FROM atm_current_state s JOIN atm_locations l ON s.atm_id=l.atm_id WHERE s.state='INACTIVE' ORDER BY l.atm_id",
           "refId": "A",
           "sql": {
             "columns": [
@@ -970,7 +995,10 @@
             "limit": 50
           }
         }
-      ]
+      ],
+      "title": "Retired ATMs",
+      "transparent": true,
+      "type": "table"
     },
     {
       "datasource": {
@@ -994,8 +1022,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1007,10 +1034,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
+        "h": 22,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 21
       },
       "id": 11,
       "options": {
@@ -1114,7 +1141,7 @@
           }
         }
       ],
-      "title": "ATM Network \u2014 Ethiopia",
+      "title": "ATM Network — Ethiopia",
       "type": "geomap"
     },
     {
@@ -1132,8 +1159,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "blue",
@@ -1148,7 +1174,7 @@
         "h": 3,
         "w": 4,
         "x": 0,
-        "y": 24
+        "y": 43
       },
       "id": 1,
       "options": {
@@ -1176,7 +1202,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_transactions",
+          "rawSql": "SELECT COUNT(DISTINCT atm_id) as value FROM atm_locations ",
           "refId": "A",
           "sql": {
             "columns": [
@@ -1215,8 +1241,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           }
@@ -1227,7 +1252,7 @@
         "h": 3,
         "w": 5,
         "x": 4,
-        "y": 24
+        "y": 43
       },
       "id": 2,
       "options": {
@@ -1294,8 +1319,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
+                "color": "red"
               },
               {
                 "color": "yellow",
@@ -1314,7 +1338,7 @@
         "h": 3,
         "w": 5,
         "x": 9,
-        "y": 24
+        "y": 43
       },
       "id": 3,
       "options": {
@@ -1381,8 +1405,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "purple",
@@ -1397,7 +1420,7 @@
         "h": 3,
         "w": 5,
         "x": 14,
-        "y": 24
+        "y": 43
       },
       "id": 5,
       "options": {
@@ -1464,8 +1487,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1480,7 +1502,7 @@
         "h": 3,
         "w": 5,
         "x": 19,
-        "y": 24
+        "y": 43
       },
       "id": 4,
       "options": {
@@ -1541,7 +1563,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 27
+        "y": 46
       },
       "id": 6,
       "options": {
@@ -1675,6 +1697,7 @@
         }
       ],
       "title": "Active ATM Alerts",
+      "transparent": true,
       "type": "alexanderzobnin-zabbix-triggers-panel"
     },
     {
@@ -1684,29 +1707,12 @@
       },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
             },
-            "lineWidth": 1,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "inspect": false
           },
           "mappings": [],
           "thresholds": {
@@ -1728,30 +1734,22 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 37
+        "y": 56
       },
       "id": 7,
       "options": {
-        "barRadius": 0,
-        "barWidth": 0.97,
-        "fullHighlight": false,
-        "groupWidth": 0.7,
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
         },
-        "orientation": "auto",
-        "showValue": "auto",
-        "stacking": "none",
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        },
-        "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0
+        "showHeader": true
       },
+      "pluginVersion": "10.2.6",
       "targets": [
         {
           "datasource": {
@@ -1782,8 +1780,9 @@
           }
         }
       ],
-      "title": "Transaction Volume by ATM \u2014 Last 24h",
-      "type": "barchart"
+      "title": "Transaction Volume by ATM — Last 24h",
+      "transparent": true,
+      "type": "table"
     },
     {
       "datasource": {
@@ -1798,7 +1797,7 @@
           "custom": {
             "align": "auto",
             "cellOptions": {
-              "type": "auto"
+              "type": "color-text"
             },
             "filterable": true,
             "inspect": false
@@ -1833,7 +1832,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 43
+        "y": 62
       },
       "id": 8,
       "options": {
@@ -1881,6 +1880,7 @@
         }
       ],
       "title": "Live Transaction Feed",
+      "transparent": true,
       "type": "table"
     },
     {
@@ -1945,7 +1945,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 51
+        "y": 70
       },
       "id": 9,
       "options": {
@@ -1990,7 +1990,7 @@
           }
         }
       ],
-      "title": "Transaction Rate \u2014 Last 24h",
+      "title": "Transaction Rate — Last 24h",
       "type": "timeseries"
     },
     {
@@ -2001,7 +2001,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "continuous-GrYlRd"
           },
           "mappings": [],
           "thresholds": {
@@ -2023,11 +2023,11 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 77
       },
       "id": 10,
       "options": {
-        "displayMode": "gradient",
+        "displayMode": "lcd",
         "maxVizHeight": 300,
         "minVizHeight": 16,
         "minVizWidth": 8,
@@ -2054,7 +2054,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\r\n  atm_id as \"ATM\",\r\n  COALESCE(SUM(CASE WHEN txn_type='WITHDRAWAL' AND status='APPROVED'\r\n    THEN amount ELSE 0 END), 0) as \"Cash Dispensed Today (ETB)\"\r\nFROM atm_transactions\r\nWHERE recorded_at >= CURRENT_DATE\r\nGROUP BY atm_id\r\nORDER BY atm_id",
+          "rawSql": "SELECT\r\n  COALESCE(SUM(amount), 0) as total_dispensed\r\nFROM atm_transactions\r\nWHERE\r\n  status = 'APPROVED'\r\n  AND txn_type = 'WITHDRAWAL'\r\n  AND recorded_at >= CURRENT_DATE",
           "refId": "A",
           "sql": {
             "columns": [
@@ -2075,7 +2075,7 @@
           }
         }
       ],
-      "title": "Cash Dispensed Today by ATM",
+      "title": "Cash Dispensed Today by all ATM",
       "type": "bargauge"
     }
   ],
@@ -2098,8 +2098,8 @@
     ]
   },
   "timezone": "Africa/Addis_Ababa",
-  "title": "ATM Operations Centre \u2014 Dashen Bank",
+  "title": "ATM Operations Centre — Dashen Bank",
   "uid": "c8749efa-b23c-4522-ba19-4c972432c92f",
-  "version": 11,
+  "version": 15,
   "weekStart": ""
 }

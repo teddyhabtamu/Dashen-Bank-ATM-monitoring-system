@@ -52,7 +52,7 @@
       }
     ]
   },
-  "editable": false,
+  "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
   "id": null,
@@ -109,6 +109,7 @@
           "timeField": "@timestamp"
         }
       ],
+      "transparent": true,
       "type": "text"
     },
     {
@@ -119,12 +120,12 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "continuous-YlBl"
           },
           "custom": {
             "align": "auto",
             "cellOptions": {
-              "type": "auto"
+              "type": "color-background"
             },
             "filterable": true,
             "inspect": false
@@ -147,7 +148,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 16,
+        "h": 13,
         "w": 24,
         "x": 0,
         "y": 4
@@ -190,6 +191,7 @@
         }
       ],
       "title": "Electronic Journal Entries",
+      "transparent": true,
       "type": "table"
     }
   ],
@@ -197,7 +199,19 @@
   "schemaVersion": 39,
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "datasource": {
+          "type": "elasticsearch",
+          "uid": "b8ca9fc9-bbe2-4843-89b5-519608afa217"
+        },
+        "filters": [],
+        "hide": 0,
+        "name": "Filters",
+        "skipUrlSync": false,
+        "type": "adhoc"
+      }
+    ]
   },
   "time": {
     "from": "now-30d",
@@ -207,6 +221,6 @@
   "timezone": "",
   "title": "Electronic Journal — Dispute Investigation",
   "uid": "cab45a52-d787-412a-b7a1-51e6f73cede2",
-  "version": 5,
+  "version": 4,
   "weekStart": ""
 }

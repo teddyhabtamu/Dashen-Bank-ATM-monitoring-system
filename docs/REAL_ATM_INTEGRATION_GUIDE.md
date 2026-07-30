@@ -445,7 +445,7 @@ docker exec -it zabbix-db psql -U zabbix -c \
 - `OUT_OF_CASH` — ATM has no cash
 - `HARDWARE_FAULT` — ATM has a hardware fault
 - `OFFLINE` — ATM is not reachable
-- `AGENT_DISCONNECTED` — ATM's SNMP agent is not responding
+- `UNREACHABLE` — ATM's SNMP agent is not responding
 - `IN_SUPERVISOR` — ATM is in supervisor mode
 - `UNKNOWN` — State cannot be determined
 

@@ -115,7 +115,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<style>\n  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap');\n\n  * { margin: 0; padding: 0; box-sizing: border-box; }\n\n  body {\n    background: transparent;\n    font-family: 'Source Sans 3', sans-serif;\n    overflow: hidden;\n  }\n\n  .header {\n    width: 100%;\n    height: 72px;\n    background: linear-gradient(135deg, #0f0a28 0%, #1a0d44 40%, #160a3d 70%, #090613 100%);\n    display: flex;\n    align-items: center;\n    justify-content: space-between;\n    padding: 0 20px;\n    position: relative;\n    overflow: hidden;\n    border-bottom: 1px solid rgba(130, 80, 255, 0.25);\n  }\n\n  .header::before {\n    content: '';\n    position: absolute;\n    inset: 0;\n    background-image: repeating-linear-gradient(\n      -45deg,\n      transparent,\n      transparent 24px,\n      rgba(120, 60, 255, 0.03) 24px,\n      rgba(120, 60, 255, 0.03) 25px\n    );\n  }\n\n  .header::after {\n    content: '';\n    position: absolute;\n    top: 0; left: 0; right: 0;\n    height: 2px;\n    background: linear-gradient(90deg, transparent, #a855f7, #e0b0ff, #a855f7, transparent);\n    animation: glowSweep 4s ease-in-out infinite;\n  }\n\n  @keyframes glowSweep {\n    0%, 100% { opacity: 0.5; }\n    50% { opacity: 1; }\n  }\n\n  /* \u2500\u2500 LEFT \u2500\u2500 */\n  .left {\n    display: flex;\n    align-items: center;\n    gap: 10px;\n    z-index: 1;\n    flex-shrink: 0;\n  }\n\n  .logo-wrap {\n    width: 40px;\n    height: 40px;\n    border-radius: 8px;\n    background: rgba(255,255,255,0.05);\n    border: 1px solid rgba(168, 85, 247, 0.25);\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    overflow: hidden;\n    flex-shrink: 0;\n  }\n\n  .logo-wrap img {\n    width: 30px;\n    height: 30px;\n    object-fit: contain;\n  }\n\n  .bank-name { display: flex; flex-direction: column; gap: 1px; }\n\n  .bank-name .name {\n    font-family: 'Rajdhani', sans-serif;\n    font-size: 16px;\n    font-weight: 700;\n    color: #ffffff;\n    letter-spacing: 0.08em;\n    text-transform: uppercase;\n    line-height: 1;\n    white-space: nowrap;\n  }\n\n  .bank-name .sub {\n    font-size: 9px;\n    font-weight: 300;\n    color: rgba(255,255,255,0.35);\n    letter-spacing: 0.18em;\n    text-transform: uppercase;\n    white-space: nowrap;\n  }\n\n  /* \u2500\u2500 CENTER \u2500\u2500 */\n  .center {\n    position: absolute;\n    left: 50%;\n    transform: translateX(-50%);\n    display: flex;\n    flex-direction: column;\n    align-items: center;\n    gap: 3px;\n    z-index: 1;\n    pointer-events: none;\n  }\n\n  .dash-title {\n    font-family: 'Rajdhani', sans-serif;\n    font-weight: 700;\n    color: #ffffff;\n    letter-spacing: 0.1em;\n    text-transform: uppercase;\n    text-shadow: 0 0 30px rgba(168, 85, 247, 0.5);\n    white-space: nowrap;\n    font-size: clamp(13px, 2.2vw, 22px);\n  }\n\n  .dash-subtitle {\n    display: flex;\n    align-items: center;\n    gap: 6px;\n  }\n\n  .ticker {\n    display: flex;\n    align-items: center;\n    gap: 3px;\n  }\n\n  .ticker .bar {\n    width: 3px;\n    border-radius: 2px;\n    background: #a855f7;\n    animation: barAnim 1.2s ease-in-out infinite;\n  }\n  .ticker .bar:nth-child(1) { height: 7px; animation-delay: 0s; }\n  .ticker .bar:nth-child(2) { height: 12px; animation-delay: 0.15s; }\n  .ticker .bar:nth-child(3) { height: 9px; animation-delay: 0.3s; }\n  .ticker .bar:nth-child(4) { height: 14px; animation-delay: 0.45s; }\n  .ticker .bar:nth-child(5) { height: 7px; animation-delay: 0.6s; }\n\n  @keyframes barAnim {\n    0%, 100% { opacity: 0.4; transform: scaleY(0.7); }\n    50% { opacity: 1; transform: scaleY(1); }\n  }\n\n  .dash-subtitle span {\n    font-size: clamp(8px, 1.1vw, 10px);\n    font-weight: 600;\n    color: #c084fc;\n    letter-spacing: 0.2em;\n    text-transform: uppercase;\n    white-space: nowrap;\n  }\n\n  /* \u2500\u2500 RIGHT \u2500\u2500 */\n  .right {\n    display: flex;\n    align-items: center;\n    gap: 14px;\n    z-index: 1;\n    flex-shrink: 0;\n  }\n\n  .stat {\n    display: flex;\n    flex-direction: column;\n    align-items: flex-end;\n    gap: 1px;\n  }\n\n  .stat .label {\n    font-size: 8px;\n    font-weight: 600;\n    color: rgba(255,255,255,0.35);\n    letter-spacing: 0.15em;\n    text-transform: uppercase;\n    white-space: nowrap;\n  }\n\n  .stat .value {\n    font-family: 'Rajdhani', sans-serif;\n    font-size: 14px;\n    font-weight: 600;\n    color: #c084fc;\n    letter-spacing: 0.04em;\n    white-space: nowrap;\n  }\n\n  .divider {\n    width: 1px;\n    height: 26px;\n    background: rgba(255,255,255,0.1);\n    flex-shrink: 0;\n  }\n\n  #clock {\n    font-family: 'Rajdhani', sans-serif;\n    font-size: 14px;\n    font-weight: 600;\n    color: rgba(255,255,255,0.65);\n    letter-spacing: 0.04em;\n  }\n\n  /* \u2500\u2500 INTEGRATION BUTTON \u2500\u2500 */\n  .generate-report-btn {\n    display: flex;\n    align-items: center;\n    gap: 6px;\n    background: rgba(168, 85, 247, 0.12);\n    border: 1px solid rgba(168, 85, 247, 0.4);\n    color: #e9d5ff;\n    padding: 6px 12px;\n    border-radius: 6px;\n    font-family: 'Rajdhani', sans-serif;\n    font-size: 12px;\n    font-weight: 700;\n    text-transform: uppercase;\n    letter-spacing: 0.05em;\n    cursor: pointer;\n    transition: all 0.25s ease;\n    outline: none;\n  }\n\n  .generate-report-btn:hover {\n    background: rgba(168, 85, 247, 0.25);\n    border-color: rgba(192, 132, 252, 0.8);\n    color: #ffffff;\n    box-shadow: 0 0 12px rgba(168, 85, 247, 0.35);\n    transform: translateY(-1px);\n  }\n\n  /* Corner accents */\n  .corner { position: absolute; width: 14px; height: 14px; z-index: 2; }\n  .corner.tl { top: 5px; left: 5px; border-top: 1.5px solid rgba(168,85,247,0.5); border-left: 1.5px solid rgba(168,85,247,0.5); }\n  .corner.tr { top: 5px; right: 5px; border-top: 1.5px solid rgba(168,85,247,0.5); border-right: 1.5px solid rgba(168,85,247,0.5); }\n  .corner.bl { bottom: 5px; left: 5px; border-bottom: 1.5px solid rgba(168,85,247,0.5); border-left: 1.5px solid rgba(168,85,247,0.5); }\n  .corner.br { bottom: 5px; right: 5px; border-bottom: 1.5px solid rgba(168,85,247,0.5); border-right: 1.5px solid rgba(168,85,247,0.5); }\n\n  /* \u2500\u2500 RESPONSIVE BREAKPOINTS \u2500\u2500 */\n  @media (max-width: 720px) {\n    .header { padding: 0 14px; }\n    .bank-name .sub { display: none; }\n    .stat:first-child { display: none; }\n    .divider { display: none; }\n    .logo-wrap { width: 36px; height: 36px; }\n    .logo-wrap img { width: 26px; height: 26px; }\n    .ticker:last-child { display: none; }\n  }\n\n  @media (max-width: 480px) {\n    .header { height: auto; min-height: 60px; flex-wrap: wrap; padding: 8px 12px; gap: 4px; }\n    .center { position: static; transform: none; order: 3; width: 100%; align-items: flex-start; padding: 2px 0 4px; border-top: 1px solid rgba(168,85,247,0.1); margin-top: 2px; gap: 2px; }\n    .dash-title { font-size: 13px; letter-spacing: 0.06em; }\n    .dash-subtitle span { font-size: 8px; }\n    .ticker { display: none; }\n    .bank-name .name { font-size: 13px; }\n    .right { gap: 8px; order: 2; }\n    #clock { font-size: 13px; }\n    .stat .label { display: none; }\n    .corner { display: none; }\n    .generate-report-btn { padding: 4px 8px; font-size: 11px; }\n  }\n\n  @media (max-width: 360px) {\n    .dash-subtitle { display: none; }\n    .stat { display: none; } /* Hide stats to keep the button visible */\n  }\n</style>\n</head>\n<body>\n<div class=\"header\">\n  <div class=\"corner tl\"></div>\n  <div class=\"corner tr\"></div>\n  <div class=\"corner bl\"></div>\n  <div class=\"corner br\"></div>\n\n  <div class=\"left\">\n    <div class=\"logo-wrap\">\n      <img src=\"https://cdn.brandfetch.io/idNZ7JoLsG/w/150/h/149/theme/dark/logo.png?c=1dxbfHSJFAPEGdCLU4o5B\" alt=\"Dashen Bank\" onerror=\"this.style.display='none'\">\n    </div>\n    <div class=\"bank-name\">\n      <span class=\"name\">Dashen Bank</span>\n      <span class=\"sub\">S.C. \u2014 Est. 1995</span>\n    </div>\n  </div>\n\n  <div class=\"center\">\n    <div class=\"dash-title\">ATM Transaction Monitoring</div>\n    <div class=\"dash-subtitle\">\n      <div class=\"ticker\">\n        <div class=\"bar\"></div><div class=\"bar\"></div><div class=\"bar\"></div>\n        <div class=\"bar\"></div><div class=\"bar\"></div>\n      </div>\n      <span>Real-Time Feed \u2014 All Branches</span>\n      <div class=\"ticker\">\n        <div class=\"bar\"></div><div class=\"bar\"></div><div class=\"bar\"></div>\n        <div class=\"bar\"></div><div class=\"bar\"></div>\n      </div>\n    </div>\n  </div>\n\n  <div class=\"right\">\n    <button onclick=\"window.open('http://' + window.location.hostname + ':8888', '_blank')\" class=\"generate-report-btn\">\n      <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\">\n        <path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path>\n        <path d=\"M14 2v6h6\"></path>\n        <path d=\"M16 13H8\"></path>\n        <path d=\"M16 17H8\"></path>\n        <path d=\"M10 9H8\"></path>\n      </svg>\n      <span>Generate Report</span>\n    </button>\n\n    <div class=\"stat\">\n      <span class=\"label\">Active ATMs</span>\n      <span class=\"value\">5 Branches</span>\n    </div>\n    <div class=\"divider\"></div>\n    <div class=\"stat\">\n      <span class=\"label\">Local Time</span>\n      <span class=\"value\" id=\"clock\">--:--:--</span>\n    </div>\n  </div>\n</div>\n\n<script>\n  function updateClock() {\n    const now = new Date();\n    document.getElementById('clock').textContent =\n      now.toLocaleTimeString('en-ET', { hour12: false });\n  }\n  updateClock();\n  setInterval(updateClock, 1000);\n</script>\n</body>\n</html>",
+        "content": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<style>\n  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap');\n\n  * { margin: 0; padding: 0; box-sizing: border-box; }\n\n  body {\n    background: transparent;\n    font-family: 'Source Sans 3', sans-serif;\n    overflow: hidden;\n  }\n\n  .header {\n    width: 100%;\n    height: 72px;\n    background: linear-gradient(135deg, #0f0a28 0%, #1a0d44 40%, #160a3d 70%, #090613 100%);\n    display: flex;\n    align-items: center;\n    justify-content: space-between;\n    padding: 0 20px;\n    position: relative;\n    overflow: hidden;\n    border-bottom: 1px solid rgba(130, 80, 255, 0.25);\n  }\n\n  .header::before {\n    content: '';\n    position: absolute;\n    inset: 0;\n    background-image: repeating-linear-gradient(\n      -45deg,\n      transparent,\n      transparent 24px,\n      rgba(120, 60, 255, 0.03) 24px,\n      rgba(120, 60, 255, 0.03) 25px\n    );\n  }\n\n  .header::after {\n    content: '';\n    position: absolute;\n    top: 0; left: 0; right: 0;\n    height: 2px;\n    background: linear-gradient(90deg, transparent, #a855f7, #e0b0ff, #a855f7, transparent);\n    animation: glowSweep 4s ease-in-out infinite;\n  }\n\n  @keyframes glowSweep {\n    0%, 100% { opacity: 0.5; }\n    50% { opacity: 1; }\n  }\n\n  /* ── LEFT ── */\n  .left {\n    display: flex;\n    align-items: center;\n    gap: 10px;\n    z-index: 1;\n    flex-shrink: 0;\n  }\n\n  .logo-wrap {\n    width: 40px;\n    height: 40px;\n    border-radius: 8px;\n    background: rgba(255,255,255,0.05);\n    border: 1px solid rgba(168, 85, 247, 0.25);\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    overflow: hidden;\n    flex-shrink: 0;\n  }\n\n  .logo-wrap img {\n    width: 30px;\n    height: 30px;\n    object-fit: contain;\n  }\n\n  .bank-name { display: flex; flex-direction: column; gap: 1px; }\n\n  .bank-name .name {\n    font-family: 'Rajdhani', sans-serif;\n    font-size: 16px;\n    font-weight: 700;\n    color: #ffffff;\n    letter-spacing: 0.08em;\n    text-transform: uppercase;\n    line-height: 1;\n    white-space: nowrap;\n  }\n\n  .bank-name .sub {\n    font-size: 9px;\n    font-weight: 300;\n    color: rgba(255,255,255,0.35);\n    letter-spacing: 0.18em;\n    text-transform: uppercase;\n    white-space: nowrap;\n  }\n\n  /* ── CENTER ── */\n  .center {\n    position: absolute;\n    left: 50%;\n    transform: translateX(-50%);\n    display: flex;\n    flex-direction: column;\n    align-items: center;\n    gap: 3px;\n    z-index: 1;\n    pointer-events: none;\n  }\n\n  .dash-title {\n    font-family: 'Rajdhani', sans-serif;\n    font-weight: 700;\n    color: #ffffff;\n    letter-spacing: 0.1em;\n    text-transform: uppercase;\n    text-shadow: 0 0 30px rgba(168, 85, 247, 0.5);\n    white-space: nowrap;\n    font-size: clamp(13px, 2.2vw, 22px);\n  }\n\n  .dash-subtitle {\n    display: flex;\n    align-items: center;\n    gap: 6px;\n  }\n\n  .ticker {\n    display: flex;\n    align-items: center;\n    gap: 3px;\n  }\n\n  .ticker .bar {\n    width: 3px;\n    border-radius: 2px;\n    background: #a855f7;\n    animation: barAnim 1.2s ease-in-out infinite;\n  }\n  .ticker .bar:nth-child(1) { height: 7px; animation-delay: 0s; }\n  .ticker .bar:nth-child(2) { height: 12px; animation-delay: 0.15s; }\n  .ticker .bar:nth-child(3) { height: 9px; animation-delay: 0.3s; }\n  .ticker .bar:nth-child(4) { height: 14px; animation-delay: 0.45s; }\n  .ticker .bar:nth-child(5) { height: 7px; animation-delay: 0.6s; }\n\n  @keyframes barAnim {\n    0%, 100% { opacity: 0.4; transform: scaleY(0.7); }\n    50% { opacity: 1; transform: scaleY(1); }\n  }\n\n  .dash-subtitle span {\n    font-size: clamp(8px, 1.1vw, 10px);\n    font-weight: 600;\n    color: #c084fc;\n    letter-spacing: 0.2em;\n    text-transform: uppercase;\n    white-space: nowrap;\n  }\n\n  /* ── RIGHT ── */\n  .right {\n    display: flex;\n    align-items: center;\n    gap: 14px;\n    z-index: 1;\n    flex-shrink: 0;\n  }\n\n  .stat {\n    display: flex;\n    flex-direction: column;\n    align-items: flex-end;\n    gap: 1px;\n  }\n\n  .stat .label {\n    font-size: 8px;\n    font-weight: 600;\n    color: rgba(255,255,255,0.35);\n    letter-spacing: 0.15em;\n    text-transform: uppercase;\n    white-space: nowrap;\n  }\n\n  .stat .value {\n    font-family: 'Rajdhani', sans-serif;\n    font-size: 14px;\n    font-weight: 600;\n    color: #c084fc;\n    letter-spacing: 0.04em;\n    white-space: nowrap;\n  }\n\n  .divider {\n    width: 1px;\n    height: 26px;\n    background: rgba(255,255,255,0.1);\n    flex-shrink: 0;\n  }\n\n  #clock {\n    font-family: 'Rajdhani', sans-serif;\n    font-size: 14px;\n    font-weight: 600;\n    color: rgba(255,255,255,0.65);\n    letter-spacing: 0.04em;\n  }\n\n  /* ── INTEGRATION BUTTON ── */\n  .generate-report-btn {\n    display: flex;\n    align-items: center;\n    gap: 6px;\n    background: rgba(168, 85, 247, 0.12);\n    border: 1px solid rgba(168, 85, 247, 0.4);\n    color: #e9d5ff;\n    padding: 6px 12px;\n    border-radius: 6px;\n    font-family: 'Rajdhani', sans-serif;\n    font-size: 12px;\n    font-weight: 700;\n    text-transform: uppercase;\n    letter-spacing: 0.05em;\n    cursor: pointer;\n    transition: all 0.25s ease;\n    outline: none;\n  }\n\n  .generate-report-btn:hover {\n    background: rgba(168, 85, 247, 0.25);\n    border-color: rgba(192, 132, 252, 0.8);\n    color: #ffffff;\n    box-shadow: 0 0 12px rgba(168, 85, 247, 0.35);\n    transform: translateY(-1px);\n  }\n\n  /* Corner accents */\n  .corner { position: absolute; width: 14px; height: 14px; z-index: 2; }\n  .corner.tl { top: 5px; left: 5px; border-top: 1.5px solid rgba(168,85,247,0.5); border-left: 1.5px solid rgba(168,85,247,0.5); }\n  .corner.tr { top: 5px; right: 5px; border-top: 1.5px solid rgba(168,85,247,0.5); border-right: 1.5px solid rgba(168,85,247,0.5); }\n  .corner.bl { bottom: 5px; left: 5px; border-bottom: 1.5px solid rgba(168,85,247,0.5); border-left: 1.5px solid rgba(168,85,247,0.5); }\n  .corner.br { bottom: 5px; right: 5px; border-bottom: 1.5px solid rgba(168,85,247,0.5); border-right: 1.5px solid rgba(168,85,247,0.5); }\n\n  /* ── RESPONSIVE BREAKPOINTS ── */\n  @media (max-width: 720px) {\n    .header { padding: 0 14px; }\n    .bank-name .sub { display: none; }\n    .stat:first-child { display: none; }\n    .divider { display: none; }\n    .logo-wrap { width: 36px; height: 36px; }\n    .logo-wrap img { width: 26px; height: 26px; }\n    .ticker:last-child { display: none; }\n  }\n\n  @media (max-width: 480px) {\n    .header { height: auto; min-height: 60px; flex-wrap: wrap; padding: 8px 12px; gap: 4px; }\n    .center { position: static; transform: none; order: 3; width: 100%; align-items: flex-start; padding: 2px 0 4px; border-top: 1px solid rgba(168,85,247,0.1); margin-top: 2px; gap: 2px; }\n    .dash-title { font-size: 13px; letter-spacing: 0.06em; }\n    .dash-subtitle span { font-size: 8px; }\n    .ticker { display: none; }\n    .bank-name .name { font-size: 13px; }\n    .right { gap: 8px; order: 2; }\n    #clock { font-size: 13px; }\n    .stat .label { display: none; }\n    .corner { display: none; }\n    .generate-report-btn { padding: 4px 8px; font-size: 11px; }\n  }\n\n  @media (max-width: 360px) {\n    .dash-subtitle { display: none; }\n    .stat { display: none; } /* Hide stats to keep the button visible */\n  }\n</style>\n</head>\n<body>\n<div class=\"header\">\n  <div class=\"corner tl\"></div>\n  <div class=\"corner tr\"></div>\n  <div class=\"corner bl\"></div>\n  <div class=\"corner br\"></div>\n\n  <div class=\"left\">\n    <div class=\"logo-wrap\">\n      <img src=\"https://cdn.brandfetch.io/idNZ7JoLsG/w/150/h/149/theme/dark/logo.png?c=1dxbfHSJFAPEGdCLU4o5B\" alt=\"Dashen Bank\" onerror=\"this.style.display='none'\">\n    </div>\n    <div class=\"bank-name\">\n      <span class=\"name\">Dashen Bank</span>\n      <span class=\"sub\">S.C. — Est. 1995</span>\n    </div>\n  </div>\n\n  <div class=\"center\">\n    <div class=\"dash-title\">ATM Transaction Monitoring</div>\n    <div class=\"dash-subtitle\">\n      <div class=\"ticker\">\n        <div class=\"bar\"></div><div class=\"bar\"></div><div class=\"bar\"></div>\n        <div class=\"bar\"></div><div class=\"bar\"></div>\n      </div>\n      <span>Real-Time Feed — All Branches</span>\n      <div class=\"ticker\">\n        <div class=\"bar\"></div><div class=\"bar\"></div><div class=\"bar\"></div>\n        <div class=\"bar\"></div><div class=\"bar\"></div>\n      </div>\n    </div>\n  </div>\n\n  <div class=\"right\">\n    <button onclick=\"window.open('http://' + window.location.hostname + ':8888', '_blank')\" class=\"generate-report-btn\">\n      <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\">\n        <path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path>\n        <path d=\"M14 2v6h6\"></path>\n        <path d=\"M16 13H8\"></path>\n        <path d=\"M16 17H8\"></path>\n        <path d=\"M10 9H8\"></path>\n      </svg>\n      <span>Generate Report</span>\n    </button>\n\n    <div class=\"stat\">\n      <span class=\"label\">Active ATMs</span>\n      <span class=\"value\">5 Branches</span>\n    </div>\n    <div class=\"divider\"></div>\n    <div class=\"stat\">\n      <span class=\"label\">Local Time</span>\n      <span class=\"value\" id=\"clock\">--:--:--</span>\n    </div>\n  </div>\n</div>\n\n<script>\n  function updateClock() {\n    const now = new Date();\n    document.getElementById('clock').textContent =\n      now.toLocaleTimeString('en-ET', { hour12: false });\n  }\n  updateClock();\n  setInterval(updateClock, 1000);\n</script>\n</body>\n</html>",
         "mode": "html"
       },
       "pluginVersion": "10.2.6",
@@ -190,6 +190,7 @@
             "cellOptions": {
               "type": "color-background"
             },
+            "filterable": true,
             "inspect": false
           },
           "links": [
@@ -285,6 +286,7 @@
         }
       ],
       "title": "ATM Fleet Overview",
+      "transparent": true,
       "type": "table"
     },
     {
@@ -316,8 +318,8 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 3,
-        "w": 24,
+        "h": 5,
+        "w": 12,
         "x": 0,
         "y": 11
       },
@@ -381,10 +383,102 @@
           "color": {
             "mode": "thresholds"
           },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 80
+              },
+              {
+                "color": "green",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 11
+      },
+      "id": 3,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\r\n  ROUND(\r\n    100.0 * SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) / COUNT(*),\r\n    2\r\n  ) as success_rate\r\nFROM atm_transactions\r\nWHERE recorded_at >= NOW() - INTERVAL '1 hour'",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Success Rate — Last 1 Hour",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "align": "auto",
             "cellOptions": {
-              "type": "auto"
+              "type": "color-background"
             },
             "filterable": true,
             "inspect": false
@@ -411,7 +505,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 16
       },
       "id": 2,
       "options": {
@@ -459,6 +553,7 @@
         }
       ],
       "title": "Live Transaction Feed",
+      "transparent": true,
       "type": "table"
     },
     {
@@ -472,25 +567,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
+            "align": "auto",
+            "cellOptions": {
+              "type": "color-background"
             },
-            "lineWidth": 1,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "inspect": false
           },
           "mappings": [],
           "thresholds": {
@@ -509,33 +590,25 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 24,
         "x": 0,
-        "y": 24
+        "y": 26
       },
       "id": 1,
       "options": {
-        "barRadius": 0,
-        "barWidth": 0.97,
-        "fullHighlight": false,
-        "groupWidth": 0.7,
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
         },
-        "orientation": "auto",
-        "showValue": "auto",
-        "stacking": "none",
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        },
-        "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0
+        "showHeader": true
       },
+      "pluginVersion": "10.2.6",
       "targets": [
         {
           "datasource": {
@@ -566,8 +639,9 @@
           }
         }
       ],
-      "title": "Transaction Summary \u2014 Last 24 Hours",
-      "type": "barchart"
+      "title": "Transaction Summary — Last 24 Hours",
+      "transparent": true,
+      "type": "table"
     },
     {
       "datasource": {
@@ -725,10 +799,10 @@
         ]
       },
       "gridPos": {
-        "h": 7,
+        "h": 9,
         "w": 24,
         "x": 0,
-        "y": 32
+        "y": 35
       },
       "id": 8,
       "options": {
@@ -775,204 +849,8 @@
           }
         }
       ],
-      "title": "Suspicious Transaction Anomalies \u2014 Last 24h",
+      "title": "Suspicious Transaction Anomalies — Last 24h",
       "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "${DS_ATM-TRANSACTIONS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "#EAB839",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 5
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 12,
-        "x": 0,
-        "y": 39
-      },
-      "id": 11,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "10.2.6",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "${DS_ATM-TRANSACTIONS}"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT COUNT(*) AS \"Unacknowledged Anomalies\"\r\nFROM atm_anomalies\r\nWHERE acknowledged = FALSE\r\nAND detected_at >= NOW() - INTERVAL '60 minutes'",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
-          }
-        }
-      ],
-      "title": "Anomaly Stat \u2014 Unacknowledged",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "${DS_ATM-TRANSACTIONS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 12,
-        "y": 39
-      },
-      "id": 10,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "${DS_ATM-TRANSACTIONS}"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT\r\n    DATE_TRUNC('hour', detected_at) AS time,\r\n    COUNT(*) FILTER (WHERE anomaly_type='VELOCITY')      AS \"Velocity Abuse\",\r\n    COUNT(*) FILTER (WHERE anomaly_type='FAILURE_SPIKE') AS \"Failure Spike\",\r\n    COUNT(*) FILTER (WHERE anomaly_type='LARGE_TXN')     AS \"Large Withdrawal\",\r\n    COUNT(*) FILTER (WHERE anomaly_type='RAPID_SEQ')     AS \"Rapid Sequential\",\r\n    COUNT(*) FILTER (WHERE anomaly_type='OFFHOURS_SPIKE')AS \"Off-Hours Spike\"\r\nFROM atm_anomalies\r\nWHERE detected_at >= NOW() - INTERVAL '7 days'\r\nGROUP BY DATE_TRUNC('hour', detected_at)\r\nORDER BY time",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
-          }
-        }
-      ],
-      "title": "Anomaly Timeline",
-      "type": "timeseries"
     },
     {
       "datasource": {
@@ -1026,7 +904,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 43
+        "y": 44
       },
       "id": 9,
       "options": {
@@ -1142,10 +1020,206 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 44
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\r\n    DATE_TRUNC('hour', detected_at) AS time,\r\n    COUNT(*) FILTER (WHERE anomaly_type='VELOCITY')      AS \"Velocity Abuse\",\r\n    COUNT(*) FILTER (WHERE anomaly_type='FAILURE_SPIKE') AS \"Failure Spike\",\r\n    COUNT(*) FILTER (WHERE anomaly_type='LARGE_TXN')     AS \"Large Withdrawal\",\r\n    COUNT(*) FILTER (WHERE anomaly_type='RAPID_SEQ')     AS \"Rapid Sequential\",\r\n    COUNT(*) FILTER (WHERE anomaly_type='OFFHOURS_SPIKE')AS \"Off-Hours Spike\"\r\nFROM atm_anomalies\r\nWHERE detected_at >= NOW() - INTERVAL '7 days'\r\nGROUP BY DATE_TRUNC('hour', detected_at)\r\nORDER BY time",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Anomaly Timeline",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "#EAB839",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 0,
+        "y": 50
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.2.6",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_ATM-TRANSACTIONS}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*) AS \"Unacknowledged Anomalies\"\r\nFROM atm_anomalies\r\nWHERE acknowledged = FALSE\r\nAND detected_at >= NOW() - INTERVAL '60 minutes'",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Anomaly Stat — Unacknowledged",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_ATM-TRANSACTIONS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 49
+        "y": 54
       },
       "id": 12,
       "options": {
@@ -1190,7 +1264,7 @@
           }
         }
       ],
-      "title": "Network Health \u2014 $atm_id",
+      "title": "Network Health — $atm_id",
       "type": "timeseries"
     },
     {
@@ -1230,7 +1304,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 56
+        "y": 61
       },
       "id": 13,
       "options": {
@@ -1278,97 +1352,6 @@
       ],
       "title": "Network Events vs Transaction Failures",
       "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "${DS_ATM-TRANSACTIONS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 0
-              },
-              {
-                "color": "yellow",
-                "value": 80
-              },
-              {
-                "color": "green",
-                "value": 95
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 64
-      },
-      "id": 3,
-      "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "sizing": "auto"
-      },
-      "pluginVersion": "10.2.6",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "${DS_ATM-TRANSACTIONS}"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT\r\n  ROUND(\r\n    100.0 * SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) / COUNT(*),\r\n    2\r\n  ) as success_rate\r\nFROM atm_transactions\r\nWHERE recorded_at >= NOW() - INTERVAL '1 hour'",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
-          }
-        }
-      ],
-      "title": "Success Rate \u2014 Last 1 Hour",
-      "type": "gauge"
     },
     {
       "datasource": {
@@ -1432,7 +1415,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 64
+        "y": 69
       },
       "id": 4,
       "options": {
@@ -1487,11 +1470,8 @@
   "templating": {
     "list": [
       {
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "All"
-        },
+        "allValue": "All",
+        "current": {},
         "datasource": {
           "type": "grafana-postgresql-datasource",
           "uid": "${DS_ATM-TRANSACTIONS}"
@@ -1508,8 +1488,7 @@
         "regex": "",
         "skipUrlSync": false,
         "sort": 0,
-        "type": "query",
-        "allValue": "All"
+        "type": "query"
       },
       {
         "current": {},
@@ -1649,6 +1628,6 @@
   "timezone": "",
   "title": "ATM Transaction Monitoring",
   "uid": "c7677a36-ea47-4a62-b90a-8cd08ddc7f74",
-  "version": 32,
+  "version": 8,
   "weekStart": ""
 }

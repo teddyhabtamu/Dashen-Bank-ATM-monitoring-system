@@ -90,7 +90,7 @@ def _decide_outcome(txn_type, state):
     the ATM's reported state:
       * HARDWARE_FAULT / OUT_OF_CASH -> cash dispensing txns fail with a
         DISPENSER fault; balance/mini-statement still succeed.
-      * AGENT_DISCONNECTED / OFFLINE -> nearly everything fails (timeout /
+      * UNREACHABLE / OFFLINE -> nearly everything fails (timeout /
         network); a rare success mimics a flapping link.
       * IN_SERVICE / IN_SUPERVISOR / others -> normal random mix.
     It is a bias, not a hard 100% block, to stay realistic.
@@ -103,7 +103,7 @@ def _decide_outcome(txn_type, state):
             return 'ERROR', '9E3D', 'DISPENSER'
         return None  # fall through to normal mix for non-cash txns
 
-    if state in ('AGENT_DISCONNECTED', 'OFFLINE'):
+    if state in ('UNREACHABLE', 'OFFLINE'):
         # Link/agent down: mostly fail, rare success.
         if random.random() < 0.92:
             if is_cash or random.random() < 0.5:
