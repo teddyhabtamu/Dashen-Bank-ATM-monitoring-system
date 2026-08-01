@@ -18,12 +18,18 @@ docker exec zabbix-db psql -U zabbix -d zabbix \
   -c "COPY atm_transactions TO STDOUT WITH CSV HEADER" \
   > "$BACKUP_DIR/atm_transactions.csv"
 
+# Backup atm_current_state (live ATM states)
+docker exec zabbix-db psql -U zabbix -d zabbix \
+  -c "COPY atm_current_state TO STDOUT WITH CSV HEADER" \
+  > "$BACKUP_DIR/atm_current_state.csv"
+
 # Full database dump for complete restore (ALL custom tables so a
 # fresh clone reproduces anomalies, users, audit and schedules too)
 docker exec zabbix-db pg_dump -U zabbix zabbix \
   --no-owner --no-acl \
   -t atm_locations \
   -t atm_transactions \
+  -t atm_current_state \
   -t atm_anomalies \
   -t atm_network_events \
   -t atm_network_correlation \
@@ -46,7 +52,27 @@ ls -t "$BACKUP_DIR"/zabbix_full_*.sql.gz 2>/dev/null | tail -n +8 | xargs -r rm
 echo "Backup complete:"
 echo "  $BACKUP_DIR/atm_locations.csv"
 echo "  $BACKUP_DIR/atm_transactions.csv"
+echo "  $BACKUP_DIR/atm_current_state.csv"
 echo "  $BACKUP_DIR/atm_custom_tables.sql"
+
+# Verify backup integrity
+echo ""
+echo "Verifying backup counts..."
+docker exec -i zabbix-db psql -U zabbix -d zabbix << 'SQLEOF'
+SELECT 'atm_locations'        as table_name, COUNT(*) as rows FROM atm_locations
+UNION ALL
+SELECT 'atm_transactions'     , COUNT(*) FROM atm_transactions
+UNION ALL
+SELECT 'atm_current_state'    , COUNT(*) FROM atm_current_state
+UNION ALL
+SELECT 'atm_anomalies'        , COUNT(*) FROM atm_anomalies
+UNION ALL
+SELECT 'app_users'            , COUNT(*) FROM app_users
+UNION ALL
+SELECT 'audit_log'            , COUNT(*) FROM audit_log
+UNION ALL
+SELECT 'scheduled_reports'    , COUNT(*) FROM scheduled_reports;
+SQLEOF
 
 
 # Auto-commit backup to git (best-effort, won't fail the script if git fails)

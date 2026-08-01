@@ -22,6 +22,7 @@ DROP TABLE IF EXISTS atm_network_events CASCADE;
 DROP TABLE IF EXISTS atm_network_metrics CASCADE;
 DROP TABLE IF EXISTS atm_anomalies CASCADE;
 DROP TABLE IF EXISTS atm_transactions CASCADE;
+DROP TABLE IF EXISTS atm_current_state CASCADE;
 DROP TABLE IF EXISTS atm_locations CASCADE;
 DROP TABLE IF EXISTS scheduled_reports CASCADE;
 DROP TABLE IF EXISTS audit_log CASCADE;
@@ -41,6 +42,8 @@ docker exec -i zabbix-db psql -U zabbix -d zabbix << 'SQLEOF'
 SELECT 'atm_locations'        as table_name, COUNT(*) as rows FROM atm_locations
 UNION ALL
 SELECT 'atm_transactions'     , COUNT(*) FROM atm_transactions
+UNION ALL
+SELECT 'atm_current_state'    , COUNT(*) FROM atm_current_state
 UNION ALL
 SELECT 'atm_anomalies'       , COUNT(*) FROM atm_anomalies
 UNION ALL
