@@ -109,6 +109,12 @@ SQLEOF
     echo "  Fresh ATM locations created"
 fi
 
+# Export atm_locations.csv from the DB (file is gitignored, needed by sync script)
+echo "  Exporting atm_locations.csv for Zabbix sync..."
+docker exec zabbix-db psql -U zabbix -d zabbix \
+    -c "COPY atm_locations TO STDOUT WITH CSV HEADER" \
+    > config/postgres/atm_locations.csv
+
 # ── Step 8 — Import Zabbix templates & hosts ───
 echo ""
 echo "Step 8: Importing Zabbix templates and registering hosts..."
@@ -165,17 +171,20 @@ for i in $(seq 1 30); do
 done
 
 # Check if GLPI is already installed by probing the DB
-INSTALLED=$(docker exec glpi-db mysql -u glpi -pzabbix glpi -e "SELECT COUNT(*) FROM glpi_configs WHERE name='version'" 2>/dev/null | tail -1 | tr -d ' ' || echo "0")
-if [ "$INSTALLED" = "0" ] || [ -z "$INSTALLED" ]; then
+MYSQL_PASSWORD=$(grep -E '^MYSQL_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
+GLPI_CONSOLE="php /var/www/html/glpi/bin/console"
+INSTALLED=$(docker exec glpi-db mysql -u glpi -p"$MYSQL_PASSWORD" glpi -e "SELECT COUNT(*) FROM glpi_configs WHERE name='version'" 2>/dev/null | tail -1 | tr -d ' ' || echo "0")
+if [ -z "$INSTALLED" ] || [ "$INSTALLED" = "0" ]; then
     echo "  GLPI not yet installed — running CLI installer..."
-    docker exec glpi php bin/console db:install \
+    docker exec glpi $GLPI_CONSOLE db:install \
         --db-host=glpi-db --db-name=glpi \
-        --db-user=glpi --db-password=zabbix \
+        --db-user=glpi --db-password="$MYSQL_PASSWORD" \
         --default-language=en --no-interaction 2>&1 | grep -v "already\|already exists" || true
-    # Set default password
-    docker exec glpi php bin/console glpi:security:change_password --no-interaction \
-        --glpi-user=glpi --new-password=DashenGLPI2024 2>/dev/null || true
 fi
+# Set default password so the REST API can log in
+echo "  Setting GLPI admin password..."
+docker exec glpi $GLPI_CONSOLE glpi:security:change_password --no-interaction \
+    --glpi-user=glpi --new-password=DashenGLPI2024 2>&1 | tail -2 || true
 
 # Enable REST API + create API client via GLPI's internal API
 echo "  Enabling GLPI REST API..."
@@ -228,16 +237,19 @@ fi
 # ── Step 13 — Run GLPI setup script ────────────
 echo ""
 echo "Step 13: Seeding GLPI categories, groups, SLAs..."
-# Copy glpi_setup.py into the GLPI container and run it
+# Copy glpi_setup.py into the report-portal container and run it
+# with the app token + password created in Step 12 (defaults in the script are stale)
 docker cp glpi_setup.py report-portal:/tmp/ 2>/dev/null
-docker exec report-portal python3 /tmp/glpi_setup.py 2>&1 | tail -20
+docker exec -e GLPI_APP_TOKEN="$GLPI_APP_TOKEN" \
+    -e GLPI_API_PASSWORD="DashenGLPI2024" \
+    report-portal python3 /tmp/glpi_setup.py 2>&1 | tail -20
 
 # ── Step 14 — Reload Zabbix cache again ────────
 docker exec zabbix-server zabbix_server -R config_cache_reload 2>/dev/null || true
 
-# ── Step 15 — Fix permissions ──────────────────
+# ── Step 16 — Fix permissions ──────────────────
 echo ""
-echo "Step 14: Fixing filesystem permissions..."
+echo "Step 16: Fixing filesystem permissions..."
 if [ -d "ej-logs" ]; then
     sudo chown -R $USER:$USER ej-logs/ 2>/dev/null || true
     chmod 755 ej-logs/ 2>/dev/null || true
