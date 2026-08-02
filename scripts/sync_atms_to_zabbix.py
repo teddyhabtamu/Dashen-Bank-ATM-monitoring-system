@@ -56,7 +56,7 @@ class Zabbix:
         self.token = None
         self.session = __import__('requests').Session()
 
-    def call(self, method, params, retries=2):
+    def call(self, method, params, retries=2, timeout=30):
         if method != 'user.login' and not self.token:
             self.login()
         for attempt in range(retries):
@@ -64,7 +64,7 @@ class Zabbix:
                 r = self.session.post(ZBX_URL, json={
                     'jsonrpc': '2.0', 'method': method,
                     'params': params, 'auth': self.token, 'id': 1
-                }, timeout=30)
+                }, timeout=timeout)
                 data = r.json()
                 if 'error' in data:
                     print(f"  API error [{method}]: {data['error']['data']}")
@@ -97,14 +97,14 @@ class Zabbix:
             'format': 'xml',
             'rules': {
                 'templates': {'createMissing': True, 'updateExisting': True},
-                'templateGroups': {'createMissing': True, 'updateExisting': True},
+                'template_groups': {'createMissing': True, 'updateExisting': True},
                 'items': {'createMissing': True, 'updateExisting': True},
                 'triggers': {'createMissing': True, 'updateExisting': True},
                 'discoveryRules': {'createMissing': True, 'updateExisting': True},
                 'valueMaps': {'createMissing': True, 'updateExisting': True},
             },
             'source': xml_data,
-        })
+        }, retries=3, timeout=300)
 
     def get_template_id(self, name):
         result = self.call('template.get', {

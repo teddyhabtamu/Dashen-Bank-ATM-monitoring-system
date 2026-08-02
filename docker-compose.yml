@@ -45,6 +45,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       ZBX_SERVER_HOST: zabbix-server
       PHP_TZ: Africa/Addis_Ababa
+      ZBX_MEMORYLIMIT: 512M
     ports:
       - "8080:8080"
     depends_on:

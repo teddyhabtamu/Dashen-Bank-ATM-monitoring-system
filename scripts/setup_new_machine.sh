@@ -182,9 +182,17 @@ if [ -z "$INSTALLED" ] || [ "$INSTALLED" = "0" ]; then
         --default-language=en --no-interaction 2>&1 | grep -v "already\|already exists" || true
 fi
 # Set default password so the REST API can log in
+# (GLPI 10.0.15 has no CLI password command; hash via Auth and UPDATE directly)
 echo "  Setting GLPI admin password..."
-docker exec glpi $GLPI_CONSOLE glpi:security:change_password --no-interaction \
-    --glpi-user=glpi --new-password=DashenGLPI2024 2>&1 | tail -2 || true
+docker exec glpi php -r "
+\$_SERVER['HTTP_HOST'] = 'localhost';
+\$_SERVER['REQUEST_URI'] = '/';
+require '/var/www/html/glpi/inc/includes.php';
+\$DB = new DB();
+\$hash = Auth::getPasswordHash('DashenGLPI2024');
+\$DB->query(\"UPDATE glpi_users SET password = '\" . \$DB->escape(\$hash) . \"', password_last_update = NOW() WHERE name = 'glpi'\");
+echo '  GLPI password set' . PHP_EOL;
+" 2>&1 | tail -1 || echo "  WARNING: could not set GLPI password"
 
 # Enable REST API + create API client via GLPI's internal API
 echo "  Enabling GLPI REST API..."
