@@ -159,16 +159,42 @@ sleep 3
 echo ""
 echo "Step 12: Configuring GLPI..."
 
-# Wait for GLPI web UI to respond
-echo -n "  Waiting for GLPI..."
-for i in $(seq 1 30); do
-    if curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/ 2>/dev/null | grep -q '200\|302'; then
+# The diouxx/glpi image downloads GLPI from GitHub on first boot.
+# Wait for the actual install files (Apache responds 200 even before GLPI exists).
+echo -n "  Waiting for GLPI installation (first-boot download)..."
+GLPI_FILES_OK=0
+for i in $(seq 1 60); do
+    if docker exec glpi sh -c '[ -f /var/www/html/glpi/bin/console ]' 2>/dev/null; then
         echo " ready"
+        GLPI_FILES_OK=1
         break
     fi
     echo -n "."
-    sleep 5
+    sleep 10
 done
+
+# If the image's first-boot download failed (e.g. slow GitHub), fetch it manually
+if [ "$GLPI_FILES_OK" = "0" ]; then
+    echo ""
+    echo "  GLPI files missing — downloading GLPI 10.0.15 manually..."
+    docker exec glpi sh -c '
+        cd /var/www/html &&
+        wget -q https://github.com/glpi-project/glpi/releases/download/10.0.15/glpi-10.0.15.tgz &&
+        tar -xzf glpi-10.0.15.tgz &&
+        rm -f glpi-10.0.15.tgz &&
+        chown -R www-data:www-data glpi
+    ' || echo "  ERROR: GLPI download failed — check network access to github.com"
+    if docker exec glpi sh -c '[ -f /var/www/html/glpi/bin/console ]' 2>/dev/null; then
+        GLPI_FILES_OK=1
+    fi
+fi
+
+if [ "$GLPI_FILES_OK" = "0" ]; then
+    echo "  FATAL: GLPI files are missing and could not be downloaded."
+    echo "  Check the glpi container logs: docker logs glpi"
+    echo "  And ensure github.com is reachable from this machine."
+    exit 1
+fi
 
 # Check if GLPI is already installed by probing the DB
 MYSQL_PASSWORD=$(grep -E '^MYSQL_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
