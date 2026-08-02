@@ -217,7 +217,21 @@ def do_apply(atms, import_templates=False):
             gid = z.get_or_create_group(f'ATM-{d}')
             district_groups[d] = gid
 
-    # Step 4: Create hosts
+    # Step 4: Resolve proxies by name to numeric IDs
+    # (fresh installs have no proxies — those ATMs get monitored directly)
+    proxy_ids = {}
+    missing_proxies = set()
+    for d, p in DISTRICT_PROXY.items():
+        pid = z.get_or_create_proxy(p)
+        if pid:
+            proxy_ids[d] = pid
+        else:
+            missing_proxies.add(p)
+    if missing_proxies:
+        print("  WARNING: proxies not found in this Zabbix (hosts will be monitored"
+              f" directly): {', '.join(sorted(missing_proxies))}")
+
+    # Step 5: Create hosts
     created = 0
     skipped = 0
     no_ip = 0
@@ -257,7 +271,7 @@ def do_apply(atms, import_templates=False):
         d = a.get('district', '') or 'UNKNOWN'
         group_ids = [grp_all, vgroup, district_groups.get(d, grp_all)]
 
-        proxy_id = DISTRICT_PROXY.get(d)
+        proxy_id = proxy_ids.get(d)
 
         ok = z.create_host(host, name, template_ids, group_ids, ip, proxy_id)
         if ok:
