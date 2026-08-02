@@ -196,6 +196,31 @@ if [ "$GLPI_FILES_OK" = "0" ]; then
     exit 1
 fi
 
+# The diouxx image writes the Apache vhost at container boot based on the GLPI
+# version present AT THAT TIME. If the first-boot download failed, it wrote the
+# legacy vhost (DocumentRoot /var/www/html/glpi, no public/ front controller)
+# which breaks the GLPI 10 REST API (empty/HTML responses). Restart the
+# container now that the files exist so the entrypoint regenerates the vhost.
+VHOST_OK=$(docker exec glpi sh -c 'grep -q "/var/www/html/glpi/public" /etc/apache2/sites-enabled/000-default.conf 2>/dev/null && echo 1 || echo 0')
+if [ "$VHOST_OK" != "1" ]; then
+    echo "  Apache vhost outdated (GLPI downloaded after boot) — restarting glpi..."
+    docker restart glpi >/dev/null
+    echo -n "  Waiting for GLPI to come back..."
+    VHOST_OK=0
+    for i in $(seq 1 30); do
+        if docker exec glpi sh -c 'grep -q "/var/www/html/glpi/public" /etc/apache2/sites-enabled/000-default.conf' 2>/dev/null; then
+            echo " ready"
+            VHOST_OK=1
+            break
+        fi
+        echo -n "."
+        sleep 5
+    done
+    if [ "$VHOST_OK" = "0" ]; then
+        echo "  WARNING: could not regenerate GLPI vhost — API may not work"
+    fi
+fi
+
 # Check if GLPI is already installed by probing the DB
 MYSQL_PASSWORD=$(grep -E '^MYSQL_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
 GLPI_CONSOLE="php /var/www/html/glpi/bin/console"
