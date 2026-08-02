@@ -201,8 +201,10 @@ docker exec glpi php -r "
 \$_SERVER['REQUEST_URI'] = '/';
 require '/var/www/html/glpi/inc/includes.php';
 \$DB = new DB();
-// Enable REST API
+// Enable REST API + credential login + create API client
 \$DB->updateOrDie('glpi_configs', ['value' => 1], ['name' => 'enable_api']);
+\$DB->updateOrDie('glpi_configs', ['value' => 1], ['name' => 'enable_api_login_credentials']);
+\$DB->updateOrDie('glpi_configs', ['value' => 1], ['name' => 'enable_api_login_external_token']);
 // Create API client if missing
 \$res = \$DB->request('glpi_apiclients', ['WHERE' => ['name' => 'Zabbix Webhook']]);
 if (\$res->count() == 0) {
