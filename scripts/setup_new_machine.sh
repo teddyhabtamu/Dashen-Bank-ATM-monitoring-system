@@ -226,7 +226,22 @@ if [ "$GLPI_FILES_OK" = "0" ]; then
         tar -xzf glpi-10.0.15.tgz &&
         rm -f glpi-10.0.15.tgz &&
         chown -R www-data:www-data glpi
-    ' || echo "  ERROR: GLPI download failed — check network access to github.com"
+    ' 2>/dev/null
+    if [ "$?" != "0" ]; then
+        echo "  Container cannot reach GitHub — downloading on host and copying in..."
+        rm -f /tmp/glpi-10.0.15.tgz
+        wget -q https://github.com/glpi-project/glpi/releases/download/10.0.15/glpi-10.0.15.tgz -O /tmp/glpi-10.0.15.tgz
+        if [ -f /tmp/glpi-10.0.15.tgz ]; then
+            docker cp /tmp/glpi-10.0.15.tgz glpi:/var/www/html/
+            rm -f /tmp/glpi-10.0.15.tgz
+            docker exec glpi sh -c '
+                cd /var/www/html &&
+                tar -xzf glpi-10.0.15.tgz &&
+                rm -f glpi-10.0.15.tgz &&
+                chown -R www-data:www-data glpi
+            '
+        fi
+    fi
     if docker exec glpi sh -c '[ -f /var/www/html/glpi/bin/console ] && [ -f /var/www/html/glpi/apirest.php ] && [ -f /var/www/html/glpi/inc/includes.php ]' 2>/dev/null; then
         GLPI_FILES_OK=1
     fi
