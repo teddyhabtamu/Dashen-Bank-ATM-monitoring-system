@@ -154,11 +154,12 @@ services:
     restart: unless-stopped
 
   glpi:
-    image: diouxx/glpi:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.glpi
     container_name: glpi
     environment:
       TZ: Africa/Addis_Ababa
-      VERSION_GLPI: "10.0.15"
       MARIADB_HOST: mariadb
       MARIADB_DATABASE: glpi
       MARIADB_USER: glpi

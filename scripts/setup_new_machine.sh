@@ -198,122 +198,17 @@ sleep 3
 echo ""
 echo "Step 12: Configuring GLPI..."
 
-# The diouxx/glpi image downloads GLPI from GitHub on first boot.
-# Wait for the actual install files (Apache responds 200 even before GLPI exists).
-echo -n "  Waiting for GLPI installation (first-boot download)..."
-GLPI_FILES_OK=0
-for i in $(seq 1 60); do
-    if docker exec glpi sh -c '[ -f /var/www/html/glpi/bin/console ] && [ -f /var/www/html/glpi/apirest.php ] && [ -f /var/www/html/glpi/inc/includes.php ]' 2>/dev/null; then
+# GLPI is pre-baked in the custom image (Dockerfile.glpi).
+# Just wait for the container to be healthy.
+echo -n "  Waiting for GLPI to be ready..."
+for i in $(seq 1 30); do
+    if docker exec glpi sh -c 'curl -s -o /dev/null -w "%{http_code}" http://localhost/' 2>/dev/null | grep -q "200"; then
         echo " ready"
-        GLPI_FILES_OK=1
         break
     fi
     echo -n "."
-    sleep 10
+    sleep 2
 done
-
-# If the image's first-boot download failed (e.g. slow GitHub), fetch it manually.
-# IMPORTANT: the image's own entrypoint may STILL be downloading in the background —
-# running two extractions concurrently corrupts the install (missing apirest.php ->
-# API returns 200 with empty body). Kill the image's wget/tar first.
-if [ "$GLPI_FILES_OK" = "0" ]; then
-    echo ""
-    echo "  GLPI files missing — stopping image download and installing manually..."
-    docker exec glpi sh -c 'pkill -9 -f "wget.*glpi-project" 2>/dev/null; pkill -9 -f "tar.*glpi" 2>/dev/null; rm -f /var/www/html/glpi-*.tgz; true'
-    docker exec glpi sh -c '
-        cd /var/www/html &&
-        wget -q https://github.com/glpi-project/glpi/releases/download/10.0.15/glpi-10.0.15.tgz &&
-        tar -xzf glpi-10.0.15.tgz &&
-        rm -f glpi-10.0.15.tgz &&
-        chown -R www-data:www-data glpi
-    ' 2>/dev/null
-    if [ "$?" != "0" ]; then
-        echo "  Container cannot reach GitHub — downloading on host and copying in..."
-        rm -f /tmp/glpi-10.0.15.tgz
-        wget -q https://github.com/glpi-project/glpi/releases/download/10.0.15/glpi-10.0.15.tgz -O /tmp/glpi-10.0.15.tgz
-        if [ -f /tmp/glpi-10.0.15.tgz ]; then
-            docker cp /tmp/glpi-10.0.15.tgz glpi:/var/www/html/
-            rm -f /tmp/glpi-10.0.15.tgz
-            docker exec glpi sh -c '
-                cd /var/www/html &&
-                tar -xzf glpi-10.0.15.tgz &&
-                rm -f glpi-10.0.15.tgz &&
-                chown -R www-data:www-data glpi
-            '
-        fi
-    fi
-    if docker exec glpi sh -c '[ -f /var/www/html/glpi/bin/console ] && [ -f /var/www/html/glpi/apirest.php ] && [ -f /var/www/html/glpi/inc/includes.php ]' 2>/dev/null; then
-        GLPI_FILES_OK=1
-    fi
-fi
-
-if [ "$GLPI_FILES_OK" = "0" ]; then
-    echo "  FATAL: GLPI files are missing and could not be downloaded."
-    echo "  Check the glpi container logs: docker logs glpi"
-    echo "  And ensure github.com is reachable from this machine."
-    exit 1
-fi
-
-# The diouxx image writes the Apache vhost at container boot based on the GLPI
-# version present AT THAT TIME. If the first-boot download failed, it wrote the
-# legacy vhost (DocumentRoot /var/www/html/glpi, no public/ front controller)
-# which breaks the GLPI 10 REST API (empty/HTML responses). Restart the
-# container now that the files exist so the entrypoint regenerates the vhost.
-VHOST_OK=$(docker exec glpi sh -c 'grep -q "/var/www/html/glpi/public" /etc/apache2/sites-enabled/000-default.conf 2>/dev/null && echo 1 || echo 0')
-if [ "$VHOST_OK" != "1" ]; then
-    echo "  Apache vhost outdated (GLPI downloaded after boot) — restarting glpi..."
-    docker restart glpi >/dev/null
-    echo -n "  Waiting for GLPI to come back..."
-    VHOST_OK=0
-    for i in $(seq 1 30); do
-        if docker exec glpi sh -c 'grep -q "/var/www/html/glpi/public" /etc/apache2/sites-enabled/000-default.conf' 2>/dev/null; then
-            echo " ready"
-            VHOST_OK=1
-            break
-        fi
-        echo -n "."
-        sleep 5
-    done
-    if [ "$VHOST_OK" = "0" ]; then
-        echo "  WARNING: could not regenerate GLPI vhost — API may not work"
-    fi
-fi
-
-# Ensure the GLPI vhost has Alias directives for the REST API.
-# GLPI 10 puts apirest.php/apixmlrpc.php at the root level, not inside
-# public/. Without these Aliases, Apache rewrites /apirest.php to
-# index.php and returns an empty body.
-VHOST_ALIAS_OK=$(docker exec glpi sh -c 'grep -q "Alias.*/apirest.php" /etc/apache2/sites-enabled/000-default.conf 2>/dev/null && echo 1 || echo 0')
-if [ "$VHOST_ALIAS_OK" != "1" ]; then
-    echo "  Adding API Aliases to GLPI vhost..."
-    docker exec glpi sh -c 'echo "Alias /apirest.php /var/www/html/glpi/apirest.php" >> /etc/apache2/sites-enabled/000-default.conf'
-    docker exec glpi sh -c 'echo "Alias /apixmlrpc.php /var/www/html/glpi/apixmlrpc.php" >> /etc/apache2/sites-enabled/000-default.conf'
-    echo "  Restarting GLPI container to pick up new vhost..."
-    docker restart glpi >/dev/null
-    echo -n "  Waiting for GLPI to come back..."
-    for i in $(seq 1 30); do
-        if docker exec glpi sh -c 'curl -s -o /dev/null -w "%{http_code}" http://localhost/' 2>/dev/null | grep -q "200"; then
-            echo " ready"
-            break
-        fi
-        echo -n "."
-        sleep 3
-    done
-fi
-
-# Check if GLPI API actually works now.
-echo -n "  Checking GLPI API health... "
-API_HEALTH=$(docker exec glpi wget -q -O - http://localhost/apirest.php 2>/dev/null | head -c 1)
-if [ "$API_HEALTH" != "{" ]; then
-    echo "BROKEN — the GLPI container has corrupted files or a misconfigured vhost."
-    echo "  Fix manually on the host:"
-    echo "    docker rm -f glpi"
-    echo "    docker volume rm zabbix-atm_glpi-root"
-    echo "    docker compose up -d glpi"
-    echo "  Then re-run this script."
-    exit 1
-fi
-echo "OK"
 
 # Check if GLPI is already installed by probing the DB
 MYSQL_PASSWORD=$(grep -E '^MYSQL_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
