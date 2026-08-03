@@ -87,6 +87,45 @@ docker compose up -d
 echo "Waiting 90 seconds for services to initialize..."
 sleep 90
 
+# ── Step 6b — Configure OpenSearch (EJ ingest pipeline + index pattern) ──
+# filebeat.yml references ingest pipeline "atm_ej_parser"; it must exist in
+# OpenSearch or filebeat cannot index EJ logs (EJ Search stays empty).
+echo ""
+echo "Step 6b: Configuring OpenSearch..."
+echo -n "  Waiting for OpenSearch..."
+OS_OK=0
+for i in $(seq 1 24); do
+    if curl -s -o /dev/null -w "%{http_code}" http://localhost:9200/ 2>/dev/null | grep -q "200"; then
+        echo " ready"
+        OS_OK=1
+        break
+    fi
+    echo -n "."
+    sleep 5
+done
+
+if [ "$OS_OK" = "1" ]; then
+    if [ -f "config/opensearch/atm_ej_parser.json" ]; then
+        if curl -s -X PUT "http://localhost:9200/_ingest/pipeline/atm_ej_parser" \
+                -H 'Content-Type: application/json' \
+                -d @"config/opensearch/atm_ej_parser.json" | grep -q '"acknowledged":true'; then
+            echo "  Ingest pipeline atm_ej_parser loaded"
+        else
+            echo "  WARNING: could not load ingest pipeline (check config/opensearch/atm_ej_parser.json)"
+        fi
+    else
+        echo "  WARNING: config/opensearch/atm_ej_parser.json not found — EJ parsing may not work"
+    fi
+
+    # Create the OpenSearch Dashboards index pattern (idempotent)
+    curl -s -X POST "http://localhost:5601/api/saved_objects/index-pattern/atm-ej-live-*" \
+        -H "osd-xsrf: true" -H "Content-Type: application/json" \
+        -u admin:admin \
+        -d '{"attributes":{"title":"atm-ej-live-*","timeFieldName":"@timestamp"}}' \
+        -o /dev/null -w "  Index pattern atm-ej-live-*: HTTP %{http_code}\n" 2>/dev/null || \
+        echo "  WARNING: could not create index pattern (not critical — EJ Search queries OpenSearch directly)"
+fi
+
 # ── Step 7 — Restore database ──────────────────
 echo ""
 echo "Step 7: Restoring database..."

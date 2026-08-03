@@ -333,6 +333,11 @@ def run():
                 check_rapid_sequential(conn, cur)
                 check_offhours_spike(conn, cur)
                 total = write_zabbix_files(cur)
+            # Always end the transaction: a scan without anomalies would
+            # otherwise leave the transaction open forever, holding
+            # AccessShareLocks that block DDL (ALTER TABLE) from other
+            # services (e.g. report-portal schema init).
+            conn.commit()
 
             if total > 0:
                 log.warning(f"Active unacknowledged anomalies: {total}")

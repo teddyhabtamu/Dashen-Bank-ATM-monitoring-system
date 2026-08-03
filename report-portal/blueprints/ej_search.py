@@ -172,7 +172,7 @@ def ej_search():
         else:
             try:
                 resp = requests.get(
-                    f"http://{ES_HOST}/{ES_INDEX}/_search",
+                    f"http://{ES_HOST}/{ES_INDEX}/_search?ignore_unavailable=true",
                     json={
                         "query": {"bool": {"must": must}},
                         "size": per_page,
@@ -277,7 +277,7 @@ def ej_search_csv():
     if must:
         try:
             resp = requests.get(
-                f"http://{ES_HOST}/{ES_INDEX}/_search",
+                f"http://{ES_HOST}/{ES_INDEX}/_search?ignore_unavailable=true",
                 json={"query": {"bool": {"must": must}}, "size": 5000, "sort": [{"@timestamp": "desc"}]},
                 timeout=30,
             )

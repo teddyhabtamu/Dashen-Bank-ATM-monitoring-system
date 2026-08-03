@@ -58,6 +58,42 @@ SCHEMA_MIGRATIONS = [
     "ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS sim_port INTEGER",
 ]
 
+# fault_type_map: raw vendor fault codes -> standard fault types.
+# NOT part of the DB backup; must be created on every machine at startup.
+FAULT_TYPE_MAP_SQL = """
+CREATE TABLE IF NOT EXISTS fault_type_map (
+    id                  SERIAL PRIMARY KEY,
+    vendor              VARCHAR(10)  NOT NULL,
+    raw_fault_code      VARCHAR(100) NOT NULL,
+    standard_fault_type VARCHAR(50)  NOT NULL,
+    display_name        VARCHAR(50)  NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_fault_type_map_vendor_code
+    ON fault_type_map(vendor, raw_fault_code);
+INSERT INTO fault_type_map (vendor, raw_fault_code, standard_fault_type, display_name) VALUES
+    ('NCR', 'CASH_JAM',              'DISPENSER',       'Dispenser'),
+    ('NCR', 'DISPENSER_ERROR',       'DISPENSER',       'Dispenser'),
+    ('NCR', '9E3D',                  'DISPENSER',       'Dispenser'),
+    ('NCR', 'CARD_READ_ERROR',       'CARD_READER',     'Card Reader'),
+    ('NCR', 'B2C1',                  'CARD_READER',     'Card Reader'),
+    ('NCR', 'RECEIPT_PAPER_LOW',     'RECEIPT_PRINTER', 'Receipt Printer'),
+    ('NCR', 'FF01',                  'RECEIPT_PRINTER', 'Receipt Printer'),
+    ('NCR', 'NETWORK_TIMEOUT',       'NETWORK',         'Network'),
+    ('NCR', '44AA',                  'NETWORK',         'Network'),
+    ('NCR', 'RETRACT_FULL',          'RETRACT_BIN',     'Retract Full'),
+    ('NCR', '3A7F',                  'DISPENSER',       'Dispenser'),
+    ('GRG', 'CASH_MODULE_ERROR',     'DISPENSER',       'Dispenser'),
+    ('GRG', 'CARD_UNIT_FAULT',       'CARD_READER',     'Card Reader'),
+    ('GRG', 'PURGE_BIN_FULL',        'RETRACT_BIN',     'Retract Full'),
+    ('GRG', 'THERMAL_PRINTER_FAULT', 'RECEIPT_PRINTER', 'Receipt Printer'),
+    ('GRG', 'COMM_ERROR',            'NETWORK',         'Network'),
+    ('GRG', 'PIN_PAD_ERROR',         'PIN_PAD',         'PinPad'),
+    ('GRG', 'CASH_JAM',              'DISPENSER',       'Dispenser')
+ON CONFLICT (vendor, raw_fault_code)
+    DO UPDATE SET standard_fault_type = EXCLUDED.standard_fault_type,
+                  display_name        = EXCLUDED.display_name;
+"""
+
 
 def init_audit_schema():
     try:
@@ -72,7 +108,9 @@ def init_audit_schema():
             try:
                 for q in [
                     AUDIT_TABLE_SQL, USERS_TABLE_SQL,
-                ] + USERS_MIGRATIONS + SCHEMA_MIGRATIONS + VENDOR_CONSTRAINTS + [
+                ] + USERS_MIGRATIONS + SCHEMA_MIGRATIONS + [
+                    FAULT_TYPE_MAP_SQL,
+                ] + VENDOR_CONSTRAINTS + [
                     "CREATE INDEX IF NOT EXISTS idx_audit_performed ON audit_log(performed_at DESC)",
                     "CREATE INDEX IF NOT EXISTS idx_audit_username  ON audit_log(username)",
                     "CREATE INDEX IF NOT EXISTS idx_audit_action    ON audit_log(action)",

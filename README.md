@@ -1,6 +1,6 @@
 # Dashen Bank ATM Monitoring System
 
-Monitors **1,227 ATMs** (798 GRG, 429 NCR) across **14 districts** in Ethiopia.
+Monitors **1,209 ATMs** (797 GRG, 412 NCR) across **14 districts** in Ethiopia.
 SNMPv2c polling via Dashen private OID root `1.3.6.1.4.1.99999`.
 
 ## Quick Start
@@ -26,11 +26,13 @@ The script automates everything:
 |------|-------------|
 | 1-3 | Validates environment and project files |
 | 4-6 | Builds Docker images and starts all services |
-| 7 | Restores PostgreSQL database (1,227 ATMs) |
+| 7 | Restores PostgreSQL database (1,209 ATMs) |
 | 8 | Imports SNMP templates + registers hosts in Zabbix |
 | 9-10 | Imports GLPI webhook mediatype + creates trigger action |
-| 11-13 | Installs GLPI (if needed), enables REST API, creates API client, runs `glpi_setup.py` |
-| 14 | Fixes filesystem permissions (ej-logs, filebeat) |
+| 11-12 | Installs GLPI (if needed), enables REST API, creates API client, runs `glpi_setup.py` (12b: API smoke test) |
+| 13 | Configures OpenSearch: loads `atm_ej_parser` ingest pipeline + creates index pattern |
+| 14 | Reloads Zabbix config cache |
+| 16 | Fixes filesystem permissions (ej-logs, filebeat) |
 
 That's it — all services, Zabbix templates, GLPI categories/groups/SLAs, and Grafana dashboards are ready.
 
@@ -48,12 +50,10 @@ That's it — all services, Zabbix templates, GLPI categories/groups/SLAs, and G
 ## Post-Setup (machine-specific, once per machine)
 
 ```bash
-# 1. Build & start EJ generators
-docker compose build atm-ej-001
-docker compose up -d atm-ej-001 atm-ej-002 atm-ej-003 atm-ej-004 atm-ej-005
-
-# 2. Install Zabbix Agent for ATM-001 (see Step 6-7 below)
+# Install Zabbix Agent for ATM-001 (see "Zabbix Agent" below)
 ```
+
+EJ generation needs no manual steps: the single multi-tenant **`atm-ej-engine`** container (replaces the old per-vendor `atm-ej-001..005` simulators) starts automatically with Step 6 and writes one log per ATM to `ej-logs/`, which filebeat ships to OpenSearch.
 
 ## Ticket Lifecycle
 
@@ -147,18 +147,23 @@ sudo systemctl restart zabbix-agent2
 docker exec zabbix-server zabbix_server -R config_cache_reload
 ```
 
-### EJ generators (once per machine)
+### EJ engine
+
+Runs automatically via `docker compose up -d` (Step 6) — no manual build needed.
+Check it's writing:
 
 ```bash
-docker compose build atm-ej-001
-docker compose up -d atm-ej-001 atm-ej-002 atm-ej-003 atm-ej-004 atm-ej-005
+docker compose logs atm-ej-engine --tail 20
+ls ej-logs/ | head
 ```
 
 ### OpenSearch index pattern (once)
 
+Created automatically by Step 6b. To recreate manually:
+
 1. Open http://localhost:5601
 2. **Stack Management → Index Patterns → Create**
-3. Pattern: `atm-electronic-journal`, Timestamp: `@timestamp`
+3. Pattern: `atm-ej-live-*`, Timestamp: `@timestamp`
 
 ## Credentials
 
