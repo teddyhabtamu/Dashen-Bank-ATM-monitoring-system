@@ -264,6 +264,35 @@ if [ "$VHOST_OK" != "1" ]; then
     fi
 fi
 
+# Check if GLPI files exist but are broken (e.g. corrupted download).
+# A working GLPI should respond to a bare apirest.php request with
+# JSON, not an empty body. If it's broken, force a clean re-download.
+echo -n "  Checking GLPI API health... "
+API_HEALTH=$(docker exec glpi wget -q -O - http://localhost/apirest.php 2>/dev/null | head -c 200)
+if [ -z "$API_HEALTH" ]; then
+    echo "BROKEN — forcing clean re-download..."
+    docker exec glpi sh -c '
+        rm -rf /var/www/html/glpi /var/www/html/glpi-*.tgz &&
+        cd /var/www/html &&
+        wget -q https://github.com/glpi-project/glpi/releases/download/10.0.15/glpi-10.0.15.tgz &&
+        tar -xzf glpi-10.0.15.tgz &&
+        rm -f glpi-10.0.15.tgz &&
+        chown -R www-data:www-data glpi
+    ' || echo "  ERROR: GLPI re-download failed"
+    docker restart glpi >/dev/null
+    echo -n "  Waiting for GLPI to come back..."
+    for i in $(seq 1 30); do
+        if docker exec glpi sh -c '[ -f /var/www/html/glpi/bin/console ] && [ -f /var/www/html/glpi/apirest.php ]' 2>/dev/null; then
+            echo " ready"
+            break
+        fi
+        echo -n "."
+        sleep 5
+    done
+else
+    echo "OK"
+fi
+
 # Check if GLPI is already installed by probing the DB
 MYSQL_PASSWORD=$(grep -E '^MYSQL_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
 GLPI_CONSOLE="php /var/www/html/glpi/bin/console"
