@@ -164,7 +164,7 @@ echo "Step 12: Configuring GLPI..."
 echo -n "  Waiting for GLPI installation (first-boot download)..."
 GLPI_FILES_OK=0
 for i in $(seq 1 60); do
-    if docker exec glpi sh -c '[ -f /var/www/html/glpi/bin/console ]' 2>/dev/null; then
+    if docker exec glpi sh -c '[ -f /var/www/html/glpi/bin/console ] && [ -f /var/www/html/glpi/apirest.php ] && [ -f /var/www/html/glpi/inc/includes.php ]' 2>/dev/null; then
         echo " ready"
         GLPI_FILES_OK=1
         break
@@ -173,10 +173,14 @@ for i in $(seq 1 60); do
     sleep 10
 done
 
-# If the image's first-boot download failed (e.g. slow GitHub), fetch it manually
+# If the image's first-boot download failed (e.g. slow GitHub), fetch it manually.
+# IMPORTANT: the image's own entrypoint may STILL be downloading in the background —
+# running two extractions concurrently corrupts the install (missing apirest.php ->
+# API returns 200 with empty body). Kill the image's wget/tar first.
 if [ "$GLPI_FILES_OK" = "0" ]; then
     echo ""
-    echo "  GLPI files missing — downloading GLPI 10.0.15 manually..."
+    echo "  GLPI files missing — stopping image download and installing manually..."
+    docker exec glpi sh -c 'pkill -9 -f "wget.*glpi-project" 2>/dev/null; pkill -9 -f "tar.*glpi" 2>/dev/null; rm -f /var/www/html/glpi-*.tgz; true'
     docker exec glpi sh -c '
         cd /var/www/html &&
         wget -q https://github.com/glpi-project/glpi/releases/download/10.0.15/glpi-10.0.15.tgz &&
@@ -184,7 +188,7 @@ if [ "$GLPI_FILES_OK" = "0" ]; then
         rm -f glpi-10.0.15.tgz &&
         chown -R www-data:www-data glpi
     ' || echo "  ERROR: GLPI download failed — check network access to github.com"
-    if docker exec glpi sh -c '[ -f /var/www/html/glpi/bin/console ]' 2>/dev/null; then
+    if docker exec glpi sh -c '[ -f /var/www/html/glpi/bin/console ] && [ -f /var/www/html/glpi/apirest.php ] && [ -f /var/www/html/glpi/inc/includes.php ]' 2>/dev/null; then
         GLPI_FILES_OK=1
     fi
 fi
@@ -293,6 +297,45 @@ if 'error' in r.json():
 else:
     print('  GLPI App-Token updated in Zabbix mediatype')
 "
+fi
+
+# ── Step 12b — Verify the GLPI REST API actually works ──
+# A broken/corrupt GLPI install (e.g. missing apirest.php from a racing download)
+# makes Apache return 200 with an EMPTY body, which silently fails glpi_setup.py.
+# Probe initSession from inside the report-portal container (same network path as
+# Step 13) before proceeding.
+if [ -n "$GLPI_APP_TOKEN" ]; then
+    echo "  Verifying GLPI REST API..."
+    API_OK=0
+    for i in $(seq 1 6); do
+        if docker exec report-portal python3 -c "
+import requests, base64, sys
+r = requests.get('http://glpi:80/apirest.php/initSession',
+    headers={'App-Token': '$GLPI_APP_TOKEN',
+             'Authorization': 'Basic ' + base64.b64encode(b'glpi:DashenGLPI2024').decode()},
+    params={'expand_dropdowns': True}, timeout=20)
+if r.status_code == 200 and 'session_token' in r.text:
+    print('  API OK')
+    sys.exit(0)
+print(f'  API FAIL: HTTP {r.status_code}, body={r.text[:200]!r}')
+sys.exit(1)
+" 2>/dev/null; then
+            API_OK=1
+            break
+        fi
+        echo -n "."
+        sleep 10
+    done
+    if [ "$API_OK" = "0" ]; then
+        echo ""
+        echo "  ERROR: GLPI API is not responding correctly (Step 13 would fail)."
+        echo "  GLPI PHP error log (last 20 lines):"
+        docker exec glpi sh -c 'tail -20 /var/www/html/glpi/files/_log/php-errors.log' 2>/dev/null || echo "  (no php-errors.log)"
+        echo "  Fix options:"
+        echo "    1. Re-run this script — it will re-check and can re-download GLPI files."
+        echo "    2. Inspect GLPI files manually: docker exec glpi ls -la /var/www/html/glpi/apirest.php"
+        exit 1
+    fi
 fi
 
 # ── Step 13 — Run GLPI setup script ────────────

@@ -20,11 +20,26 @@ headers = {"Content-Type": "application/json", "App-Token": APP_TOKEN}
 
 def get_session():
     auth = base64.b64encode(f"{USER}:{PASS}".encode()).decode()
-    r = requests.get(f"{GLPI_URL}/initSession",
-        headers={**headers, "Authorization": f"Basic {auth}"},
-        params={"expand_dropdowns": True})
-    r.raise_for_status()
-    token = r.json()["session_token"]
+    try:
+        r = requests.get(f"{GLPI_URL}/initSession",
+            headers={**headers, "Authorization": f"Basic {auth}"},
+            params={"expand_dropdowns": True}, timeout=20)
+    except requests.RequestException as e:
+        print(f"  FAIL: cannot reach GLPI API at {GLPI_URL} — {e}")
+        sys.exit(1)
+    if r.status_code != 200:
+        print(f"  FAIL: initSession returned HTTP {r.status_code}")
+        print(f"  Body: {r.text[:300]!r}")
+        sys.exit(1)
+    try:
+        token = r.json()["session_token"]
+    except Exception as e:
+        print(f"  FAIL: initSession returned a non-JSON body (HTTP {r.status_code}):")
+        print(f"  {r.text[:300]!r}")
+        print(f"  Hint: an empty body usually means a broken GLPI install")
+        print(f"  (e.g. missing apirest.php) or the GLPI Apache vhost is wrong.")
+        print(f"  Check: docker exec glpi sh -c 'tail -20 /var/www/html/glpi/files/_log/php-errors.log'")
+        sys.exit(1)
     print(f"Session: {token[:20]}...")
     return {**headers, "Session-Token": token}
 
