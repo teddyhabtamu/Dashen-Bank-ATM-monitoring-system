@@ -4,16 +4,12 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir psycopg2-binary "pysnmp==6.2.6" requests
 
-COPY atm_snmp_simulator.py .
-COPY ej_log_generator.py .
-COPY transaction_feed.py .
-COPY grg_snmp_simulator.py .
-COPY grg_ej_generator.py .
-COPY state_manager.py .
 COPY common.py .
 COPY sim_engine.py .
 COPY snmp_agent.py .
 COPY txn_engine.py .
 COPY ej_engine.py .
+COPY state_manager.py .
 
-CMD ["python3", "ej_log_generator.py"]
+# All services override command:; this only sets a safe default.
+CMD ["python3", "state_manager.py"]
