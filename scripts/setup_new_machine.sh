@@ -338,11 +338,20 @@ else:
 "
 fi
 
-# ── Step 12b — Verify the GLPI REST API actually works ──
+# ── Step 13 — Run GLPI setup script ────────────
+echo ""
+echo "Step 13: Seeding GLPI categories, groups, SLAs..."
+# Copy glpi_setup.py into the report-portal container and run it
+# with the app token + password created in Step 12 (defaults in the script are stale)
+docker cp glpi_setup.py report-portal:/tmp/ 2>/dev/null
+docker exec -e GLPI_APP_TOKEN="$GLPI_APP_TOKEN" \
+    -e GLPI_API_PASSWORD="DashenGLPI2024" \
+    report-portal python3 /tmp/glpi_setup.py 2>&1 | tail -20
+
+# ── Step 12c — Verify the GLPI REST API actually works ──
 # A broken/corrupt GLPI install (e.g. missing apirest.php from a racing download)
-# makes Apache return 200 with an EMPTY body, which silently fails glpi_setup.py.
-# Probe initSession from inside the report-portal container (same network path as
-# Step 13) before proceeding.
+# makes Apache return 200 with an EMPTY body. Verify AFTER glpi_setup.py
+# has bootstrapped the API so we catch real failures, not premature checks.
 if [ -n "$GLPI_APP_TOKEN" ]; then
     echo "  Verifying GLPI REST API..."
     API_OK=0
@@ -367,7 +376,7 @@ sys.exit(1)
     done
     if [ "$API_OK" = "0" ]; then
         echo ""
-        echo "  ERROR: GLPI API is not responding correctly (Step 13 would fail)."
+        echo "  ERROR: GLPI API is not responding correctly."
         echo "  GLPI PHP error log (last 20 lines):"
         docker exec glpi sh -c 'tail -20 /var/www/html/glpi/files/_log/php-errors.log' 2>/dev/null || echo "  (no php-errors.log)"
         echo "  Fix options:"
@@ -376,16 +385,6 @@ sys.exit(1)
         exit 1
     fi
 fi
-
-# ── Step 13 — Run GLPI setup script ────────────
-echo ""
-echo "Step 13: Seeding GLPI categories, groups, SLAs..."
-# Copy glpi_setup.py into the report-portal container and run it
-# with the app token + password created in Step 12 (defaults in the script are stale)
-docker cp glpi_setup.py report-portal:/tmp/ 2>/dev/null
-docker exec -e GLPI_APP_TOKEN="$GLPI_APP_TOKEN" \
-    -e GLPI_API_PASSWORD="DashenGLPI2024" \
-    report-portal python3 /tmp/glpi_setup.py 2>&1 | tail -20
 
 # ── Step 14 — Reload Zabbix cache again ────────
 docker exec zabbix-server zabbix_server -R config_cache_reload 2>/dev/null || true
