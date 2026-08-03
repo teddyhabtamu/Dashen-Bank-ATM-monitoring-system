@@ -316,6 +316,13 @@ if (\$res->count() == 0) {
 " 2>/dev/null | tee /tmp/glpi_app_token.txt
 echo "  GLPI API configured"
 
+# Warm up GLPI's web bootstrap so the REST API can initialize properly.
+# The db:install command creates the DB schema but GLPI needs at least one
+# web request to fully bootstrap sessions, CSRF tokens, etc.
+echo "  Waking up GLPI web interface..."
+docker exec glpi wget -q -O /dev/null http://localhost/ 2>/dev/null || true
+sleep 3
+
 GLPI_APP_TOKEN=$(grep 'App-Token:' /tmp/glpi_app_token.txt | awk '{print $2}')
 if [ -n "$GLPI_APP_TOKEN" ]; then
     echo "  Updating Zabbix mediatype with GLPI App-Token..."
@@ -355,7 +362,7 @@ docker exec -e GLPI_APP_TOKEN="$GLPI_APP_TOKEN" \
 if [ -n "$GLPI_APP_TOKEN" ]; then
     echo "  Verifying GLPI REST API..."
     API_OK=0
-    for i in $(seq 1 6); do
+    for i in $(seq 1 10); do
         if docker exec report-portal python3 -c "
 import requests, base64, sys
 r = requests.get('http://glpi:80/apirest.php/initSession',
@@ -372,16 +379,22 @@ sys.exit(1)
             break
         fi
         echo -n "."
-        sleep 10
+        sleep 15
     done
     if [ "$API_OK" = "0" ]; then
         echo ""
         echo "  ERROR: GLPI API is not responding correctly."
         echo "  GLPI PHP error log (last 20 lines):"
         docker exec glpi sh -c 'tail -20 /var/www/html/glpi/files/_log/php-errors.log' 2>/dev/null || echo "  (no php-errors.log)"
+        echo "  Apache vhost DocumentRoot:"
+        docker exec glpi sh -c 'grep DocumentRoot /etc/apache2/sites-enabled/000-default.conf' 2>/dev/null || true
+        echo "  GLPI config_db.php exists:"
+        docker exec glpi sh -c 'ls -la /var/www/html/glpi/config/config_db.php' 2>/dev/null || true
         echo "  Fix options:"
         echo "    1. Re-run this script — it will re-check and can re-download GLPI files."
-        echo "    2. Inspect GLPI files manually: docker exec glpi ls -la /var/www/html/glpi/apirest.php"
+        echo "    2. Inspect GLPI files:      docker exec glpi ls -la /var/www/html/glpi/apirest.php"
+        echo "    3. Check Apache vhost:       docker exec glpi cat /etc/apache2/sites-enabled/000-default.conf"
+        echo "    4. Check GLPI logs:          docker exec glpi tail -30 /var/www/html/glpi/files/_log/php-errors.log"
         exit 1
     fi
 fi
