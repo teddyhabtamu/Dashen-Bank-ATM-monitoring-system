@@ -303,34 +303,6 @@ services:
     depends_on:
       - postgres
     restart: unless-stopped
-  
-
-  # ─── ATM SIMULATORS ───────────────────────────────────────────
-  # Each block = one real ATM in production
-  # To connect real ATM: remove simulator, add real ATM IP to Zabbix
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  # ─── GRG ATM SIMULATORS ───────────────────────────────
-
-
-
-
-
 
   # ─── MULTI-TENANT SIMULATION ENGINES ───────────────────────
   # A single engine simulates EVERY ATM in atm_locations (auto-discovered).
