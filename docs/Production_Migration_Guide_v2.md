@@ -290,7 +290,7 @@ Before touching any server, you need to **split** the single PoC `docker-compose
 | ISO 8583 Gateway | `iso8583-gateway` | VM5 | DB_HOST → VM2 |
 | Anomaly Detector | `anomaly-detector` | VM5 | DB_HOST → VM2 |
 | Network Correlator | `network-correlator` | VM5 | DB_HOST → VM2, ZABBIX_URL → VM1 |
-| Simulators (15 containers) | `atm-sim*`, `txn-feed*`, `atm-ej*` | UAT only | Not in production |
+| Simulators (multi-tenant engines) | `atm-sim-engine`, `atm-txn-engine`, `atm-ej-engine`, `state-manager` | UAT only | Not in production |
 
 ## 4.2 The Critical Change: Container Names → IP Addresses
 
@@ -739,7 +739,7 @@ UAT VM1 runs everything except OpenSearch/OpenSearch Dashboards — similar to t
 
 Create `deploy/uat/docker-compose-uat-vm1.yml`. This is the most complex file because it includes all 5 simulators + all services.
 
-The file should contain ALL services from the original `docker-compose.yml` (postgres, zabbix-server, zabbix-web, zabbix-agent, grafana, mariadb, glpi, report-portal, iso8583-gateway, anomaly-detector, network-correlator, all 5 atm-sim, all 5 txn-feed, all 5 atm-ej, pgadmin) — **same as your current PoC** — with these changes:
+The file should contain ALL services from the original `docker-compose.yml` (postgres, zabbix-server, zabbix-web, zabbix-agent, grafana, mariadb, glpi, report-portal, iso8583-gateway, anomaly-detector, network-correlator, atm-sim-engine, atm-txn-engine, atm-ej-engine, state-manager, pgadmin) — **same as your current PoC** — with these changes:
 
 1. Use `rhel-6.4-latest` images instead of `ubuntu-6.4-latest` for Zabbix
 2. Grafana port stays `3000:3000`
@@ -1009,7 +1009,8 @@ sudo chmod 644 filebeat.yml
 ```bash
 # Build custom images
 docker compose -f deploy/uat/docker-compose-uat-vm1.yml build --no-cache \
-  atm-sim-001 report-portal iso8583-gateway
+  atm-sim-engine atm-txn-engine atm-ej-engine state-manager \
+  report-portal iso8583-gateway
 
 # Start PostgreSQL first (everything depends on it)
 docker compose -f deploy/uat/docker-compose-uat-vm1.yml up -d postgres
@@ -1046,7 +1047,7 @@ You should see approximately 25 containers all showing "Up":
 - mariadb, glpi
 - grafana, grafana-renderer, report-portal
 - iso8583-gateway, anomaly-detector, network-correlator
-- 5× atm-sim, 5× txn-feed, 5× atm-ej
+- atm-sim-engine, atm-txn-engine, atm-ej-engine, state-manager
 - pgadmin
 
 ### Step 5.2.8 — Verify PostgreSQL has data
@@ -2017,10 +2018,9 @@ Only once real ATMs are confirmed working. No rush — simulators do not interfe
 ## 13.1 Stop Simulator Containers (UAT/Production)
 
 ```bash
-docker compose -f deploy/uat/docker-compose-uat-vm1.yml stop \
-  atm-sim-001 atm-sim-002 atm-sim-003 atm-sim-004 atm-sim-005 \
-  atm-ej-001 atm-ej-002 atm-ej-003 atm-ej-004 atm-ej-005 \
-  txn-feed-001 txn-feed-002 txn-feed-003 txn-feed-004 txn-feed-005
+docker compose stop \
+  atm-sim-engine atm-txn-engine atm-ej-engine state-manager \
+  anomaly-detector network-correlator
 ```
 
 ## 13.2 Disable Simulator Hosts in Zabbix

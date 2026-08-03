@@ -31,7 +31,7 @@ docker compose logs <container-name> --tail=30
 
 For example:
 ```bash
-docker compose logs atm-sim-002 --tail=30
+docker compose logs atm-sim-engine --tail=30
 ```
 
 **Common causes:**
@@ -110,17 +110,17 @@ curl -s "http://localhost:9200/_cat/indices?v"
 If this only shows the header row with no data — OpenSearch is
 empty. Continue below.
 
-**2. Check the EJ generator containers are running:**
+**2. Check the EJ generator container is running:**
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}" | grep atm-ej
 ```
-You should see 5 containers (`atm-ej-001` through `atm-ej-005`) all
-`Up`. If they don't exist at all:
+You should see the multi-tenant `atm-ej-engine` container `Up`. If it
+doesn't exist at all:
 ```bash
-grep -c "atm-ej-" docker-compose.yml
+grep -c "atm-ej-engine" docker-compose.yml
 ```
-If this returns `0`, the services are missing from your compose file
-entirely — see README.md Step 8.3 to add them back.
+If this returns `0`, the service is missing from your compose file
+entirely — see README.md Post-Setup to add it back.
 
 **3. Check `ej-logs/` directory ownership** (very common after cloning
 on a new machine — Docker often creates it as `root:root`):
@@ -128,7 +128,7 @@ on a new machine — Docker often creates it as `root:root`):
 ls -la ej-logs/
 sudo chown -R $USER:$USER ej-logs/
 chmod 755 ej-logs/
-docker compose restart atm-ej-001 atm-ej-002 atm-ej-003 atm-ej-004 atm-ej-005
+docker compose restart atm-ej-engine
 ```
 
 **4. Check Filebeat config file ownership** (Filebeat refuses to start
@@ -156,7 +156,8 @@ curl -s "http://localhost:9200/_cat/indices?v"
 
 **7. If indices exist but OpenSearch Dashboards Discover shows nothing:**
 - Check the Index Pattern exists: **Stack Management → Index Patterns** —
-  should show one pointing to `atm-electronic-journal` with timestamp field
+  should show one matching `atm-ej-live-*,atm-electronic-journal`
+  (mirrors the `ES_INDEX` used by report-portal) with timestamp field
   `@timestamp`
 - Check the time range picker (top right of Discover) — default
   "Last 15 minutes" often shows nothing; set it to **Last 7 days**
