@@ -10,12 +10,32 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2-dev \
     libzip-dev \
     libpq-dev \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) gd intl xml zip pdo pdo_mysql \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    libbz2-dev \
+    libsodium-dev \
+    libldap2-dev \
+    libwebp-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+    && docker-php-ext-install -j$(nproc) \
+        gd \
+        intl \
+        xml \
+        zip \
+        pdo \
+        pdo_mysql \
+        mysqli \
+        curl \
+        exif \
+        ldap \
+        opcache \
+        bz2 \
+        sodium \
+        zlib \
+    && docker-php-ext-enable mysqli \
+    && a2enmod rewrite \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-
-RUN a2enmod rewrite
 
 RUN mkdir -p /var/www/html && \
     cd /var/www/html && \
