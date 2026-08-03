@@ -271,13 +271,8 @@ fi
 VHOST_ALIAS_OK=$(docker exec glpi sh -c 'grep -q "Alias.*/apirest.php" /etc/apache2/sites-enabled/000-default.conf 2>/dev/null && echo 1 || echo 0')
 if [ "$VHOST_ALIAS_OK" != "1" ]; then
     echo "  Adding API Aliases to GLPI vhost..."
-    docker exec glpi sh -c '
-        cat >> /etc/apache2/sites-enabled/000-default.conf << VHOST_ALIAS_EOF
-
-Alias /apirest.php /var/www/html/glpi/apirest.php
-Alias /apixmlrpc.php /var/www/html/glpi/apixmlrpc.php
-VHOST_ALIAS_EOF
-    '
+    docker exec glpi sh -c 'echo "Alias /apirest.php /var/www/html/glpi/apirest.php" >> /etc/apache2/sites-enabled/000-default.conf'
+    docker exec glpi sh -c 'echo "Alias /apixmlrpc.php /var/www/html/glpi/apixmlrpc.php" >> /etc/apache2/sites-enabled/000-default.conf'
     docker exec glpi apachectl reload 2>/dev/null || docker exec glpi service apache2 reload 2>/dev/null || true
     sleep 3
 fi
