@@ -278,12 +278,11 @@ if [ "$VHOST_ALIAS_OK" != "1" ]; then
 fi
 
 # Check if GLPI files exist but are broken (e.g. corrupted download).
-# A working GLPI should respond to a bare apirest.php request with
-# JSON, not an empty body. If it's broken, force a clean re-download.
+# A working GLPI API should return JSON (starts with {), not HTML docs.
 echo -n "  Checking GLPI API health... "
-API_HEALTH=$(docker exec glpi wget -q -O - http://localhost/apirest.php 2>/dev/null | head -c 200)
-if [ -z "$API_HEALTH" ]; then
-    echo "BROKEN — forcing clean re-download..."
+API_HEALTH=$(docker exec glpi wget -q -O - http://localhost/apirest.php 2>/dev/null | head -c 1)
+if [ "$API_HEALTH" != "{" ]; then
+    echo "BROKEN (got HTML instead of JSON) — forcing clean re-download..."
     docker exec glpi sh -c '
         rm -rf /var/www/html/glpi /var/www/html/glpi-*.tgz &&
         cd /var/www/html &&
