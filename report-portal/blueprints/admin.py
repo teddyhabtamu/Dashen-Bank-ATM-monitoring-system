@@ -1112,23 +1112,6 @@ def user_delete():
 
 def _guide_page(data):
     atm_id_val = data.get('atm_id') or 'ATM-XXX'
-    branch_val = data.get('branch') or 'Branch Name'
-    tid_val = data.get('terminal_id') or 'TIDXXX'
-
-    compose_snippet = f"""  {atm_id_val.lower()}-ej:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: {atm_id_val.lower()}-ej
-    command: python3 ej_log_generator.py
-    environment:
-      ATM_ID: "{atm_id_val}"
-      ATM_TERMINAL_ID: "{tid_val}"
-      ATM_BRANCH: "{branch_val}"
-      EJ_LOG_PATH: "/var/log/atm-ej/{atm_id_val}.log"
-    volumes:
-      - ./ej-logs:/var/log/atm-ej
-    restart: unless-stopped"""
 
     return f"""<!DOCTYPE html><html><head><title>ATM Registered</title>
 <style>
@@ -1148,22 +1131,15 @@ def _guide_page(data):
 
   <h2>What happens automatically <span class="badge-ok">&#10003; No action needed</span></h2>
   <ul>
+    <li><strong>Simulation engines</strong> — the multi-tenant engines (<code>atm-sim-engine</code>, <code>atm-txn-engine</code>, <code>atm-ej-engine</code>, <code>state-manager</code>) auto-discover every ATM in <code>atm_locations</code>. No per-ATM compose service is required.</li>
     <li><strong>Filebeat</strong> — already watches <code>ej-logs/ATM-*.log</code> with a wildcard.<br>
         The moment a file named <code>ej-logs/{atm_id_val}.log</code> exists, Filebeat ships it to OpenSearch automatically.</li>
     <li><strong>EJ Search</strong> — will show {atm_id_val} data as soon as logs are indexed.</li>
     <li><strong>ATM dropdown</strong> — already shows {atm_id_val} in all search filters.</li>
   </ul>
 
-  <h2>What you need to do next <span class="badge-warn">&#9888; Action required</span></h2>
-
-  <p><strong>Option A — Simulated ATM (for demo/testing):</strong><br>
-  Add this service to <code>docker-compose.yml</code> before the <code>volumes:</code> section, then run the two commands below:</p>
-  <pre>{compose_snippet}</pre>
-  <pre>docker compose build {atm_id_val.lower()}-ej
-docker compose up -d {atm_id_val.lower()}-ej</pre>
-
-  <p><strong>Option B — Real ATM (production):</strong><br>
-  Configure the ATM's EJ log delivery (agent, SFTP, or shared folder) to write files into <code>ej-logs/{atm_id_val}.log</code>.
+  <h2>Real ATM (production) <span class="badge-warn">&#9888; Action required</span></h2>
+  <p>Configure the ATM's EJ log delivery (agent, SFTP, or shared folder) to write files into <code>ej-logs/{atm_id_val}.log</code>.
   Filebeat will detect and ship the file automatically — no further configuration needed.</p>
 
   <a href="/admin/atm" class="btn">&#8592; Back to ATM Management</a>
