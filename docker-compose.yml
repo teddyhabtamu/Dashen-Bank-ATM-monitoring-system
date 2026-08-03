@@ -154,9 +154,7 @@ services:
     restart: unless-stopped
 
   glpi:
-    build:
-      context: .
-      dockerfile: Dockerfile.glpi
+    image: diouxx/glpi:latest
     container_name: glpi
     environment:
       TZ: Africa/Addis_Ababa
