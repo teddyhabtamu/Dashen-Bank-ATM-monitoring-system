@@ -273,37 +273,32 @@ if [ "$VHOST_ALIAS_OK" != "1" ]; then
     echo "  Adding API Aliases to GLPI vhost..."
     docker exec glpi sh -c 'echo "Alias /apirest.php /var/www/html/glpi/apirest.php" >> /etc/apache2/sites-enabled/000-default.conf'
     docker exec glpi sh -c 'echo "Alias /apixmlrpc.php /var/www/html/glpi/apixmlrpc.php" >> /etc/apache2/sites-enabled/000-default.conf'
-    docker exec glpi apachectl reload 2>/dev/null || docker exec glpi service apache2 reload 2>/dev/null || true
-    sleep 3
-fi
-
-# Check if GLPI files exist but are broken (e.g. corrupted download).
-# A working GLPI API should return JSON (starts with {), not HTML docs.
-echo -n "  Checking GLPI API health... "
-API_HEALTH=$(docker exec glpi wget -q -O - http://localhost/apirest.php 2>/dev/null | head -c 1)
-if [ "$API_HEALTH" != "{" ]; then
-    echo "BROKEN (got HTML instead of JSON) — forcing clean re-download..."
-    docker exec glpi sh -c '
-        rm -rf /var/www/html/glpi /var/www/html/glpi-*.tgz &&
-        cd /var/www/html &&
-        wget -q https://github.com/glpi-project/glpi/releases/download/10.0.15/glpi-10.0.15.tgz &&
-        tar -xzf glpi-10.0.15.tgz &&
-        rm -f glpi-10.0.15.tgz &&
-        chown -R www-data:www-data glpi
-    ' || echo "  ERROR: GLPI re-download failed"
+    echo "  Restarting GLPI container to pick up new vhost..."
     docker restart glpi >/dev/null
     echo -n "  Waiting for GLPI to come back..."
     for i in $(seq 1 30); do
-        if docker exec glpi sh -c '[ -f /var/www/html/glpi/bin/console ] && [ -f /var/www/html/glpi/apirest.php ]' 2>/dev/null; then
+        if docker exec glpi sh -c 'curl -s -o /dev/null -w "%{http_code}" http://localhost/' 2>/dev/null | grep -q "200"; then
             echo " ready"
             break
         fi
         echo -n "."
-        sleep 5
+        sleep 3
     done
-else
-    echo "OK"
 fi
+
+# Check if GLPI API actually works now.
+echo -n "  Checking GLPI API health... "
+API_HEALTH=$(docker exec glpi wget -q -O - http://localhost/apirest.php 2>/dev/null | head -c 1)
+if [ "$API_HEALTH" != "{" ]; then
+    echo "BROKEN — the GLPI container has corrupted files or a misconfigured vhost."
+    echo "  Fix manually on the host:"
+    echo "    docker rm -f glpi"
+    echo "    docker volume rm zabbix-atm_glpi-root"
+    echo "    docker compose up -d glpi"
+    echo "  Then re-run this script."
+    exit 1
+fi
+echo "OK"
 
 # Check if GLPI is already installed by probing the DB
 MYSQL_PASSWORD=$(grep -E '^MYSQL_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
@@ -432,10 +427,11 @@ sys.exit(1)
         echo "  GLPI config_db.php exists:"
         docker exec glpi sh -c 'ls -la /var/www/html/glpi/config/config_db.php' 2>/dev/null || true
         echo "  Fix options:"
-        echo "    1. Re-run this script — it will re-check and can re-download GLPI files."
-        echo "    2. Inspect GLPI files:      docker exec glpi ls -la /var/www/html/glpi/apirest.php"
-        echo "    3. Check Apache vhost:       docker exec glpi cat /etc/apache2/sites-enabled/000-default.conf"
-        echo "    4. Check GLPI logs:          docker exec glpi tail -30 /var/www/html/glpi/files/_log/php-errors.log"
+        echo "    1. Re-run this script — it will add missing Apache Aliases for the API."
+        echo "    2. If still broken, nuke GLPI and re-create:  docker rm -f glpi && docker volume rm zabbix-atm_glpi-root && docker compose up -d glpi"
+        echo "    3. Inspect GLPI files:      docker exec glpi ls -la /var/www/html/glpi/apirest.php"
+        echo "    4. Check Apache vhost:       docker exec glpi cat /etc/apache2/sites-enabled/000-default.conf"
+        echo "    5. Check GLPI logs:          docker exec glpi tail -30 /var/www/html/glpi/files/_log/php-errors.log"
         exit 1
     fi
 fi
