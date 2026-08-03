@@ -82,7 +82,7 @@ services:
       GF_LOG_FILTERS: rendering:debug
       ZABBIX_WEB_PASSWORD: zabbix
       DB_PASS: ${DB_PASS}
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/provisioning/dashboards/ATM Operations Centre — Dashen Bank-1781385603999.json
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/provisioning/dashboards/ATM Operations Centre — Dashen Bank-1785397982257.json
     ports:
       - "3002:3000"
     volumes:
