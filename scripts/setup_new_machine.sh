@@ -216,10 +216,25 @@ GLPI_CONSOLE="php /var/www/html/glpi/bin/console"
 INSTALLED=$(docker exec glpi-db mysql -u glpi -p"$MYSQL_PASSWORD" glpi -e "SELECT COUNT(*) FROM glpi_configs WHERE name='version'" 2>/dev/null | tail -1 | tr -d ' ' || echo "0")
 if [ -z "$INSTALLED" ] || [ "$INSTALLED" = "0" ]; then
     echo "  GLPI not yet installed — running CLI installer..."
-    docker exec glpi $GLPI_CONSOLE db:install \
+    # Ensure config/ directory is writable so db:install can create config_db.php
+    docker exec glpi sh -c 'chown -R www-data:www-data /var/www/html/glpi/config'
+    DB_INSTALL_OUTPUT=$(docker exec glpi $GLPI_CONSOLE db:install \
         --db-host=glpi-db --db-name=glpi \
         --db-user=glpi --db-password="$MYSQL_PASSWORD" \
-        --default-language=en --no-interaction 2>&1 | grep -v "already\|already exists" || true
+        --default-language=en --no-interaction 2>&1)
+    DB_INSTALL_EXIT=$?
+    echo "$DB_INSTALL_OUTPUT" | grep -v "already\|already exists" || true
+    if [ "$DB_INSTALL_EXIT" != "0" ]; then
+        echo "  ERROR: GLPI db:install failed (exit code $DB_INSTALL_EXIT)."
+        echo "  Check the GLPI container logs: docker logs glpi"
+        exit 1
+    fi
+    # Verify config_db.php was created
+    if ! docker exec glpi test -f /var/www/html/glpi/config/config_db.php; then
+        echo "  ERROR: GLPI db:install completed but config_db.php was not created."
+        echo "  Check the GLPI container logs: docker logs glpi"
+        exit 1
+    fi
 fi
 # Set default password so the REST API can log in
 # (GLPI 10.0.15 has no CLI password command; hash via Auth and UPDATE directly)
