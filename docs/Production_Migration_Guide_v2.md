@@ -1,29 +1,29 @@
 # Dashen Bank — ATM Monitoring System
-# Production Migration Guide v2 (Revised 2026-07-16)
+# Production Migration Guide v3 (Revised 2026-08-06)
 
-## From PoC (Single Laptop / Simulated ATMs) to Production (5 VMs / Real NCR + GRG ATMs)
+## From PoC (Single Laptop / Simulated ATMs) to Production (3 VMs / Real NCR + GRG ATMs)
 
-**Based on:** Server Infrastructure Specification (June 2026) + Collection Strategy decision (`docs/collection-strategy.md`)
-**Target:** Production — RHEL 9, 5 VMs, real Dashen ATM fleet (NCR + GRG only), 3-Year Data Retention
+**Based on:** Server Infrastructure Specification (Revised — August 2026) + Collection Strategy decision (`docs/collection-strategy.md`)
+**Target:** Production — RHEL 9, **3 VMs (APPS-01, DATA-01, GWY-01)**, real Dashen ATM fleet (NCR + GRG only), 3-Year Data Retention
+**Supersedes:** v2 (which assumed the old 5-VM layout — all VM references below follow the revised 3-VM specification)
 
 ---
 
 # 0. Read This First — Corrections & Re-prioritization
 
-This v2 guide was written assuming the PoC used SNMP against the simulators. **That assumption is wrong and must be corrected before you trust any Phase 4–8 step:**
-
-1. **The PoC simulators are collected over HTTP, not SNMP.** The Zabbix templates use `HTTP agent` items hitting `http://172.17.0.1:{$ATM_PORT}/oid/...`. Real ATMs must be collected over **SNMP** (UDP 161). So the production cutover is *not* "only change the address" — it is "change item type HTTP→SNMP **and** re-map OIDs to the real NCR/GRG MIB trees." See §8.1 and `docs/collection-strategy.md` §4.
+1. **The PoC simulators are collected over HTTP, not SNMP.** The Zabbix templates use `HTTP agent` items hitting `http://172.17.0.1:{$ATM_PORT}/oid/...`. Real ATMs must be collected over **SNMP** (UDP 161). The production cutover is *not* "only change the address" — it is "change item type HTTP→SNMP **and** re-map OIDs to the real NCR/GRG MIB trees." See §8.1 and `docs/collection-strategy.md` §4.
    - **Mitigation (do this during the build phase, not at cutover):** make the simulators emit **real SNMP** (e.g. `snmp-simulator` / `snmp4arts`) so the Zabbix items are SNMP-native from day one. Then production is truly "point Zabbix at real ATMs."
 
-2. **Fleet size is inconsistent between planning docs.** This guide says 2,300–2,700 ATMs; Abinet's inventory says ~1,200 ATMs (798 GRG + 429 NCR). The inventory has been reconciled — the count is ~1,200, not 2,300–2,700. VM specs in this guide use the upper bound; with ~1,200 ATMs the current specs are even more comfortable.
+2. **Fleet size is inconsistent between planning docs.** Earlier guides said 2,300–2,700 ATMs; Abinet's inventory confirmed **1,202 ATMs** (798 GRG + 429 NCR). Capacity planning and VM sizing use this confirmed count — the revised spec (24 vCPU / 72 GB / ~4 TB) has comfortable headroom even for growth toward 5,000.
 
-3. **Full-fleet cutover in 2 months is not realistic.** This guide's Phase order implies a big-bang move. In practice: build the platform + connect a **pilot wave (10–50 ATMs)** over SNMP, run **parallel to NetXMS**, validate, then phase the rest. See §8.7 (Parallel Run) and `docs/collection-strategy.md` §5.
+3. **Full-fleet cutover in 2 months is not realistic.** Build the platform + connect a **pilot wave (10–50 ATMs)** over SNMP, run **parallel to NetXMS**, validate, then phase the rest. See §8.7 (Parallel Run) and `docs/collection-strategy.md` §5.
 
-4. **Zabbix proxies are deferred to Phase 2.** The original proxy-topology design (8 proxies across 14 districts) was premature. Based on senior engineer review:
-   - A single Zabbix server with the documented specs (16 vCPU + 64 GB PostgreSQL) easily handles 1,200 ATMs × 40 items = 48,000 items.
-   - Proxies add procurement, installation, configuration, security, and monitoring overhead that would jeopardize the 45-day timeline.
-   - Initial rollout is **centralized**. Proxies are considered only if real performance monitoring proves they're needed.
-   - See `docs/proxy-topology.md` (updated) and `docs/uat-pilot-checklist.md` for the revised approach.
+4. **Zabbix proxies are deferred to Phase 2.** A single centralized Zabbix server (8 vCPU on APPS-01) easily handles 1,202 ATMs × 40 items = 48,000 items. Proxies are considered only if real performance monitoring proves they're needed. See `docs/proxy-topology.md` and `docs/uat-pilot-checklist.md`.
+
+5. **Server layout changed from 5 VMs to 3 VMs** (revised spec, August 2026). Services that previously had their own VM now share tiered servers because they are not all busy at the same time:
+   - **APPS-01** — Zabbix server + web, Grafana, GLPI, Report Portal, anomaly detector, network correlator, state manager (8 vCPU / 16 GB / 400 GB)
+   - **DATA-01** — PostgreSQL + OpenSearch + OpenSearch Dashboards + Filebeat (12 vCPU / 48 GB / 3.5 TB)
+   - **GWY-01** — ISO 8583 Gateway only (4 vCPU / 8 GB / 100 GB) — kept separate for network isolation from the bank's switch
 
 ---
 
@@ -31,16 +31,14 @@ This v2 guide was written assuming the PoC used SNMP against the simulators. **T
 
 ## 1.1 What This Guide Does
 
-This guide takes the ATM Monitoring System — currently running on your laptop with simulated ATMs (all in one Docker Compose file) — and moves it onto Dashen Bank's production infrastructure: **5 separate RHEL 9 virtual machines** serving the real Dashen ATM fleet.
-
-The infrastructure differs fundamentally from the PoC:
+This guide takes the ATM Monitoring System — currently running on your laptop with simulated ATMs (all in one Docker Compose file) — and moves it onto Dashen Bank's production infrastructure: **3 RHEL 9 virtual machines** serving the real Dashen ATM fleet.
 
 | **PoC Assumed** | **Production Spec** |
 |---|---|
-| 1 laptop (Docker Compose) | 5 VMs (RHEL 9) |
-| ~40 services in one compose | Services split across 5 VMs |
+| 1 laptop (Docker Compose) | 3 VMs (RHEL 9) |
+| ~18 services in one compose | Services split across 3 VMs |
 | Simulated ATMs over HTTP | Real NCR/GRG ATMs over SNMP |
-| 5–22 ATMs | Real fleet (reconcile count — see §0.2) |
+| 5–22 ATMs | Real fleet (1,202 ATMs confirmed — see §0.2) |
 | 90-day retention | 3-year data retention |
 
 ## 1.2 Who This Guide Is For
@@ -61,44 +59,37 @@ These do **not** change during migration:
 
 If you need to edit a Grafana dashboard query or Report Portal route to make it "work with real ATMs" — stop. That means your data is not arriving in the expected shape. Fix the data source, not the dashboard.
 
-## 1.4 The Big Change: From One Compose File to Five
+## 1.4 The Big Change: From One Compose File to Three
 
-Your PoC has one `docker-compose.yml` with ~40 services all talking to each other by container name (`postgres`, `opensearch`, `zabbix-server`).
+Your PoC has one `docker-compose.yml` with ~18 services all talking to each other by container name (`postgres`, `opensearch`, `zabbix-server`).
 
-In production, services are spread across 5 VMs. They cannot use Docker's internal DNS. Instead, they use **IP addresses** across the bank's network.
-
-Here is the connection diagram:
+In production, services are spread across 3 VMs. They cannot use Docker's internal DNS. Instead, they use **IP addresses** across the bank's network.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                         DASHEN BANK INTERNAL NETWORK                          │
 │                                                                              │
-│  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐       │
-│  │   VM1: ZABBIX    │    │   VM2: DB        │    │  VM3: OPENSEARCH STACK  │       │
-│  │   16 vCPU, 32 GB │    │   16 vCPU, 64 GB │    │  12 vCPU, 48 GB  │       │
-│  │   200 GB NVMe    │    │   1 TB NVMe      │    │   2 TB NVMe      │       │
-│  │                  │    │                  │    │                  │       │
-│  │  zabbix-server ──┼────┼─> VM2:5432      │    │  opensearch      │       │
-│  │  zabbix-web   ───┼────┼─> VM2:5432      │    │  os-dashboards   │       │
-│  │  Port: 8080,10051│    │  Port: 5432      │    │  filebeat        │       │
-│  └────────┬─────────┘    └──────────────────┘    │  Ports: 9200,5601│       │
-│           │                                      └────────┬─────────┘       │
-│           │ VM1:8080 (Zabbix API)                          │                │
-│           ▼                                                │ OS:9200        │
-│  ┌──────────────────────────────────────────────────────────┘                │
-│  │                                                                           │
-│  │  ┌──────────────────┐    ┌──────────────────┐                             │
-│  │  │   VM4: GRAFANA   │    │   VM5: GATEWAY   │                            │
-│  │  │   8 vCPU, 24 GB  │    │   8 vCPU, 16 GB  │                             │
-│  │  │   200 GB NVMe    │    │   100 GB NVMe    │                             │
-│  │  │                  │    │                  │                             │
-│  │  │  grafana ────────┼────┼─> VM1:8080 (API)│                             │
-│  │  │  grafana ────────┼────┼─> VM2:5432 (DB) │  iso8583-gateway ───────────┼─> VM2:5432
-│  │  │  report-portal ──┼────┼─> VM2:5432 (DB) │  anomaly-detector ─────────┼─> VM2:5432
-│  │  │  report-portal ──┼────┼─> VM3:9200 (ES) │  network-correlator ───────┼─> VM2:5432
-│  │  │  glpi            │    │                  │  network-correlator ───────┼─> VM1:8080
-│  │  │  mariadb         │    │                  │                            │
-│  │  └──────────────────┘    └──────────────────┘                            │
+│  ┌───────────────────────────┐       ┌───────────────────────────┐           │
+│  │ APPS-01  8 vCPU / 16 GB   │       │ DATA-01  12 vCPU / 48 GB  │           │
+│  │ 400 GB NVMe               │       │ 3.5 TB NVMe               │           │
+│  │                           │       │                           │           │
+│  │ zabbix-server ────────────┼───────┼─> PG 172.26.18.102:5432     │           │
+│  │ zabbix-web                │       │ opensearch                │           │
+│  │ grafana / renderer        │       │ os-dashboards             │           │
+│  │ glpi + mariadb            │       │ filebeat ──> local OS:9200│           │
+│  │ report-portal ────────────┼───────┼─> PG :5432, OS :9200      │           │
+│  │ anomaly-detector          │       │                           │           │
+│  │ network-correlator        │       │ Ports: 5432, 9200, 5601   │           │
+│  │ state-manager             │       └───────────────────────────┘           │
+│  │                           │                                              │
+│  │ Ports: 8080, 3000, 8082,  │        ┌───────────────────────────┐          │
+│  │ 8888                      │        │ GWY-01   4 vCPU / 8 GB    │          │
+│  └───────────┬───────────────┘        │ 100 GB NVMe               │          │
+│              │                        │                           │          │
+│              │ Zabbix API (local)     │ iso8583-gateway ──────────┼─> PG:5432│
+│              │                        │ Port: 9876 (to switch)   │          │
+│              ▼                        └───────────────────────────┘          │
+│  UDP 161 → ATM network (SNMP polling)                                        │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -108,55 +99,43 @@ Every arrow is a **firewall rule you must request from Dashen IT**. Section 3.2 
 
 # 2. Your Production Architecture
 
-## 2.1 The 5 Production VMs
+## 2.1 The 3 Production VMs
 
-### VM1 — Zabbix Server + Web
-- **Spec:** 16 vCPU, 32 GB RAM, 200 GB NVMe SSD
-- **Runs:** Zabbix Server, Zabbix Web (UI), Zabbix Agent (for the VM itself)
-- **Why:** Zabbix needs CPU to poll 2,700+ ATMs and evaluate triggers. 16 vCPU handles 30–60s polling intervals at scale.
-- **Open ports:** 8080 (web), 10051 (trapper/proxy), 10050 (agent)
+### APPS-01 — Zabbix + Dashboards + Reports + Intelligence
+- **Spec:** 8 vCPU, 16 GB RAM, 400 GB NVMe SSD
+- **Runs:** Zabbix Server, Zabbix Web (UI), Zabbix Agent (for the VM itself), Grafana, Grafana Image Renderer, GLPI + MariaDB, Report Portal, Anomaly Detector, Network Correlator, State Manager
+- **Why one VM for all of these:** they are never busy at the same time (dashboards in the morning, reports at month-end, alerts only on problems). Zabbix's own sizing guide puts 5,000 hosts at ~4 vCPU / 8 GB — 8/16 gives double headroom.
+- **Open ports:** 8080 (Zabbix web), 10051 (trapper/proxy), 10050 (agent), 3000 (Grafana), 8082 (GLPI), 8888 (Report Portal)
 
-### VM2 — PostgreSQL (Monitoring DB + Transaction DB)
-- **Spec:** 16 vCPU, 64 GB RAM, 1 TB NVMe SSD
-- **Runs:** PostgreSQL 15 — **single instance**, no Docker container for the database itself
-- **Why 64 GB / 1 TB:** This VM holds Zabbix history, trends, events, plus `atm_transactions` for 2,700 ATMs × 3 years ≈ billions of rows. PostgreSQL needs huge `shared_buffers` and `effective_cache_size` for analytical queries on transaction data.
-- **Open port:** 5432 — **only** to VMs 1, 4, and 5
+### DATA-01 — PostgreSQL + OpenSearch (the storage tier)
+- **Spec:** 12 vCPU, 48 GB RAM, 3.5 TB NVMe SSD
+- **Runs:** PostgreSQL 15 (single instance — monitoring history, trends, `atm_transactions`), OpenSearch + OpenSearch Dashboards, Filebeat
+- **Why 48 GB / 3.5 TB:** PostgreSQL cache (shared_buffers ~12–16 GB) + OpenSearch JVM heap (16 GB) + ~2.5 years of searchable EJ journals + 30-day history + 3-yr transactions ≈ 3.5 TB.
+- **Open ports:** 5432 (PostgreSQL — **only** to APPS-01 and GWY-01), 9200 (OpenSearch — to APPS-01 only), 5601 (OpenSearch Dashboards — staff workstations, optional)
 
-### VM3 — OpenSearch + OpenSearch Dashboards + Filebeat
-- **Spec:** 12 vCPU, 48 GB RAM, 2 TB NVMe SSD
-- **Runs:** OpenSearch, OpenSearch Dashboards, Filebeat
-- **Why 2 TB:** EJ logs from 2,700 ATMs over 3 years ≈ 886M+ documents. 2 TB covers storage + indexing overhead + replicas.
-- **Open ports:** 9200 (OS API — to VM4 only), 5601 (OpenSearch Dashboards — staff workstations)
-
-### VM4 — Grafana + GLPI + Report Portal + Renderer
-- **Spec:** 8 vCPU, 24 GB RAM, 200 GB NVMe SSD
-- **Runs:** Grafana (with Zabbix plugin), Grafana Image Renderer, GLPI, MariaDB (for GLPI), Report Portal (Flask)
-- **Why 8 vCPU:** PDF rendering with headless Chromium is CPU-intensive. Reports are generated on-demand.
-- **Open ports:** 3000 (Grafana), 8082 (GLPI), 8888 (Report Portal)
-
-### VM5 — ISO 8583 Gateway + Anomaly Detector + Network Correlator
-- **Spec:** 8 vCPU, 16 GB RAM, 100 GB NVMe SSD
-- **Runs:** ISO 8583 Gateway (TCP listener), Anomaly Detector, Network Correlator
-- **Why relatively small:** These are lightweight Python processes running periodic SQL queries and a TCP listener.
+### GWY-01 — ISO 8583 Gateway
+- **Spec:** 4 vCPU, 8 GB RAM, 100 GB NVMe SSD
+- **Runs:** ISO 8583 Gateway (TCP listener)
+- **Why its own VM:** it is the **only ingress from the bank's switch**. Network isolation (DMZ/blast-radius) is standard for banking integrations — if this VM is compromised, the attacker hits a gateway, not the database.
 - **Open port:** 9876 (ISO 8583 — to ATM switch network only)
 
 ## 2.2 The 2 UAT VMs
 
-### UAT VM1 — Zabbix + PostgreSQL + Grafana + GLPI + Report Portal (all-in-one)
-- **Spec:** 8 vCPU, 32 GB RAM, 500 GB NVMe SSD
-- **Purpose:** A compact environment to test everything before touching production.
+| VM | Services | Spec |
+|---|---|---|
+| **UAT-01** | Zabbix + PostgreSQL + Grafana + GLPI + Report Portal (all-in-one) | 4 vCPU, 8 GB RAM, 500 GB |
+| **UAT-02** | OpenSearch + OpenSearch Dashboards + ISO 8583 Gateway | 4 vCPU, 8 GB RAM, 200 GB |
 
-### UAT VM2 — OpenSearch + OpenSearch Dashboards + ISO 8583 Gateway
-- **Spec:** 8 vCPU, 32 GB RAM, 500 GB NVMe SSD
-- **Purpose:** EJ log testing and ISO 8583 message validation.
+UAT replicates the **shape** of the system, not its 1,202-ATM scale — 10–20 simulated ATMs are enough to validate templates, dashboards, and reports. Full UAT deployment steps are in **`docs/UAT_Migration_Guide.md`**.
 
-## 2.3 Why Not One Big Server?
+## 2.3 Why Not One Big Server? (And Why Not Five?)
 
-Three reasons:
+**Why not one big server:**
+1. **I/O isolation** — PostgreSQL and OpenSearch are both I/O-hungry. DATA-01 owns that tier alone, so Zabbix polling and EJ indexing never compete with dashboard/report queries for the same disk.
+2. **Security zones** — the ISO 8583 gateway (GWY-01) must be reachable from the ATM switch network. That port should **not** be on the same VM as 3 years of transaction history.
+3. **Recovery scope** — if the data tier fails, apps stay up; if the gateway is compromised, the DB is untouched.
 
-1. **I/O isolation** — PostgreSQL and OpenSearch are both I/O-hungry. Competing for the same disk would slow down transaction queries _and_ EJ searches simultaneously.
-2. **Security zones** — The ISO 8583 gateway (VM5) must be reachable from the ATM switch network. That port should **not** be on the same VM as 3 years of transaction history. If VM5 is compromised, the attacker hits a gateway, not your database.
-3. **Bank standard** — Dashen IT specified this architecture. The VM provisioning, firewall rules, and monitoring tooling are designed around this split.
+**Why not five VMs (as v2 assumed):** every extra VM is an OS to patch, a firewall rule-set, a backup stream, and a failure point. Zabbix server + web + app services on one VM is a standard, documented deployment at this fleet size. The two separations that matter are kept (data tier + DMZ). The revised spec says so explicitly — the same services, the same coverage, fewer machines.
 
 ---
 
@@ -164,7 +143,7 @@ Three reasons:
 
 ## 3.1 Access Checklist
 
-- [ ] **SSH access** to all 7 VMs — ask IT to create your user and add to `wheel` group
+- [ ] **SSH access** to all 5 VMs (3 production + 2 UAT) — ask IT to create your user and add to `wheel` group
 - [ ] **RHEL 9 subscription** or local repo access
 - [ ] **Docker** installed (instructions in Phase 1 — same for all VMs)
 - [ ] **Git** installed on all VMs
@@ -176,22 +155,22 @@ Three reasons:
 
 ## 3.2 Firewall Rules to Request
 
+**Network layout (confirmed with Cloud & Core / Security, August 2026):** APPS-01 and GWY-01 sit on **VLAN 4055** (172.26.18.64/28), DATA-01 on **VLAN 4056** (172.26.18.96/28) — production traffic between APPS/GWY and DATA-01 is therefore **inter-VLAN** and must be explicitly allowed. UAT-01 is on VLAN 4029 (172.26.208.0/24), UAT-02 on VLAN 4021 (172.26.21.0/24) — also inter-VLAN. The central repo server **172.25.37.4** must reach all 5 RHEL servers for update activity.
+
 | From | To | Port | Purpose |
 |---|---|---|---|
-| VM1 (Zabbix) | VM2 (PostgreSQL) | TCP 5432 | Zabbix reads/writes monitoring data |
-| VM4 (Grafana) | VM2 (PostgreSQL) | TCP 5432 | Grafana PostgreSQL datasource |
-| VM4 (Report Portal) | VM2 (PostgreSQL) | TCP 5432 | Report Portal reads transactions |
-| VM5 (Gateway) | VM2 (PostgreSQL) | TCP 5432 | ISO 8583 writes transactions |
-| VM5 (Anomaly Detector) | VM2 (PostgreSQL) | TCP 5432 | Reads transactions for scanning |
-| VM5 (Correlator) | VM2 (PostgreSQL) | TCP 5432 | Reads transactions for correlation |
-| VM4 (Grafana) | VM1 (Zabbix) | TCP 8080 | Zabbix API calls from Grafana |
-| VM5 (Correlator) | VM1 (Zabbix) | TCP 8080 | Zabbix API for event data |
-| VM4 (Report Portal) | VM3 (OpenSearch) | TCP 9200 | EJ search queries |
-| VM5 (Gateway) | ATM Switch | TCP 9876 | ISO 8583 messages |
-| VM1 (Zabbix) | ATM Network | UDP 161 | SNMP polling |
-| Staff workstations | VM1 | TCP 8080 | Zabbix web UI |
-| Staff workstations | VM4 | TCP 3000, 8082, 8888 | Grafana, GLPI, Report Portal |
-| Staff workstations | VM3 | TCP 5601 | OpenSearch Dashboards (optional) |
+| APPS-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 5432 | Zabbix reads/writes monitoring data |
+| APPS-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 5432 | Grafana PostgreSQL datasource |
+| APPS-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 5432 | Report Portal reads transactions |
+| APPS-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 9200 | EJ search queries |
+| APPS-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 5432 | Anomaly detector reads transactions |
+| APPS-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 5432 | Correlator reads transactions |
+| GWY-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 5432 | ISO 8583 writes transactions |
+| GWY-01 (Gateway) | ATM Switch | TCP 9876 | ISO 8583 messages |
+| APPS-01 (Zabbix) | ATM Network | UDP 161 | SNMP polling |
+| Staff workstations | APPS-01 | TCP 8080, 3000, 8082, 8888 | Zabbix web, Grafana, GLPI, Report Portal |
+| Staff workstations | DATA-01 | TCP 5601 | OpenSearch Dashboards (optional) |
+| Repo server 172.25.37.4 | All 5 RHEL servers | TCP 443, 80 | Update activity (requested by Cloud & Core, Aug 12) |
 
 **All rules must be internal-only.** No port exposed to the public internet.
 
@@ -202,7 +181,7 @@ Ask the Channel Support / ATM Switch team for these 5 things:
 1. **Connection direction** — Does the switch connect to our listener (TCP server mode), or must we connect to the switch (client mode)?
 2. **ISO 8583 variant** — Different switches (Base24, Postilion, etc.) have different bitmap/field definitions.
 3. **Sample message captures** — Hex dumps or pcap files of 5–10 real messages to validate the parser.
-4. **Switch IP and port** — Must be reachable from VM5.
+4. **Switch IP and port** — Must be reachable from GWY-01.
 5. **Test/UAT switch environment** — To validate before hitting production.
 
 ## 3.4 Information from the ATM Hardware Team
@@ -216,9 +195,9 @@ Open a ticket with the ATM vendor support team for:
 
 ---
 
-# 3.5 Revised 45-Day Priorities (per Senior Engineer Review)
+# 3.5 Revised Priorities (per Senior Engineer Review)
 
-The original phase ordering (deploy VMs → import templates → connect ATMs) assumed the main risk was infrastructure deployment. Based on senior engineer review, the **highest risks are elsewhere**. This section reorders the work.
+The original phase ordering (deploy VMs → import templates → connect ATMs) assumed the main risk was infrastructure deployment. The **highest risks are elsewhere**:
 
 ## Priority 1 — Validate One Real ATM End-to-End (Highest Risk)
 
@@ -234,7 +213,7 @@ Before deploying any VMs or splitting compose files, validate that a real ATM ca
 ## Priority 2 — Confirm SNMP Credentials and Network Path
 
 1. Verify SNMP community string with the bank (is it v2c? v3? one community across all ATMs or per-vendor?)
-2. Request firewall rules: UDP 161 from the Zabbix server IP to ATM subnet(s)
+2. Request firewall rules: UDP 161 from the Zabbix server IP (APPS-01) to ATM subnet(s)
 3. Test reachability to a representative ATM from the UAT VM1 (not just sandbox)
 
 ## Priority 3 — Pilot 20–50 ATMs Across Different Districts
@@ -248,14 +227,14 @@ Once 1 ATM works, expand to a pilot set covering multiple districts, vendors (NC
 ## Priority 4 — Scale to Full Fleet
 
 Only after the pilot is stable. This means:
-- Import all 1,200+ hosts into Zabbix
+- Import all 1,202 hosts into Zabbix
 - Tune polling intervals (critical items 30s, normal hourly, static daily)
 - Monitor server load (CPU, DB connections, disk I/O)
 - Build the operational dashboard (online/offline, cash low, alerts, availability %)
 
 ## What This Means for the Phase Order
 
-The original Phase 0–8 ordering in this guide is still valid as a **reference**, but the **actual sequence** should be:
+The phase ordering below (Phases 1–10) is still valid as a **reference**, but the **actual sequence** should be:
 
 1. **Validate 1 real ATM** (wasn't in original plan — now top priority)
 2. **Deploy UAT VMs** (Phase 1 — to have a proper test environment)
@@ -263,7 +242,7 @@ The original Phase 0–8 ordering in this guide is still valid as a **reference*
 4. **Deploy Production VMs** (Phase 2)
 5. **Scale to full fleet**
 
-Proxies (§2.2 in proxy-topology.md) are removed from this timeline entirely — they are a Phase 2 consideration after the centralized deployment is stable.
+Proxies are removed from this timeline entirely — they are a Phase 2 consideration after the centralized deployment is stable.
 
 ---
 
@@ -275,22 +254,23 @@ Before touching any server, you need to **split** the single PoC `docker-compose
 
 | Container | PoC Name | Prod VM | Key Change |
 |---|---|---|---|
-| Zabbix Server | `zabbix-server` | VM1 | DB_HOST → VM2 IP |
-| Zabbix Web | `zabbix-web` | VM1 | DB_HOST → VM2 IP |
-| Zabbix Agent | `zabbix-agent` | VM1 | Monitors the VM itself |
-| PostgreSQL | `zabbix-db` | VM2 | Exposed on port 5432 |
-| OpenSearch | `elasticsearch` | VM3 | 16 GB JVM heap |
-| OpenSearch Dashboards | `kibana` | VM3 | Points to local ES |
-| Filebeat | `filebeat` | VM3 | Watches local + real EJ log dirs |
-| Grafana | `grafana` | VM4 | Datasources use VM IPs |
-| Grafana Renderer | `grafana-renderer` | VM4 | For PDF generation |
-| MariaDB (GLPI) | `glpi-db` | VM4 | Local to VM4 |
-| GLPI | `glpi` | VM4 | Points to local MariaDB |
-| Report Portal | `report-portal` | VM4 | DB_HOST → VM2, OS_HOST → VM3 |
-| ISO 8583 Gateway | `iso8583-gateway` | VM5 | DB_HOST → VM2 |
-| Anomaly Detector | `anomaly-detector` | VM5 | DB_HOST → VM2 |
-| Network Correlator | `network-correlator` | VM5 | DB_HOST → VM2, ZABBIX_URL → VM1 |
-| Simulators (multi-tenant engines) | `atm-sim-engine`, `atm-txn-engine`, `atm-ej-engine`, `state-manager` | UAT only | Not in production |
+| Zabbix Server | `zabbix-server` | APPS-01 | DB_HOST → DATA-01 IP |
+| Zabbix Web | `zabbix-web` | APPS-01 | DB_HOST → DATA-01 IP |
+| Zabbix Agent | `zabbix-agent` | APPS-01 | Monitors the VM itself |
+| Grafana | `grafana` | APPS-01 | Datasources use VM IPs |
+| Grafana Renderer | `grafana-renderer` | APPS-01 | For PDF generation |
+| MariaDB (GLPI) | `glpi-db` | APPS-01 | Local to APPS-01 |
+| GLPI | `glpi` | APPS-01 | Points to local MariaDB |
+| Report Portal | `report-portal` | APPS-01 | DB_HOST → DATA-01, OS_HOST → DATA-01 |
+| Anomaly Detector | `anomaly-detector` | APPS-01 | DB_HOST → DATA-01 |
+| Network Correlator | `network-correlator` | APPS-01 | DB_HOST → DATA-01, Zabbix local |
+| State Manager | `state-manager` | APPS-01 | DB_HOST → DATA-01 |
+| PostgreSQL | `zabbix-db` | DATA-01 | Exposed on port 5432 |
+| OpenSearch | `opensearch` | DATA-01 | 16 GB JVM heap |
+| OpenSearch Dashboards | `opensearch-dashboards` | DATA-01 | Points to local OS |
+| Filebeat | `filebeat` | DATA-01 | Watches local + real EJ log dirs |
+| ISO 8583 Gateway | `iso8583-gateway` | GWY-01 | DB_HOST → DATA-01 |
+| Simulators (multi-tenant engines) | `atm-sim-engine`, `atm-txn-engine`, `atm-ej-engine` | UAT only | Not in production |
 
 ## 4.2 The Critical Change: Container Names → IP Addresses
 
@@ -307,20 +287,20 @@ In production, each VM has a different IP. Replace container names with real IPs
 ```yaml
 # Production — uses real network IPs
 environment:
-  DB_HOST: 10.200.1.2          # VM2's IP
-  OS_HOST: 10.200.1.3:9200     # VM3's IP
-  ZABBIX_URL: http://10.200.1.1:8080/api_jsonrpc.php  # VM1's IP
+  DB_HOST: 172.26.18.102          # DATA-01's IP
+  OS_HOST: 172.26.18.102:9200     # DATA-01's IP (same VM as the DB now)
+  ZABBIX_URL: http://172.26.18.74:8080/api_jsonrpc.php  # APPS-01's IP
 ```
 
-Fill in your actual IPs here:
+Your actual IPs (confirmed with IT, August 2026):
 
-| VM | Placeholder IP | Your Actual IP |
-|---|---|---|
-| VM1 (Zabbix) | 10.200.1.1 | _____________ |
-| VM2 (PostgreSQL) | 10.200.1.2 | _____________ |
-| VM3 (OpenSearch) | 10.200.1.3 | _____________ |
-| VM4 (Grafana/GLPI) | 10.200.1.4 | _____________ |
-| VM5 (Gateway) | 10.200.1.5 | _____________ |
+| VM | Server Name (per IT mapping) | VLAN / Network | IP |
+|---|---|---|---|
+| APPS-01 (Zabbix/dashboards) | DBHQPRODATMMONAPP | VLAN 4055 — 172.26.18.64/28 (gw 172.26.18.65) | 172.26.18.74 |
+| DATA-01 (PostgreSQL/OpenSearch) | DBHQPRODATMMONDB | VLAN 4056 — 172.26.18.96/28 (gw 172.26.18.97) | 172.26.18.102 |
+| GWY-01 (ISO 8583 Gateway) | DBHQPRODATMMONGW | VLAN 4055 — 172.26.18.64/28 (gw 172.26.18.65) | 172.26.18.76 |
+| UAT-01 (all-in-one) | DBHQUATATMMONAPP | VLAN 4029 — 172.26.208.0/24 (gw 172.26.208.1) | 172.26.208.176 |
+| UAT-02 (OpenSearch) | DBHQUATATMMONDB | VLAN 4021 — 172.26.21.0/24 (gw 172.26.21.1) | 172.26.21.50 |
 
 ## 4.3 Step-by-Step: Create Per-VM Compose Files
 
@@ -333,9 +313,9 @@ mkdir -p deploy/production
 mkdir -p deploy/uat
 ```
 
-### Step 4.3.2 — VM1 compose file (Zabbix)
+### Step 4.3.2 — APPS-01 compose file (Zabbix + dashboards + reports)
 
-Create `deploy/production/docker-compose-vm1-zabbix.yml`:
+Create `deploy/production/docker-compose-apps.yml`:
 
 ```yaml
 services:
@@ -343,7 +323,7 @@ services:
     image: zabbix/zabbix-server-pgsql:rhel-6.4-latest
     container_name: zabbix-server
     environment:
-      DB_SERVER_HOST: "10.200.1.2"
+      DB_SERVER_HOST: "172.26.18.102"
       POSTGRES_DB: "zabbix"
       POSTGRES_USER: "zabbix"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
@@ -355,7 +335,7 @@ services:
     image: zabbix/zabbix-web-nginx-pgsql:rhel-6.4-latest
     container_name: zabbix-web
     environment:
-      DB_SERVER_HOST: "10.200.1.2"
+      DB_SERVER_HOST: "172.26.18.102"
       POSTGRES_DB: "zabbix"
       POSTGRES_USER: "zabbix"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
@@ -373,164 +353,12 @@ services:
     network_mode: "host"
     privileged: true
     environment:
-      ZBX_HOSTNAME: "Zabbix-Server-VM1"
+      ZBX_HOSTNAME: "Zabbix-Server-APPS01"
       ZBX_SERVER_HOST: "127.0.0.1"
     restart: unless-stopped
     depends_on:
       - zabbix-server
-```
 
-**Why `rhel-6.4-latest` images?** The PoC uses `ubuntu-6.4-latest`. RHEL-9-native images avoid compatibility issues with RHEL's kernel and library versions.
-
-**Why `DB_SERVER_HOST: 10.200.1.2`?** This is the entire point of the distributed architecture — Zabbix connects to PostgreSQL on VM2 over the network, not to a local container.
-
-### Step 4.3.3 — VM2 compose file (PostgreSQL)
-
-Create `deploy/production/docker-compose-vm2-postgres.yml`:
-
-```yaml
-services:
-  postgres:
-    image: postgres:15
-    container_name: zabbix-db
-    environment:
-      POSTGRES_DB: "zabbix"
-      POSTGRES_USER: "zabbix"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./config/postgres-production/postgresql-custom.conf:/etc/postgresql/postgresql.conf.d/custom.conf:ro
-    ports:
-      - "5432:5432"
-    restart: unless-stopped
-
-volumes:
-  pgdata:
-```
-
-**You must tune PostgreSQL for 64 GB RAM.** Create the performance config:
-
-```bash
-mkdir -p config/postgres-production
-```
-
-Create `config/postgres-production/postgresql-custom.conf`:
-
-```
-# Dashen Bank ATM — PostgreSQL Performance Tuning
-# Target: VM2 with 64 GB RAM, 16 vCPU, 1 TB NVMe SSD
-
-shared_buffers = '16GB'
-effective_cache_size = '48GB'
-work_mem = '64MB'
-maintenance_work_mem = '2GB'
-wal_buffers = '64MB'
-max_connections = '200'
-checkpoint_completion_target = '0.9'
-checkpoint_timeout = '15min'
-max_wal_size = '16GB'
-min_wal_size = '4GB'
-random_page_cost = '1.1'
-effective_io_concurrency = '200'
-max_parallel_workers_per_gather = '4'
-max_parallel_workers = '8'
-autovacuum_max_workers = '6'
-autovacuum_naptime = '30s'
-autovacuum_vacuum_scale_factor = '0.01'
-autovacuum_analyze_scale_factor = '0.005'
-```
-
-### Step 4.3.4 — VM3 compose file (OpenSearch + OpenSearch Dashboards + Filebeat)
-
-**Note:** These instructions use **OpenSearch** (which the PoC already uses and the bank has standardized on). The configuration is identical to what runs in the PoC today, just tuned for production resources.
-
-Create `deploy/production/docker-compose-vm3-opensearch.yml`:
-
-```yaml
-services:
-  opensearch:
-    image: opensearch:8.11.0
-    container_name: opensearch
-    environment:
-      - discovery.type=single-node
-      - OPENSEARCH_JAVA_OPTS=-Xms16g -Xmx16g
-      - DISABLE_SECURITY_PLUGIN=true
-      
-      
-    volumes:
-      - os-data:/usr/share/opensearch/data
-    ports:
-      - "9200:9200"
-    restart: unless-stopped
-
-  opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:2.14.0
-    container_name: opensearch-dashboards
-    environment:
-      - OPENSEARCH_HOSTS=http://opensearch:9200
-    ports:
-      - "5601:5601"
-    depends_on:
-      - opensearch
-    restart: unless-stopped
-
-  filebeat:
-    image: docker.elastic.co/beats/filebeat-oss:7.12.1
-    container_name: filebeat
-    user: root
-    volumes:
-      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-      - ./ej-logs:/var/log/atm-ej:ro
-      - /data/real-ej-logs:/data/real-ej-logs:ro
-    depends_on:
-      - opensearch
-    restart: unless-stopped
-
-volumes:
-  os-data:
-```
-
-**Why `OPENSEARCH_JAVA_OPTS=-Xms16g -Xmx16g`?** OpenSearch's JVM heap should not exceed 50% of available RAM (the rest is for the OS filesystem cache, which OpenSearch relies on heavily). 16 GB of 48 GB is the sweet spot.
-
-### Step 4.3.5 — Update `filebeat.yml` for production
-
-Replace the PoC's `filebeat.yml` with this version that watches both simulator logs (if any) and real ATM logs:
-
-```yaml
-filebeat.inputs:
-  - type: log
-    enabled: true
-    paths:
-      - /var/log/atm-ej/ATM-*.log
-      - /data/real-ej-logs/*.log
-    fields:
-      log_type: atm_ej
-    fields_under_root: true
-    multiline.pattern: '^\d{4}-\d{2}-\d{2}'
-    multiline.negate: true
-    multiline.match: after
-
-output.elasticsearch:
-  hosts: ["localhost:9200"]
-  index: "atm-ej-live-%{+yyyy.MM.dd}"
-  pipeline: "atm_ej_parser"
-
-setup.ilm.enabled: false
-setup.template.name: "atm-ej-live"
-setup.template.pattern: "atm-ej-live-*"
-
-# Note: Filebeat's "output.elasticsearch" works with OpenSearch
-# because OpenSearch is API-compatible with Elasticsearch 7.x
-```
-
-**`hosts: ["localhost:9200"]`** because both Filebeat and OpenSearch run on VM3.
-
-### Step 4.3.6 — VM4 compose file (Grafana + GLPI + Report Portal + Renderer)
-
-Create `deploy/production/docker-compose-vm4-dashboards.yml`:
-
-```yaml
-services:
   mariadb:
     image: mariadb:10.11
     container_name: glpi-db
@@ -551,7 +379,6 @@ services:
     container_name: glpi
     environment:
       TZ: "Africa/Addis_Ababa"
-      VERSION_GLPI: "10.0.15"
       MARIADB_HOST: "mariadb"
       MARIADB_DATABASE: "glpi"
       MARIADB_USER: "glpi"
@@ -576,7 +403,6 @@ services:
       GF_PANELS_DISABLE_SANITIZE_HTML: "true"
       GF_RENDERING_SERVER_URL: "http://grafana-renderer:8081/render"
       GF_RENDERING_CALLBACK_URL: "http://grafana:3000/"
-      GF_LOG_FILTERS: "rendering:debug"
     ports:
       - "3000:3000"
     volumes:
@@ -587,7 +413,6 @@ services:
       - ./config/grafana/datasources-production.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
       - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
     entrypoint: ["sh", "/entrypoint.sh"]
-    depends_on: []
     restart: unless-stopped
 
   grafana-renderer:
@@ -605,86 +430,18 @@ services:
       dockerfile: Dockerfile
     container_name: report-portal
     environment:
-      DB_HOST: "10.200.1.2"
+      DB_HOST: "172.26.18.102"
       DB_NAME: "zabbix"
       DB_USER: "zabbix"
       DB_PASS: "${DB_PASS}"
-      GRAFANA_URL: "http://10.200.1.4:3000"
+      GRAFANA_URL: "http://172.26.18.74:3000"
       REPORT_PORTAL_PORT: "8888"
-      OS_HOST: "10.200.1.3:9200"
+      OS_HOST: "172.26.18.102:9200"
       OS_INDEX: "atm-ej-live-*,atm-electronic-journal"
     volumes:
       - ./report-portal:/app:rw
     ports:
       - "8888:8888"
-    depends_on: []
-    restart: unless-stopped
-
-volumes:
-  mariadb-data:
-  glpi-root:
-  grafana-data:
-```
-
-### Step 4.3.7 — Create production Grafana datasources
-
-The PoC's `config/grafana/datasources.yml` uses container names. Create a production version at `config/grafana/datasources-production.yml`:
-
-```yaml
-apiVersion: 1
-
-datasources:
-  - name: Zabbix-ATM
-    type: alexanderzobnin-zabbix-datasource
-    access: proxy
-    url: http://10.200.1.1:8080/api_jsonrpc.php
-    jsonData:
-      username: Admin
-    secureJsonData:
-      password: zabbix
-
-  - name: ATM-Transactions
-    type: postgres
-    url: 10.200.1.2:5432
-    database: zabbix
-    user: zabbix
-    secureJsonData:
-      password: zabbix_pass
-    jsonData:
-      sslmode: disable
-      postgresVersion: 1500
-
-  - name: EJ-OpenSearch
-    type: elasticsearch
-    url: http://10.200.1.3:9200
-    jsonData:
-      index: atm-*
-      timeField: "@timestamp"
-      esVersion: "7.10.0"
-      logMessageField: message
-      logLevelField: status
-```
-
-### Step 4.3.8 — VM5 compose file (Gateway + Anomaly + Correlator)
-
-Create `deploy/production/docker-compose-vm5-gateway.yml`:
-
-```yaml
-services:
-  iso8583-gateway:
-    build:
-      context: ./camel
-      dockerfile: Dockerfile.gateway
-    container_name: iso8583-gateway
-    environment:
-      MODE: "simulation"
-      DB_HOST: "10.200.1.2"
-      DB_NAME: "zabbix"
-      DB_USER: "zabbix"
-      DB_PASS: "${DB_PASS}"
-      INTERVAL: "10"
-    ports:
-      - "9876:9876"
     restart: unless-stopped
 
   anomaly-detector:
@@ -694,7 +451,7 @@ services:
     container_name: anomaly-detector
     command: python3 /app/anomaly_detector.py
     environment:
-      DB_HOST: "10.200.1.2"
+      DB_HOST: "172.26.18.102"
       DB_NAME: "zabbix"
       DB_USER: "zabbix"
       DB_PASS: "${DB_PASS}"
@@ -718,11 +475,11 @@ services:
     container_name: network-correlator
     command: python3 /app/network_correlator.py
     environment:
-      DB_HOST: "10.200.1.2"
+      DB_HOST: "172.26.18.102"
       DB_NAME: "zabbix"
       DB_USER: "zabbix"
       DB_PASS: "${DB_PASS}"
-      ZABBIX_URL: "http://10.200.1.1:8080/api_jsonrpc.php"
+      ZABBIX_URL: "http://172.26.18.74:8080/api_jsonrpc.php"
       ZABBIX_USER: "Admin"
       ZABBIX_PASS: "zabbix"
       CHECK_INTERVAL: "120"
@@ -731,36 +488,46 @@ services:
     volumes:
       - ./network_correlator.py:/app/network_correlator.py:ro
     restart: unless-stopped
+
+  state-manager:
+    build:
+      context: ./simulators
+      dockerfile: Dockerfile.atm-simulator
+    container_name: state-manager
+    command: python3 /app/state_manager.py
+    environment:
+      DB_HOST: "172.26.18.102"
+      DB_NAME: "zabbix"
+      DB_USER: "zabbix"
+      DB_PASS: "${DB_PASS}"
+    restart: unless-stopped
+
+volumes:
+  mariadb-data:
+  glpi-root:
+  grafana-data:
 ```
 
-### Step 4.3.9 — UAT VM1 compose file (all-in-one)
+### Step 4.3.3 — DATA-01 compose file (PostgreSQL + OpenSearch)
 
-UAT VM1 runs everything except OpenSearch/OpenSearch Dashboards — similar to the PoC but with RHEL-based images.
-
-Create `deploy/uat/docker-compose-uat-vm1.yml`. This is the most complex file because it includes all 5 simulators + all services.
-
-The file should contain ALL services from the original `docker-compose.yml` (postgres, zabbix-server, zabbix-web, zabbix-agent, grafana, mariadb, glpi, report-portal, iso8583-gateway, anomaly-detector, network-correlator, atm-sim-engine, atm-txn-engine, atm-ej-engine, state-manager, pgadmin) — **same as your current PoC** — with these changes:
-
-1. Use `rhel-6.4-latest` images instead of `ubuntu-6.4-latest` for Zabbix
-2. Grafana port stays `3000:3000`
-3. Report Portal's `OS_HOST` points to UAT VM2's IP
-
-```bash
-# Copy your existing docker-compose.yml as the base
-cp docker-compose.yml deploy/uat/docker-compose-uat-vm1.yml
-
-# Then edit it to change:
-#   1. Zabbix images to rhel-6.4-latest
-#   2. Grafana port from 3002:3000 to 3000:3000
-#   3. Report Portal OS_HOST to UAT VM2 IP
-```
-
-### Step 4.3.10 — UAT VM2 compose file (OpenSearch + OpenSearch Dashboards)
-
-Create `deploy/uat/docker-compose-uat-vm2.yml`:
+Create `deploy/production/docker-compose-data.yml`:
 
 ```yaml
 services:
+  postgres:
+    image: postgres:15
+    container_name: zabbix-db
+    environment:
+      POSTGRES_DB: "zabbix"
+      POSTGRES_USER: "zabbix"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./config/postgres-production/postgresql-custom.conf:/etc/postgresql/postgresql.conf.d/custom.conf:ro
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
   opensearch:
     image: opensearchproject/opensearch:2.14.0
     container_name: opensearch
@@ -799,33 +566,150 @@ services:
       - opensearch
     restart: unless-stopped
 
-  opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:2.14.0
-    container_name: opensearch-dashboards
-    environment:
-      - OPENSEARCH_HOSTS=http://opensearch:9200
-    ports:
-      - "5601:5601"
-    depends_on:
-      - opensearch
-    restart: unless-stopped
-
-  filebeat:
-    image: docker.elastic.co/beats/filebeat-oss:7.12.1
-    container_name: filebeat
-    user: root
-    volumes:
-      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-      - ./ej-logs:/var/log/atm-ej:ro
-    depends_on:
-      - opensearch
-    restart: unless-stopped
-
 volumes:
+  pgdata:
   os-data:
 ```
 
-### Step 4.3.11 — Production .env file
+**You must tune PostgreSQL for the DATA-01 specs.** Create the performance config:
+
+```bash
+mkdir -p config/postgres-production
+```
+
+Create `config/postgres-production/postgresql-custom.conf`:
+
+```
+# Dashen Bank ATM — PostgreSQL Performance Tuning
+# Target: DATA-01 with 48 GB RAM (shared with OpenSearch), 12 vCPU, 3.5 TB NVMe SSD
+
+shared_buffers = '12GB'
+effective_cache_size = '32GB'
+work_mem = '64MB'
+maintenance_work_mem = '2GB'
+wal_buffers = '64MB'
+max_connections = '200'
+checkpoint_completion_target = '0.9'
+checkpoint_timeout = '15min'
+max_wal_size = '16GB'
+min_wal_size = '4GB'
+random_page_cost = '1.1'
+effective_io_concurrency = '200'
+max_parallel_workers_per_gather = '4'
+max_parallel_workers = '8'
+autovacuum_max_workers = '6'
+autovacuum_naptime = '30s'
+autovacuum_vacuum_scale_factor = '0.01'
+autovacuum_analyze_scale_factor = '0.005'
+```
+
+> Note: `shared_buffers = 12 GB` (not 16 GB) because OpenSearch's 16 GB JVM heap lives on the same VM. PostgreSQL + OpenSearch share the 48 GB budget: ~12 GB shared_buffers + ~16 GB heap + OS cache headroom.
+
+**Why `OPENSEARCH_JAVA_OPTS=-Xms16g -Xmx16g`?** OpenSearch's JVM heap should not exceed 50% of available RAM (the rest is for the OS filesystem cache, which OpenSearch relies on heavily). 16 GB of 48 GB is the sweet spot.
+
+### Step 4.3.4 — Update `filebeat.yml` for production
+
+Replace the PoC's `filebeat.yml` with this version that watches both simulator logs (if any) and real ATM logs:
+
+```yaml
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/atm-ej/ATM-*.log
+      - /data/real-ej-logs/*.log
+    fields:
+      log_type: atm_ej
+    fields_under_root: true
+    multiline.pattern: '^\d{4}-\d{2}-\d{2}'
+    multiline.negate: true
+    multiline.match: after
+
+output.elasticsearch:
+  hosts: ["localhost:9200"]
+  index: "atm-ej-live-%{+yyyy.MM.dd}"
+  pipeline: "atm_ej_parser"
+
+setup.ilm.enabled: false
+setup.template.name: "atm-ej-live"
+setup.template.pattern: "atm-ej-live-*"
+
+# Note: Filebeat's "output.elasticsearch" works with OpenSearch
+# because OpenSearch is API-compatible with Elasticsearch 7.x
+```
+
+**`hosts: ["localhost:9200"]`** because both Filebeat and OpenSearch run on DATA-01.
+
+### Step 4.3.5 — GWY-01 compose file (ISO 8583 Gateway)
+
+Create `deploy/production/docker-compose-gateway.yml`:
+
+```yaml
+services:
+  iso8583-gateway:
+    build:
+      context: ./camel
+      dockerfile: Dockerfile.gateway
+    container_name: iso8583-gateway
+    environment:
+      MODE: "simulation"
+      DB_HOST: "172.26.18.102"
+      DB_NAME: "zabbix"
+      DB_USER: "zabbix"
+      DB_PASS: "${DB_PASS}"
+      INTERVAL: "10"
+    ports:
+      - "9876:9876"
+    restart: unless-stopped
+```
+
+### Step 4.3.6 — Create production Grafana datasources
+
+The PoC's `config/grafana/datasources.yml` uses container names. Create a production version at `config/grafana/datasources-production.yml`:
+
+```yaml
+apiVersion: 1
+
+datasources:
+  - name: Zabbix-ATM
+    type: alexanderzobnin-zabbix-datasource
+    access: proxy
+    url: http://172.26.18.74:8080/api_jsonrpc.php
+    jsonData:
+      username: Admin
+    secureJsonData:
+      password: zabbix
+
+  - name: ATM-Transactions
+    type: postgres
+    url: 172.26.18.102:5432
+    database: zabbix
+    user: zabbix
+    secureJsonData:
+      password: zabbix_pass
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1500
+
+  - name: EJ-OpenSearch
+    type: elasticsearch
+    url: http://172.26.18.102:9200
+    jsonData:
+      index: atm-*
+      timeField: "@timestamp"
+      esVersion: "7.10.0"
+      logMessageField: message
+      logLevelField: status
+```
+
+### Step 4.3.7 — UAT compose files
+
+The UAT deployment is covered in full by **`docs/UAT_Migration_Guide.md`**. In short:
+
+- `deploy/uat/docker-compose-uat-vm1.yml` — all services except OpenSearch/Dashboards (same as the current PoC, with `rhel-6.4-latest` Zabbix images and Report Portal's `OS_HOST` pointing to UAT-02's IP)
+- `deploy/uat/docker-compose-uat-vm2.yml` — OpenSearch + OpenSearch Dashboards + Filebeat + ISO 8583 Gateway
+
+### Step 4.3.8 — Production .env file
 
 Create `deploy/production/.env.production`:
 
@@ -861,14 +745,22 @@ Create `deploy/uat/.env.uat` with similar but different passwords.
 
 **Why UAT first?** The UAT environment is isolated. You can make mistakes, test connections, develop SNMP mappings, and validate the ISO 8583 parser — without affecting production data or alarming operations staff.
 
-## 5.1 Deploy UAT VM2 (OpenSearch + OpenSearch Dashboards)
+> **This phase is fully documented in `docs/UAT_Migration_Guide.md`.** It covers, step by step:
+> 1. UAT-02 (OpenSearch) deployment
+> 2. UAT-01 (everything else) deployment
+> 3. Zabbix template/host/media-type imports
+> 4. Grafana, Report Portal, and GLPI verification
+> 5. End-to-end UAT sign-off checklist
+> 6. UAT exit criteria (what must be true before you touch production)
 
-Start with VM2 because it is simpler and will be needed by the Report Portal on VM1.
+The rest of this section is the quick version.
 
-### Step 5.1.1 — SSH into UAT VM2
+## 5.1 Deploy UAT-02 (OpenSearch + OpenSearch Dashboards)
+
+### Step 5.1.1 — SSH into UAT-02
 
 ```bash
-ssh <your-username>@<uat-vm2-ip>
+ssh <your-username>@172.26.21.50
 ```
 
 ### Step 5.1.2 — Install Docker on RHEL 9
@@ -906,10 +798,7 @@ docker compose version
 ### Step 5.1.3 — Clone the repository
 
 ```bash
-# Install git if needed
 sudo dnf install -y git
-
-# Create project directory
 cd /opt
 sudo mkdir -p atm-monitoring
 sudo chown $USER:$USER atm-monitoring
@@ -922,13 +811,8 @@ cd atm-monitoring
 OpenSearch requires increased mmap limits:
 
 ```bash
-# Set temporarily
 sudo sysctl -w vm.max_map_count=262144
-
-# Make permanent
 echo 'vm.max_map_count=262144' | sudo tee -a /etc/sysctl.conf
-
-# Disable swap (ES hates swap)
 sudo swapoff -a
 ```
 
@@ -938,8 +822,6 @@ sudo swapoff -a
 cp deploy/uat/.env.uat .env
 chmod 600 .env
 nano .env
-# Set your passwords
-
 mkdir -p ej-logs
 ```
 
@@ -951,60 +833,44 @@ docker compose -f deploy/uat/docker-compose-uat-vm2.yml up -d
 echo "Waiting 60 seconds for OpenSearch to initialize..."
 sleep 60
 
-# Verify OpenSearch is running
 curl -s http://localhost:9200
 # Expected: JSON response with "cluster_name" and "version"
 
-# Check indices (should be empty initially)
 curl -s http://localhost:9200/_cat/indices?v
 ```
 
-## 5.2 Deploy UAT VM1 (Everything Else)
+## 5.2 Deploy UAT-01 (Everything Else)
 
-### Step 5.2.1 — SSH into UAT VM1
-
-```bash
-ssh <your-username>@<uat-vm1-ip>
-```
-
-### Step 5.2.2 — Install Docker (same as step 5.1.2)
-
-### Step 5.2.3 — Clone the repo
+### Step 5.2.1 — SSH into UAT-01
 
 ```bash
-cd /opt
-sudo mkdir -p atm-monitoring
-sudo chown $USER:$USER atm-monitoring
-git clone <YOUR_GITHUB_URL> atm-monitoring
-cd atm-monitoring
+ssh <your-username>@172.26.208.176
 ```
 
-### Step 5.2.4 — Set up environment
+### Step 5.2.2 — Install Docker + clone repo (same as steps 5.1.2–5.1.3)
+
+### Step 5.2.3 — Set up environment
 
 ```bash
 cp deploy/uat/.env.uat .env
 chmod 600 .env
 nano .env
 
-# Create required directories
 mkdir -p ej-logs reports config/zabbix config/grafana/dashboards config/postgres
 sudo mkdir -p /data/real-ej-logs
 sudo chown $USER:$USER /data/real-ej-logs
 ```
 
-### Step 5.2.5 — Fix Filebeat and EJ log permissions
+### Step 5.2.4 — Fix Filebeat and EJ log permissions
 
 ```bash
-# Fix EJ logs directory ownership
 sudo chown -R $USER:$USER ej-logs/
 chmod 755 ej-logs/
-
-# Fix Filebeat config ownership
 sudo chown root:root filebeat.yml
 sudo chmod 644 filebeat.yml
 ```
 
-### Step 5.2.6 — Start all services
+### Step 5.2.5 — Start all services
 
 ```bash
 # Build custom images
@@ -1015,7 +881,6 @@ docker compose -f deploy/uat/docker-compose-uat-vm1.yml build --no-cache \
 # Start PostgreSQL first (everything depends on it)
 docker compose -f deploy/uat/docker-compose-uat-vm1.yml up -d postgres
 
-# Wait for PostgreSQL to be ready
 echo "Waiting for PostgreSQL..."
 for i in {1..30}; do
   if docker exec zabbix-db pg_isready -U zabbix -d zabbix &>/dev/null; then
@@ -1031,154 +896,67 @@ docker exec -i zabbix-db psql -U zabbix -d zabbix < config/postgres/atm_custom_t
 
 # Start everything else
 docker compose -f deploy/uat/docker-compose-uat-vm1.yml up -d
-
-# Wait for services to initialize
 sleep 60
 ```
 
-### Step 5.2.7 — Verify all containers are running
+### Step 5.2.6 — Verify all containers are running
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}" | grep -v "Exited"
 ```
 
-You should see approximately 25 containers all showing "Up":
-- postgres, zabbix-server, zabbix-web, zabbix-agent
-- mariadb, glpi
-- grafana, grafana-renderer, report-portal
-- iso8583-gateway, anomaly-detector, network-correlator
-- atm-sim-engine, atm-txn-engine, atm-ej-engine, state-manager
-- pgadmin
+You should see containers all showing "Up": postgres, zabbix-server, zabbix-web, zabbix-agent, mariadb, glpi, grafana, grafana-renderer, report-portal, iso8583-gateway, anomaly-detector, network-correlator, atm-sim-engine, atm-txn-engine, atm-ej-engine, state-manager, pgadmin.
 
-### Step 5.2.8 — Verify PostgreSQL has data
+### Step 5.2.7 — Verify PostgreSQL has data
 
 ```bash
-# Check transaction count from simulators
 docker exec zabbix-db psql -U zabbix -d zabbix -c "SELECT COUNT(*) FROM atm_transactions;"
-
-# Check ATM locations
 docker exec zabbix-db psql -U zabbix -d zabbix -c "SELECT atm_id, branch FROM atm_locations;"
 ```
 
 ## 5.3 Import Zabbix Configuration
 
-Now load the monitoring templates and hosts into Zabbix.
+1. Browse to `http://172.26.208.176:8080`, log in `Admin` / `zabbix`
+2. **Configuration → Templates → Import** → `config/zabbix/zbx_export_templates.xml` → Import
+3. **Configuration → Hosts → Import** → `config/zabbix/zbx_export_hosts.xml` → Import
+4. **Administration → Media types → Import** → `config/zabbix/zbx_export_mediatypes.xml` → Import
+5. Verify hosts appear (ATM-001 through ATM-005)
 
-### Step 5.3.1 — Import the template
+## 5.4 Verify Grafana, Report Portal, GLPI
 
-1. Browse to `http://<uat-vm1-ip>:8080`
-2. Log in: `Admin` / `zabbix`
-3. **Configuration → Templates → Import** (top-right button)
-4. Choose `config/zabbix/zbx_export_templates.xml`
-5. Leave all checkboxes checked → **Import**
-6. Confirm green "Imported successfully" message
+- Grafana at `http://172.26.208.176:3000` — 6 dashboards, Zabbix-ATM + ATM-Transactions datasources test OK
+- Report Portal at `http://172.26.208.176:8888` — generate a PDF/Excel/CSV report
+- GLPI at `http://172.26.208.176:8082` — complete install wizard, enable REST API, create API client, wire the Zabbix media type
 
-### Step 5.3.2 — Import hosts
+## 5.5 UAT End-to-End Sign-Off
 
-1. **Configuration → Hosts → Import**
-2. Choose `config/zabbix/zbx_export_hosts.xml`
-3. **Import**
-
-### Step 5.3.3 — Import media types
-
-1. **Administration → Media types → Import**
-2. Choose `config/zabbix/zbx_export_mediatypes.xml`
-3. **Import**
-
-### Step 5.3.4 — Verify hosts
-
-1. **Configuration → Hosts**
-2. You should see ATM-001 through ATM-005
-3. ATM-002 through ATM-005 should show green **ZBX** (they use HTTP agent against simulator containers)
-4. ATM-001 may show red (needs Zabbix agent on host — skip for now)
-
-## 5.4 Verify Grafana
-
-### Step 5.4.1 — Check dashboards loaded
-
-1. Browse to `http://<uat-vm1-ip>:3000`
-2. Log in: `admin` / `<your-GRAFANA_ADMIN_PASSWORD>`
-3. **Dashboards → Browse**
-4. You should see 6 dashboards
-
-If not, check provisioning:
-
-```bash
-docker logs grafana | grep -i provision
-```
-
-### Step 5.4.2 — Check data sources
-
-1. **Configuration → Data Sources**
-2. Should show: Zabbix-ATM, ATM-Transactions, EJ-OpenSearch
-3. Test Zabbix-ATM: Click **Save & Test** → should succeed
-4. Test ATM-Transactions: Click **Save & Test** → should succeed
-5. Test EJ-OpenSearch: Will fail (UAT VM2 not connected to EJ logs yet) — skip
-
-### Step 5.4.3 — View ATM Operations Centre dashboard
-
-1. Open **Dashboards → ATM Operations Centre — Dashen Bank**
-2. You should see:
-   - Geo-map with 5 markers (Addis Ababa, Bole, Merkato, Hawassa, Dire Dawa)
-   - KPI cards showing transaction counts, ATM status
-   - Cassette level gauges
-   - Temperature readings
-   - Transaction volume time-series
-
-## 5.5 Verify Report Portal
-
-1. Browse to `http://<uat-vm1-ip>:8888`
-2. Click **Generate Report** → select any report type
-3. Choose "Last 7 days" → **Generate**
-4. Verify PDF/Excel/CSV downloads with data
-
-## 5.6 Verify GLPI
-
-1. Browse to `http://<uat-vm1-ip>:8082`
-2. Log in: `glpi` / `DashenGLPI2024`
-3. Complete the installation wizard (one-time):
-   - Accept license → Continue
-   - Database should be pre-configured → Continue
-   - Set admin password
-4. **Setup → General → API** → Enable REST API
-5. **Setup → API → Add API Client**:
-   - Name: `Zabbix Integration`
-   - Generate App Token → **Copy it**
-6. In Zabbix: **Administration → Media types → GLPI Ticket**:
-   - Update `app_token` with the copied token
-   - Update `glpi_url` to `http://<uat-vm1-ip>:8082`
-   - **Update**
-
-## 5.7 Verify End-to-End on UAT
-
-Before moving to production, confirm:
-
-- [ ] All 25+ containers running
-- [ ] Zabbix shows 5 hosts with data
+- [ ] All containers running
+- [ ] Zabbix shows hosts with data
 - [ ] Grafana dashboards show live simulator data
-- [ ] Report Portal generates PDF/Excel/CSV reports
-- [ ] GLPI is accessible and API is enabled
-- [ ] Transactions are being written to `atm_transactions`
-- [ ] EJ logs are being written to `ej-logs/` directory
+- [ ] Report Portal generates reports
+- [ ] GLPI accessible + API enabled + tickets auto-create from a trigger
+- [ ] Transactions written to `atm_transactions`
+- [ ] EJ logs written to `ej-logs/` and searchable in OpenSearch Dashboards
+- [ ] ISO 8583 gateway writes `ISO8583_SIM` transactions
+
+**Full UAT steps + exit criteria: see `docs/UAT_Migration_Guide.md`.**
 
 ---
 
 # 6. Phase 2 — Deploy Production VMs
 
-Now that UAT is working, repeat the deployment on the 5 production VMs. **Deploy in this order:**
+Now that UAT is working, repeat the deployment on the 3 production VMs. **Deploy in this order:**
 
-1. **VM2 (PostgreSQL)** — everything depends on the database
-2. **VM1 (Zabbix)** — needs DB, then provides Zabbix API
-3. **VM3 (OpenSearch)** — needs to be ready for Filebeat and Report Portal
-4. **VM4 (Grafana + GLPI + Report Portal)** — needs DB, Zabbix API, ES
-5. **VM5 (Gateway)** — needs DB and Zabbix API
+1. **DATA-01** — everything depends on the database (and OpenSearch for Filebeat/reporting)
+2. **APPS-01** — needs DB, then provides Zabbix API + dashboards
+3. **GWY-01** — needs DB
 
-## 6.1 Deploy VM2 — PostgreSQL
+## 6.1 Deploy DATA-01 — PostgreSQL + OpenSearch
 
 ### Step 6.1.1 — SSH in and install Docker
 
 ```bash
-ssh <your-username>@10.200.1.2
+ssh <your-username>@172.26.18.102
 
 # Install Docker (same commands as step 5.1.2)
 sudo dnf remove -y podman buildah
@@ -1207,13 +985,12 @@ cd atm-monitoring
 cp deploy/production/.env.production .env
 chmod 600 .env
 nano .env
-# Generate and set strong passwords
 
 mkdir -p config/postgres-production
 
 cat > config/postgres-production/postgresql-custom.conf << 'CONF'
-shared_buffers = '16GB'
-effective_cache_size = '48GB'
+shared_buffers = '12GB'
+effective_cache_size = '32GB'
 work_mem = '64MB'
 maintenance_work_mem = '2GB'
 wal_buffers = '64MB'
@@ -1233,55 +1010,61 @@ autovacuum_analyze_scale_factor = '0.005'
 CONF
 ```
 
-### Step 6.1.4 — Start PostgreSQL
+### Step 6.1.4 — Configure sysctl for OpenSearch
 
 ```bash
-docker compose -f deploy/production/docker-compose-vm2-postgres.yml up -d
-
-# Wait for it
-echo "Waiting for PostgreSQL..."
-sleep 15
-
-docker exec zabbix-db pg_isready -U zabbix -d zabbix
+sudo sysctl -w vm.max_map_count=262144
+echo 'vm.max_map_count=262144' | sudo tee -a /etc/sysctl.conf
+sudo swapoff -a
 ```
 
-### Step 6.1.5 — Create custom tables
+### Step 6.1.5 — Start PostgreSQL + OpenSearch
+
+```bash
+docker compose -f deploy/production/docker-compose-data.yml up -d
+
+echo "Waiting for PostgreSQL..."
+sleep 15
+docker exec zabbix-db pg_isready -U zabbix -d zabbix
+
+echo "Waiting 60 seconds for OpenSearch..."
+sleep 60
+curl -s http://localhost:9200
+```
+
+### Step 6.1.6 — Create custom tables
 
 ```bash
 docker exec -i zabbix-db psql -U zabbix -d zabbix < config/postgres/atm_custom_tables.sql
 
-# Verify
 docker exec zabbix-db psql -U zabbix -d zabbix -c "\dt"
 # Should show: atm_locations, atm_transactions, atm_anomalies, atm_network_events, etc.
 ```
 
-### Step 6.1.6 — Allow remote connections
+### Step 6.1.7 — Allow remote connections
 
-By default, PostgreSQL inside the container only listens on localhost. Tell it to listen on all interfaces:
+By default, PostgreSQL inside the container only listens on localhost:
 
 ```bash
-# Check if PostgreSQL is listening externally
 ss -tlnp | grep 5432
 # Should show: 0.0.0.0:5432
 
-# If it only shows 127.0.0.1:5432, you need to update postgresql.conf:
+# If it only shows 127.0.0.1:5432:
 docker exec zabbix-db bash -c "echo \"listen_addresses = '*'\" >> /var/lib/postgresql/data/postgresql.conf"
-docker compose -f deploy/production/docker-compose-vm2-postgres.yml restart postgres
+docker compose -f deploy/production/docker-compose-data.yml restart postgres
 
-# Also check pg_hba.conf allows connections from your VM IPs
-docker exec zabbix-db bash -c "echo 'host all all 10.200.1.0/24 md5' >> /var/lib/postgresql/data/pg_hba.conf"
-docker compose -f deploy/production/docker-compose-vm2-postgres.yml restart postgres
+# Allow connections from your VM IPs (VLAN 4055 — APPS-01 + GWY-01)
+docker exec zabbix-db bash -c "echo 'host all all 172.26.18.64/28 md5' >> /var/lib/postgresql/data/pg_hba.conf"
+docker compose -f deploy/production/docker-compose-data.yml restart postgres
 ```
 
-### Step 6.1.7 — Test remote connection (from your laptop)
+### Step 6.1.8 — Test remote connection (from your laptop)
 
 ```bash
-# Install psql on your laptop if needed
-# Then:
-psql -h 10.200.1.2 -U zabbix -d zabbix -c "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
+psql -h 172.26.18.102 -U zabbix -d zabbix -c "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
 ```
 
-## 6.2 Deploy VM1 — Zabbix Server + Web
+## 6.2 Deploy APPS-01 — Zabbix + Dashboards + Reports
 
 ### Step 6.2.1 — SSH in, install Docker, clone repo
 
@@ -1293,161 +1076,103 @@ psql -h 10.200.1.2 -U zabbix -d zabbix -c "SELECT table_name FROM information_sc
 cp deploy/production/.env.production .env
 chmod 600 .env
 nano .env
-# IMPORTANT: POSTGRES_PASSWORD must match what you set on VM2!
+# IMPORTANT: POSTGRES_PASSWORD must match what you set on DATA-01!
 ```
 
 ### Step 6.2.3 — Start Zabbix
 
 ```bash
-docker compose -f deploy/production/docker-compose-vm1-zabbix.yml up -d
+docker compose -f deploy/production/docker-compose-apps.yml up -d zabbix-server zabbix-web zabbix-agent
 
-# Wait 30 seconds for Zabbix to initialize its database schema
 sleep 30
-
-# Check logs
 docker logs zabbix-server --tail 20
 ```
 
 Look for:
 ```
-connecting to database 'zabbix' on '10.200.1.2' port '5432'
+connecting to database 'zabbix' on '172.26.18.102' port '5432'
 database connection established
 ```
 
 If you see "Cannot connect to database":
 - Double-check the password in `.env`
-- Verify firewall between VM1 and VM2 on port 5432
-- Check `pg_hba.conf` on VM2 allows VM1's IP
+- Verify firewall between APPS-01 and DATA-01 on port 5432
+- Check `pg_hba.conf` on DATA-01 allows APPS-01's IP
 
 ### Step 6.2.4 — Verify Zabbix web UI
 
 ```bash
 # From your browser:
-# http://10.200.1.1:8080
+# http://172.26.18.74:8080
 # Log in: Admin / zabbix
 ```
 
-## 6.3 Deploy VM3 — OpenSearch + OpenSearch Dashboards + Filebeat
-
-### Step 6.3.1 — SSH in, install Docker, clone repo
-
-### Step 6.3.2 — Configure sysctl and start
+### Step 6.2.5 — Start the rest
 
 ```bash
-sudo sysctl -w vm.max_map_count=262144
-echo 'vm.max_map_count=262144' | sudo tee -a /etc/sysctl.conf
-sudo swapoff -a
-
-cp deploy/production/.env.production .env
-chmod 600 .env
-
-mkdir -p ej-logs
-sudo mkdir -p /data/real-ej-logs
-sudo chown $USER:$USER /data/real-ej-logs
-
-# Fix filebeat permissions
-sudo chown root:root filebeat.yml
-sudo chmod 644 filebeat.yml
-
-docker compose -f deploy/production/docker-compose-vm3-opensearch.yml up -d
-
-echo "Waiting 60 seconds for OpenSearch..."
-sleep 60
-
-curl -s http://localhost:9200
-```
-
-## 6.4 Deploy VM4 — Grafana + GLPI + Report Portal + Renderer
-
-### Step 6.4.1 — SSH in, install Docker, clone repo
-
-### Step 6.4.2 — Set up and start
-
-```bash
-cp deploy/production/.env.production .env
-chmod 600 .env
-nano .env
-# POSTGRES_PASSWORD must match VM2
-# GRAFANA_ADMIN_PASSWORD, MYSQL_ROOT_PASSWORD, MYSQL_PASSWORD must be set
-
-# Copy production datasources into place
+# Copy production datasources into place BEFORE Grafana starts
 cp config/grafana/datasources-production.yml config/grafana/datasources.yml
 
-docker compose -f deploy/production/docker-compose-vm4-dashboards.yml up -d
-
+docker compose -f deploy/production/docker-compose-apps.yml up -d
 sleep 30
 docker ps --format "table {{.Names}}\t{{.Status}}"
 ```
 
-### Step 6.4.3 — Verify
+### Step 6.2.6 — Verify
 
 ```bash
-# Check Grafana
-curl -s http://localhost:3000/api/health
-
-# Check Report Portal
-curl -s http://localhost:8888
-
-# Check GLPI
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8082
-# Should return 200
+curl -s http://localhost:3000/api/health          # Grafana
+curl -s http://localhost:8888                     # Report Portal
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8082   # GLPI (expect 200)
 ```
 
-## 6.5 Deploy VM5 — Gateway + Anomaly + Correlator
+## 6.3 Deploy GWY-01 — ISO 8583 Gateway
 
-### Step 6.5.1 — SSH in, install Docker, clone repo
+### Step 6.3.1 — SSH in, install Docker, clone repo
 
-### Step 6.5.2 — Start
+### Step 6.3.2 — Start
 
 ```bash
 cp deploy/production/.env.production .env
 chmod 600 .env
-# POSTGRES_PASSWORD must match VM2
+# POSTGRES_PASSWORD must match DATA-01
 
-docker compose -f deploy/production/docker-compose-vm5-gateway.yml up -d
-
+docker compose -f deploy/production/docker-compose-gateway.yml up -d
 sleep 15
 docker ps --format "table {{.Names}}\t{{.Status}}"
 ```
 
-### Step 6.5.3 — Verify gateway is writing transactions
+### Step 6.3.3 — Verify gateway is writing transactions
 
 ```bash
-# Check gateway logs
 docker logs iso8583-gateway --tail 5
 # Expected: "MODE: SIMULATION" and "generating 1 transaction every 10 seconds"
 
-# Wait 30 seconds, then check DB from VM2:
-# On VM2:
+# Wait 30 seconds, then check DB from DATA-01:
 docker exec zabbix-db psql -U zabbix -d zabbix -c "SELECT COUNT(*), source FROM atm_transactions GROUP BY source;"
 # Should show ~3 transactions with source = 'ISO8583_SIM'
 ```
 
-## 6.6 Production Deployment Verification
+## 6.4 Production Deployment Verification
 
-Before proceeding, confirm:
-
-- [ ] All 5 production VMs have Docker installed and running
-- [ ] VM2: PostgreSQL running, accessible from other VMs, custom tables exist
-- [ ] VM1: Zabbix web UI accessible at `http://10.200.1.1:8080`, connected to VM2's DB
-- [ ] VM3: OpenSearch responding at `http://10.200.1.3:9200`
-- [ ] VM4: Grafana at `http://10.200.1.4:3000`, datasources connecting to VM1 and VM2
-- [ ] VM4: Report Portal at `http://10.200.1.4:8888`, GLPI at `http://10.200.1.4:8082`
-- [ ] VM5: ISO 8583 Gateway running and writing transactions to VM2's DB
+- [ ] All 3 production VMs have Docker installed and running
+- [ ] DATA-01: PostgreSQL running, accessible from other VMs, custom tables exist; OpenSearch responding at `http://172.26.18.102:9200`
+- [ ] APPS-01: Zabbix web UI at `http://172.26.18.74:8080` connected to DATA-01's DB; Grafana datasources connecting; Report Portal + GLPI up
+- [ ] GWY-01: ISO 8583 Gateway running and writing transactions to DATA-01's DB
 - [ ] All containers set to `restart: unless-stopped`
 
 ---
 
 # 7. Phase 3 — Import Zabbix Template and Hosts (Production)
 
-Repeat the import steps from UAT (section 5.3) on the production Zabbix (VM1):
+Repeat the import steps from UAT (section 5.3) on the production Zabbix (APPS-01):
 
 1. **Configuration → Templates → Import** → `config/zabbix/zbx_export_templates.xml`
 2. **Configuration → Hosts → Import** → `config/zabbix/zbx_export_hosts.xml`
 3. **Administration → Media types → Import** → `config/zabbix/zbx_export_mediatypes.xml`
 4. Update GLPI media type:
-   - `glpi_url`: `http://10.200.1.4:8082`
-   - `app_token`: from GLPI API client setup on VM4
+   - `glpi_url`: `http://172.26.18.74:8082`
+   - `app_token`: from GLPI API client setup (GLPI runs on APPS-01 now)
 
 ---
 
@@ -1475,7 +1200,7 @@ Two things change, not one:
 
 ## 8.2 SNMP Walk the Test ATM
 
-### Step 8.2.1 — Install SNMP tools on VM1
+### Step 8.2.1 — Install SNMP tools on APPS-01
 
 ```bash
 sudo dnf install -y net-snmp-utils
@@ -1596,9 +1321,9 @@ After 1–2 minutes:
 
 | Problem | Likely Cause | Fix |
 |---|---|---|
-| "Timeout" | Network/firewall blocking UDP 161 | Ping ATM from VM1. Check firewall rules. |
+| "Timeout" | Network/firewall blocking UDP 161 | Ping ATM from APPS-01. Check firewall rules. |
 | "Cannot connect" | Wrong IP or port | Verify IP and port 161 |
-| "Unknown SNMP error" | Wrong community string | Run `snmpwalk` from VM1 to confirm |
+| "Unknown SNMP error" | Wrong community string | Run `snmpwalk` from APPS-01 to confirm |
 | Item shows wrong value | Wrong OID in item config | Re-check snmpwalk output and mapping table |
 | Some items work, some don't | Not all OIDs supported by this ATM model | Normal. Disable unsupported items. |
 
@@ -1631,7 +1356,7 @@ This is the only safe path to "a system better than the current one" — you pro
 
 # 9. Phase 5 — Connect Electronic Journal (EJ) Logs
 
-The PoC's EJ generators write fake logs. For real ATMs, EJ files exist on the ATM's Windows OS and must reach VM3's Filebeat.
+The PoC's EJ generators write fake logs. For real ATMs, EJ files exist on the ATM's Windows OS and must reach DATA-01's Filebeat.
 
 ## 9.1 Find the EJ File Location
 
@@ -1647,8 +1372,8 @@ Ask the ATM hardware/vendor team:
 | Method | How It Works | Best When |
 |---|---|---|
 | **Filebeat on ATM** | Install lightweight Filebeat for Windows on each ATM | Vendor allows software install |
-| **Network share** | ATM writes to a Windows share; VM3's Filebeat mounts it | No agent on ATM needed |
-| **SFTP push** | ATM/collection process SFTPs files to VM3 | Bank already has EJ collection |
+| **Network share** | ATM writes to a Windows share; DATA-01's Filebeat mounts it | No agent on ATM needed |
+| **SFTP push** | ATM/collection process SFTPs files to DATA-01 | Bank already has EJ collection |
 | **Central collector** | Point Filebeat at bank's existing EJ server | Simplest if it exists |
 
 ### Option A: Filebeat on ATM (Long-term best)
@@ -1669,7 +1394,7 @@ filebeat.inputs:
     fields_under_root: true
 
 output.elasticsearch:
-  hosts: ["10.200.1.3:9200"]
+  hosts: ["172.26.18.102:9200"]
   index: "atm-ej-live-%{+yyyy.MM.dd}"
 ```
 
@@ -1680,14 +1405,14 @@ powershell -ExecutionPolicy Unrestricted -File .\install-service-filebeat.ps1
 
 ### Option B: Network Share (No agent needed)
 
-On VM3:
+On DATA-01:
 ```bash
 sudo mkdir -p /mnt/atm-ej-share
 sudo mount -t cifs //<file-server>/atm-ej-logs /mnt/atm-ej-share \
   -o username=<user>,password=<pass>,domain=DASHEN
 ```
 
-Then add to Filebeat volume in `docker-compose-vm3-opensearch.yml`:
+Then add to Filebeat volume in `docker-compose-data.yml`:
 ```yaml
 volumes:
   - /mnt/atm-ej-share:/data/real-ej-logs:ro
@@ -1695,7 +1420,7 @@ volumes:
 
 ### Option C: SFTP Push
 
-On VM3:
+On DATA-01:
 ```bash
 sudo useradd -m -s /sbin/nologin atm-ej-sftp
 sudo mkdir -p /home/atm-ej-sftp/ej-logs
@@ -1745,13 +1470,13 @@ curl -X PUT "localhost:9200/_ingest/pipeline/atm_ej_parser" -H 'Content-Type: ap
 
 ```bash
 # Check indices
-curl -s http://10.200.1.3:9200/_cat/indices?v
+curl -s http://172.26.18.102:9200/_cat/indices?v
 
 # Check document count
-curl -s "http://10.200.1.3:9200/atm-ej-live-*/_count"
+curl -s "http://172.26.18.102:9200/atm-ej-live-*/_count"
 
 # Browse OpenSearch Dashboards
-# http://10.200.1.3:5601
+# http://172.26.18.102:5601
 # Create index pattern: atm-ej-live-*
 # Time field: @timestamp
 ```
@@ -1771,7 +1496,7 @@ From the ATM Switch team:
 
 ## 10.2 Switch to TCP Mode
 
-On VM5, update the gateway environment:
+On GWY-01, update the gateway environment:
 
 ```yaml
   iso8583-gateway:
@@ -1779,7 +1504,7 @@ On VM5, update the gateway environment:
       MODE: "tcp"
       SWITCH_HOST: "0.0.0.0"
       SWITCH_PORT: "9876"
-      DB_HOST: "10.200.1.2"
+      DB_HOST: "172.26.18.102"
       DB_NAME: "zabbix"
       DB_USER: "zabbix"
       DB_PASS: "${DB_PASS}"
@@ -1787,8 +1512,8 @@ On VM5, update the gateway environment:
 
 Then rebuild and restart:
 ```bash
-docker compose -f deploy/production/docker-compose-vm5-gateway.yml build iso8583-gateway
-docker compose -f deploy/production/docker-compose-vm5-gateway.yml up -d iso8583-gateway
+docker compose -f deploy/production/docker-compose-gateway.yml build iso8583-gateway
+docker compose -f deploy/production/docker-compose-gateway.yml up -d iso8583-gateway
 ```
 
 Verify:
@@ -1892,7 +1617,7 @@ If parsing fails, adjust `parse_iso8583_message()` for:
 
 ```bash
 # Check source counts
-psql -h 10.200.1.2 -U zabbix -d zabbix -c \
+psql -h 172.26.18.102 -U zabbix -d zabbix -c \
   "SELECT source, COUNT(*), MAX(recorded_at) FROM atm_transactions GROUP BY source;"
 ```
 
@@ -1925,7 +1650,7 @@ Request from the branch network team:
 ## 11.2 Manual Entry (First Few ATMs)
 
 ```bash
-psql -h 10.200.1.2 -U zabbix -d zabbix
+psql -h 172.26.18.102 -U zabbix -d zabbix
 ```
 
 ```sql
@@ -1936,7 +1661,7 @@ INSERT INTO atm_locations VALUES
 ON CONFLICT (atm_id) DO NOTHING;
 ```
 
-Or use the web form: `http://10.200.1.4:8888/admin/atm`
+Or use the web form: `http://172.26.18.74:8888/admin/atm`
 
 ## 11.3 Bulk Import (Full Fleet)
 
@@ -1952,10 +1677,10 @@ ATM-007,Bahir Dar Branch,Bahir Dar,Bahir Dar,Amhara,11.5850,37.3900,TID0007,NCR,
 Then import:
 
 ```bash
-# Copy CSV to VM2
-scp atm_locations_bulk.csv <user>@10.200.1.2:/tmp/
+# Copy CSV to DATA-01
+scp atm_locations_bulk.csv <user>@172.26.18.102:/tmp/
 
-# On VM2:
+# On DATA-01:
 docker cp /tmp/atm_locations_bulk.csv zabbix-db:/tmp/
 docker exec zabbix-db psql -U zabbix -d zabbix -c \
   "\copy atm_locations FROM '/tmp/atm_locations_bulk.csv' WITH CSV HEADER"
@@ -1966,15 +1691,12 @@ docker exec zabbix-db psql -U zabbix -d zabbix -c "SELECT COUNT(*) FROM atm_loca
 
 ---
 
-# 12. Phase 8 — Scale to Full Fleet (Proxies + Auto-Discovery)
+# 12. Phase 8 — Scale to Full Fleet (Auto-Discovery, Proxies as Phase 2)
 
-Manually creating hosts for thousands of ATMs is not feasible, and SNMP-polling thousands of ATMs every ≤5s from a single Zabbix server will overwhelm it. **You must use Zabbix proxies** (regional collectors) — this is the scale fix the PoC's per-port HTTP model cannot provide.
+Manually creating hosts for 1,202 ATMs is not feasible. Two mechanisms:
 
-## 12.0 Zabbix Proxy Topology (REQUIRED for scale)
-
-- Deploy **1 Zabbix proxy per region/zone** (number depends on reconciled fleet size — see §0.2). Each proxy polls the ATMs in its zone over SNMP and forwards to VM1.
-- This also solves the **per-port problem**: the PoC publishes one Docker port per ATM (1161–1260 ≈ 100 ATMs). That model cannot scale. With SNMP + proxies, ATMs are polled on the standard UDP 161; no per-ATM published port is needed. Recommended long-term model: **single SNMP listener per zone (proxy) + ATM identified by IP/community/index**, not one port per ATM.
-- Proxy sizing: a proxy handles ~500–1,000 SNMP hosts comfortably at 10–30s intervals. Size proxy count = ceil(fleet / 800).
+1. **Auto-discovery + auto-registration** (this phase) — Zabbix finds ATMs on the network and creates hosts automatically.
+2. **Zabbix proxies** (Phase 2, only if measured performance demands it) — see `docs/proxy-topology.md`.
 
 ## 12.1 Create the Discovery Rule
 
@@ -1998,16 +1720,25 @@ Manually creating hosts for thousands of ATMs is not feasible, and SNMP-polling 
    - Add host
    - Add to host group "Dashen Bank ATMs"
    - Link template "Dashen Bank ATM Hardware - SNMP (Real)"
-   - Assign to the correct proxy (by zone)
 5. **Enable**
 
 ## 12.3 What Auto-Discovery Does Not Do
 
 Auto-discovery handles Zabbix host creation only. For each newly discovered ATM, you still need:
-- **Location data** → Enter via admin form at `http://10.200.1.4:8888/admin/atm` (or bulk import, Phase 7)
+- **Location data** → Enter via admin form at `http://172.26.18.74:8888/admin/atm` (or bulk import, Phase 7)
 - **EJ log shipping** → Configure per ATM (or use the centralized method from Phase 5)
 - **ISO 8583 transactions** → Automatic (the gateway is switch-wide, not per-ATM)
-- **Proxy assignment** → Set per zone so load is distributed
+
+## 12.4 When to Add Proxies (Phase 2 Decision Gate)
+
+| Measure | Threshold | Action |
+|---------|-----------|--------|
+| Poll duration | >3s average | Consider proxy for that district |
+| Timeout rate | >10% | Investigate network, then consider proxy |
+| Server CPU | >80% sustained | Tune intervals, then consider proxy |
+| WAN bandwidth | >50 Mbps sustained | Consider proxy |
+
+If triggered, deploy **one** proxy for the worst-performing district first, measure improvement, then expand. See `docs/proxy-topology.md`.
 
 ---
 
@@ -2015,12 +1746,11 @@ Auto-discovery handles Zabbix host creation only. For each newly discovered ATM,
 
 Only once real ATMs are confirmed working. No rush — simulators do not interfere with real data.
 
-## 13.1 Stop Simulator Containers (UAT/Production)
+## 13.1 Stop Simulator Containers (UAT)
 
 ```bash
 docker compose stop \
-  atm-sim-engine atm-txn-engine atm-ej-engine state-manager \
-  anomaly-detector network-correlator
+  atm-sim-engine atm-txn-engine atm-ej-engine state-manager
 ```
 
 ## 13.2 Disable Simulator Hosts in Zabbix
@@ -2041,15 +1771,15 @@ docker compose stop \
 
 ## 14.1 What Needs Backing Up
 
-| Data | Method | Frequency | Location |
-|---|---|---|---|
-| PostgreSQL (VM2) | pg_dump | Daily | Off-server |
-| OpenSearch (VM3) | Snapshot API | Weekly | Off-server |
-| Zabbix config (VM1) | XML export | Per change | Git repo |
-| Grafana dashboards | Git (already in repo) | Per change | Git repo |
-| GLPI database (VM4) | mysqldump | Daily | Off-server |
+| Data | VM | Method | Frequency | Location |
+|---|---|---|---|---|
+| PostgreSQL | DATA-01 | pg_dump | Daily | Off-server |
+| OpenSearch | DATA-01 | Snapshot API | Weekly | Off-server |
+| Zabbix config | APPS-01 | XML export | Per change | Git repo |
+| Grafana dashboards | APPS-01 | Git (already in repo) | Per change | Git repo |
+| GLPI database | APPS-01 | mysqldump | Daily | Off-server |
 
-## 14.2 PostgreSQL Backup (VM2)
+## 14.2 PostgreSQL Backup (DATA-01)
 
 Create `/opt/atm-monitoring/scripts/backup-production.sh`:
 
@@ -2075,7 +1805,7 @@ ls -t "$BACKUP_DIR"/zabbix_full_*.sql.gz 2>/dev/null | tail -n +15 | xargs -r rm
 echo "Backup complete: $BACKUP_DIR"
 ```
 
-Schedule via crontab on VM2:
+Schedule via crontab on DATA-01:
 ```bash
 crontab -e
 # Add:
@@ -2084,7 +1814,7 @@ crontab -e
 
 **Off-server storage:** Coordinate with IT to mount an NFS/CIFS share to `/backups/`. A backup on the same server is not a backup.
 
-## 14.3 OpenSearch Snapshots (VM3)
+## 14.3 OpenSearch Snapshots (DATA-01)
 
 Register a snapshot repository (one-time):
 ```bash
@@ -2101,7 +1831,7 @@ Take a snapshot:
 curl -X PUT "localhost:9200/_snapshot/atm_ej_backup/snapshot_$(date +%Y%m%d)?wait_for_completion=false"
 ```
 
-## 14.4 GLPI Backup (VM4)
+## 14.4 GLPI Backup (APPS-01)
 
 ```bash
 docker exec glpi-db mysqldump -u root -p"${MYSQL_ROOT_PASSWORD}" glpi | gzip > /backups/glpi-backup-$(date +%Y%m%d).sql.gz
@@ -2122,33 +1852,33 @@ A backup that has never been restored is not verified. At least once before goin
 # 15. Production Readiness Checklist
 
 ## Infrastructure
-- [ ] Server provisioned with agreed specifications (5 VMs)
+- [ ] Server provisioned with agreed specifications (3 VMs)
 - [ ] All Docker containers running and set to `restart: unless-stopped`
 - [ ] Firewall rules allow only necessary internal traffic
 - [ ] No ports exposed to public internet
 
-## Zabbix (VM1)
+## Zabbix (APPS-01)
 - [ ] Real ATM(s) report hardware status via SNMP
 - [ ] Triggers fire for: cash low/empty, door open, printer fault, network down
 - [ ] Auto-discovery configured and tested
 - [ ] GLPI tickets created automatically on trigger firing
 
-## Grafana (VM4)
+## Grafana (APPS-01)
 - [ ] Real ATMs appear on geo-map with correct locations
 - [ ] ATM Fleet Overview table shows real data
 - [ ] Drill-down dashboards work for real ATMs
 
-## Transactions (VM5 → VM2)
+## Transactions (GWY-01 → DATA-01)
 - [ ] ISO 8583 Gateway receives real switch messages
 - [ ] Transaction amounts, statuses match switch's records
 - [ ] Source tagging (`ISO8583_REAL`) works
 
-## EJ Logs (VM3)
+## EJ Logs (DATA-01)
 - [ ] Real EJ logs searchable in OpenSearch Dashboards
 - [ ] PCI DSS card masking verified
-- [ ] Retention policy configured (90 days minimum)
+- [ ] Retention policy configured
 
-## Reporting (VM4)
+## Reporting (APPS-01)
 - [ ] Report Portal generates correct reports with real ATM data
 - [ ] Scheduled reports delivering to correct recipients
 
@@ -2175,10 +1905,10 @@ A backup that has never been restored is not verified. At least once before goin
 
 | Problem | Likely Cause | Fix |
 |---|---|---|
-| `zabbix-server` won't start, "Cannot connect to database" | PostgreSQL password mismatch or firewall | Check `.env` password matches VM2. Check port 5432 firewall. |
+| `zabbix-server` won't start, "Cannot connect to database" | PostgreSQL password mismatch or firewall | Check `.env` password matches DATA-01. Check port 5432 firewall. |
 | Zabbix items show "Not supported" | Wrong item type (HTTP vs SNMP) or wrong OID | Verify the item is SNMP type. Check OID with snmpwalk. |
-| Report Portal shows "DB connection error" | DB_HOST points to wrong IP | Ensure VM4's `DB_HOST: 10.200.1.2` |
-| Grafana datasource "Zabbix-ATM" fails | VM1's Zabbix web not accessible from VM4 | Check firewall port 8080 between VM4 and VM1 |
+| Report Portal shows "DB connection error" | DB_HOST points to wrong IP | Ensure APPS-01's `DB_HOST: 172.26.18.102` |
+| Grafana datasource "Zabbix-ATM" fails | Zabbix web not reachable | Check Zabbix runs on APPS-01 (local) |
 | ISO 8583 Gateway "Address already in use" | Port 9876 already occupied | `ss -tlnp | grep 9876` to find the process, then stop it |
 | OpenSearch won't start | `vm.max_map_count` not set | `sudo sysctl -w vm.max_map_count=262144` |
 | Filebeat won't start | `filebeat.yml` not owned by root | `sudo chown root:root filebeat.yml` |
@@ -2186,7 +1916,7 @@ A backup that has never been restored is not verified. At least once before goin
 | GLPI 502 Bad Gateway | PHP worker timeout, or GLPI not fully installed | Complete GLPI installation wizard. Restart GLPI container. |
 | Grafana PDF export fails | Renderer not running | Check `docker ps | grep grafana-renderer`. Verify `GF_RENDERING_SERVER_URL` |
 | Anomaly Detector writes no anomalies | Too few transactions to trigger rules | In simulation mode, wait for ~50+ transactions. In production, check thresholds. |
-| Network Correlator shows no data | Zabbix API not reachable | Check `ZABBIX_URL` env var on VM5. Verify firewall. |
+| Network Correlator shows no data | Zabbix API not reachable | Check `ZABBIX_URL` env var. Verify firewall. |
 
 ---
 
@@ -2195,13 +1925,11 @@ A backup that has never been restored is not verified. At least once before goin
 | Purpose | File |
 |---|---|
 | Original PoC compose | `docker-compose.yml` |
-| Production VM1 (Zabbix) | `deploy/production/docker-compose-vm1-zabbix.yml` |
-| Production VM2 (PostgreSQL) | `deploy/production/docker-compose-vm2-postgres.yml` |
-| Production VM3 (OpenSearch) | `deploy/production/docker-compose-vm3-opensearch.yml` |
-| Production VM4 (Dashboards) | `deploy/production/docker-compose-vm4-dashboards.yml` |
-| Production VM5 (Gateway) | `deploy/production/docker-compose-vm5-gateway.yml` |
-| UAT VM1 (All-in-one) | `deploy/uat/docker-compose-uat-vm1.yml` |
-| UAT VM2 (OpenSearch) | `deploy/uat/docker-compose-uat-vm2.yml` |
+| Production APPS-01 (Zabbix + dashboards + reports) | `deploy/production/docker-compose-apps.yml` |
+| Production DATA-01 (PostgreSQL + OpenSearch) | `deploy/production/docker-compose-data.yml` |
+| Production GWY-01 (ISO 8583 Gateway) | `deploy/production/docker-compose-gateway.yml` |
+| UAT-01 (All-in-one) | `deploy/uat/docker-compose-uat-vm1.yml` |
+| UAT-02 (OpenSearch) | `deploy/uat/docker-compose-uat-vm2.yml` |
 | Production env vars | `deploy/production/.env.production` |
 | UAT env vars | `deploy/uat/.env.uat` |
 | Production Grafana datasources | `config/grafana/datasources-production.yml` |
@@ -2222,7 +1950,8 @@ A backup that has never been restored is not verified. At least once before goin
 | Backup script | `scripts/backup_db.sh` |
 | Restore script | `scripts/restore_db.sh` |
 | PoC setup script | `scripts/setup_new_machine.sh` |
+| UAT migration guide | `docs/UAT_Migration_Guide.md` |
 
 ---
 
-*End of guide. Last updated: July 2026.*
+*End of guide. Last updated: August 2026.*
