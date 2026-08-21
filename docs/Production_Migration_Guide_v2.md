@@ -244,7 +244,22 @@ Proxies are removed from this timeline entirely — they are a Phase 2 considera
 
 ---
 
-# 4. Phase 0 — Per-VM Deploy Files (Already in the Repo)
+# 3.6 How to use this guide (from one laptop to three servers)
+
+Today the whole stack runs on **one laptop with one `docker-compose.yml`** — every service reaches the others by container name. Production runs on **3 RHEL 9 VMs** (APPS-01, DATA-01, GWY-01) where services on *different* VMs reach each other by **IP**, not container name. That is the only structural change.
+
+This guide is a **linear, step-by-step cookbook** — install the tools, deploy the services, then configure and customize. The exact commands are the same shape on every server, so:
+
+- **UAT first.** Do the full install → configure → customize loop on the 2 UAT servers first (`docs/UAT_Migration_Guide.md`), because UAT is isolated and lets you make mistakes safely.
+- **Production second.** Repeat the *same* steps on the 3 production servers, with the production IPs and the three production differences (real ATMs over SNMP, real EJ logs, real ISO 8583 switch). Those differences are called out in Phases 4, 5, 6 below.
+
+Everything you do on a server is: **install Docker → clone repo → `cp .env` → `docker compose up` → verify**. The per-VM compose files are **already in the repo** (`deploy/production/`, `deploy/uat/`) with the confirmed IPs baked in — you do not hand-write them.
+
+> Networking (VMs, VLANs, security groups, firewall) is handled by the Cloud & Core / Network / Security teams. You **verify** connectivity after each step (the checks are inline).
+
+---
+
+# 4. Per-VM Deploy Files (Already in the Repo)
 
 **The split is done.** The files below already exist in the repo (created August 2026) with the confirmed IPs baked in. You deploy by **`git clone` → copy `.env` → `docker compose up`** — you do not hand-write compose files. Read the steps to understand the layout; override a file only if you need a change (e.g. real switch IP in Phase 6).
 
@@ -739,19 +754,13 @@ Create `deploy/uat/.env.uat` with similar but different passwords.
 
 ---
 
-# 5. Phase 1 — Deploy UAT (Practice First)
+# 5. UAT — Install, Configure, Customize (Practice First)
 
 **Why UAT first?** The UAT environment is isolated. You can make mistakes, test connections, develop SNMP mappings, and validate the ISO 8583 parser — without affecting production data or alarming operations staff.
 
-> **This phase is fully documented in `docs/UAT_Migration_Guide.md`.** It covers, step by step:
-> 1. UAT-02 (OpenSearch) deployment
-> 2. UAT-01 (everything else) deployment
-> 3. Zabbix template/host/media-type imports
-> 4. Grafana, Report Portal, and GLPI verification
-> 5. End-to-end UAT sign-off checklist
-> 6. UAT exit criteria (what must be true before you touch production)
+> **This phase is a full step-by-step cookbook in `docs/UAT_Migration_Guide.md`** (Steps A–I: install Docker → clone → deploy UAT-02 → deploy UAT-01 → verify SNMP → import Zabbix → configure Grafana/GLPI/Report Portal → validate). **Follow that guide for UAT.** It is the same sequence you will repeat in production below.
 
-The rest of this section is the quick version.
+The rest of this section is the quick version for reference.
 
 ## 5.1 Deploy UAT-02 (OpenSearch + OpenSearch Dashboards)
 
@@ -941,74 +950,44 @@ docker exec zabbix-db psql -U zabbix -d zabbix -c "SELECT atm_id, branch FROM at
 
 ---
 
-# 6. Phase 2 — Deploy Production VMs
+# 6. Production — Install, Configure, Customize (3 VMs)
 
-Now that UAT is working, repeat the deployment on the 3 production VMs. **Deploy in this order:**
+This is the **same linear cookbook as UAT** (`docs/UAT_Migration_Guide.md` Steps A–I), with the production IPs/names and the three production-only differences (real ATMs over SNMP, real EJ logs, real ISO 8583 switch — Phases 4–6 below). Every server follows: **install Docker → clone repo → `cp .env` → `docker compose up` → verify**.
 
-1. **DATA-01** — everything depends on the database (and OpenSearch for Filebeat/reporting)
-2. **APPS-01** — needs DB, then provides Zabbix API + dashboards
-3. **GWY-01** — needs DB
+**Production servers (confirmed with IT):**
 
-## 6.1 Deploy DATA-01 — PostgreSQL + OpenSearch
+| Server | Name | VLAN / Network | IP |
+|---|---|---|---|
+| DATA-01 | DBHQPRODATMMONDB | VLAN 4056 — 172.26.18.96/28 (gw 172.26.18.97) | 172.26.18.102 |
+| APPS-01 | DBHQPRODATMMONAPP | VLAN 4055 — 172.26.18.64/28 (gw 172.26.18.65) | 172.26.18.74 |
+| GWY-01 | DBHQPRODATMMONGW | VLAN 4055 — 172.26.18.64/28 (gw 172.26.18.65) | 172.26.18.76 |
 
-### Step 6.1.1 — SSH in and install Docker
+**Deploy order:** DATA-01 → APPS-01 → GWY-01 (everything depends on the database first).
+
+---
+
+## Step A — Install the tools on each server (Docker + git)
+
+Run on **all three** (replace the IP each time):
 
 ```bash
-ssh <your-username>@172.26.18.102
+ssh <your-user>@172.26.18.102     # DATA-01
+ssh <your-user>@172.26.18.74      # APPS-01
+ssh <your-user>@172.26.18.76      # GWY-01
+```
 
-# Install Docker (same commands as step 5.1.2)
+```bash
 sudo dnf remove -y podman buildah
 sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
 sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-sudo systemctl enable docker
-sudo systemctl start docker
+sudo systemctl enable --now docker
 sudo usermod -aG docker $USER
-exit
-# Reconnect
+exit                                   # log back in for the group to apply
+
+sudo dnf install -y git
 ```
 
-### Step 6.1.2 — Clone the repo
-
-```bash
-cd /opt
-sudo mkdir -p atm-monitoring
-sudo chown $USER:$USER atm-monitoring
-git clone <YOUR_GITHUB_URL> atm-monitoring
-cd atm-monitoring
-```
-
-### Step 6.1.3 — Set up environment and PostgreSQL tuning
-
-```bash
-cp deploy/production/.env.production .env
-chmod 600 .env
-nano .env
-
-mkdir -p config/postgres-production
-
-cat > config/postgres-production/postgresql-custom.conf << 'CONF'
-shared_buffers = '12GB'
-effective_cache_size = '32GB'
-work_mem = '64MB'
-maintenance_work_mem = '2GB'
-wal_buffers = '64MB'
-max_connections = '200'
-checkpoint_completion_target = '0.9'
-checkpoint_timeout = '15min'
-max_wal_size = '16GB'
-min_wal_size = '4GB'
-random_page_cost = '1.1'
-effective_io_concurrency = '200'
-max_parallel_workers_per_gather = '4'
-max_parallel_workers = '8'
-autovacuum_max_workers = '6'
-autovacuum_naptime = '30s'
-autovacuum_vacuum_scale_factor = '0.01'
-autovacuum_analyze_scale_factor = '0.005'
-CONF
-```
-
-### Step 6.1.4 — Configure sysctl for OpenSearch
+On **DATA-01** only (it runs OpenSearch), also:
 
 ```bash
 sudo sysctl -w vm.max_map_count=262144
@@ -1016,161 +995,181 @@ echo 'vm.max_map_count=262144' | sudo tee -a /etc/sysctl.conf
 sudo swapoff -a
 ```
 
-### Step 6.1.5 — Start PostgreSQL + OpenSearch
+Verify on each: `docker --version && docker compose version && git --version`.
+
+---
+
+## Step B — Get the code and set passwords
+
+Run on **all three** servers:
 
 ```bash
-docker compose -f deploy/production/docker-compose-data.yml up -d
+cd /opt
+sudo mkdir -p atm-monitoring
+sudo chown $USER:$USER atm-monitoring
+git clone <YOUR_GITHUB_URL> atm-monitoring
+cd /opt/atm-monitoring
 
-echo "Waiting for PostgreSQL..."
-sleep 15
-docker exec zabbix-db pg_isready -U zabbix -d zabbix
-
-echo "Waiting 60 seconds for OpenSearch..."
-sleep 60
-curl -s http://localhost:9200
+cp deploy/production/.env.production .env
+chmod 600 .env
+nano .env                               # fill every <...> placeholder with a strong password
 ```
 
-### Step 6.1.6 — Create custom tables
+`DB_PASS` must equal `POSTGRES_PASSWORD` (every server uses the same DB credentials to reach DATA-01's PostgreSQL). Generate 4 distinct passwords:
+
+```bash
+openssl rand -base64 16     # run 4 times
+```
+
+---
+
+## Step C — Deploy DATA-01 (PostgreSQL + OpenSearch + Dashboards + Filebeat)
+
+```bash
+ssh <your-user>@172.26.18.102
+cd /opt/atm-monitoring
+
+# The PostgreSQL tuning file is already in the repo: config/postgres-production/postgresql-custom.conf
+docker compose -f deploy/production/docker-compose-data.yml up -d
+sleep 60
+
+docker exec zabbix-db pg_isready -U zabbix -d zabbix     # expect "accepting connections"
+curl -s http://localhost:9200                             # expect JSON cluster_name + version
+```
+
+Create the custom tables, then open the DB to APPS-01 + GWY-01 (both on VLAN 4055):
 
 ```bash
 docker exec -i zabbix-db psql -U zabbix -d zabbix < config/postgres/atm_custom_tables.sql
+docker exec zabbix-db psql -U zabbix -d zabbix -c "\dt"    # confirm the custom tables
 
-docker exec zabbix-db psql -U zabbix -d zabbix -c "\dt"
-# Should show: atm_locations, atm_transactions, atm_anomalies, atm_network_events, etc.
-```
-
-### Step 6.1.7 — Allow remote connections
-
-By default, PostgreSQL inside the container only listens on localhost:
-
-```bash
-ss -tlnp | grep 5432
-# Should show: 0.0.0.0:5432
-
-# If it only shows 127.0.0.1:5432:
 docker exec zabbix-db bash -c "echo \"listen_addresses = '*'\" >> /var/lib/postgresql/data/postgresql.conf"
-docker compose -f deploy/production/docker-compose-data.yml restart postgres
-
-# Allow connections from your VM IPs (VLAN 4055 — APPS-01 + GWY-01)
 docker exec zabbix-db bash -c "echo 'host all all 172.26.18.64/28 md5' >> /var/lib/postgresql/data/pg_hba.conf"
 docker compose -f deploy/production/docker-compose-data.yml restart postgres
 ```
 
-### Step 6.1.8 — Test remote connection (from your laptop)
+---
+
+## Step D — Deploy APPS-01 (Zabbix + Grafana + GLPI + Report Portal + detectors)
 
 ```bash
-psql -h 172.26.18.102 -U zabbix -d zabbix -c "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
-```
+ssh <your-user>@172.26.18.74
+cd /opt/atm-monitoring
 
-## 6.2 Deploy APPS-01 — Zabbix + Dashboards + Reports
-
-### Step 6.2.1 — SSH in, install Docker, clone repo
-
-(Repeat steps 6.1.1–6.1.2)
-
-### Step 6.2.2 — Set up .env
-
-```bash
-cp deploy/production/.env.production .env
-chmod 600 .env
-nano .env
-# IMPORTANT: POSTGRES_PASSWORD must match what you set on DATA-01!
-```
-
-### Step 6.2.3 — Start Zabbix
-
-```bash
-docker compose -f deploy/production/docker-compose-apps.yml up -d zabbix-server zabbix-web zabbix-agent
-
-sleep 30
-docker logs zabbix-server --tail 20
-```
-
-Look for:
-```
-connecting to database 'zabbix' on '172.26.18.102' port '5432'
-database connection established
-```
-
-If you see "Cannot connect to database":
-- Double-check the password in `.env`
-- Verify firewall between APPS-01 and DATA-01 on port 5432
-- Check `pg_hba.conf` on DATA-01 allows APPS-01's IP
-
-### Step 6.2.4 — Verify Zabbix web UI
-
-```bash
-# From your browser:
-# http://172.26.18.74:8080
-# Log in: Admin / zabbix
-```
-
-### Step 6.2.5 — Start the rest
-
-```bash
-# Copy production datasources into place BEFORE Grafana starts
+# Put the production Grafana datasources in place (points at 172.26.18.102 + 172.26.18.74)
 cp config/grafana/datasources-production.yml config/grafana/datasources.yml
 
 docker compose -f deploy/production/docker-compose-apps.yml up -d
-sleep 30
-docker ps --format "table {{.Names}}\t{{.Status}}"
+sleep 60
+docker ps --format "table {{.Names}}\t{{.Status}}" | grep -v Exited
 ```
 
-### Step 6.2.6 — Verify
+Zabbix server must connect to DATA-01's database:
 
 ```bash
-curl -s http://localhost:3000/api/health          # Grafana
-curl -s http://localhost:8888                     # Report Portal
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8082   # GLPI (expect 200)
+docker logs zabbix-server --tail 20
+# Expect: connecting to database 'zabbix' on '172.26.18.102' port '5432' … database connection established
 ```
 
-## 6.3 Deploy GWY-01 — ISO 8583 Gateway
+If you see "Cannot connect to database": check `.env` password, the VLAN 4055→4056 firewall on 5432, and the `pg_hba.conf` line above.
 
-### Step 6.3.1 — SSH in, install Docker, clone repo
-
-### Step 6.3.2 — Start
-
-```bash
-cp deploy/production/.env.production .env
-chmod 600 .env
-# POSTGRES_PASSWORD must match DATA-01
-
-docker compose -f deploy/production/docker-compose-gateway.yml up -d
-sleep 15
-docker ps --format "table {{.Names}}\t{{.Status}}"
-```
-
-### Step 6.3.3 — Verify gateway is writing transactions
-
-```bash
-docker logs iso8583-gateway --tail 5
-# Expected: "MODE: SIMULATION" and "generating 1 transaction every 10 seconds"
-
-# Wait 30 seconds, then check DB from DATA-01:
-docker exec zabbix-db psql -U zabbix -d zabbix -c "SELECT COUNT(*), source FROM atm_transactions GROUP BY source;"
-# Should show ~3 transactions with source = 'ISO8583_SIM'
-```
-
-## 6.4 Production Deployment Verification
-
-- [ ] All 3 production VMs have Docker installed and running
-- [ ] DATA-01: PostgreSQL running, accessible from other VMs, custom tables exist; OpenSearch responding at `http://172.26.18.102:9200`
-- [ ] APPS-01: Zabbix web UI at `http://172.26.18.74:8080` connected to DATA-01's DB; Grafana datasources connecting; Report Portal + GLPI up
-- [ ] GWY-01: ISO 8583 Gateway running and writing transactions to DATA-01's DB
-- [ ] All containers set to `restart: unless-stopped`
+Verify the web UIs (from your laptop):
+- Zabbix http://172.26.18.74:8080 (`Admin` / `zabbix`)
+- Grafana http://172.26.18.74:3000 — **Connections → Data sources** should all show "Success"
+- GLPI http://172.26.18.74:8082
+- Report Portal http://172.26.18.74:8888
 
 ---
 
-# 7. Phase 3 — Import Zabbix Template and Hosts (Production)
+## Step E — Deploy GWY-01 (ISO 8583 Gateway)
 
-Repeat the import steps from UAT (section 5.3) on the production Zabbix (APPS-01):
+```bash
+ssh <your-user>@172.26.18.76
+cd /opt/atm-monitoring
+docker compose -f deploy/production/docker-compose-gateway.yml up -d
+sleep 15
+docker logs iso8583-gateway --tail 5        # "MODE: SIMULATION", generating transactions
+```
 
-1. **Configuration → Templates → Import** → `config/zabbix/zbx_export_templates.xml`
-2. **Configuration → Hosts → Import** → `config/zabbix/zbx_export_hosts.xml`
-3. **Administration → Media types → Import** → `config/zabbix/zbx_export_mediatypes.xml`
-4. Update GLPI media type:
-   - `glpi_url`: `http://172.26.18.74:8082`
-   - `app_token`: from GLPI API client setup (GLPI runs on APPS-01 now)
+Verify transactions landed on DATA-01:
+
+```bash
+ssh <your-user>@172.26.18.102
+docker exec zabbix-db psql -U zabbix -d zabbix -c \
+  "SELECT source, COUNT(*) FROM atm_transactions GROUP BY source;"
+# Expect source = 'ISO8583_SIM', count growing
+```
+
+---
+
+## Step F — Verify the network (the part other teams set up)
+
+These must succeed (open a ticket with Network/Cloud if not):
+
+```bash
+# From APPS-01 (VLAN 4055) → DATA-01 (VLAN 4056) on 5432 and 9200
+ssh <your-user>@172.26.18.74
+pg_isready -h 172.26.18.102 -U zabbix -d zabbix
+curl -s http://172.26.18.102:9200/_cat/indices?v
+
+# From GWY-01 (VLAN 4055) → DATA-01 (VLAN 4056) on 5432
+ssh <your-user>@172.26.18.76
+pg_isready -h 172.26.18.102 -U zabbix -d zabbix
+
+# From your laptop → APPS-01 web ports 8080, 3000, 8082, 8888
+```
+
+---
+
+## Step G — Configure Zabbix (import + create ATM hosts)
+
+Browse to **http://172.26.18.74:8080** (`Admin` / `zabbix`).
+
+1. **Configuration → Templates → Import** → `config/zabbix/template_ncr_snmp.xml` and `template_grg_snmp.xml` (the SNMP-agent templates).
+2. **Configuration → Hosts → Import** → `config/zabbix/zbx_export_hosts.xml`.
+3. **Administration → Media types → Import** → `config/zabbix/zbx_export_mediatypes.xml`.
+4. Create ATM hosts with an **SNMP interface** (IP = real ATM IP, port 161, community = real bank community) and link the NCR/GRG SNMP template. See **Phase 4** for the full real-ATM walkthrough (SNMP walk, OID mapping, SNMPv3).
+
+---
+
+## Step H — Configure & customize the rest
+
+**Grafana** — the `datasources-production.yml` already provisions Zabbix-ATM, ATM-Transactions, EJ-OpenSearch; confirm each says "Success" and the 6 dashboards show data.
+
+**GLPI** (http://172.26.18.74:8082) — complete the install wizard → **Setup → General → API** enable REST API, create an API client → in Zabbix **Administration → Media types** set the GLPI Ticket media type `glpi_url` = `http://172.26.18.74:8082`. Trigger a fault and confirm a ticket is created.
+
+**Report Portal** (http://172.26.18.74:8888) — generate a PDF/Excel/CSV report.
+
+**EJ logs → OpenSearch** — production `filebeat.yml` must point at `localhost:9200` and add `/data/real-ej-logs/*.log`; the real ATM EJ delivery method (Filebeat-on-ATM / network share / SFTP) is in **Phase 5**.
+
+**ISO 8583 switch** — switch the gateway to `MODE: tcp` and point it at the real switch (SWITCH_HOST/SWITCH_PORT) per **Phase 6**. Validate the parser with real sample messages before go-live.
+
+---
+
+## Step I — Validate Production (sign-off checklist)
+
+- [ ] All containers `Up` on all 3 VMs (`restart: unless-stopped`)
+- [ ] DATA-01: PostgreSQL reachable from APPS-01 + GWY-01; custom tables exist; OpenSearch responding
+- [ ] APPS-01: Zabbix connected to DATA-01; Grafana/GLPI/Report Portal up; 3 datasources OK
+- [ ] GWY-01: gateway writing `ISO8583_SIM` (then real `ISO8583_REAL` after Phase 6)
+- [ ] SNMP: real ATM(s) report hardware status via SNMP (Phase 4)
+- [ ] GLPI tickets auto-create from a trigger
+- [ ] EJ logs searchable in OpenSearch Dashboards; PCI DSS masking confirmed
+- [ ] Report Portal generates correct reports with real data
+- [ ] Daily PostgreSQL backup + weekly OpenSearch snapshot configured; restore rehearsed
+- [ ] All config changes committed to git
+
+Full readiness checklist: §15. Full troubleshooting: §16.
+
+---
+
+# 7. Zabbix Import — detail (expands Step G)
+
+The import sequence is covered in **Step G** above. The one production-specific detail not in the cookbook:
+
+- **Administration → Media types → GLPI Ticket** → set `glpi_url` = `http://172.26.18.74:8082` and `app_token` from the GLPI API client you created in Step H. (GLPI now runs on APPS-01, not UAT.)
+
+The SNMP templates to import are `config/zabbix/template_ncr_snmp.xml` and `template_grg_snmp.xml` (not the legacy HTTP templates).
 
 ---
 
