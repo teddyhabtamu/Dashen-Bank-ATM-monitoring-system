@@ -1,0 +1,32 @@
+apiVersion: 1
+
+datasources:
+  - name: Zabbix-ATM
+    type: alexanderzobnin-zabbix-datasource
+    access: proxy
+    url: http://172.26.208.176:8080/api_jsonrpc.php
+    jsonData:
+      username: Admin
+    secureJsonData:
+      password: zabbix
+
+  - name: ATM-Transactions
+    type: postgres
+    url: 172.26.208.176:5432
+    database: zabbix
+    user: zabbix
+    secureJsonData:
+      password: <uat-postgres-password>
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1500
+
+  - name: EJ-OpenSearch
+    type: elasticsearch
+    url: http://172.26.21.50:9200
+    jsonData:
+      index: atm-*
+      timeField: "@timestamp"
+      esVersion: "7.10.0"
+      logMessageField: message
+      logLevelField: status

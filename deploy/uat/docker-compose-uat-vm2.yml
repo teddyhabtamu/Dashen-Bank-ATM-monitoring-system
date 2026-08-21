@@ -1,0 +1,45 @@
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.14.0
+    container_name: opensearch
+    environment:
+      - discovery.type=single-node
+      - OPENSEARCH_JAVA_OPTS=-Xms2g -Xmx2g
+      - DISABLE_SECURITY_PLUGIN=true
+      - compatibility.override_main_response_version=true
+    volumes:
+      - os-data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+    restart: unless-stopped
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.14.0
+    container_name: opensearch-dashboards
+    environment:
+      - OPENSEARCH_HOSTS=http://opensearch:9200
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+    ports:
+      - "5601:5601"
+    depends_on:
+      - opensearch
+    restart: unless-stopped
+
+  iso8583-gateway:
+    build:
+      context: ./camel
+      dockerfile: Dockerfile.gateway
+    container_name: iso8583-gateway
+    environment:
+      MODE: "simulation"
+      DB_HOST: "172.26.208.176"
+      DB_NAME: "zabbix"
+      DB_USER: "zabbix"
+      DB_PASS: "${DB_PASS}"
+      INTERVAL: "10"
+    ports:
+      - "9876:9876"
+    restart: unless-stopped
+
+volumes:
+  os-data:

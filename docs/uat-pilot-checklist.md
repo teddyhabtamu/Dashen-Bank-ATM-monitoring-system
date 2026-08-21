@@ -58,15 +58,18 @@
 > **Goal:** Stand up the full stack on the procured UAT hardware.
 
 ### Step 1.1 — Pre-deployment
-- [ ] Confirm UAT VM1 and UAT VM2 are provisioned (8 vCPU, 32 GB RAM, 500 GB each per spec)
+- [ ] Confirm UAT servers are provisioned (per the revised spec — see `docs/UAT_Migration_Guide.md`):
+  - UAT-01 `DBHQUATATMMONAPP` 172.26.208.176 — 4 vCPU, 8 GB RAM, 500 GB
+  - UAT-02 `DBHQUATATMMONDB` 172.26.21.50 — 4 vCPU, 8 GB RAM, 200 GB
 - [ ] Confirm SSH access to both VMs
 - [ ] Confirm RHEL 9 subscription or repo access
-- [ ] Confirm firewall rules:
-  - UAT VM1:5432 ← no external access needed initially
-  - UAT VM1:8080, 3000, 8082, 8888 ← your laptop access
+- [ ] Firewall/VLAN rules handled by Cloud & Core / Network teams — verify reachability only:
+  - UAT-01 (VLAN 4029) → UAT-02 (VLAN 4021) TCP 9200 (OpenSearch)
+  - UAT-02 (VLAN 4021) → UAT-01 (VLAN 4029) TCP 5432 (PostgreSQL)
+  - UAT-01:8080, 3000, 8082, 8888 ← your laptop access
 
-### Step 1.2 — Deploy UAT VM2 (OpenSearch)
-- [ ] SSH into UAT VM2
+### Step 1.2 — Deploy UAT-02 (OpenSearch + Dashboards, `DBHQUATATMMONDB`)
+- [ ] SSH into UAT-02
 - [ ] Install Docker (see Production_Migration_Guide §5.1.2)
 - [ ] Clone the repo
 - [ ] Configure sysctl: `vm.max_map_count=262144`
@@ -77,8 +80,8 @@
   ```
 - [ ] Verify: `curl http://localhost:9200` returns JSON
 
-### Step 1.3 — Deploy UAT VM1 (everything else)
-- [ ] SSH into UAT VM1
+### Step 1.3 — Deploy UAT-01 (everything else, `DBHQUATATMMONAPP`)
+- [ ] SSH into UAT-01
 - [ ] Install Docker, clone repo
 - [ ] Set up `.env` with passwords
 - [ ] Start PostgreSQL first:
@@ -146,30 +149,26 @@
 
 ## Phase 3 — Deploy Production VMs (Week 3–4)
 
-> **Goal:** Build the production environment (5 VMs) based on lessons learned from UAT pilot.
+> **Goal:** Build the production environment (**3 VMs** per the revised spec) based on lessons learned from UAT pilot.
 
 ### Step 3.1 — Confirm production server readiness
-- [ ] VM1 (Zabbix): 16 vCPU, 32 GB RAM, 200 GB — provisioned?
-- [ ] VM2 (PostgreSQL): 16 vCPU, 64 GB RAM, 1 TB — provisioned?
-- [ ] VM3 (OpenSearch): 12 vCPU, 48 GB RAM, 2 TB — provisioned?
-- [ ] VM4 (Grafana/GLPI): 8 vCPU, 24 GB RAM, 200 GB — provisioned?
-- [ ] VM5 (Gateway): 8 vCPU, 16 GB RAM, 100 GB — provisioned?
+- [ ] APPS-01 `DBHQPRODATMMONAPP` 172.26.18.74 — 8 vCPU, 16 GB RAM, 400 GB — provisioned?
+- [ ] DATA-01 `DBHQPRODATMMONDB` 172.26.18.102 — 12 vCPU, 48 GB RAM, 3.5 TB — provisioned?
+- [ ] GWY-01 `DBHQPRODATMMONGW` 172.26.18.76 — 4 vCPU, 8 GB RAM, 100 GB — provisioned?
 - [ ] All VMs have RHEL 9 + Docker + SSH access?
-- [ ] Firewall rules in place (see Production_Migration_Guide §3.2)?
+- [ ] Firewall/VLAN rules handled by Cloud & Core / Network teams — verify inter-VLAN reachability (APPS/GWY on VLAN 4055 → DATA-01 on VLAN 4056)
 
 ### Step 3.2 — Deploy in order
-- [ ] VM2 → PostgreSQL (with performance tuning from Production_Migration_Guide §4.3.3)
-- [ ] VM1 → Zabbix Server + Web (pointing to VM2's DB)
-- [ ] VM3 → OpenSearch + OpenSearch Dashboards + Filebeat
-- [ ] VM4 → Grafana + GLPI + Report Portal + Renderer
-- [ ] VM5 → ISO 8583 Gateway + Anomaly Detector + Network Correlator
+- [ ] DATA-01 → PostgreSQL (with tuning from `config/postgres-production/postgresql-custom.conf`) + OpenSearch + Dashboards + Filebeat
+- [ ] APPS-01 → Zabbix Server + Web (pointing to DATA-01's DB) + Grafana + GLPI + Report Portal + Renderer + Anomaly Detector + Correlator + State Manager
+- [ ] GWY-01 → ISO 8583 Gateway
 
 ### Step 3.3 — Import configuration
 - [ ] Import Zabbix templates (v2 with real OIDs)
 - [ ] Import hosts (pilot group first, then full fleet)
 - [ ] Import media types (GLPI webhook)
 - [ ] Configure GLPI API token
-- [ ] Configure Grafana datasources (point to VM1, VM2, VM3)
+- [ ] Configure Grafana datasources (point to APPS-01, DATA-01 — see `config/grafana/datasources-production.yml`)
 
 ---
 

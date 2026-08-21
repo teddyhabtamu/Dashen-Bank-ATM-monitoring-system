@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: zabbix-db
+    environment:
+      POSTGRES_DB: "zabbix"
+      POSTGRES_USER: "zabbix"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./config/postgres-production/postgresql-custom.conf:/etc/postgresql/postgresql.conf.d/custom.conf:ro
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  opensearch:
+    image: opensearchproject/opensearch:2.14.0
+    container_name: opensearch
+    environment:
+      - discovery.type=single-node
+      - OPENSEARCH_JAVA_OPTS=-Xms16g -Xmx16g
+      - DISABLE_SECURITY_PLUGIN=true
+      - compatibility.override_main_response_version=true
+    volumes:
+      - os-data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+    restart: unless-stopped
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.14.0
+    container_name: opensearch-dashboards
+    environment:
+      - OPENSEARCH_HOSTS=http://opensearch:9200
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+    ports:
+      - "5601:5601"
+    depends_on:
+      - opensearch
+    restart: unless-stopped
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat-oss:7.12.1
+    container_name: filebeat
+    user: root
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./ej-logs:/var/log/atm-ej:ro
+      - /data/real-ej-logs:/data/real-ej-logs:ro
+    depends_on:
+      - opensearch
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  os-data:

@@ -75,7 +75,9 @@
 
 ## 1.3 Firewall Rules to Request
 
-**Network layout (confirmed with Cloud & Core / Security, August 2026):** UAT-01 is on **VLAN 4029** (172.26.208.0/24), UAT-02 on **VLAN 4021** (172.26.21.0/24) — the UAT cross-VM links below are **inter-VLAN** and must be explicitly allowed. The central repo server **172.25.37.4** must reach both VMs for update activity.
+**Division of labor (confirmed August 2026):** VM provisioning, VLANs, security groups, and firewall rules are handled by the Cloud & Core / Network / Security teams (see the Rahel Kiros & Jemil J. email thread). **You do not request these — you verify them** with the reachability checks in Phases A–C.
+
+**Network layout (confirmed with Cloud & Core / Security, August 2026):** UAT-01 is on **VLAN 4029** (172.26.208.0/24), UAT-02 on **VLAN 4021** (172.26.21.0/24) — the UAT cross-VM links below are **inter-VLAN**. The central repo server **172.25.37.4** reaches both VMs for update activity.
 
 | From | To | Port | Purpose |
 |---|---|---|---|
@@ -101,7 +103,7 @@
   | UAT-01 | DBHQUATATMMONAPP | VLAN 4029 — 172.26.208.0/24 (gw 172.26.208.1) | 172.26.208.176 |
   | UAT-02 | DBHQUATATMMONDB | VLAN 4021 — 172.26.21.0/24 (gw 172.26.21.1) | 172.26.21.50 |
 
-- [ ] **Firewall rules** from §1.3 in place
+- [ ] **Firewall rules** (§1.3) — handled by Cloud & Core / Network / Security; you only verify reachability in Phases A–C
 - [ ] **GitHub SSH key** or personal access token (to clone the repo on both VMs)
 - [ ] **`net-snmp-utils`** installable on UAT-01 (for verifying simulator SNMP)
 
@@ -109,12 +111,9 @@
 
 ---
 
-# 3. Create the UAT Deploy Files (on your laptop, in the repo)
+# 3. UAT Deploy Files (Already in the Repo)
 
-```bash
-mkdir -p deploy/uat
-mkdir -p config/grafana config/postgres-uat
-```
+**The files below already exist in the repo** (created August 2026) with the confirmed IPs baked in: `deploy/uat/docker-compose-uat-vm1.yml`, `deploy/uat/docker-compose-uat-vm2.yml`, `deploy/uat/.env.uat`, `config/grafana/datasources-uat.yml`, `config/postgres-uat/postgresql-custom.conf`. Read this section to understand what they contain; override only if you need a change.
 
 ## 3.1 UAT-01 compose file — `deploy/uat/docker-compose-uat-vm1.yml`
 

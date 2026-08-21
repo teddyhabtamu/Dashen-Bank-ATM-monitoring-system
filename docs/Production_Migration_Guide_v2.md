@@ -153,18 +153,16 @@ UAT replicates the **shape** of the system, not its 1,202-ATM scale — 10–20 
 - [ ] **Contact person** on the ATM Hardware/Vendor team (for SNMP OIDs and EJ paths)
 - [ ] **Branch network spreadsheet** with ATM IDs, branch names, GPS coordinates, terminal IDs, vendor, model, install dates
 
-## 3.2 Firewall Rules to Request
+## 3.2 Firewall Rules — Handled by Other Departments (Verify Only)
 
-**Network layout (confirmed with Cloud & Core / Security, August 2026):** APPS-01 and GWY-01 sit on **VLAN 4055** (172.26.18.64/28), DATA-01 on **VLAN 4056** (172.26.18.96/28) — production traffic between APPS/GWY and DATA-01 is therefore **inter-VLAN** and must be explicitly allowed. UAT-01 is on VLAN 4029 (172.26.208.0/24), UAT-02 on VLAN 4021 (172.26.21.0/24) — also inter-VLAN. The central repo server **172.25.37.4** must reach all 5 RHEL servers for update activity.
+> **Division of labor (confirmed August 2026):** VM provisioning, VLANs, security groups, and firewall rules are handled by the Cloud & Core / Network / Security teams (see the Rahel Kiros & Jemil J. email thread). **You do not request these — you verify them.** The tables below are the reference; the phases include a connectivity check after each deployment step.
+
+**Network layout (confirmed with Cloud & Core / Security, August 2026):** APPS-01 and GWY-01 sit on **VLAN 4055** (172.26.18.64/28), DATA-01 on **VLAN 4056** (172.26.18.96/28) — production traffic between APPS/GWY and DATA-01 is therefore **inter-VLAN**. UAT-01 is on VLAN 4029 (172.26.208.0/24), UAT-02 on VLAN 4021 (172.26.21.0/24) — also inter-VLAN. The central repo server **172.25.37.4** reaches all 5 RHEL servers for update activity.
 
 | From | To | Port | Purpose |
 |---|---|---|---|
-| APPS-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 5432 | Zabbix reads/writes monitoring data |
-| APPS-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 5432 | Grafana PostgreSQL datasource |
-| APPS-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 5432 | Report Portal reads transactions |
-| APPS-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 9200 | EJ search queries |
-| APPS-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 5432 | Anomaly detector reads transactions |
-| APPS-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 5432 | Correlator reads transactions |
+| APPS-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 5432 | Zabbix / Grafana / Report Portal / anomaly detector / correlator → PostgreSQL |
+| APPS-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 9200 | Report Portal EJ search queries |
 | GWY-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 5432 | ISO 8583 writes transactions |
 | GWY-01 (Gateway) | ATM Switch | TCP 9876 | ISO 8583 messages |
 | APPS-01 (Zabbix) | ATM Network | UDP 161 | SNMP polling |
@@ -246,9 +244,9 @@ Proxies are removed from this timeline entirely — they are a Phase 2 considera
 
 ---
 
-# 4. Phase 0 — Create Per-VM Deploy Files
+# 4. Phase 0 — Per-VM Deploy Files (Already in the Repo)
 
-Before touching any server, you need to **split** the single PoC `docker-compose.yml` into separate files — one per production VM, plus combined files for UAT.
+**The split is done.** The files below already exist in the repo (created August 2026) with the confirmed IPs baked in. You deploy by **`git clone` → copy `.env` → `docker compose up`** — you do not hand-write compose files. Read the steps to understand the layout; override a file only if you need a change (e.g. real switch IP in Phase 6).
 
 ## 4.1 Service-to-VM Mapping
 

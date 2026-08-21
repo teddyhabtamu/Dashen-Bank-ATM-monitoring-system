@@ -1,0 +1,16 @@
+services:
+  iso8583-gateway:
+    build:
+      context: ./camel
+      dockerfile: Dockerfile.gateway
+    container_name: iso8583-gateway
+    environment:
+      MODE: "simulation"
+      DB_HOST: "172.26.18.102"
+      DB_NAME: "zabbix"
+      DB_USER: "zabbix"
+      DB_PASS: "${DB_PASS}"
+      INTERVAL: "10"
+    ports:
+      - "9876:9876"
+    restart: unless-stopped
