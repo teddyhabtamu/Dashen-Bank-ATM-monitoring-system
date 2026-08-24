@@ -214,6 +214,14 @@ pg_isready -h 172.26.208.176 -U zabbix -d zabbix      # (or: psql -h 172.26.208.
 #   http://172.26.208.176:3000  Grafana
 #   http://172.26.208.176:8082  GLPI
 #   http://172.26.208.176:8888  Report Portal
+
+# From UAT-01: reach the two real test ATMs (SNMP UDP 161) — 4 Kilo Building
+#   NCR ATM           172.22.248.4
+#   GRG ATM Terminal  172.23.248.6
+snmpwalk -v2c -c <ATM_COMMUNITY> 172.22.248.4 .1.3.6.1.2.1.1
+snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.6 .1.3.6.1.2.1.1
+# If these time out, the Network/Cloud team must open UDP 161 from UAT-01
+# (172.26.208.176, VLAN 4029) to 172.22.248.4 and 172.23.248.6.
 ```
 
 ---
@@ -240,6 +248,25 @@ Now create the simulator hosts (SNMP, not HTTP):
 8. Repeat for a few ATMs (next port `1162`, `1163`, …)
 
 After 1–2 min: **Monitoring → Latest data** for `ATM-001` should show all ~30 items populated.
+
+### 8.1 Real test ATMs (4 Kilo Building)
+
+Two real test ATMs are available and should be monitored from UAT-01 to validate SNMP collection end-to-end:
+
+| ATM | Vendor | IP | Subnet |
+|---|---|---|---|
+| Test ATM 1 | NCR | 172.22.248.4 | 172.22.248.0/24 |
+| Test ATM 2 | GRG | 172.23.248.6 | 172.23.248.0/24 |
+
+Create them as real SNMP hosts (port **161**, not the simulator 1161):
+
+1. **Configuration → Hosts → Create host** → **Host name:** `ATM-TEST-NCR`, **Groups:** `Dashen Bank ATMs`
+2. **Interfaces → Add → SNMP:** IP `172.22.248.4`, **Port `161`**, SNMPv2, community `<ATM_COMMUNITY>` (from the ATM/Channel Support team)
+3. **Templates:** link `Dashen Bank ATM Hardware` (NCR)
+4. Repeat for `ATM-TEST-GRG` → IP `172.23.248.6`, template `… - GRG`
+
+> The SNMP templates shipped in the repo use the **simulation** OID tree (`.1.3.6.1.4.1.99999`). Real NCR/GRG ATMs expose different vendor OIDs. Before these hosts show data you must (a) confirm SNMP reachability (Step F above) and (b) re-map the template items to the real vendor MIB — the same exercise described for production in `docs/Production_Migration_Guide_v2.md` Phase 4. Until then, expect "Not supported" on items; that is expected and is the cutover work, not a UAT failure.
+
 
 ---
 
