@@ -292,8 +292,8 @@ services:
       DB_USER: zabbix
       DB_PASS: ${DB_PASS}
       ZABBIX_URL: http://zabbix-web:8080/api_jsonrpc.php
-      ZABBIX_USER: Admin
-      ZABBIX_PASS: zabbix
+      ZABBIX_USER: ${ZBX_USER:-Admin}
+      ZABBIX_PASS: ${ZBX_PASS:-zabbix}
       CHECK_INTERVAL: "120"
       LATENCY_THRESHOLD: "200"
       LOSS_THRESHOLD: "10"
