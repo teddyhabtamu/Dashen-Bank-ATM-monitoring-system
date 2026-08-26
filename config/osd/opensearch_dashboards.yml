@@ -1,0 +1,23 @@
+# ─────────────────────────────────────────────────────────────
+# OpenSearch Dashboards — Dashen Bank branded configuration
+# Mounted read-only over the stock config by docker compose.
+# Self-contained: works identically on dev, UAT and production
+# (the opensearch service name is the same in every environment).
+# ─────────────────────────────────────────────────────────────
+
+server.name: dashen-osd
+server.host: "0.0.0.0"
+opensearch.hosts: ["http://opensearch:9200"]
+
+opensearchDashboards.branding:
+  applicationTitle: "Dashen Bank — ATM Monitoring"
+  logo:
+    defaultUrl: "/ui/dashen-logo.png"
+    darkModeUrl: "/ui/dashen-logo.png"
+  mark:
+    defaultUrl: "/ui/dashen-mark.png"
+    darkModeUrl: "/ui/dashen-mark.png"
+  loadingLogo:
+    defaultUrl: "/ui/dashen-logo.png"
+    darkModeUrl: "/ui/dashen-logo.png"
+  faviconUrl: "/ui/dashen-favicon.png"

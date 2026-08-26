@@ -19,6 +19,11 @@ services:
     environment:
       - OPENSEARCH_HOSTS=http://opensearch:9200
       - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+    volumes:
+      - ./config/osd/opensearch_dashboards.yml:/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml:ro
+      - ./config/osd/ui_brand/dashen-logo.png:/usr/share/opensearch-dashboards/src/core/server/core_app/assets/dashen-logo.png:ro
+      - ./config/osd/ui_brand/dashen-mark.png:/usr/share/opensearch-dashboards/src/core/server/core_app/assets/dashen-mark.png:ro
+      - ./config/osd/ui_brand/dashen-favicon.png:/usr/share/opensearch-dashboards/src/core/server/core_app/assets/dashen-favicon.png:ro
     ports:
       - "5601:5601"
     depends_on:
