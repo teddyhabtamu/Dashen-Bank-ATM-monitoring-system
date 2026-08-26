@@ -1,0 +1,38 @@
+{
+  "index_patterns": ["atm-ej-live-*"],
+  "priority": 200,
+  "template": {
+    "mappings": {
+      "dynamic_templates": [
+        {
+          "strings_as_keyword": {
+            "match_mapping_type": "string",
+            "mapping": { "type": "keyword", "ignore_above": 512 }
+          }
+        }
+      ],
+      "properties": {
+        "@timestamp":          { "type": "date" },
+        "message":             { "type": "text" },
+        "log_type":            { "type": "keyword" },
+        "vendor":              { "type": "keyword" },
+        "operator_id":         { "type": "keyword" },
+        "atm":       { "properties": { "id": { "type": "keyword" } } },
+        "terminal":  { "properties": { "id": { "type": "keyword" } } },
+        "card":      { "properties": { "masked": { "type": "keyword" } } },
+        "event":     { "properties": { "category": { "type": "keyword" }, "action": { "type": "keyword" } } },
+        "fault":     { "properties": { "code": { "type": "keyword" }, "desc": { "type": "keyword" }, "cassette": { "type": "keyword" } } },
+        "transaction": {
+          "properties": {
+            "type":     { "type": "keyword" },
+            "status":   { "type": "keyword" },
+            "sequence": { "type": "keyword" },
+            "currency": { "type": "keyword" },
+            "auth_code":{ "type": "keyword" },
+            "amount":   { "type": "float" }
+          }
+        }
+      }
+    }
+  }
+}

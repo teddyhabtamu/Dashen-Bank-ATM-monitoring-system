@@ -20,14 +20,41 @@ ES_INDEX = os.environ.get('ES_INDEX', 'atm-ej-live-*,atm-electronic-journal')
 
 def _parse_ej_log_line(src):
     """
-    Filebeat ships raw log lines as plain text in src['message'].
-    When structured fields are absent, parse the message pipe-delimited string.
-    Two formats exist:
-      4-field: ts | ATM-ID | EVENT_TYPE | SUB_TYPE | KV...
-      5-field: ts | ATM-ID | TID | EVENT_TYPE | SUB_TYPE | KV...
+    Normalize a hit's _source into the flat display fields used by routes.
+
+    Handles all three schema generations:
+      1. Nested (current):  atm.id, terminal.id, transaction.*, card.masked,
+                            fault.*, event.category  (atm_ej_parser v2)
+      2. Flat pipeline:     atm_id, terminal_id, sub_type, status, amount ...
+                            (atm_ej_parser v1 — older daily indices)
+      3. Raw message only:  pipe-delimited line parsed client-side
     """
+    # ── Generation 1: nested schema ──
+    atm_obj = src.get('atm') if isinstance(src.get('atm'), dict) else {}
+    if atm_obj.get('id'):
+        txn   = src.get('transaction') if isinstance(src.get('transaction'), dict) else {}
+        card  = src.get('card')        if isinstance(src.get('card'), dict) else {}
+        fault = src.get('fault')       if isinstance(src.get('fault'), dict) else {}
+        ev    = src.get('event')       if isinstance(src.get('event'), dict) else {}
+        term  = src.get('terminal')    if isinstance(src.get('terminal'), dict) else {}
+        src['atm_id']      = atm_obj.get('id')
+        src['terminal_id'] = term.get('id')
+        src['event_type']  = ev.get('category')
+        src['sub_type']    = txn.get('type')
+        src['seq']         = txn.get('sequence')
+        src['card_masked'] = card.get('masked')
+        src['status']      = txn.get('status')
+        src['amount']      = txn.get('amount')
+        src['currency']    = txn.get('currency')
+        src['auth_code']   = txn.get('auth_code')
+        src['error_code']  = fault.get('code')
+        return src
+
+    # ── Generation 2: flat pipeline fields already present ──
     if src.get('atm_id'):
         return src
+
+    # ── Generation 3: parse raw message ──
     msg = src.get('message', '')
     if not msg or '|' not in msg:
         return src
@@ -78,29 +105,43 @@ def _parse_ej_log_line(src):
 
 def _build_must(keyword, card, date_from, date_to, atm_id,
                 event_type, status, min_amount, max_amount, auth_code):
+    """
+    Build the bool.must list. Every field filter targets BOTH schema
+    generations (nested v2 fields and flat v1 fields) plus a raw-message
+    fallback, because atm-ej-live-* spans daily indices written before
+    and after the structured-schema cutover.
+    """
     must = []
     if keyword:
         must.append({"match": {"message": {"query": keyword}}})
     if card:
-        must.append({"wildcard": {"message": {"value": f"*{card}*"}}})
+        card_val = f"*{card}*"
+        must.append({"bool": {"should": [
+            {"wildcard": {"card.masked": {"value": card_val}}},
+            {"wildcard": {"card_masked": {"value": card_val}}},
+            {"wildcard": {"message":     {"value": card_val}}},
+        ], "minimum_should_match": 1}})
     if date_from:
         must.append({"range": {"@timestamp": {"gte": date_from}}})
     if date_to:
         must.append({"range": {"@timestamp": {"lte": f"{date_to}T23:59:59"}}})
     if atm_id:
         must.append({"bool": {"should": [
+            {"term":         {"atm.id": atm_id}},
             {"term":         {"atm_id": atm_id}},
-            {"match_phrase": {"message":        atm_id}},
+            {"match_phrase": {"message": atm_id}},
         ], "minimum_should_match": 1}})
     if event_type:
         must.append({"bool": {"should": [
-            {"term":         {"event_type": event_type}},
-            {"match_phrase": {"message":            event_type}},
+            {"term":         {"event.category": event_type}},
+            {"term":         {"event_type":      event_type}},
+            {"match_phrase": {"message":         event_type}},
         ], "minimum_should_match": 1}})
     if status:
         must.append({"bool": {"should": [
-            {"term":         {"status.keyword": status}},
-            {"match_phrase": {"message":        status}},
+            {"term":         {"transaction.status": status}},
+            {"term":         {"status.keyword":     status}},
+            {"match_phrase": {"message":            status}},
         ], "minimum_should_match": 1}})
     if min_amount or max_amount:
         amt_range = {}
@@ -111,11 +152,15 @@ def _build_must(keyword, card, date_from, date_to, atm_id,
             try:    amt_range["lte"] = float(max_amount)
             except: pass
         if amt_range:
-            must.append({"range": {"amount": amt_range}})
+            must.append({"bool": {"should": [
+                {"range": {"transaction.amount": amt_range}},
+                {"range": {"amount":             amt_range}},
+            ], "minimum_should_match": 1}})
     if auth_code:
         must.append({"bool": {"should": [
-            {"term":      {"auth_code.keyword": auth_code}},
-            {"wildcard":  {"message":           {"value": f"*{auth_code}*"}}},
+            {"term":      {"transaction.auth_code": auth_code}},
+            {"term":      {"auth_code.keyword":     auth_code}},
+            {"wildcard":  {"message":               {"value": f"*{auth_code}*"}}},
         ], "minimum_should_match": 1}})
     return must
 

@@ -117,6 +117,17 @@ if [ "$OS_OK" = "1" ]; then
         echo "  WARNING: config/opensearch/atm_ej_parser.json not found — EJ parsing may not work"
     fi
 
+    # Structured-schema index template for atm-ej-live-* (typed keyword/float mappings)
+    if [ -f "config/opensearch/ej_live_index_template.json" ]; then
+        if curl -s -X PUT "http://localhost:9200/_index_template/ej-live-template" \
+                -H 'Content-Type: application/json' \
+                -d @"config/opensearch/ej_live_index_template.json" | grep -q '"acknowledged":true'; then
+            echo "  Index template ej-live-template loaded"
+        else
+            echo "  WARNING: could not load ej-live-template (EJ aggregations fall back to dynamic mapping)"
+        fi
+    fi
+
     # Create the OpenSearch Dashboards index pattern (idempotent)
     curl -s -X POST "http://localhost:5601/api/saved_objects/index-pattern/atm-ej-live-*" \
         -H "osd-xsrf: true" -H "Content-Type: application/json" \

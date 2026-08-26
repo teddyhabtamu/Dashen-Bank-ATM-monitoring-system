@@ -1,13 +1,18 @@
 {
-  "description": "Parse ATM Electronic Journal log lines for NCR and GRG vendors into structured fields. Loaded into OpenSearch and referenced by filebeat.yml (output.elasticsearch.pipeline).",
+  "description": "Parse ATM Electronic Journal log lines (NCR + GRG, legacy and current shapes) into a structured nested schema: atm.id, terminal.id, transaction.*, card.masked, fault.*, event.category. Referenced by filebeat.yml (output.elasticsearch.pipeline). v2 replaces flat field output; raw message is always retained by filebeat.",
   "processors": [
     {
       "grok": {
         "field": "message",
         "patterns": [
-          "%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm_id} \\| %{DATA:terminal_id} \\| %{DATA:event_type} \\| %{DATA:sub_type} \\| SEQ=%{DATA:seq} \\| CARD=%{DATA:card_masked} \\| AMOUNT=%{NUMBER:amount} \\| CURRENCY=%{DATA:currency} \\| STATUS=%{DATA:status}(\\| AUTH=%{DATA:auth_code})?$",
-          "%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm_id} \\| %{DATA:terminal_id} \\| VENDOR=%{DATA:vendor} \\| TXN_CODE=%{DATA:sub_type} \\| SEQ=%{DATA:seq} \\| ACCT_NO=%{DATA:card_masked} \\| AMOUNT=%{NUMBER:amount} \\| CURRENCY=%{DATA:currency} \\| RESP_CODE=%{DATA:status}(\\| AUTH(_CODE)?=%{DATA:auth_code})?$",
-          "%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm_id} \\| %{DATA:terminal_id} \\| VENDOR=%{DATA:vendor} \\| EVENT=%{DATA:event_type} \\| FAULT_CODE=%{DATA:error_code} \\| FAULT_DESC=%{DATA:fault_desc}$"
+          "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:terminal.id} \\| %{DATA:event.category} \\| %{DATA:transaction.type} \\| SEQ=%{DATA:transaction.sequence} \\| CARD=%{DATA:card.masked} \\| AMOUNT=%{NUMBER:transaction.amount:float} \\| CURRENCY=%{DATA:transaction.currency} \\| STATUS=%{DATA:transaction.status}(\\| AUTH=%{DATA:transaction.auth_code})?$",
+          "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:terminal.id} \\| %{DATA:event.category} \\| %{DATA:transaction.type} \\| SEQ=%{DATA:transaction.sequence} \\| CARD=%{DATA:card.masked} \\| STATUS=%{DATA:transaction.status}$",
+          "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:event.category} \\| %{DATA:transaction.type} \\| CARD=%{DATA:card.masked} \\| AMOUNT=%{NUMBER:transaction.amount:float} \\| CURRENCY=%{DATA:transaction.currency} \\| STATUS=%{DATA:transaction.status}(\\| AUTH=%{DATA:transaction.auth_code})?$",
+          "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:event.category} \\| %{DATA:transaction.type} \\| CARD=%{DATA:card.masked} \\| STATUS=%{DATA:transaction.status}$",
+          "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:terminal.id} \\| VENDOR=%{DATA:vendor} \\| TXN_CODE=%{DATA:transaction.type} \\| SEQ=%{DATA:transaction.sequence} \\| ACCT_NO=%{DATA:card.masked} \\| AMOUNT=%{NUMBER:transaction.amount:float} \\| CURRENCY=%{DATA:transaction.currency} \\| RESP_CODE=%{DATA:transaction.status}(\\| AUTH(_CODE)?=%{DATA:transaction.auth_code})?$",
+          "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:terminal.id} \\| VENDOR=%{DATA:vendor} \\| EVENT=%{DATA:event.category} \\| FAULT_CODE=%{DATA:fault.code} \\| FAULT_DESC=%{DATA:fault.desc}$",
+          "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:event.category} \\| %{DATA:fault.desc} \\| CASSETTE=%{DATA:fault.cassette} \\| TECH_CODE=%{DATA:fault.code}$",
+          "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:event.category} \\| %{DATA:event.action} \\| OPERATOR=%{DATA:operator_id}$"
         ],
         "ignore_failure": true
       }
@@ -20,10 +25,17 @@
       }
     },
     {
-      "convert": {
-        "field": "amount",
-        "type": "float",
-        "ignore_failure": true
+      "set": {
+        "if": "ctx.event?.category == null && ctx.transaction != null",
+        "field": "event.category",
+        "value": "TXN"
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.event?.category == null && ctx.fault != null",
+        "field": "event.category",
+        "value": "FAULT"
       }
     },
     {
