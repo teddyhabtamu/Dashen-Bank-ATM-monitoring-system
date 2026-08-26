@@ -19,9 +19,10 @@ import os
 import sys
 import requests
 
-ZBX_URL  = os.environ.get('ZABBIX_URL', 'http://localhost:8080/api_jsonrpc.php')
-ZBX_USER = os.environ.get('ZABBIX_USER', 'Admin')
-ZBX_PASS = os.environ.get('ZABBIX_PASS', 'zabbix')
+# Accept both spellings; canonical names are ZBX_* (match .env / other scripts)
+ZBX_URL  = os.environ.get('ZBX_URL') or os.environ.get('ZABBIX_URL', 'http://localhost:8080/api_jsonrpc.php')
+ZBX_USER = os.environ.get('ZBX_USER') or os.environ.get('ZABBIX_USER', 'Admin')
+ZBX_PASS = os.environ.get('ZBX_PASS') or os.environ.get('ZABBIX_PASS', 'zabbix')
 
 MEDIA_TYPE_NAME = 'GLPI Ticket'
 ACTION_NAME     = 'ATM GLPI Auto-Ticket'

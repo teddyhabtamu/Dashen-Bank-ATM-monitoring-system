@@ -24,9 +24,10 @@ DB_NAME   = os.environ.get('DB_NAME',   'zabbix')
 DB_USER   = os.environ.get('DB_USER',   'zabbix')
 DB_PASS   = os.environ.get('DB_PASS',   '')
 
-ZABBIX_URL  = os.environ.get('ZABBIX_URL',  'http://zabbix-web:8080/api_jsonrpc.php')
-ZABBIX_USER = os.environ.get('ZABBIX_USER', 'Admin')
-ZABBIX_PASS = os.environ.get('ZABBIX_PASS', 'zabbix')
+# Accept both spellings; canonical names are ZBX_* (match .env / other scripts)
+ZABBIX_URL  = os.environ.get('ZBX_URL') or os.environ.get('ZABBIX_URL',  'http://zabbix-web:8080/api_jsonrpc.php')
+ZABBIX_USER = os.environ.get('ZBX_USER') or os.environ.get('ZABBIX_USER', 'Admin')
+ZABBIX_PASS = os.environ.get('ZBX_PASS') or os.environ.get('ZABBIX_PASS', 'zabbix')
 
 CHECK_INTERVAL    = int(os.environ.get('CHECK_INTERVAL',    '120'))  # seconds
 LATENCY_THRESHOLD = float(os.environ.get('LATENCY_THRESHOLD','200')) # ms
