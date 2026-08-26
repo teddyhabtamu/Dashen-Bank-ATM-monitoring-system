@@ -190,6 +190,8 @@ services:
       DB_USER: zabbix
       DB_PASS: ${DB_PASS}
       GRAFANA_URL: ${GRAFANA_URL}
+      ZABBIX_UI_URL: ${ZABBIX_UI_URL:-http://localhost:8080}
+      GLPI_UI_URL: ${GLPI_UI_URL:-http://localhost:8082}
       REPORT_PORTAL_PORT: ${REPORT_PORTAL_PORT}
       ES_HOST: opensearch:9200
       ES_INDEX: atm-ej-live-*,atm-electronic-journal

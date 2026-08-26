@@ -155,7 +155,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
     <h1 class="page-title">ATM Registration</h1>
     <p class="page-subtitle">Manage ATM location data used by monitoring dashboards and reports.</p>
   </div>
-  <a href="http://localhost:3002" target="_blank" class="btn-live btn-primary"><i data-lucide="bar-chart-3"></i> Live Dashboards</a>
+  <a href="{{ grafana_url }}" target="_blank" rel="noopener" class="btn-live btn-primary"><i data-lucide="bar-chart-3"></i> Live Dashboards</a>
 </div>
 
 <div class="page-content" data-fields='{{ fields|tojson }}' data-vendors='{{ vendor_options|tojson }}'>

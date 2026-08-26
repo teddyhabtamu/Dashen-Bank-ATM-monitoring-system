@@ -115,6 +115,8 @@ services:
       DB_USER: "zabbix"
       DB_PASS: "${DB_PASS}"
       GRAFANA_URL: "http://172.26.18.74:3000"
+      ZABBIX_UI_URL: "http://172.26.18.74:8080"
+      GLPI_UI_URL: "http://172.26.18.74:8082"
       REPORT_PORTAL_PORT: "8888"
       ES_HOST: "172.26.18.102:9200"
       ES_INDEX: "atm-ej-live-*,atm-electronic-journal"

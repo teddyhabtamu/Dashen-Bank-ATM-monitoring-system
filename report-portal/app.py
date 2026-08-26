@@ -76,6 +76,16 @@ def create_app():
     def start_timer():
         g.start = time.time()
 
+    @app.context_processor
+    def external_links():
+        """UI links for the sidebar/header — configurable per environment
+        (localhost defaults keep laptop dev working unchanged)."""
+        return {
+            'grafana_url': os.environ.get('GRAFANA_URL', 'http://localhost:3002'),
+            'zabbix_ui_url': os.environ.get('ZABBIX_UI_URL', 'http://localhost:8080'),
+            'glpi_ui_url': os.environ.get('GLPI_UI_URL', 'http://localhost:8082'),
+        }
+
     @app.after_request
     def log_request(response):
         if not FLASK_DEBUG and hasattr(g, 'start'):

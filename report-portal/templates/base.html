@@ -313,7 +313,7 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
     </button>
   </div>
     <div class="top-bar-right">
-      <a href="http://localhost:3002" target="_blank" class="top-bar-link">
+      <a href="{{ grafana_url }}" target="_blank" rel="noopener" class="top-bar-link">
         <i data-lucide="bar-chart-3"></i> Live Dashboards
       </a>
     </div>
@@ -368,13 +368,20 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
     </a>
     {% endif %}
     <div class="nav-section-label" style="margin-top:8px">Quick Links</div>
-    <a href="http://localhost:3002" target="_blank" class="nav-item">
+    <a href="{{ grafana_url }}" target="_blank" rel="noopener" class="nav-item"
+       title="Grafana — live dashboards">
       <i data-lucide="bar-chart-3"></i>
       <span>Live Dashboards</span>
     </a>
-    <a href="http://localhost:8080" target="_blank" class="nav-item">
-      <i data-lucide="server"></i>
-      <span>Zabbix</span>
+    <a href="{{ zabbix_ui_url }}" target="_blank" rel="noopener" class="nav-item"
+       title="Zabbix — hosts, metrics and problems">
+      <i data-lucide="activity"></i>
+      <span>Monitoring Center</span>
+    </a>
+    <a href="{{ glpi_ui_url }}" target="_blank" rel="noopener" class="nav-item"
+       title="GLPI — tickets, SLA and RCA">
+      <i data-lucide="ticket"></i>
+      <span>Incident Management</span>
     </a>
   </nav>
   <div class="sidebar-support">
