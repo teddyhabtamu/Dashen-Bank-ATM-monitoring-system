@@ -236,7 +236,7 @@ working, independent of Zabbix:
 ```bash
 curl -s -X GET "http://localhost:8082/apirest.php/initSession" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Basic $(echo -n 'glpi:DashenGLPI2024' | base64)" \
+  -H "Authorization: Basic $(echo -n 'glpi:<GLPI_API_PASSWORD-from-.env>' | base64)" \
   -H "App-Token: YOUR_APP_TOKEN"
 ```
 A successful response returns a `session_token`. If this fails, the

@@ -75,9 +75,6 @@ SELECT 'scheduled_reports'    , COUNT(*) FROM scheduled_reports;
 SQLEOF
 
 
-# Auto-commit backup to git (best-effort, won't fail the script if git fails)
-cd "$(dirname "$0")/.."
-git add config/postgres/ 2>/dev/null
-git commit -m "Automated backup $(date +%Y-%m-%d)" 2>/dev/null
-git push 2>/dev/null
-echo "Backup committed to git (if changes existed)"
+# NOTE: backups are NOT committed to git — database dumps contain user data
+# and this repository may be public. Copy them to secure storage instead:
+#   scp config/postgres/zabbix_full_*.sql.gz <backup-server>:/backups/

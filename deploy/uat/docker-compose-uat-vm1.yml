@@ -132,8 +132,16 @@ services:
       DB_PASS: "${DB_PASS}"
       GRAFANA_URL: "http://172.26.208.176:3000"
       REPORT_PORTAL_PORT: "8888"
-      OS_HOST: "172.26.21.50:9200"
-      OS_INDEX: "atm-ej-live-*,atm-electronic-journal"
+      ES_HOST: "172.26.21.50:9200"
+      ES_INDEX: "atm-ej-live-*,atm-electronic-journal"
+      ADMIN_USER: "${ADMIN_USER}"
+      ADMIN_PASS: "${ADMIN_PASS}"
+      FLASK_SECRET_KEY: "${FLASK_SECRET_KEY}"
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASS: "${SMTP_PASS:-}"
+      SMTP_FROM: "${SMTP_FROM:-atm-monitor@dashenbank.com}"
     volumes:
       - ./report-portal:/app:rw
     ports:
@@ -218,7 +226,7 @@ services:
       DB_PASS: "${DB_PASS}"
       SIM_PORT_MIN: "1161"
       SIM_PORT_MAX: "1260"
-      ATM_COUNT: "10"
+      MAX_SIMULATED_ATMS: "${MAX_SIMULATED_ATMS:-20}"
     ports:
       - "1161-1260:1161-1260/udp"
     depends_on:

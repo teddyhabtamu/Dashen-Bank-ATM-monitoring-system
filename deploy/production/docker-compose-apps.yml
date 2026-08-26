@@ -116,8 +116,8 @@ services:
       DB_PASS: "${DB_PASS}"
       GRAFANA_URL: "http://172.26.18.74:3000"
       REPORT_PORTAL_PORT: "8888"
-      OS_HOST: "172.26.18.102:9200"
-      OS_INDEX: "atm-ej-live-*,atm-electronic-journal"
+      ES_HOST: "172.26.18.102:9200"
+      ES_INDEX: "atm-ej-live-*,atm-electronic-journal"
     volumes:
       - ./report-portal:/app:rw
     ports:

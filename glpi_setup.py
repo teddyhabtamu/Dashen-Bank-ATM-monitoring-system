@@ -12,9 +12,18 @@ Prints a complete ID mapping table at the end for the Zabbix webhook script.
 import requests, json, os, sys, base64, time
 
 GLPI_URL = os.environ.get('GLPI_URL', "http://glpi:80/apirest.php")
-APP_TOKEN = os.environ.get('GLPI_APP_TOKEN', 'XuApka4zrjQ9GFFEgGFHBlkpdmcPuY32q4DtsmmQ')
+# No secrets in source — provide via environment (see .env / setup_new_machine.sh):
+#   GLPI_APP_TOKEN       GLPI API client app token
+#   GLPI_USER            GLPI API user (default: glpi)
+#   GLPI_API_PASSWORD    GLPI API user password
+APP_TOKEN = os.environ.get('GLPI_APP_TOKEN', '')
 USER = os.environ.get('GLPI_USER', "glpi")
-PASS = os.environ.get('GLPI_API_PASSWORD', 'DashenGLPI2024')
+PASS = os.environ.get('GLPI_API_PASSWORD', '')
+
+if not APP_TOKEN or not PASS:
+    sys.exit("ERROR: set GLPI_APP_TOKEN and GLPI_API_PASSWORD environment "
+             "variables before running glpi_setup.py (they are machine-specific "
+             "and must not be committed to git).")
 
 headers = {"Content-Type": "application/json", "App-Token": APP_TOKEN}
 

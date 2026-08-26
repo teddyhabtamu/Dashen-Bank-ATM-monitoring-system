@@ -8,11 +8,12 @@ Reads config/postgres/atm_locations.csv and updates the `name`
 """
 
 import csv
+import os
 import requests
 
-ZBX_URL = "http://localhost:8080/api_jsonrpc.php"
-ZBX_USER = "Admin"
-ZBX_PASS = "zabbix"
+ZBX_URL = os.environ.get("ZBX_URL", "http://localhost:8080/api_jsonrpc.php")
+ZBX_USER = os.environ.get("ZBX_USER", "Admin")
+ZBX_PASS = os.environ.get("ZBX_PASS", "zabbix")
 CSV_PATH = "config/postgres/atm_locations.csv"
 
 

@@ -8,7 +8,7 @@
             <parameters>
                 <parameter>
                     <name>api_key</name>
-                    <value>atsk_39cb83828d650e5dd9fe2930f25eb71f138338fe39b25d37c6f18a326c108230d18c6d12</value>
+                    <value>__AT_API_KEY__</value>
                 </parameter>
                 <parameter>
                     <name>message</name>
@@ -125,11 +125,11 @@ Duration: {EVENT.DURATION}</message>
             <smtp_server>smtp.gmail.com</smtp_server>
             <smtp_port>587</smtp_port>
             <smtp_helo>GMAIL.com</smtp_helo>
-            <smtp_email>zabbix@example.com</smtp_email>
+            <smtp_email>__SMTP_EMAIL__</smtp_email>
             <smtp_security>STARTTLS</smtp_security>
             <smtp_authentication>PASSWORD</smtp_authentication>
-            <username>tewodroshabtamu29@gmail.com</username>
-            <password>fpyq iaqd skto amaz</password>
+            <username>__SMTP_EMAIL__</username>
+            <password>__SMTP_PASS__</password>
             <message_templates>
                 <message_template>
                     <event_source>TRIGGERS</event_source>
@@ -297,7 +297,7 @@ Dashen Bank ATM Monitoring System &amp;mdash; Automated Alert &amp;mdash; Do not
             <parameters>
                 <parameter>
                     <name>app_token</name>
-                    <value>XuApka4zrjQ9GFFEgGFHBlkpdmcPuY32q4DtsmmQ</value>
+                    <value>__GLPI_APP_TOKEN__</value>
                 </parameter>
                 <parameter>
                     <name>event_date</name>
@@ -313,7 +313,7 @@ Dashen Bank ATM Monitoring System &amp;mdash; Automated Alert &amp;mdash; Do not
                 </parameter>
                 <parameter>
                     <name>glpi_password</name>
-                    <value>DashenGLPI2024</value>
+                    <value>__GLPI_PASSWORD__</value>
                 </parameter>
                 <parameter>
                     <name>glpi_ticket_id</name>
@@ -585,9 +585,9 @@ if (mode === 'recovery') {
   &quot;event_date&quot;: &quot;{EVENT.DATE} {EVENT.TIME}&quot;,
   &quot;event_id&quot;: &quot;{EVENT.ID}&quot;,
   &quot;glpi_url&quot;: &quot;http://glpi:80/apirest.php&quot;,
-  &quot;app_token&quot;: &quot;W8xhdcEKO984RGfM6GNcomjREIJ7FXfUVERqovDn&quot;,
-  &quot;glpi_user&quot;: &quot;glpi&quot;,
-  &quot;glpi_password&quot;: &quot;DashenGLPI2024&quot;,
+  &quot;app_token&quot;: &quot;__GLPI_APP_TOKEN__&quot;,
+  &quot;glpi_user&quot;: &quot;__GLPI_USER__&quot;,
+  &quot;glpi_password&quot;: &quot;__GLPI_PASSWORD__&quot;,
   &quot;glpi_ticket_id&quot;: &quot;{EVENT.TAGS.glpi_id}&quot;
 }</message>
                 </message_template>
@@ -603,9 +603,9 @@ if (mode === 'recovery') {
   &quot;event_date&quot;: &quot;{EVENT.DATE} {EVENT.TIME}&quot;,
   &quot;event_id&quot;: &quot;{EVENT.ID}&quot;,
   &quot;glpi_url&quot;: &quot;http://glpi:80/apirest.php&quot;,
-  &quot;app_token&quot;: &quot;W8xhdcEKO984RGfM6GNcomjREIJ7FXfUVERqovDn&quot;,
-  &quot;glpi_user&quot;: &quot;glpi&quot;,
-  &quot;glpi_password&quot;: &quot;DashenGLPI2024&quot;,
+  &quot;app_token&quot;: &quot;__GLPI_APP_TOKEN__&quot;,
+  &quot;glpi_user&quot;: &quot;__GLPI_USER__&quot;,
+  &quot;glpi_password&quot;: &quot;__GLPI_PASSWORD__&quot;,
   &quot;glpi_ticket_id&quot;: &quot;{EVENT.TAGS.glpi_id}&quot;,
   &quot;mode&quot;: &quot;recovery&quot;
 }</message>

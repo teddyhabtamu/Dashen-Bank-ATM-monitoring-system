@@ -40,12 +40,12 @@ That's it — all services, Zabbix templates, GLPI categories/groups/SLAs, and G
 
 | Service | URL | Login |
 |---------|-----|-------|
-| Zabbix | http://localhost:8080 | Admin / zabbix |
-| Grafana | http://localhost:3002 | admin / dashen2024 |
-| GLPI | http://localhost:8082 | glpi / DashenGLPI2024 |
+| Zabbix | http://localhost:8080 | see `ZBX_USER` / `ZBX_PASS` in `.env` |
+| Grafana | http://localhost:3002 | admin / `GRAFANA_ADMIN_PASSWORD` from `.env` |
+| GLPI | http://localhost:8082 | glpi / `GLPI_API_PASSWORD` from `.env` |
 | Report Portal | http://localhost:8888 | admin / from `.env` |
 | OpenSearch Dashboards | http://localhost:5601 | admin / admin |
-| pgAdmin | http://localhost:5050 | admin@dashenbank.com / dashen2024 |
+| pgAdmin | http://localhost:5050 | admin@dashenbank.com / `PGADMIN_PASSWORD` from `.env` |
 
 ## Post-Setup (machine-specific, once per machine)
 
@@ -170,13 +170,14 @@ Created automatically by Step 6b. To recreate manually:
 | Role | Username | Password |
 |------|----------|----------|
 | Report Portal Admin | `admin` | from `.env` `ADMIN_PASS` |
-| Report Portal Operator | `operator` | `operator123` |
-| Report Portal Viewer | `viewer` | `viewer123` |
-| Zabbix Admin | `Admin` | `zabbix` |
-| Grafana Admin | `admin` | `dashen2024` |
-| GLPI Admin | `glpi` | `DashenGLPI2024` |
-| OpenSearch | `admin` | `admin` |
+| Zabbix Admin | from `.env` `ZBX_USER` (default `Admin`) | **change the factory default immediately after setup** |
+| Grafana Admin | `admin` | from `.env` `GRAFANA_ADMIN_PASSWORD` |
+| GLPI Admin | `glpi` | from `.env` `GLPI_API_PASSWORD` |
+| OpenSearch | `admin` | `admin` (security plugin disabled in dev — restrict network access) |
 | PostgreSQL | `zabbix` | from `.env` `POSTGRES_PASSWORD` |
+
+> Never commit real passwords. Every credential is set per-machine via `.env`
+> (gitignored); placeholders live only in `.env.example`.
 
 ## Architecture
 

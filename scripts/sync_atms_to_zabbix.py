@@ -11,9 +11,9 @@ Connects to Zabbix API at localhost:8080.
 
 import csv, json, os, sys, time
 
-ZBX_URL = "http://localhost:8080/api_jsonrpc.php"
-ZBX_USER = "Admin"
-ZBX_PASS = "zabbix"
+ZBX_URL = os.environ.get("ZBX_URL", "http://localhost:8080/api_jsonrpc.php")
+ZBX_USER = os.environ.get("ZBX_USER", "Admin")
+ZBX_PASS = os.environ.get("ZBX_PASS", "zabbix")
 CSV_PATH = "config/postgres/atm_locations.csv"
 TEMPLATE_NCR_PATH = "config/zabbix/template_ncr_snmp.xml"
 TEMPLATE_GRG_PATH = "config/zabbix/template_grg_snmp.xml"

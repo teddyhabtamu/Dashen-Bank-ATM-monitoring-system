@@ -162,31 +162,12 @@ python3 scripts/sync_atms_to_zabbix.py --apply --import-templates || {
     echo "  python3 scripts/sync_atms_to_zabbix.py --apply --import-templates"
 }
 
-# ── Step 9 — Import mediatype XML via API ──────
-echo ""
-echo "Step 9: Importing GLPI Ticket mediatype into Zabbix..."
-python3 -c "
-import requests, os
-url = os.environ.get('ZBX_URL', 'http://localhost:8080/api_jsonrpc.php')
-user = os.environ.get('ZBX_USER', 'Admin')
-pwd  = os.environ.get('ZBX_PASS', 'zabbix')
-auth = requests.post(url, json={'jsonrpc':'2.0','method':'user.login','params':{'username':user,'password':pwd},'id':1}, headers={'Content-Type':'application/json-rpc'}, timeout=30).json()['result']
-with open('config/zabbix/zbx_export_mediatypes.xml') as f:
-    xml_data = f.read()
-r = requests.post(url, json={'jsonrpc':'2.0','method':'configuration.import','params':{'format':'xml','rules':{'mediaTypes':{'createMissing':True,'updateExisting':True}},'source':xml_data},'auth':auth,'id':2}, headers={'Content-Type':'application/json-rpc'}, timeout=30)
-res = r.json()
-if 'error' in res:
-    print(f'  WARNING: Mediatype import failed: {res[\"error\"]}')
-else:
-    print('  GLPI Ticket mediatype imported successfully')
-" 2>&1 | grep -v '^<'
-
-# ── Step 10 — Create Zabbix trigger action ─────
-echo ""
-echo "Step 10: Creating Zabbix trigger action for GLPI..."
-python3 scripts/setup_zabbix_actions.py || {
-    echo "  WARNING: Failed to create trigger action."
-}
+# ── Step 9/10 — MOVED to Step 12b ──────────────
+# The mediatype XML now contains __PLACEHOLDER__ tokens instead of real
+# credentials, so it is rendered with values from .env AFTER the GLPI API
+# client (app token) has been created in Step 12 — see Step 12b below.
+# This keeps credentials out of git while producing exactly the same
+# imported Zabbix configuration as before.
 
 # ── Step 11 — Reload Zabbix config cache ───────
 echo ""
@@ -317,6 +298,20 @@ echo "OK"
 
 # Check if GLPI is already installed by probing the DB
 MYSQL_PASSWORD=$(grep -E '^MYSQL_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
+# Credentials for GLPI API + Zabbix mediatype rendering (all from .env — no secrets in this script)
+env_val() { grep -E "^$1=" .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'"; }
+GLPI_USER=$(env_val GLPI_USER);        GLPI_USER=${GLPI_USER:-glpi}
+GLPI_API_PASSWORD=$(env_val GLPI_API_PASSWORD)
+ZBX_USER_ENV=$(env_val ZBX_USER);      ZBX_USER_ENV=${ZBX_USER_ENV:-Admin}
+ZBX_PASS_ENV=$(env_val ZBX_PASS);      ZBX_PASS_ENV=${ZBX_PASS_ENV:-zabbix}
+SMTP_USER_ENV=$(env_val SMTP_USER)
+SMTP_PASS_ENV=$(env_val SMTP_PASS)
+SMTP_FROM_ENV=$(env_val SMTP_FROM);    SMTP_FROM_ENV=${SMTP_FROM_ENV:-atm-monitor@dashenbank.com}
+AT_API_KEY_ENV=$(env_val AT_API_KEY)
+if [ -z "$GLPI_API_PASSWORD" ]; then
+    echo "  ERROR: GLPI_API_PASSWORD is not set in .env (needed to set the GLPI admin password)."
+    exit 1
+fi
 GLPI_CONSOLE="php /var/www/html/glpi/bin/console"
 INSTALLED=$(docker exec glpi-db mysql -u glpi -p"$MYSQL_PASSWORD" glpi -e "SELECT COUNT(*) FROM glpi_configs WHERE name='version'" 2>/dev/null | tail -1 | tr -d ' ' || echo "0")
 if [ -z "$INSTALLED" ] || [ "$INSTALLED" = "0" ]; then
@@ -349,7 +344,7 @@ docker exec glpi php -r "
 \$_SERVER['REQUEST_URI'] = '/';
 require '/var/www/html/glpi/inc/includes.php';
 \$DB = new DB();
-\$hash = Auth::getPasswordHash('DashenGLPI2024');
+\$hash = Auth::getPasswordHash('$GLPI_API_PASSWORD');
 \$DB->query(\"UPDATE glpi_users SET password = '\" . \$DB->escape(\$hash) . \"', password_last_update = NOW() WHERE name = 'glpi'\");
 echo '  GLPI password set' . PHP_EOL;
 " 2>&1 | tail -1 || echo "  WARNING: could not set GLPI password"
@@ -391,24 +386,55 @@ sleep 3
 
 GLPI_APP_TOKEN=$(grep 'App-Token:' /tmp/glpi_app_token.txt | awk '{print $2}')
 if [ -n "$GLPI_APP_TOKEN" ]; then
-    echo "  Updating Zabbix mediatype with GLPI App-Token..."
-    # Update the mediatype's app_token parameter via Zabbix API
+    # ── Step 12b — Render + import Zabbix mediatypes, then create the trigger action ──
+    # The repo XML carries __PLACEHOLDER__ markers; real values come from .env
+    # and the freshly generated app token. Nothing secret ever touches git.
+    echo "Step 12b: Importing Zabbix mediatypes (rendered with credentials from .env)..."
+    GLPI_APP_TOKEN="$GLPI_APP_TOKEN" GLPI_USER="$GLPI_USER" \
+    GLPI_API_PASSWORD="$GLPI_API_PASSWORD" SMTP_USER_ENV="$SMTP_USER_ENV" \
+    SMTP_PASS_ENV="$SMTP_PASS_ENV" SMTP_FROM_ENV="$SMTP_FROM_ENV" \
+    AT_API_KEY_ENV="$AT_API_KEY_ENV" \
+    python3 -c "
+import os
+from xml.sax.saxutils import escape
+src = open('config/zabbix/zbx_export_mediatypes.xml').read()
+repl = {
+    '__GLPI_APP_TOKEN__': os.environ['GLPI_APP_TOKEN'],
+    '__GLPI_USER__':      os.environ.get('GLPI_USER', 'glpi'),
+    '__GLPI_PASSWORD__':  os.environ['GLPI_API_PASSWORD'],
+    '__SMTP_EMAIL__':     os.environ.get('SMTP_FROM_ENV') if os.environ.get('SMTP_PASS_ENV') else 'changeme@example.com',
+    '__SMTP_PASS__':      os.environ.get('SMTP_PASS_ENV') or 'changeme',
+    '__AT_API_KEY__':     os.environ.get('AT_API_KEY_ENV') or 'changeme',
+}
+for k, v in repl.items():
+    src = src.replace(k, escape(str(v)))
+open('/tmp/zbx_mediatypes_rendered.xml', 'w').write(src)
+print('  Rendered /tmp/zbx_mediatypes_rendered.xml')
+"
+    ZBX_URL="${ZBX_URL:-http://localhost:8080/api_jsonrpc.php}" \
+    ZBX_USER="$ZBX_USER_ENV" ZBX_PASS="$ZBX_PASS_ENV" \
     python3 -c "
 import requests, os
-url = os.environ.get('ZBX_URL', 'http://localhost:8080/api_jsonrpc.php')
-user = os.environ.get('ZBX_USER', 'Admin')
-pwd  = os.environ.get('ZBX_PASS', 'zabbix')
-auth = requests.post(url, json={'jsonrpc':'2.0','method':'user.login','params':{'username':user,'password':pwd},'id':1}, headers={'Content-Type':'application/json-rpc'}, timeout=30).json()['result']
-# Get mediatype ID
-r = requests.post(url, json={'jsonrpc':'2.0','method':'mediatype.get','params':{'output':['mediatypeid','name'],'filter':{'name':'GLPI Ticket'}},'auth':auth,'id':2}, headers={'Content-Type':'application/json-rpc'}, timeout=30)
-mtid = r.json()['result'][0]['mediatypeid']
-# Update app_token parameter
-r = requests.post(url, json={'jsonrpc':'2.0','method':'mediatype.update','params':{'mediatypeid':mtid,'parameters':[{'name':'app_token','value':'$GLPI_APP_TOKEN'}]},'auth':auth,'id':3}, headers={'Content-Type':'application/json-rpc'}, timeout=30)
-if 'error' in r.json():
-    print('  WARNING: Could not update app_token — do it manually in Zabbix UI')
+url = os.environ['ZBX_URL']
+auth = requests.post(url, json={'jsonrpc':'2.0','method':'user.login','params':{'username':os.environ['ZBX_USER'],'password':os.environ['ZBX_PASS']},'id':1}, headers={'Content-Type':'application/json-rpc'}, timeout=30).json()['result']
+xml_data = open('/tmp/zbx_mediatypes_rendered.xml').read()
+r = requests.post(url, json={'jsonrpc':'2.0','method':'configuration.import','params':{'format':'xml','rules':{'mediaTypes':{'createMissing':True,'updateExisting':True}},'source':xml_data},'auth':auth,'id':2}, headers={'Content-Type':'application/json-rpc'}, timeout=60)
+res = r.json()
+if 'error' in res:
+    print(f'  WARNING: Mediatype import failed: {res[\"error\"]}')
 else:
-    print('  GLPI App-Token updated in Zabbix mediatype')
+    print('  Mediatypes imported successfully (GLPI Ticket + Email + SMS)')
+requests.post(url, json={'jsonrpc':'2.0','method':'user.logout','params':[],'auth':auth,'id':3}, headers={'Content-Type':'application/json-rpc'}, timeout=10)
 "
+    rm -f /tmp/zbx_mediatypes_rendered.xml
+
+    echo "  Creating Zabbix trigger action for GLPI..."
+    ZBX_URL="${ZBX_URL:-http://localhost:8080/api_jsonrpc.php}" \
+    ZBX_USER="$ZBX_USER_ENV" ZBX_PASS="$ZBX_PASS_ENV" \
+    python3 scripts/setup_zabbix_actions.py || echo "  WARNING: Failed to create trigger action."
+else
+    echo "  WARNING: no GLPI App-Token generated — skipping mediatype import."
+    echo "           Re-run this script after fixing the GLPI API client creation."
 fi
 
 # ── Step 13 — Run GLPI setup script ────────────
@@ -418,7 +444,7 @@ echo "Step 13: Seeding GLPI categories, groups, SLAs..."
 # with the app token + password created in Step 12 (defaults in the script are stale)
 docker cp glpi_setup.py report-portal:/tmp/ 2>/dev/null
 docker exec -e GLPI_APP_TOKEN="$GLPI_APP_TOKEN" \
-    -e GLPI_API_PASSWORD="DashenGLPI2024" \
+    -e GLPI_API_PASSWORD="$GLPI_API_PASSWORD" \
     report-portal python3 /tmp/glpi_setup.py 2>&1 | tail -20
 
 # ── Step 12c — Verify the GLPI REST API actually works ──
@@ -429,11 +455,15 @@ if [ -n "$GLPI_APP_TOKEN" ]; then
     echo "  Verifying GLPI REST API..."
     API_OK=0
     for i in $(seq 1 10); do
-        if docker exec report-portal python3 -c "
-import requests, base64, sys
+        if GLPI_APP_TOKEN="$GLPI_APP_TOKEN" GLPI_USER="$GLPI_USER" \
+           GLPI_API_PASSWORD="$GLPI_API_PASSWORD" docker exec \
+           -e GLPI_APP_TOKEN -e GLPI_USER -e GLPI_API_PASSWORD \
+           report-portal python3 -c "
+import requests, base64, sys, os
 r = requests.get('http://glpi:80/apirest.php/initSession',
-    headers={'App-Token': '$GLPI_APP_TOKEN',
-             'Authorization': 'Basic ' + base64.b64encode(b'glpi:DashenGLPI2024').decode()},
+    headers={'App-Token': os.environ['GLPI_APP_TOKEN'],
+             'Authorization': 'Basic ' + base64.b64encode(
+                 (os.environ['GLPI_USER'] + ':' + os.environ['GLPI_API_PASSWORD']).encode()).decode()},
     params={'expand_dropdowns': True}, timeout=20)
 if r.status_code == 200 and 'session_token' in r.text:
     print('  API OK')
@@ -492,12 +522,12 @@ echo "SETUP COMPLETE"
 echo "======================================"
 echo ""
 echo "Access your system:"
-echo "  Zabbix:       http://localhost:8080   (Admin / zabbix)"
-echo "  Grafana:      http://localhost:3002   (admin / dashen2024)"
-echo "  GLPI:         http://localhost:8082   (glpi / DashenGLPI2024)"
-echo "  Report Portal: http://localhost:8888  (see .env for credentials)"
-echo "  OpenSearch:   http://localhost:5601   (admin / admin)"
-echo "  pgAdmin:      http://localhost:5050   (admin@dashenbank.com / dashen2024)"
+echo "  Zabbix:       http://localhost:8080   (see ZBX_USER/ZBX_PASS in .env)"
+echo "  Grafana:      http://localhost:3002   (admin / GRAFANA_ADMIN_PASSWORD from .env)"
+echo "  GLPI:         http://localhost:8082   (glpi / GLPI_API_PASSWORD from .env)"
+echo "  Report Portal: http://localhost:8888  (ADMIN_USER / ADMIN_PASS from .env)"
+echo "  OpenSearch:   http://localhost:5601"
+echo "  pgAdmin:      http://localhost:5050   (PGADMIN_EMAIL / PGADMIN_PASSWORD from .env)"
 echo ""
 echo "Next steps (manual, machine-specific):"
 echo "  1. Zabbix Agent on host/WSL   → README Step 6-7"
