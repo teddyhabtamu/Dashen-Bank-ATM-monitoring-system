@@ -145,6 +145,9 @@ services:
       SMTP_PASS: "${SMTP_PASS:-}"
       SMTP_FROM: "${SMTP_FROM:-atm-monitor@dashenbank.com}"
       ENABLE_SIMULATORS: "${ENABLE_SIMULATORS:-false}"
+      ZABBIX_URL: "http://zabbix-web:8080/api_jsonrpc.php"
+      ZABBIX_USER: "${ZABBIX_USER:-Admin}"
+      ZABBIX_PASS: "${ZBX_PASS}"
     volumes:
       - ./report-portal:/app:rw
     ports:

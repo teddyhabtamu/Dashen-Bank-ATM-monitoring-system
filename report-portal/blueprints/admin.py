@@ -2,7 +2,7 @@
 blueprints/admin.py
 ATM Admin registration routes.
 """
-import csv, io, re, os, concurrent.futures
+import csv, io, re, os, json, concurrent.futures, urllib.request
 import requests
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response, current_app, abort
@@ -82,8 +82,37 @@ def assign_sim_port(atm_id, vendor):
         print(f"[assign_sim_port] {atm_id}: {e}")
 
 
+# Map legacy simulator metric OIDs to the Zabbix item keys the detail page
+# consumes. Used only to keep the (legacy, simulator-based) path keyed the same
+# way as the real-Zabbix path. Best-effort for OIDs that collide across vendors.
+SIM_TO_ZBX = {
+    '1.1.0': 'atm.status',
+    '1.2.0': 'atm.cash.cassette1', '1.3.0': 'atm.cash.cassette2',
+    '1.4.0': 'atm.cash.cassette3', '1.5.0': 'atm.cash.cassette4',
+    '1.6.0': 'atm.cash.rejectbin', '1.7.0': 'atm.cash.jam',
+    '2.1.0': 'atm.cash.cassette1', '2.2.0': 'atm.cash.cassette2',
+    '2.3.0': 'atm.cash.cassette3', '2.4.0': 'atm.cash.rejectbin',
+    '2.5.0': 'atm.cash.jam',
+    '3.1.0': 'atm.card.reader', '4.1.0': 'atm.printer.paper',
+    '4.2.0': 'atm.card.reader', '4.3.0': 'atm.hw.pinpad',
+    '4.4.0': 'atm.hw.dispenser', '4.5.0': 'atm.printer.receipt',
+    '4.6.0': 'atm.printer.journal', '5.1.0': 'atm.security.cabdoor',
+    '5.2.0': 'atm.security.vibration', '5.3.0': 'atm.env.temperature',
+    '6.1.0': 'atm.net.status', '6.2.0': 'atm.net.latency',
+    '6.3.0': 'atm.power.ups', '7.1.0': 'atm.net.link',
+    '7.2.0': 'atm.power.ups', '7.3.0': 'atm.security.alarm',
+    '8.1.0': 'atm.net.link', '8.2.0': 'atm.txn.total',
+    '8.3.0': 'atm.txn.failed', '9.1.0': 'atm.op.uptime',
+    '9.2.0': 'atm.op.downtime',
+}
+
+
+def _sim_to_zbx(raw):
+    return {SIM_TO_ZBX.get(k, k): v for k, v in (raw or {}).items()}
+
+
 def fetch_metrics(atm_id, port=None):
-    """Return the simulator /metrics JSON, or None if unreachable."""
+    """Return live metrics (keyed by Zabbix item keys) from the simulator, or None."""
     if port is None:
         port = get_sim_port(atm_id)
     if not port:
@@ -91,30 +120,90 @@ def fetch_metrics(atm_id, port=None):
     try:
         r = requests.get(f"http://{GATEWAY_IP}:{port}/metrics", timeout=3)
         if r.status_code == 200:
-            return r.json()
+            return _sim_to_zbx(r.json())
     except Exception:
         return None
     return None
 
 
+# ─── Zabbix API (real-ATM live telemetry) ────────────────────────────────────
+ZABBIX_URL = os.environ.get('ZABBIX_URL', 'http://zabbix-web:8080/api_jsonrpc.php')
+ZABBIX_USER = os.environ.get('ZABBIX_USER', 'Admin')
+ZABBIX_PASS = os.environ.get('ZABBIX_PASS', 'zabbix')
+
+_zbx_auth = {'token': None}
+
+
+def _zbx_post(payload):
+    req = urllib.request.Request(
+        ZABBIX_URL,
+        data=json.dumps(payload).encode(),
+        headers={'Content-Type': 'application/json-rpc'},
+    )
+    with urllib.request.urlopen(req, timeout=8) as r:
+        return json.loads(r.read().decode())
+
+
+def _zbx_login():
+    if _zbx_auth['token']:
+        return _zbx_auth['token']
+    try:
+        res = _zbx_post({'jsonrpc': '2.0', 'method': 'user.login',
+                         'params': {'username': ZABBIX_USER, 'password': ZABBIX_PASS}, 'id': 1})
+        _zbx_auth['token'] = res.get('result')
+    except Exception as e:
+        print(f"[ZABBIX] login failed: {e}")
+        _zbx_auth['token'] = None
+    return _zbx_auth['token']
+
+
+def _zbx_call(method, params, auth):
+    try:
+        res = _zbx_post({'jsonrpc': '2.0', 'method': method, 'params': params,
+                         'auth': auth, 'id': 1})
+        return res.get('result')
+    except Exception as e:
+        print(f"[ZABBIX] call {method} failed: {e}")
+        return None
+
+
+def fetch_zabbix_metrics(atm_id):
+    """Return {item_key: lastvalue} for the ATM's Zabbix host, or None if unavailable."""
+    auth = _zbx_login()
+    if not auth:
+        return None
+    try:
+        hosts = _zbx_call('host.get', {'output': ['hostid'],
+                                       'filter': {'host': [atm_id]}}, auth)
+        if not hosts:
+            return None
+        hostid = hosts[0]['hostid']
+        items = _zbx_call('item.get', {'hostids': [hostid],
+                                       'output': ['key_', 'lastvalue'],
+                                       'filter': {'status': 0}}, auth)
+        if not items:
+            return None
+        return {it['key_']: it.get('lastvalue') for it in items}
+    except Exception:
+        return None
+
+
 def determine_live_state(vendor, metrics):
-    """Derive ATM state from live metrics (mirrors state_manager.determine_state)."""
+    """Derive ATM state from live Zabbix item values (mirrors state_manager.determine_state)."""
     if not metrics:
         return None
-    def m(oid, default=0):
-        v = metrics.get(oid)
-        return int(v) if v is not None else default
-    status = m('1.1.0')
-    if vendor == 'GRG':
-        cash1 = m('2.1.0'); cash2 = m('2.2.0')
-        cash_jam = m('2.5.0')
-        card = m('3.1.0')
-        net = m('8.1.0')
-    else:
-        cash1 = m('1.2.0'); cash2 = m('1.3.0')
-        cash_jam = m('1.7.0')
-        card = m('2.1.0')
-        net = m('7.1.0')
+    def m(key, default=0):
+        v = metrics.get(key)
+        try:
+            return int(v) if v is not None else default
+        except (TypeError, ValueError):
+            return default
+    status = m('atm.status')
+    net = m('atm.net.link')
+    cash1 = m('atm.cash.cassette1')
+    cash2 = m('atm.cash.cassette2')
+    cash_jam = m('atm.cash.jam')
+    card = m('atm.card.reader')
     if net == 2:
         return 'OFFLINE'
     if status == 2:
@@ -131,23 +220,29 @@ def determine_live_state(vendor, metrics):
 
 
 def batch_fetch_live_states(atms):
-    """Fetch live metrics for a list of ATM dicts in parallel.
+    """Fetch live state for a list of ATM dicts in parallel.
     Returns dict: {atm_id: (state, datetime)} for reachable ATMs only.
+    Uses the Zabbix API when simulators are disabled (UAT), else the sim engine.
     """
     def fetch_one(atm):
         atm_id = atm['atm_id']
         vendor = atm.get('vendor', 'NCR')
-        port = atm.get('sim_port')
-        if not port:
-            return (atm_id, None, None)
-        try:
-            r = requests.get(f"http://{GATEWAY_IP}:{port}/metrics", timeout=2)
-            if r.status_code == 200:
-                state = determine_live_state(vendor, r.json())
-                if state:
-                    return (atm_id, state, datetime.now(timezone.utc))
-        except Exception:
-            pass
+        metrics = None
+        if ENABLE_SIMULATORS:
+            port = atm.get('sim_port')
+            if not port:
+                return (atm_id, None, None)
+            try:
+                r = requests.get(f"http://{GATEWAY_IP}:{port}/metrics", timeout=2)
+                metrics = _sim_to_zbx(r.json()) if r.status_code == 200 else None
+            except Exception:
+                metrics = None
+        else:
+            metrics = fetch_zabbix_metrics(atm_id)
+        if metrics:
+            state = determine_live_state(vendor, metrics)
+            if state:
+                return (atm_id, state, datetime.now(timezone.utc))
         return (atm_id, None, None)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
@@ -178,7 +273,7 @@ def build_cassettes(vendor, m):
 
     out = []
     if vendor == 'NCR':  # 2 x 2 cassette grid
-        keys = ['1.2.0', '1.3.0', '1.4.0', '1.5.0']
+        keys = ['atm.cash.cassette1', 'atm.cash.cassette2', 'atm.cash.cassette3', 'atm.cash.cassette4']
         labels = ['Cass 1', 'Cass 2', 'Cass 3', 'Cass 4']
         gap = 12
         cw = (VW - gap) / 2
@@ -189,7 +284,7 @@ def build_cassettes(vendor, m):
             y = VY + r * (ch + gap)
             out.append(slot(k, lbl, x, y, cw, ch))
     else:  # GRG — three module bays side by side
-        keys = ['2.1.0', '2.2.0', '2.3.0']
+        keys = ['atm.cash.cassette1', 'atm.cash.cassette2', 'atm.cash.cassette3']
         labels = ['Module 1', 'Module 2', 'Module 3']
         gap = 14
         cw = (VW - 2 * gap) / 3
@@ -208,30 +303,17 @@ def build_hardware(vendor, m):
     ATM state in `state_manager.determine_state` (cash_jam + card_reader),
     otherwise the detail page disagrees with the HARDWARE_FAULT badge.
     """
-    if vendor == 'NCR':
-        cash_jam = m.get('1.7.0') or 0
-        card = m.get('2.1.0') or 0
-        comps = [
-            ('Card reader', 'ok' if card == 1 else ('error' if card == 2 else 'error')),
-            ('Printer', 'ok' if m.get('3.1.0') == 1 else 'error'),
-            ('Pin pad', 'ok'),
-            ('Cash jam', 'error' if cash_jam == 1 else 'ok'),
-            ('Retract bin', 'ok' if (m.get('1.6.0') or 0) < 80 else 'warn'),
-            ('Network', 'ok' if m.get('7.1.0') == 1 else 'error'),
-            ('UPS', 'ok' if (m.get('6.3.0') or 0) > 20 else 'error'),
-        ]
-    else:  # GRG
-        cash_jam = m.get('2.5.0') or 0
-        card = m.get('3.1.0') or 0
-        comps = [
-            ('Card reader', 'ok' if card == 1 else ('error' if card == 2 else 'error')),
-            ('Printer', 'ok' if m.get('4.1.0') == 1 else 'error'),
-            ('Pin pad', 'ok'),
-            ('Cash jam', 'error' if cash_jam == 1 else 'ok'),
-            ('Retract bin', 'ok' if (m.get('2.4.0') or 0) < 80 else 'warn'),
-            ('Network', 'ok' if m.get('8.1.0') == 1 else 'error'),
-            ('UPS', 'ok' if (m.get('7.2.0') or 0) > 20 else 'error'),
-        ]
+    cash_jam = m.get('atm.cash.jam') or 0
+    card = m.get('atm.card.reader') or 0
+    comps = [
+        ('Card reader', 'ok' if card == 1 else ('error' if card == 2 else 'error')),
+        ('Printer', 'ok' if m.get('atm.printer.paper') == 1 else 'error'),
+        ('Pin pad', 'ok'),
+        ('Cash jam', 'error' if cash_jam == 1 else 'ok'),
+        ('Retract bin', 'ok' if (m.get('atm.cash.rejectbin') or 0) < 80 else 'warn'),
+        ('Network', 'ok' if m.get('atm.net.link') == 1 else 'error'),
+        ('UPS', 'ok' if (m.get('atm.power.ups') or 0) > 0 else 'error'),
+    ]
     return [{'name': n, 'status': s} for n, s in comps]
 
 
@@ -384,7 +466,8 @@ def atm_detail(atm_id):
         atm = dict(zip(cols, row))
         vendor = atm.get('vendor')
 
-        metrics = fetch_metrics(atm_id, port=atm.get('sim_port'))
+        metrics = fetch_metrics(atm_id, port=atm.get('sim_port')) if ENABLE_SIMULATORS \
+            else fetch_zabbix_metrics(atm_id)
         cassettes = build_cassettes(vendor, metrics) if metrics else []
         hardware = build_hardware(vendor, metrics) if metrics else []
 

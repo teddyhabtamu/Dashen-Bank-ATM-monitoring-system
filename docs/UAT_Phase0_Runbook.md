@@ -66,6 +66,7 @@ This imports the remapped templates and creates Zabbix hosts named by `atm_id`
   docker exec zabbix-db psql -U zabbix -d zabbix -c "SELECT atm_id, state FROM atm_current_state;"
   ```
 - `network-correlator` writes `atm_network_metrics` from real `atm.net.latency`/`packetloss`/`link`.
+- Report Portal → ATM detail page live cassette/hardware/state widgets now read the same Zabbix item last values (via the Zabbix API), so they populate from the real ATMs.
 
 ## 8. Tune the EJ parser
 ```bash
