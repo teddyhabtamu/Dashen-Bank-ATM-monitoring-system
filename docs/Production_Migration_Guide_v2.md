@@ -253,7 +253,7 @@ This guide is a **linear, step-by-step cookbook** — install the tools, deploy 
 - **UAT first.** Do the full install → configure → customize loop on the 2 UAT servers first (`docs/UAT_Migration_Guide.md`), because UAT is isolated and lets you make mistakes safely.
 - **Production second.** Repeat the *same* steps on the 3 production servers, with the production IPs and the three production differences (real ATMs over SNMP, real EJ logs, real ISO 8583 switch). Those differences are called out in Phases 4, 5, 6 below.
 
-Everything you do on a server is: **install Docker → clone repo → `cp .env` → `docker compose up` → verify**. The per-VM compose files are **already in the repo** (`deploy/production/`, `deploy/uat/`) with the confirmed IPs baked in — you do not hand-write them.
+Everything you do on a server is: **install Docker → clone repo → `cp .env` → `docker compose up` → verify**. The per-VM compose files are **already in the repo** (`docker-compose.yml` for VM1, `docker-compose.gateway.yml` for VM2, at the repo root) with the confirmed IPs baked in — you do not hand-write them.
 
 > Networking (VMs, VLANs, security groups, firewall) is handled by the Cloud & Core / Network / Security teams. You **verify** connectivity after each step (the checks are inline).
 
@@ -323,7 +323,7 @@ On your laptop (where the GitHub repo lives):
 
 ```bash
 mkdir -p deploy/production
-mkdir -p deploy/uat
+# UAT compose files already live at the repo root (docker-compose.yml, docker-compose.gateway.yml) — no directory needed
 ```
 
 ### Step 4.3.2 — APPS-01 compose file (Zabbix + dashboards + reports)
@@ -719,8 +719,8 @@ datasources:
 
 The UAT deployment is covered in full by **`docs/UAT_Migration_Guide.md`**. In short:
 
-- `deploy/uat/docker-compose-uat-vm1.yml` — all services except OpenSearch/Dashboards (same as the current PoC, with `rhel-6.4-latest` Zabbix images and Report Portal's `OS_HOST` pointing to UAT-02's IP)
-- `deploy/uat/docker-compose-uat-vm2.yml` — OpenSearch + OpenSearch Dashboards + Filebeat + ISO 8583 Gateway
+- `docker-compose.yml` — all services except OpenSearch/Dashboards (same as the current PoC, with `rhel-6.4-latest` Zabbix images and Report Portal's `OS_HOST` pointing to UAT-02's IP)
+- `docker-compose.gateway.yml` — OpenSearch + OpenSearch Dashboards + Filebeat + ISO 8583 Gateway
 
 ### Step 4.3.8 — Production .env file
 
@@ -750,7 +750,7 @@ REPORT_PORTAL_PORT=8888
 openssl rand -base64 16   # Run this 4 times for 4 different passwords
 ```
 
-Create `deploy/uat/.env.uat` with similar but different passwords.
+Create `.env.uat` with similar but different passwords.
 
 ---
 
@@ -826,7 +826,7 @@ sudo swapoff -a
 ### Step 5.1.5 — Create required directories and set up .env
 
 ```bash
-cp deploy/uat/.env.uat .env
+cp .env.uat .env
 chmod 600 .env
 nano .env
 mkdir -p ej-logs
@@ -835,7 +835,7 @@ mkdir -p ej-logs
 ### Step 5.1.6 — Start OpenSearch + OpenSearch Dashboards + Filebeat
 
 ```bash
-docker compose -f deploy/uat/docker-compose-uat-vm2.yml up -d
+docker compose -f docker-compose.gateway.yml up -d
 
 echo "Waiting 60 seconds for OpenSearch to initialize..."
 sleep 60
@@ -859,7 +859,7 @@ ssh <your-username>@172.26.208.176
 ### Step 5.2.3 — Set up environment
 
 ```bash
-cp deploy/uat/.env.uat .env
+cp .env.uat .env
 chmod 600 .env
 nano .env
 
@@ -881,12 +881,12 @@ sudo chmod 644 filebeat.yml
 
 ```bash
 # Build custom images
-docker compose -f deploy/uat/docker-compose-uat-vm1.yml build --no-cache \
+docker compose -f docker-compose.yml build --no-cache \
   atm-sim-engine atm-txn-engine atm-ej-engine state-manager \
   report-portal iso8583-gateway
 
 # Start PostgreSQL first (everything depends on it)
-docker compose -f deploy/uat/docker-compose-uat-vm1.yml up -d postgres
+docker compose -f docker-compose.yml up -d postgres
 
 echo "Waiting for PostgreSQL..."
 for i in {1..30}; do
@@ -902,7 +902,7 @@ done
 docker exec -i zabbix-db psql -U zabbix -d zabbix < config/postgres/atm_custom_tables.sql
 
 # Start everything else
-docker compose -f deploy/uat/docker-compose-uat-vm1.yml up -d
+docker compose -f docker-compose.yml up -d
 sleep 60
 ```
 
@@ -1940,10 +1940,10 @@ A backup that has never been restored is not verified. At least once before goin
 | Production APPS-01 (Zabbix + dashboards + reports) | `deploy/production/docker-compose-apps.yml` |
 | Production DATA-01 (PostgreSQL + OpenSearch) | `deploy/production/docker-compose-data.yml` |
 | Production GWY-01 (ISO 8583 Gateway) | `deploy/production/docker-compose-gateway.yml` |
-| UAT-01 (All-in-one) | `deploy/uat/docker-compose-uat-vm1.yml` |
-| UAT-02 (OpenSearch) | `deploy/uat/docker-compose-uat-vm2.yml` |
+| UAT-01 (All-in-one) | `docker-compose.yml` |
+| UAT-02 (OpenSearch) | `docker-compose.gateway.yml` |
 | Production env vars | `deploy/production/.env.production` |
-| UAT env vars | `deploy/uat/.env.uat` |
+| UAT env vars | `.env.uat` |
 | Production Grafana datasources | `config/grafana/datasources-production.yml` |
 | PostgreSQL tuning config | `config/postgres-production/postgresql-custom.conf` |
 | Filebeat config | `filebeat.yml` |

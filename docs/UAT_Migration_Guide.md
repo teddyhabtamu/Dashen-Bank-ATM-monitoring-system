@@ -19,7 +19,7 @@
 | Why | PoC | prove the multi-server architecture | run the bank |
 
 The important UAT work is two-fold:
-1. **Split the one compose file into two** (already done — files are in the repo under `deploy/uat/`).
+1. **Split the one compose file into two** (already done — the files are at the repo root: `docker-compose.yml` (VM1 / apps+data), `docker-compose.gateway.yml` (VM2 / search+gateway), and `.env.uat` for variables).
 2. **Make collection SNMP-native** — the simulators already answer genuine SNMP GETs (community `dashen_sim`, OID root `.1.3.6.1.4.1.99999`). This is the same mechanism production uses for real ATMs; only the port (161) and the real vendor OID tree change later.
 
 > Two things are handled by other departments (verify only): VM provisioning, VLANs, security groups, and firewall rules. You only **install, configure, and customize** — then check the connections work.
@@ -97,7 +97,7 @@ git clone <YOUR_GITHUB_URL> atm-monitoring
 cd /opt/atm-monitoring
 
 # Copy the UAT env template and set real passwords (chmod 600 — it is secret)
-cp deploy/uat/.env.uat .env
+cp .env.uat .env
 chmod 600 .env
 nano .env                               # fill every <...> placeholder with a strong password
 ```
@@ -121,7 +121,7 @@ ssh <your-user>@172.26.21.50
 cd /opt/atm-monitoring
 
 # Start OpenSearch + Dashboards (the gateway needs UAT-01's DB, so start it later in Step E)
-docker compose -f deploy/uat/docker-compose-uat-vm2.yml up -d opensearch opensearch-dashboards
+docker compose -f docker-compose.gateway.yml up -d opensearch opensearch-dashboards
 sleep 60
 curl -s http://localhost:9200          # expect JSON with cluster_name + version
 curl -s http://localhost:9200/_cat/indices?v
@@ -153,7 +153,7 @@ mkdir -p ej-logs config/grafana/dashboards
 sudo mkdir -p /data/real-ej-logs && sudo chown $USER:$USER /data/real-ej-logs
 
 # 1. PostgreSQL first
-docker compose -f deploy/uat/docker-compose-uat-vm1.yml up -d postgres
+docker compose -f docker-compose.yml up -d postgres
 for i in {1..30}; do
   docker exec zabbix-db pg_isready -U zabbix -d zabbix >/dev/null 2>&1 && break
   echo "waiting for PostgreSQL ($i/30)"; sleep 3
@@ -166,12 +166,12 @@ docker exec zabbix-db psql -U zabbix -d zabbix -c "\dt"     # confirm the custom
 # 3. Let the UAT-02 gateway reach this DB over the network
 docker exec zabbix-db bash -c "echo \"listen_addresses = '*'\" >> /var/lib/postgresql/data/postgresql.conf"
 docker exec zabbix-db bash -c "echo 'host all all 172.26.21.0/24 md5' >> /var/lib/postgresql/data/pg_hba.conf"
-docker compose -f deploy/uat/docker-compose-uat-vm1.yml restart postgres
+docker compose -f docker-compose.yml restart postgres
 
 # 4. Build the images that come from this repo, then start everything
-docker compose -f deploy/uat/docker-compose-uat-vm1.yml build --no-cache \
+docker compose -f docker-compose.yml build --no-cache \
   atm-sim-engine atm-txn-engine atm-ej-engine state-manager report-portal
-docker compose -f deploy/uat/docker-compose-uat-vm1.yml up -d
+docker compose -f docker-compose.yml up -d
 sleep 60
 
 # 5. Confirm all containers are Up
@@ -201,7 +201,7 @@ If empty: `docker logs atm-sim-engine --tail 50` — look for `[SNMP] ... respon
 ```bash
 ssh <your-user>@172.26.21.50
 cd /opt/atm-monitoring
-docker compose -f deploy/uat/docker-compose-uat-vm2.yml up -d iso8583-gateway
+docker compose -f docker-compose.gateway.yml up -d iso8583-gateway
 sleep 15
 docker logs iso8583-gateway --tail 5        # "MODE: SIMULATION", generating transactions
 ```
@@ -357,9 +357,9 @@ For the rest, the stack is identical to production — see `docs/Production_Migr
 
 | Purpose | File |
 |---|---|
-| UAT-01 compose | `deploy/uat/docker-compose-uat-vm1.yml` |
-| UAT-02 compose | `deploy/uat/docker-compose-uat-vm2.yml` |
-| UAT env | `deploy/uat/.env.uat` |
+| UAT-01 compose | `docker-compose.yml` |
+| UAT-02 compose | `docker-compose.gateway.yml` |
+| UAT env | `.env.uat` |
 | UAT datasources | `config/grafana/datasources-uat.yml` |
 | UAT Postgres tuning | `config/postgres-uat/postgresql-custom.conf` |
 | SNMP templates | `config/zabbix/template_ncr_snmp.xml`, `template_grg_snmp.xml` |

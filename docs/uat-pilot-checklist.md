@@ -76,7 +76,7 @@
 - [ ] Create `ej-logs/` directory
 - [ ] Start OpenStack + OpenSearch Dashboards:
   ```bash
-  docker compose -f deploy/uat/docker-compose-uat-vm2.yml up -d
+  docker compose -f docker-compose.gateway.yml up -d
   ```
 - [ ] Verify: `curl http://localhost:9200` returns JSON
 - [ ] **Load EJ ingest pipeline + index template** (REQUIRED — without it EJ Search returns flat/unparsed data):
@@ -93,7 +93,7 @@
 - [ ] Confirm `.env.uat` sets `GRAFANA_URL`, `ZABBIX_UI_URL`, `GLPI_UI_URL` (these drive the Report Portal top-bar links)
 - [ ] Start PostgreSQL first:
   ```bash
-  docker compose -f deploy/uat/docker-compose-uat-vm1.yml up -d postgres
+  docker compose -f docker-compose.yml up -d postgres
   ```
 - [ ] Restore database:
   ```bash
@@ -105,7 +105,7 @@
   ```
 - [ ] Start remaining services:
   ```bash
-  docker compose -f deploy/uat/docker-compose-uat-vm1.yml up -d
+  docker compose -f docker-compose.yml up -d
   ```
 
 ### Step 1.4 — Verify UAT
