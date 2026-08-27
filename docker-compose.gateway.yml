@@ -36,7 +36,9 @@ services:
       dockerfile: Dockerfile.gateway
     container_name: iso8583-gateway
     environment:
-      MODE: "simulation"
+      MODE: "${ISO8583_MODE:-simulation}"
+      SWITCH_HOST: "${SWITCH_HOST:-0.0.0.0}"
+      SWITCH_PORT: "${SWITCH_PORT:-9876}"
       DB_HOST: "${APPS_VM_IP}"
       DB_NAME: "zabbix"
       DB_USER: "zabbix"

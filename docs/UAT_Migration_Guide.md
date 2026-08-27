@@ -325,6 +325,23 @@ The sync creates Zabbix hosts **named by `atm_id`** (this is the name `state-man
 
 ---
 
+### 8.2 Transactions (ISO 8583 gateway)
+
+The `iso8583-gateway` (VM2) feeds `atm_transactions`, which drives the transaction dashboards, the anomaly detector, and the network-correlation engine.
+
+* **Default (out-of-the-box for UAT):** `ISO8583_MODE=simulation` generates transaction events for every ATM in `atm_locations` (i.e. the 2 test ATMs). This exercises the full transaction → anomaly → correlation pipeline without needing the bank switch. These rows are tagged `source=ISO8583_SIM`.
+* **Real transactions (when the bank provides the switch feed):** set in `.env.uat`:
+  ```bash
+  ISO8583_MODE=tcp
+  SWITCH_HOST=0.0.0.0
+  SWITCH_PORT=9876
+  ```
+  then re-create the container (`docker compose up -d iso8583-gateway`). The gateway listens on `SWITCH_PORT`; the bank must route the 2 test ATMs' ISO 8583 traffic to **UAT-02 (`172.26.21.50`) port 9876**, and the VM2 firewall must allow it from the switch subnet. Real rows are tagged `source=ISO8583_REAL`.
+
+> Until the real switch feed is connected, transaction/anomaly dashboards will be empty or show only simulated events — that is expected, not a UAT failure.
+
+---
+
 # 9. Step H — Configure & customize the rest
 
 **Grafana** (http://172.26.208.176:3000): the `datasources-uat.yml` already provisions the 3 datasources (Zabbix-ATM, ATM-Transactions, EJ-OpenSearch) — open **Connections → Data sources** and confirm each says "Success". All 6 dashboards should show live data from the real test ATMs.
