@@ -5,16 +5,70 @@
       "grok": {
         "field": "message",
         "patterns": [
-          "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:terminal.id} \\| %{DATA:event.category} \\| %{DATA:transaction.type} \\| SEQ=%{DATA:transaction.sequence} \\| CARD=%{DATA:card.masked} \\| AMOUNT=%{NUMBER:transaction.amount:float} \\| CURRENCY=%{DATA:transaction.currency} \\| STATUS=%{DATA:transaction.status}(\\| AUTH=%{DATA:transaction.auth_code})?$",
+          "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:terminal.id} \\| %{DATA:event.category} \\| %{DATA:transaction.type} \\| SEQ=%{DATA:transaction.sequence} \\| CARD=%{DATA:card.masked} \\| AMOUNT=%{NUMBER:transaction.amount:float} \\| CURRENCY=%{DATA:transaction.currency} \\| STATUS=%{DATA:transaction.status}( \\| AUTH=%{DATA:transaction.auth_code})?$",
           "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:terminal.id} \\| %{DATA:event.category} \\| %{DATA:transaction.type} \\| SEQ=%{DATA:transaction.sequence} \\| CARD=%{DATA:card.masked} \\| STATUS=%{DATA:transaction.status}$",
-          "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:event.category} \\| %{DATA:transaction.type} \\| CARD=%{DATA:card.masked} \\| AMOUNT=%{NUMBER:transaction.amount:float} \\| CURRENCY=%{DATA:transaction.currency} \\| STATUS=%{DATA:transaction.status}(\\| AUTH=%{DATA:transaction.auth_code})?$",
+          "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:event.category} \\| %{DATA:transaction.type} \\| CARD=%{DATA:card.masked} \\| AMOUNT=%{NUMBER:transaction.amount:float} \\| CURRENCY=%{DATA:transaction.currency} \\| STATUS=%{DATA:transaction.status}( \\| AUTH=%{DATA:transaction.auth_code})?$",
           "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:event.category} \\| %{DATA:transaction.type} \\| CARD=%{DATA:card.masked} \\| STATUS=%{DATA:transaction.status}$",
-          "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:terminal.id} \\| VENDOR=%{DATA:vendor} \\| TXN_CODE=%{DATA:transaction.type} \\| SEQ=%{DATA:transaction.sequence} \\| ACCT_NO=%{DATA:card.masked} \\| AMOUNT=%{NUMBER:transaction.amount:float} \\| CURRENCY=%{DATA:transaction.currency} \\| RESP_CODE=%{DATA:transaction.status}(\\| AUTH(_CODE)?=%{DATA:transaction.auth_code})?$",
+          "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:terminal.id} \\| VENDOR=%{DATA:vendor} \\| TXN_CODE=%{DATA:transaction.type} \\| SEQ=%{DATA:transaction.sequence} \\| ACCT_NO=%{DATA:card.masked} \\| AMOUNT=%{NUMBER:transaction.amount:float} \\| CURRENCY=%{DATA:transaction.currency} \\| RESP_CODE=%{DATA:transaction.status}( \\| AUTH(_CODE)?=%{DATA:transaction.auth_code})?$",
           "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:terminal.id} \\| VENDOR=%{DATA:vendor} \\| EVENT=%{DATA:event.category} \\| FAULT_CODE=%{DATA:fault.code} \\| FAULT_DESC=%{DATA:fault.desc}$",
           "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:event.category} \\| %{DATA:fault.desc} \\| CASSETTE=%{DATA:fault.cassette} \\| TECH_CODE=%{DATA:fault.code}$",
           "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:event.category} \\| %{DATA:event.action} \\| OPERATOR=%{DATA:operator_id}$"
         ],
         "ignore_failure": true
+      }
+    },
+    {
+      "trim": {
+        "field": "transaction.status",
+        "ignore_missing": true
+      }
+    },
+    {
+      "trim": {
+        "field": "transaction.type",
+        "ignore_missing": true
+      }
+    },
+    {
+      "trim": {
+        "field": "transaction.currency",
+        "ignore_missing": true
+      }
+    },
+    {
+      "trim": {
+        "field": "transaction.auth_code",
+        "ignore_missing": true
+      }
+    },
+    {
+      "trim": {
+        "field": "transaction.sequence",
+        "ignore_missing": true
+      }
+    },
+    {
+      "trim": {
+        "field": "card.masked",
+        "ignore_missing": true
+      }
+    },
+    {
+      "trim": {
+        "field": "atm.id",
+        "ignore_missing": true
+      }
+    },
+    {
+      "trim": {
+        "field": "terminal.id",
+        "ignore_missing": true
+      }
+    },
+    {
+      "trim": {
+        "field": "vendor",
+        "ignore_missing": true
       }
     },
     {
@@ -42,7 +96,9 @@
       "date": {
         "field": "event_time",
         "target_field": "@timestamp",
-        "formats": ["yyyy-MM-dd HH:mm:ss"],
+        "formats": [
+          "yyyy-MM-dd HH:mm:ss"
+        ],
         "ignore_failure": true
       }
     },
