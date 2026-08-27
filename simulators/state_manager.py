@@ -1,167 +1,167 @@
 #!/usr/bin/env python3
-"""
-ATM State Manager
-Updates atm_current_state every 30s by reading each ATM's simulator HTTP API
-and deriving a NetXMS-style state. In production this would read from the
-Zabbix API instead; here it reads the same HTTP-agent endpoints the Zabbix
-template polls, so the Grafana state dashboards stay accurate (fixes the
-"misinformation" complaint).
-
-Fixes vs the original dev-guide version:
-  * uses stdlib urllib (no extra pip dependency in the simulator image)
-  * DB_PASS comes from ${DB_PASS} (empty fallback fails safely)
-  * GATEWAY_IP defaults to 172.17.0.1 to match the Zabbix item URLs
-  * GRG-aware OID tree (2.x cash / 3.x card / 8.x net) like the GRG template
-"""
 import os
 import time
+import json
+import psycopg2
 import urllib.request
 import urllib.error
-import psycopg2
-from datetime import datetime
 
 DB_HOST = os.environ.get('DB_HOST', 'postgres')
 DB_NAME = os.environ.get('DB_NAME', 'zabbix')
 DB_USER = os.environ.get('DB_USER', 'zabbix')
 DB_PASS = os.environ.get('DB_PASS', '')
-GATEWAY_IP = os.environ.get('GATEWAY_IP', '172.17.0.1')
 
-# Ports are now read from atm_locations.sim_port (assigned automatically by the
-# multi-tenant sim engine). No hard-coded map needed — every ATM is polled.
+ZABBIX_URL = os.environ.get('ZBX_URL') or os.environ.get('ZABBIX_URL', 'http://zabbix-web:8080/api_jsonrpc.php')
+ZABBIX_USER = os.environ.get('ZBX_USER') or os.environ.get('ZABBIX_USER', 'Admin')
+ZABBIX_PASS = os.environ.get('ZBX_PASS') or os.environ.get('ZABBIX_PASS', 'zabbix')
+
+POLL_INTERVAL = int(os.environ.get('STATE_POLL_INTERVAL', '30'))
+
+STATE_KEYS = [
+    'atm.status', 'atm.cash.cassette1', 'atm.cash.cassette2',
+    'atm.cash.jam', 'atm.card.reader', 'atm.net.link',
+]
 
 
 def get_db():
-    return psycopg2.connect(
-        host=DB_HOST, dbname=DB_NAME,
-        user=DB_USER, password=DB_PASS)
+    return psycopg2.connect(host=DB_HOST, dbname=DB_NAME, user=DB_USER, password=DB_PASS)
 
 
-def _fetch(port, oid, timeout=8, retries=2):
-    """Fetch an OID value with a retry. A single slow-but-alive simulator
-    should not be reported as UNREACHABLE."""
-    last = None
-    for _ in range(retries + 1):
-        try:
-            url = f"http://{GATEWAY_IP}:{port}/oid/{oid}"
-            with urllib.request.urlopen(url, timeout=timeout) as r:
-                return int(r.read().decode().strip())
-        except Exception as e:
-            last = e
-            time.sleep(0.3)
-    if last is not None:
-        raise last
-    raise ValueError("no response")
-
-
-def determine_state(atm_id, port, vendor):
-    """Derive ATM state from simulator OIDs.
-
-    Dashen Bank only deploys NCR and GRG ATMs. The simulator models every
-    non-GRG vendor as NCR, so we use the same rule — GRG -> GRG OIDs,
-    everything else -> NCR OIDs.
-    """
+def _to_int(v, default=0):
     try:
-        status = _fetch(port, '1.1.0')   # reachability gate
-    except Exception:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return default
+
+
+def zbx_post(payload):
+    req = urllib.request.Request(
+        ZABBIX_URL,
+        data=json.dumps(payload).encode(),
+        headers={'Content-Type': 'application/json-rpc'},
+    )
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode())
+
+
+def zbx_login():
+    try:
+        res = zbx_post({'jsonrpc': '2.0', 'method': 'user.login',
+                        'params': {'username': ZABBIX_USER, 'password': ZABBIX_PASS}, 'id': 1})
+        return res.get('result')
+    except Exception as e:
+        print(f"[ZABBIX] login failed: {e}")
+        return None
+
+
+def zbx_call(method, params, auth):
+    try:
+        res = zbx_post({'jsonrpc': '2.0', 'method': method, 'params': params, 'auth': auth, 'id': 1})
+        return res.get('result')
+    except Exception as e:
+        print(f"[ZABBIX] call {method} failed: {e}")
+        return None
+
+
+def fetch_host_metrics(auth, host):
+    hosts = zbx_call('host.get', {'output': ['hostid'], 'filter': {'host': [host]}}, auth)
+    if not hosts:
+        return None
+    hostid = hosts[0]['hostid']
+    items = zbx_call('item.get', {'output': ['key_', 'lastvalue'], 'hostids': [hostid],
+                                  'filter': {'key_': STATE_KEYS}}, auth)
+    if not items:
+        return {}
+    return {it['key_']: it.get('lastvalue') for it in items}
+
+
+def determine_state(m):
+    if not m:
         return 'UNREACHABLE'
-
-    def metric(oid, default=0):
-        try:
-            return _fetch(port, oid)
-        except Exception:
-            return default   # one missing OID should not disconnect the whole ATM
-
-    if vendor == 'GRG':
-        cash1 = metric('2.1.0'); cash2 = metric('2.2.0'); cash_jam = metric('2.5.0')
-        card = metric('3.1.0'); net = metric('8.1.0')
-    else:  # NCR and all other vendors share the NCR OID schema
-        cash1 = metric('1.2.0'); cash2 = metric('1.3.0'); cash_jam = metric('1.7.0')
-        card = metric('2.1.0'); net = metric('7.1.0')
+    status = _to_int(m.get('atm.status'), 1)
+    net = _to_int(m.get('atm.net.link'), 1)
+    cash1 = _to_int(m.get('atm.cash.cassette1'), 0)
+    cash2 = _to_int(m.get('atm.cash.cassette2'), 0)
+    cash_jam = _to_int(m.get('atm.cash.jam'), 0)
+    card = _to_int(m.get('atm.card.reader'), 0)
 
     if net == 2:
         return 'OFFLINE'
-    elif status == 2:
+    if status == 2:
         return 'OUT_OF_SERVICE'
-    elif status == 4:
+    if status == 4:
         return 'IN_SUPERVISOR'
-    elif cash1 == 0 and cash2 == 0:
+    if cash1 == 0 and cash2 == 0:
         return 'OUT_OF_CASH'
-    elif cash_jam == 1 or card == 2:
+    if cash_jam == 1 or card == 2:
         return 'HARDWARE_FAULT'
-    elif status == 1:
+    if status == 1:
         return 'IN_SERVICE'
     return 'UNKNOWN'
 
 
-def update_states():
-    import common
+def update_states(auth):
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT atm_id, vendor FROM atm_locations WHERE status = 'active'")
+        atms = cur.fetchall()
+        cur.close()
+    finally:
+        conn.close()
 
-    # Phase 1: read fleet (only active ATMs with sim_port)
-    conn1 = get_db()
-    cur1 = conn1.cursor()
-    cur1.execute("SELECT atm_id, sim_port, vendor FROM atm_locations WHERE sim_port IS NOT NULL AND status = 'active'")
-    port_map = {r[0]: (r[1], r[2]) for r in cur1.fetchall()}
-    atms = list(port_map.keys())
-    conn1.close()
-
-    # Phase 2: determine states (no DB connection held — HTTP calls may be slow)
     results = []
-    for atm_id in atms:
-        pm = port_map.get(atm_id)
-        if not pm:
-            continue
-        port, vendor = pm
-        new_state = determine_state(atm_id, port, vendor or 'NCR')
-        results.append((atm_id, vendor or 'NCR', new_state))
+    for atm_id, vendor in atms:
+        m = fetch_host_metrics(auth, atm_id)
+        state = determine_state(m) if m is not None else 'UNREACHABLE'
+        results.append((atm_id, vendor or 'NCR', state))
 
-    # Phase 3: write results in a short transaction
-    conn2 = get_db()
-    cur2 = conn2.cursor()
-    for atm_id, vendor, new_state in results:
-        cur2.execute("SELECT state FROM atm_current_state WHERE atm_id = %s", (atm_id,))
-        row = cur2.fetchone()
-        current_state = row[0] if row else None
-
-        if current_state != new_state:
-            print(f"[STATE CHANGE] {atm_id}: {current_state} -> {new_state}")
-            cur2.execute("""
-                INSERT INTO atm_current_state
-                    (atm_id, state, previous_state, state_changed_at, last_seen, updated_at)
-                VALUES (%s, %s, %s, NOW(), NOW(), NOW())
-                ON CONFLICT (atm_id) DO UPDATE SET
-                    previous_state = atm_current_state.state,
-                    state = EXCLUDED.state,
-                    state_changed_at = NOW(),
-                    last_seen = NOW(),
-                    updated_at = NOW()
-            """, (atm_id, new_state, current_state))
-        else:
-            cur2.execute("""
-                UPDATE atm_current_state
-                SET last_seen = NOW(), updated_at = NOW()
-                WHERE atm_id = %s
-            """, (atm_id,))
-
-    conn2.commit()
-    conn2.close()
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        for atm_id, vendor, new_state in results:
+            cur.execute("SELECT state FROM atm_current_state WHERE atm_id = %s", (atm_id,))
+            row = cur.fetchone()
+            current_state = row[0] if row else None
+            if current_state != new_state:
+                print(f"[STATE CHANGE] {atm_id}: {current_state} -> {new_state}")
+                cur.execute("""
+                    INSERT INTO atm_current_state
+                        (atm_id, state, previous_state, state_changed_at, last_seen, updated_at)
+                    VALUES (%s, %s, %s, NOW(), NOW(), NOW())
+                    ON CONFLICT (atm_id) DO UPDATE SET
+                        previous_state = atm_current_state.state,
+                        state = EXCLUDED.state,
+                        state_changed_at = NOW(),
+                        last_seen = NOW(),
+                        updated_at = NOW()
+                """, (atm_id, new_state, current_state))
+            else:
+                cur.execute("UPDATE atm_current_state SET last_seen = NOW(), updated_at = NOW() WHERE atm_id = %s", (atm_id,))
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
 
 
-print("ATM State Manager started — updating every 30 seconds")
-print("This fixes the 'misinformation' problem by keeping state always current")
+print("ATM State Manager (Zabbix-backed) started — updating every %d seconds" % POLL_INTERVAL)
 
-# Wait for DB
 for i in range(30):
     try:
         get_db().close()
         print("Connected to PostgreSQL")
         break
     except Exception:
-        print(f"Waiting for DB ({i+1}/30)...")
+        print("Waiting for DB (%d/30)..." % (i + 1))
         time.sleep(5)
 
 while True:
     try:
-        update_states()
+        auth = zbx_login()
+        if auth:
+            update_states(auth)
+        else:
+            print("[ZABBIX] login failed — skipping state update this cycle")
     except Exception as e:
         print(f"State update error: {e}")
-    time.sleep(30)
+    time.sleep(POLL_INTERVAL)

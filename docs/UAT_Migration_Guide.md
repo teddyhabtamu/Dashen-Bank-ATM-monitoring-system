@@ -18,9 +18,10 @@
 | How ATMs are polled | HTTP agent (simulators) | **SNMP agent** (real test ATMs, vendor OIDs) | SNMP agent (real ATMs) |
 | Why | PoC | prove the multi-server architecture | run the bank |
 
-The important UAT work is two-fold:
+The important UAT work is three-fold:
 1. **Split the one compose file into two** (already done — the files are at the repo root: `docker-compose.yml` (VM1 / apps+data), `docker-compose.gateway.yml` (VM2 / search+gateway), and `.env.uat` for variables).
 2. **Collect from real ATMs over SNMP** — UAT polls the bank's 2 real test ATMs via SNMP (UDP 161, vendor community/OIDs captured in `config/snmp/`). This is exactly the production mechanism; the only difference is scale. No simulators run in UAT.
+3. **Analysis services read from Zabbix, not simulators** — `state-manager` derives `atm_current_state` from each ATM's Zabbix item last values (`atm.status`, `atm.cash.*`, `atm.card.reader`, `atm.net.link`); `network-correlator` pulls real `atm.net.latency`/`atm.net.packetloss`/`atm.net.link` metrics from Zabbix (synthetic metrics only if `NET_SIMULATE=1`). `anomaly-detector` is already DB-driven (reads `atm_transactions`). All three require the real ATMs to be present as Zabbix hosts named by their `atm_id`.
 
 > Two things are handled by other departments (verify only): VM provisioning, VLANs, security groups, and firewall rules. You only **install, configure, and customize** — then check the connections work.
 

@@ -205,6 +205,17 @@ class ZabbixAPI:
                     results[host['host']] = history
         return results
 
+    def get_item_lastvalues(self, hostnames, keys):
+        hosts = self.call('host.get', {'output': ['hostid', 'host'], 'filter': {'host': hostnames}})
+        if not hosts:
+            return {}
+        out = {}
+        for host in hosts:
+            items = self.call('item.get', {'output': ['key_', 'lastvalue'],
+                                           'hostids': [host['hostid']], 'filter': {'key_': keys}})
+            out[host['host']] = {it['key_']: it.get('lastvalue') for it in (items or [])}
+        return out
+
 zabbix = ZabbixAPI()
 
 # ── SIMULATED NETWORK METRICS (when Zabbix not available) ─────────────────────
@@ -260,6 +271,49 @@ def generate_simulated_metrics(conn):
             """, (atm_id, branch, round(base_latency,2),
                   round(base_loss,2), round(base_jitter,2), status))
 
+    conn.commit()
+
+def _net_float(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+def _net_int(v):
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return None
+
+def pull_zabbix_network_metrics(conn, zbx):
+    """Pull real network metrics from Zabbix item last values for each active ATM."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT atm_id, branch FROM atm_locations WHERE status = 'active'")
+        atms = cur.fetchall()
+    if not atms:
+        return
+    net_keys = ['atm.net.latency', 'atm.net.packetloss', 'atm.net.link']
+    for atm_id, branch in atms:
+        m = zbx.get_item_lastvalues([atm_id], net_keys)
+        vals = m.get(atm_id, {})
+        if not vals:
+            continue
+        latency = _net_float(vals.get('atm.net.latency'))
+        loss = _net_float(vals.get('atm.net.packetloss'))
+        link = _net_int(vals.get('atm.net.link'))
+        if latency is None and loss is None and link is None:
+            continue
+        if link == 2:
+            status = 'DOWN'
+        elif (latency is not None and latency > LATENCY_THRESHOLD) or (loss is not None and loss > LOSS_THRESHOLD):
+            status = 'DEGRADED'
+        else:
+            status = 'NORMAL'
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO atm_network_metrics (atm_id, branch, latency_ms, packet_loss, jitter_ms, status) "
+                "VALUES (%s, %s, %s, %s, NULL, %s)",
+                (atm_id, branch, latency, loss, status))
     conn.commit()
 
 # ── CORRELATION ENGINE ────────────────────────────────────────────────────────
@@ -408,13 +462,12 @@ def run():
 
     while True:
         try:
-            if not zabbix_ok:
-                # Simulation mode: generate synthetic metrics
+            if zabbix_ok:
+                pull_zabbix_network_metrics(conn, zabbix)
+            elif os.environ.get('NET_SIMULATE') == '1':
                 generate_simulated_metrics(conn)
             else:
-                # Production mode: pull from Zabbix
-                # (extended Zabbix metric pull would go here)
-                generate_simulated_metrics(conn)  # supplement with simulated
+                log.warning("Zabbix unreachable — skipping network metric collection (set NET_SIMULATE=1 to synthesize)")
 
             # Run correlation engine
             correlate_network_with_transactions(conn)

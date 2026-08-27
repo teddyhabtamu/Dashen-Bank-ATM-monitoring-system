@@ -211,6 +211,10 @@ services:
       DB_NAME: "zabbix"
       DB_USER: "zabbix"
       DB_PASS: "${DB_PASS}"
+      ZBX_URL: "http://zabbix-web:8080/api_jsonrpc.php"
+      ZBX_USER: "Admin"
+      ZBX_PASS: "${ZBX_PASS}"
+      STATE_POLL_INTERVAL: "30"
     depends_on:
       - postgres
     restart: unless-stopped
