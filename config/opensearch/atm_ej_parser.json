@@ -1,5 +1,5 @@
 {
-  "description": "Parse ATM Electronic Journal log lines (NCR + GRG, legacy and current shapes) into a structured nested schema: atm.id, terminal.id, transaction.*, card.masked, fault.*, event.category. Referenced by filebeat.yml (output.elasticsearch.pipeline). v2 replaces flat field output; raw message is always retained by filebeat.",
+      "description": "Parse ATM Electronic Journal log lines (NCR + GRG, legacy and current shapes) into a structured nested schema: atm.id, terminal.id, transaction.*, card.masked, fault.*, event.category. Referenced by filebeat.yml (output.elasticsearch.pipeline). Real (non-simulator) EJ lines that do not match the grok patterns are retained verbatim in `ej_raw` and tagged `ej_parsed:false` so they can be tuned later without data loss.",
   "processors": [
     {
       "grok": {
@@ -106,6 +106,27 @@
       "remove": {
         "field": "event_time",
         "ignore_failure": true
+      }
+    },
+    {
+      "set": {
+        "field": "ej_raw",
+        "value": "{{message}}",
+        "ignore_failure": true
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.atm?.id != null",
+        "field": "ej_parsed",
+        "value": true
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.atm?.id == null",
+        "field": "ej_parsed",
+        "value": false
       }
     }
   ]

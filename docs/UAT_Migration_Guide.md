@@ -336,12 +336,14 @@ curl -s http://localhost:9200/_cat/indices?v     # atm-ej-live-YYYY.MM.DD presen
 ```
 Open OpenSearch Dashboards (http://172.26.21.50:5601), create index pattern `atm-ej-live-*` (time field `@timestamp`).
 
-**Filebeat output note:** the repo `filebeat.yml` is edited per environment. For UAT it must point at the UAT-02 IP:
+**Filebeat → OpenSearch (cross-VM):** the repo `filebeat.yml` ships EJ from UAT-01 to UAT-02's OpenSearch. For UAT it points at the VM2 IP:
 ```yaml
 output.elasticsearch:
   hosts: ["172.26.21.50:9200"]
+  index: "atm-ej-live-%{+yyyy.MM.dd}"
+  pipeline: "atm_ej_parser"
 ```
-(For production it becomes `localhost:9200` and adds `/data/real-ej-logs/*.log`.)
+Real test ATMs forward their EJ to Filebeat's syslog listener (`0.0.0.0:514`, UDP/TCP) on UAT-01; the `atm_ej_parser` pipeline tags each record with `ej_parsed` (true when the structured grok matched, false otherwise) and always retains the original line in `ej_raw`. **Phase 0 tuning:** capture one real ATM EJ line (`tcpdump -i any udp port 514 -A` on UAT-01) and extend the grok patterns in `config/opensearch/atm_ej_parser.json` for the NCR/GRG format; until then, search `ej_raw` / filter `ej_parsed:false` to see unparsed records.
 
 ---
 
