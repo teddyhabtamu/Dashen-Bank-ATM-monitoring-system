@@ -206,7 +206,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
           <tr>
             <td>{{ t[0] }}</td>
             <td>{{ t[1] or '—' }}</td>
-            <td>{{ t[2] or '—' }}</td>
+            <td class="card-mask">{{ t[2] or '—' }}</td>
             <td>{% if t[3] is not none %}{{ '%.2f'|format(t[3]) }}{% else %}—{% endif %}</td>
             <td class="st-{{ t[4] }}">{{ t[4] }}</td>
             <td class="auth-cell">

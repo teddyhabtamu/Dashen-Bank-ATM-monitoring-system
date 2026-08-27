@@ -292,7 +292,7 @@ td { font-variant-numeric: tabular-nums; }
                 </td>
                 <td>{{ r.atm_id }}</td>
                 <td><span class="badge-evt {{ r.event_type }}">{{ r.txn_type or r.event_type or '—' }}</span></td>
-                <td>{{ r.card or '—' }}</td>
+                <td class="card-mask">{{ r.card or '—' }}</td>
                 <td><span class="badge {{ r.status }}">{{ r.status or '—' }}</span></td>
                 <td style="text-align:right;font-weight:600">
                   {% if r.amount %}ETB {{ '{:,.2f}'.format(r.amount) }}{% else %}—{% endif %}
