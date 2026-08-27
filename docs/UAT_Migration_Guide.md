@@ -102,6 +102,33 @@ chmod 600 .env
 nano .env                               # fill every <...> placeholder with a strong password
 ```
 
+### B.1 — Prepare the compose file for THIS server
+
+The repo root ships **two** compose files, one per VM:
+
+| File | Runs on |
+|---|---|
+| `docker-compose.yml` | UAT-01 (VM1 — Zabbix, GLPI, Grafana, Report Portal, simulators, Filebeat, PostgreSQL) |
+| `docker-compose.gateway.yml` | UAT-02 (VM2 — OpenSearch, OpenSearch Dashboards, ISO 8583 gateway) |
+
+Each server only brings up its own stack. After cloning, **delete the other VM's file and rename yours to the default name** so both servers end up with a plain `docker-compose.yml` and use the identical command `docker compose up -d` (no `-f`, no env var).
+
+On **UAT-01** (VM1):
+```bash
+rm -f docker-compose.gateway.yml          # drop the VM2 file; keep docker-compose.yml (VM1 stack)
+```
+
+On **UAT-02** (VM2):
+```bash
+rm -f docker-compose.yml                  # drop the VM1 file
+mv docker-compose.gateway.yml docker-compose.yml   # rename to the default name
+```
+
+> **Note — if you `git pull` later:** the deleted file comes back; just re-run the
+> matching `rm`/`mv` above. Prefer not to delete files? On UAT-02 instead run
+> `export COMPOSE_FILE=docker-compose.gateway.yml` (add it to `~/.bashrc`) — then
+> `docker compose up -d` also works without renaming. Both ways are fine.
+
 Generate 4 distinct passwords:
 
 ```bash
@@ -121,7 +148,7 @@ ssh <your-user>@172.26.21.50
 cd /opt/atm-monitoring
 
 # Start OpenSearch + Dashboards (the gateway needs UAT-01's DB, so start it later in Step E)
-docker compose -f docker-compose.gateway.yml up -d opensearch opensearch-dashboards
+docker compose up -d opensearch opensearch-dashboards
 sleep 60
 curl -s http://localhost:9200          # expect JSON with cluster_name + version
 curl -s http://localhost:9200/_cat/indices?v
@@ -201,7 +228,7 @@ If empty: `docker logs atm-sim-engine --tail 50` — look for `[SNMP] ... respon
 ```bash
 ssh <your-user>@172.26.21.50
 cd /opt/atm-monitoring
-docker compose -f docker-compose.gateway.yml up -d iso8583-gateway
+docker compose up -d iso8583-gateway
 sleep 15
 docker logs iso8583-gateway --tail 5        # "MODE: SIMULATION", generating transactions
 ```

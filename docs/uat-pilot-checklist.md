@@ -74,9 +74,14 @@
 - [ ] Clone the repo
 - [ ] Configure sysctl: `vm.max_map_count=262144`
 - [ ] Create `ej-logs/` directory
+- [ ] After cloning, make this VM use the default compose name (delete VM1's file, rename yours):
+  ```bash
+  rm -f docker-compose.yml
+  mv docker-compose.gateway.yml docker-compose.yml
+  ```
 - [ ] Start OpenStack + OpenSearch Dashboards:
   ```bash
-  docker compose -f docker-compose.gateway.yml up -d
+  docker compose up -d
   ```
 - [ ] Verify: `curl http://localhost:9200` returns JSON
 - [ ] **Load EJ ingest pipeline + index template** (REQUIRED — without it EJ Search returns flat/unparsed data):
@@ -89,6 +94,7 @@
 ### Step 1.3 — Deploy UAT-01 (everything else, `DBHQUATATMMONAPP`)
 - [ ] SSH into UAT-01
 - [ ] Install Docker, clone repo
+- [ ] After cloning, delete the VM2 compose file (keep `docker-compose.yml`): `rm -f docker-compose.gateway.yml`
 - [ ] Set up `.env` with passwords
 - [ ] Confirm `.env.uat` sets `GRAFANA_URL`, `ZABBIX_UI_URL`, `GLPI_UI_URL` (these drive the Report Portal top-bar links)
 - [ ] Start PostgreSQL first:

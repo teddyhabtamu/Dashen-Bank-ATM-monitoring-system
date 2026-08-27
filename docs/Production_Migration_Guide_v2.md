@@ -835,7 +835,7 @@ mkdir -p ej-logs
 ### Step 5.1.6 — Start OpenSearch + OpenSearch Dashboards + Filebeat
 
 ```bash
-docker compose -f docker-compose.gateway.yml up -d
+docker compose up -d
 
 echo "Waiting 60 seconds for OpenSearch to initialize..."
 sleep 60
