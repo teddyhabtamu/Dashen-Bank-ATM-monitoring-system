@@ -125,6 +125,19 @@ docker compose -f deploy/uat/docker-compose-uat-vm2.yml up -d opensearch opensea
 sleep 60
 curl -s http://localhost:9200          # expect JSON with cluster_name + version
 curl -s http://localhost:9200/_cat/indices?v
+
+# C.1 — Load the EJ ingest pipeline + index template (REQUIRED, before Filebeat ships logs)
+# Without this, EJ log lines are NOT parsed into structured fields and the Report Portal
+# "EJ Search" feature returns unparsed/flat data. See scripts/setup_new_machine.sh Step 6b.
+curl -s -X PUT "http://localhost:9200/_ingest/pipeline/atm_ej_parser" \
+  -H 'Content-Type: application/json' -d @config/opensearch/atm_ej_parser.json \
+  | grep -q '"acknowledged":true' && echo "ingest pipeline: OK" || echo "ingest pipeline: FAILED"
+curl -s -X PUT "http://localhost:9200/_index_template/atm-ej-live" \
+  -H 'Content-Type: application/json' -d @config/opensearch/ej_live_index_template.json \
+  | grep -q '"acknowledged":true' && echo "index template: OK" || echo "index template: FAILED"
+
+# OpenSearch Dashboards Dashen branding is applied by the compose mount (config/osd) —
+# verify at http://172.26.21.50:5601 (logo + "Dashen Bank" in the header).
 ```
 
 ---
@@ -164,6 +177,12 @@ sleep 60
 # 5. Confirm all containers are Up
 docker ps --format "table {{.Names}}\t{{.Status}}" | grep -v Exited
 ```
+
+> **Report Portal external links** are driven by `.env.uat`: `GRAFANA_URL`,
+> `ZABBIX_UI_URL`, and `GLPI_UI_URL` (already wired into the compose). The top bar
+> shows **Live Dashboards → Grafana**, **Monitoring Center → Zabbix**, and
+> **Incident Management → GLPI**. After deploy, open Report Portal and confirm each
+> link resolves to the correct UAT URL.
 
 **Critical UAT check — prove SNMP works** (this is the production-accurate path):
 
@@ -304,13 +323,17 @@ output.elasticsearch:
 - [ ] Report Portal generates all report types
 - [ ] `ISO8583_SIM` rows growing in `atm_transactions`
 - [ ] `atm-ej-live-*` indices populated; OpenSearch Dashboards searchable
+- [ ] **EJ structured schema present** — `_ingest/pipeline/atm_ej_parser` and `_index_template/atm-ej-live` exist; EJ Search shows nested `transaction.*` / `atm.id` / `fault.*` fields (not a single flat string)
+- [ ] **OpenSearch Dashboards branding** visible (Dashen logo/name), applied from `config/osd`
+- [ ] **Report Portal links correct** — Live Dashboards/Monitoring Center/Incident Management point to the UAT Grafana/Zabbix/GLPI URLs from `.env.uat`
+- [ ] **Card masking consistent** — every `card_masked` value is `************XXXX` (16 chars, last-4 only); no `4000************XXXX` legacy form
 - [ ] Restart a VM → everything returns (`restart: unless-stopped`)
 
 ---
 
 # 11. UAT exit criteria (before production)
 
-Do **not** deploy production until: SNMP path proven, templates final, cross-VM links proven, gateway parser validated (if sample messages exist), GLPI ticketing proven, reporting proven, backup/restore rehearsed, and every UAT change committed to git. Full detail: `docs/Production_Migration_Guide_v2.md` §5 + §15.
+Do **not** deploy production until: SNMP path proven, templates final, cross-VM links proven, gateway parser validated (if sample messages exist), **EJ ingest pipeline + index template loaded and verified**, **OpenSearch Dashboards branding + Report Portal external links verified**, GLPI ticketing proven, reporting proven, backup/restore rehearsed, and every UAT change committed to git. Full detail: `docs/Production_Migration_Guide_v2.md` §5 + §15.
 
 ---
 

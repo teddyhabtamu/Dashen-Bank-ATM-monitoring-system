@@ -79,11 +79,18 @@
   docker compose -f deploy/uat/docker-compose-uat-vm2.yml up -d
   ```
 - [ ] Verify: `curl http://localhost:9200` returns JSON
+- [ ] **Load EJ ingest pipeline + index template** (REQUIRED — without it EJ Search returns flat/unparsed data):
+  ```bash
+  curl -s -X PUT "http://localhost:9200/_ingest/pipeline/atm_ej_parser" -H 'Content-Type: application/json' -d @config/opensearch/atm_ej_parser.json
+  curl -s -X PUT "http://localhost:9200/_index_template/atm-ej-live" -H 'Content-Type: application/json' -d @config/opensearch/ej_live_index_template.json
+  ```
+- [ ] OpenSearch Dashboards shows Dashen branding (applied via `config/osd` mount)
 
 ### Step 1.3 — Deploy UAT-01 (everything else, `DBHQUATATMMONAPP`)
 - [ ] SSH into UAT-01
 - [ ] Install Docker, clone repo
 - [ ] Set up `.env` with passwords
+- [ ] Confirm `.env.uat` sets `GRAFANA_URL`, `ZABBIX_UI_URL`, `GLPI_UI_URL` (these drive the Report Portal top-bar links)
 - [ ] Start PostgreSQL first:
   ```bash
   docker compose -f deploy/uat/docker-compose-uat-vm1.yml up -d postgres
@@ -107,6 +114,9 @@
 - [ ] Report Portal at `http://<uat-vm1-ip>:8888`
 - [ ] GLPI at `http://<uat-vm1-ip>:8082`
 - [ ] Simulators running and data flowing to Grafana
+- [ ] EJ structured schema present (`_ingest/pipeline/atm_ej_parser` + `_index_template/atm-ej-live`); Report Portal EJ Search shows nested `transaction.*` / `atm.id` / `fault.*` fields
+- [ ] Report Portal links (Live Dashboards / Monitoring Center / Incident Management) resolve to the UAT Grafana / Zabbix / GLPI URLs
+- [ ] Card masking consistent — every `card_masked` is `************XXXX` (16 chars, last-4 only)
 
 ---
 
