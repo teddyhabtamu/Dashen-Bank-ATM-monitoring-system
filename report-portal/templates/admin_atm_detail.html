@@ -148,9 +148,9 @@ table.txn tbody tr:hover{background:#EEF2FF}
             <text x="{{ c.x + c.w / 2 }}" y="{{ c.y + c.h - 11 }}" fill="#E5E7EB" font-size="11" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">{% if c.pct is not none %}{{ c.pct }}%{% else %}No data{% endif %}</text>
             {% endfor %}
           </svg>
-          <div class="atm-cap">{% if (atm.status or 'active') != 'active' %}Last known telemetry (retired ATM){% else %}Live telemetry from SNMP simulator{% endif %}</div>
+          <div class="atm-cap">{% if (atm.status or 'active') != 'active' %}Last known telemetry (retired ATM){% else %}Live telemetry from SNMP{% endif %}</div>
           {% else %}
-          <div class="no-data" style="padding:60px 12px">Live cassette data unavailable (simulator not reachable).</div>
+          <div class="no-data" style="padding:60px 12px">Live cassette data unavailable (ATM not reachable).</div>
           {% endif %}
         </div>
       </div>
@@ -188,7 +188,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
             {% endfor %}
           </div>
           {% else %}
-          <div class="no-data">Live hardware status unavailable (simulator not reachable).</div>
+          <div class="no-data">Live hardware status unavailable (ATM not reachable).</div>
           {% endif %}
         </div>
       </div>

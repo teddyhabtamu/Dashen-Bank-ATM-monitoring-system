@@ -144,6 +144,7 @@ services:
       SMTP_USER: "${SMTP_USER:-}"
       SMTP_PASS: "${SMTP_PASS:-}"
       SMTP_FROM: "${SMTP_FROM:-atm-monitor@dashenbank.com}"
+      ENABLE_SIMULATORS: "${ENABLE_SIMULATORS:-false}"
     volumes:
       - ./report-portal:/app:rw
     ports:

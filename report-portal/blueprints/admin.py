@@ -13,6 +13,8 @@ from audit import log_action
 
 EAT = timezone(timedelta(hours=3))
 
+ENABLE_SIMULATORS = os.environ.get('ENABLE_SIMULATORS', 'false').lower() in ('1', 'true', 'yes', 'on')
+
 def to_eat(dt, fmt='%Y-%m-%d %H:%M'):
     if not dt:
         return None
@@ -39,6 +41,8 @@ CASSETTE_MAX = 2500  # notes-per-cassette capacity used for fill %
 
 def get_sim_port(atm_id):
     """Return the simulator port for an ATM (from atm_locations.sim_port)."""
+    if not ENABLE_SIMULATORS:
+        return None
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -61,6 +65,8 @@ def assign_sim_port(atm_id, vendor):
     Uses a single global sequence (MAX(sim_port)+1) shared by NCR and GRG so
     ports never collide. Legacy ATMs keep their historical ports.
     """
+    if not ENABLE_SIMULATORS:
+        return
     try:
         with get_db() as conn:
             cur = conn.cursor()
