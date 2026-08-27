@@ -7,6 +7,14 @@
 **Target:** Production — RHEL 9, **3 VMs (APPS-01, DATA-01, GWY-01)**, real Dashen ATM fleet (NCR + GRG only), 3-Year Data Retention
 **Supersedes:** v2 (which assumed the old 5-VM layout — all VM references below follow the revised 3-VM specification)
 
+> **Branch layout — which files live where**
+> This guide is the **production** runbook. Its `deploy/production/*` compose files and `.env.production`
+> are maintained on the `main` / production branch and are **intentionally excluded from the `uat-prep` branch**
+> (UAT needs only UAT files). On `uat-prep` the UAT environment is driven by the repo-root
+> `docker-compose.yml` (UAT-01) and `docker-compose.gateway.yml` (UAT-02), with `.env.uat` — see
+> `docs/UAT_Migration_Guide.md`. The `deploy/production/*` commands below are correct on the production
+> branch; on `uat-prep` use the UAT root files instead.
+
 ---
 
 # 0. Read This First — Corrections & Re-prioritization
@@ -1934,17 +1942,17 @@ A backup that has never been restored is not verified. At least once before goin
 
 # 17. Summary of Files
 
-| Purpose | File |
-|---|---|
-| Original PoC compose | `docker-compose.yml` |
-| Production APPS-01 (Zabbix + dashboards + reports) | `deploy/production/docker-compose-apps.yml` |
-| Production DATA-01 (PostgreSQL + OpenSearch) | `deploy/production/docker-compose-data.yml` |
-| Production GWY-01 (ISO 8583 Gateway) | `deploy/production/docker-compose-gateway.yml` |
-| UAT-01 (All-in-one) | `docker-compose.yml` |
-| UAT-02 (OpenSearch) | `docker-compose.gateway.yml` |
-| Production env vars | `deploy/production/.env.production` |
-| UAT env vars | `.env.uat` |
-| Production Grafana datasources | `config/grafana/datasources-production.yml` |
+| Purpose | File | Branch |
+|---|---|---|
+| Original PoC compose | `docker-compose.yml` | main / uat-prep |
+| Production APPS-01 (Zabbix + dashboards + reports) | `deploy/production/docker-compose-apps.yml` | production |
+| Production DATA-01 (PostgreSQL + OpenSearch) | `deploy/production/docker-compose-data.yml` | production |
+| Production GWY-01 (ISO 8583 Gateway) | `deploy/production/docker-compose-gateway.yml` | production |
+| UAT-01 (All-in-one) | `docker-compose.yml` | uat-prep |
+| UAT-02 (OpenSearch) | `docker-compose.gateway.yml` | uat-prep |
+| Production env vars | `deploy/production/.env.production` | production |
+| UAT env vars | `.env.uat` | uat-prep |
+| Production Grafana datasources | `config/grafana/datasources-production.yml` | production |
 | PostgreSQL tuning config | `config/postgres-production/postgresql-custom.conf` |
 | Filebeat config | `filebeat.yml` |
 | Database schema + seed data | `config/postgres/atm_custom_tables.sql` |
