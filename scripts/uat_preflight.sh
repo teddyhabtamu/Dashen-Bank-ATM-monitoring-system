@@ -1,59 +1,56 @@
 #!/usr/bin/env bash
-# UAT preflight — verifies the deployed UAT stack is healthy BEFORE sign-off.
-# Run on UAT-01 (or from a host that can reach the UAT endpoints).
-#
-# Override endpoints via env vars if needed:
-#   OS_HOST=localhost:9200 RP_HOST=localhost:8888 GLPI_HOST=localhost:8082 \
-#   GRAFANA_HOST=localhost:3000 ZABBIX_HOST=localhost:8080 ./uat_preflight.sh
-set -uo pipefail
+# UAT Phase 0 preflight — run on UAT-01 before executing the runbook.
+# Fails fast if a prerequisite is missing so you don't discover it mid-cutover.
+set -u
+ZBX_HOST="${ZABBIX_HOST:-172.26.208.176}"
+ZBX_PORT="${ZABBIX_PORT:-8080}"
+DATA_VM_IP="${DATA_VM_IP:-172.26.21.50}"
+fail=0
 
-OS_HOST="${OS_HOST:-localhost:9200}"
-RP_HOST="${RP_HOST:-localhost:8888}"
-GLPI_HOST="${GLPI_HOST:-localhost:8082}"
-GRAFANA_HOST="${GRAFANA_HOST:-localhost:3000}"
-ZABBIX_HOST="${ZABBIX_HOST:-localhost:8080}"
-
-PASS=0; FAIL=0
-ok()   { echo "  [PASS] $1"; PASS=$((PASS+1)); }
-bad()  { echo "  [FAIL] $1"; FAIL=$((FAIL+1)); }
+ok()   { echo "  [OK]   $1"; }
+bad()  { echo "  [FAIL] $1"; fail=1; }
 
 echo "== UAT preflight =="
+echo "-- inventory (docker) --"
+command -v docker >/dev/null 2>&1 && ok "docker present" || bad "docker missing"
 
-# 1. OpenSearch reachable
-if curl -s -m 5 "http://$OS_HOST/" >/dev/null; then ok "OpenSearch reachable ($OS_HOST)"; else bad "OpenSearch unreachable ($OS_HOST)"; fi
-
-# 2. EJ ingest pipeline present
-if curl -s -m 5 "http://$OS_HOST/_ingest/pipeline/atm_ej_parser" | grep -q '"atm_ej_parser"'; then
-  ok "EJ ingest pipeline present"; else bad "EJ ingest pipeline MISSING (load config/opensearch/atm_ej_parser.json)"; fi
-
-# 3. EJ index template present
-if curl -s -m 5 "http://$OS_HOST/_index_template/atm-ej-live" | grep -q '"atm-ej-live"'; then
-  ok "EJ index template present"; else bad "EJ index template MISSING (load config/opensearch/ej_live_index_template.json)"; fi
-
-# 4. Report Portal reachable (expect 200 or 302 to login)
-code=$(curl -s -o /dev/null -m 5 -w "%{http_code}" "http://$RP_HOST/")
-if [ "$code" = "200" ] || [ "$code" = "302" ]; then ok "Report Portal reachable ($code)"; else bad "Report Portal unreachable ($code)"; fi
-
-# 5. GLPI reachable
-code=$(curl -s -o /dev/null -m 5 -w "%{http_code}" "http://$GLPI_HOST/")
-if [ "$code" = "200" ] || [ "$code" = "302" ]; then ok "GLPI reachable ($code)"; else bad "GLPI unreachable ($code)"; fi
-
-# 6. Grafana health
-if curl -s -m 5 "http://$GRAFANA_HOST/api/health" | grep -q '"database":"ok"\|"commit"'; then
-  ok "Grafana healthy"; else bad "Grafana not healthy"; fi
-
-# 7. Zabbix web reachable
-code=$(curl -s -o /dev/null -m 5 -w "%{http_code}" "http://$ZABBIX_HOST/")
-if [ "$code" = "200" ] || [ "$code" = "302" ]; then ok "Zabbix web reachable ($code)"; else bad "Zabbix web unreachable ($code)"; fi
-
-# 8. Card-mask consistency in DB (0 legacy 20-char rows expected)
-if command -v psql >/dev/null 2>&1 && [ -n "${DB_PASS:-}" ]; then
-  bad_rows=$(psql -t -A -h "${DB_HOST:-postgres}" -U "${DB_USER:-zabbix}" -d "${DB_NAME:-zabbix}" \
-    -c "SELECT count(*) FROM atm_transactions WHERE card_masked ~ '^[0-9A-Za-z]{4}\*{12}[0-9A-Za-z]{4}\$';" 2>/dev/null | tail -1)
-  if [ "${bad_rows:-0}" = "0" ]; then ok "card_masked consistent (0 legacy rows)"; else bad "card_masked has $bad_rows legacy 20-char rows"; fi
+echo "-- Zabbix API reachable --"
+if curl -s -o /dev/null -w "%{http_code}" "http://${ZBX_HOST}:${ZBX_PORT}/api_jsonrpc.php" | grep -q 200; then
+  ok "Zabbix API on ${ZBX_HOST}:${ZBX_PORT}"
 else
-  echo "  [SKIP] card_masked DB check (psql/DB_PASS not available here)"
+  bad "Zabbix API unreachable on ${ZBX_HOST}:${ZBX_PORT}"
 fi
 
-echo "== preflight done: $PASS pass, $FAIL fail =="
-[ "$FAIL" -eq 0 ]
+echo "-- seeded test ATMs --"
+if docker exec zabbix-db psql -U zabbix -d zabbix -tAc "SELECT count(*) FROM atm_locations WHERE atm_id IN ('ATM-TEST-NCR','ATM-TEST-GRG');" 2>/dev/null | grep -q 2; then
+  ok "ATM-TEST-NCR / ATM-TEST-GRG seeded"
+else
+  bad "test ATMs not seeded (run setup + seed_uat_atms.sql)"
+fi
+
+echo "-- SNMP loader present --"
+command -v snmpwalk >/dev/null 2>&1 && ok "snmpwalk present" || bad "snmpwalk missing (apt install snmp)"
+
+echo "-- OpenSearch reachable from UAT-01 --"
+if curl -s -o /dev/null -w "%{http_code}" "http://${DATA_VM_IP}:9200" | grep -q 200; then
+  ok "OpenSearch on ${DATA_VM_IP}:9200"
+else
+  bad "OpenSearch unreachable on ${DATA_VM_IP}:9200"
+fi
+
+echo "-- filebeat syslog listener --"
+if ss -lun 2>/dev/null | grep -q ":514"; then
+  ok "UDP/514 listening (filebeat)"
+else
+  bad "nothing listening on UDP/514 (filebeat syslog input)"
+fi
+
+echo "-- templates not accidentally remapped already --"
+if grep -rq "1.3.6.1.4.1.99999" config/zabbix/template_*.xml 2>/dev/null; then
+  ok "templates still on simulator OID root (expected before cutover)"
+else
+  echo "  [WARN] no simulator OIDs found — templates may already be remapped"
+fi
+
+echo "== preflight $( [ $fail -eq 0 ] && echo PASS || echo FAILED ) =="
+exit $fail
