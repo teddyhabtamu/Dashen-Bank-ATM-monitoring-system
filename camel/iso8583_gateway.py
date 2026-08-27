@@ -216,8 +216,8 @@ def parse_iso8583_message(raw_data):
 
         # Map to internal format
         pan = fields.get(2, '')
-        masked = (pan[:4] + '************'
-                  + pan[-4:] if pan else '')
+        masked = ('************' + pan[-4:]
+                  if pan else '')
         pc = fields.get(3, '012000')
         rc = fields.get(39, '00')
         status, err = RESPONSE_CODES.get(
@@ -269,7 +269,7 @@ def generate_simulated_iso8583():
         rc, ('UNKNOWN', None))
 
     pan = random.choice(CARDS)
-    masked = pan[:4] + '************' + pan[-4:]
+    masked = '************' + pan[-4:]
 
     amount = None
     if pc_val in ['WITHDRAWAL', 'TRANSFER']:
