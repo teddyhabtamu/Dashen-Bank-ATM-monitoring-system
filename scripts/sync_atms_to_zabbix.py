@@ -137,7 +137,7 @@ class Zabbix:
         return None
 
     def create_host(self, host, visible_name, template_ids, group_ids, ip,
-                    proxy_id=None):
+                    proxy_id=None, community='dashen_sim', version=2):
         interface = {
             'type': 2,  # SNMP
             'main': 1,
@@ -146,9 +146,9 @@ class Zabbix:
             'dns': '',
             'port': '161',
             'details': {
-                'version': 2,
+                'version': version,
                 'bulk': 0,
-                'community': 'dashen_sim',
+                'community': community,
             }
         }
         params = {
@@ -236,10 +236,15 @@ def do_apply(atms, import_templates=False):
     skipped = 0
     no_ip = 0
     for a in atms:
-        host = a.get('terminal_id', '').strip()
+        host = a.get('atm_id', '').strip() or a.get('terminal_id', '').strip()
         name = a.get('atm_name', '').strip() or host
         ip = a.get('ip_address', '').strip()
         vendor = a.get('vendor', '').strip()
+        community = (a.get('snmp_community', '') or '').strip() or os.environ.get('ATM_SNMP_COMMUNITY', 'dashen_sim')
+        try:
+            version = int(a.get('snmp_version', '').strip() or 2)
+        except ValueError:
+            version = 2
 
         if not ip:
             no_ip += 1
@@ -273,7 +278,7 @@ def do_apply(atms, import_templates=False):
 
         proxy_id = proxy_ids.get(d)
 
-        ok = z.create_host(host, name, template_ids, group_ids, ip, proxy_id)
+        ok = z.create_host(host, name, template_ids, group_ids, ip, proxy_id, community, version)
         if ok:
             created += 1
         else:

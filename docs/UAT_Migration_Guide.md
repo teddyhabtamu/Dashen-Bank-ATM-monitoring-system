@@ -300,23 +300,27 @@ Browse to **http://172.26.208.176:8080** (`Admin` / `zabbix`).
 
 > After 1–2 min, **Monitoring → Latest data** for a host should show all ~30 items populated.
 
-### 8.1 Real test ATMs (4 Kilo Building)
+### 8.1 Register the 2 real test ATMs (4 Kilo Building)
 
-Two real test ATMs are available and should be monitored from UAT-01 to validate SNMP collection end-to-end:
+Two real test ATMs are monitored from UAT-01 to validate SNMP collection end-to-end:
 
-| ATM | Vendor | IP | Subnet |
+| ATM (`atm_id`) | Vendor | IP | Subnet |
 |---|---|---|---|
-| Test ATM 1 | NCR | 172.22.248.4 | 172.22.248.0/24 |
-| Test ATM 2 | GRG | 172.23.248.6 | 172.23.248.0/24 |
+| ATM-TEST-NCR | NCR | 172.22.248.4 | 172.22.248.0/24 |
+| ATM-TEST-GRG | GRG | 172.23.248.6 | 172.23.248.0/24 |
 
-Create them as real SNMP hosts (port **161**, not the simulator 1161):
+**Automated (preferred):** a fresh UAT DB is seeded with these two ATMs (`config/postgres/seed_uat_atms.sql`). Before syncing to Zabbix, set the real SNMP community (from ATM/Channel Support):
+```bash
+docker exec -i zabbix-db psql -U zabbix -d zabbix -c \
+  "UPDATE atm_locations SET snmp_community='<REAL_COMMUNITY>' WHERE atm_id IN ('ATM-TEST-NCR','ATM-TEST-GRG');"
+docker exec zabbix-db psql -U zabbix -d zabbix -c "COPY atm_locations TO STDOUT WITH CSV HEADER" > config/postgres/atm_locations.csv
+python3 scripts/sync_atms_to_zabbix.py --apply --import-templates
+```
+The sync creates Zabbix hosts **named by `atm_id`** (this is the name `state-manager` and `network-correlator` query), with the correct IP, SNMP v2, and community.
 
-1. **Configuration → Hosts → Create host** → **Host name:** `ATM-TEST-NCR`, **Groups:** `Dashen Bank ATMs`
-2. **Interfaces → Add → SNMP:** IP `172.22.248.4`, **Port `161`**, SNMPv2, community `<ATM_COMMUNITY>` (from the ATM/Channel Support team)
-3. **Templates:** link `Dashen Bank ATM Hardware` (NCR)
-4. Repeat for `ATM-TEST-GRG` → IP `172.23.248.6`, template `… - GRG`
+**Manual alternative:** Configuration → Hosts → Create host → **Host name** `ATM-TEST-NCR` (must equal the `atm_id`), SNMP interface IP `172.22.248.4` port `161` v2 community `<REAL_COMMUNITY>`, link template `Dashen Bank ATM Hardware` (NCR); repeat for `ATM-TEST-GRG` (IP `172.23.248.6`, GRG template).
 
-> The SNMP templates shipped in the repo use the **simulation** OID tree (`.1.3.6.1.4.1.99999`). Real NCR/GRG ATMs expose different vendor OIDs. Before these hosts show data you must (a) confirm SNMP reachability (Step F above) and (b) re-map the template items to the real vendor MIB — the same exercise described for production in `docs/Production_Migration_Guide_v2.md` Phase 4. Until then, expect "Not supported" on items; that is expected and is the cutover work, not a UAT failure.
+> The shipped SNMP templates use the **simulation** OID tree (`.1.3.6.1.4.1.99999`). Real NCR/GRG ATMs expose different vendor OIDs, so items read "Not supported" until re-mapped to the real vendor MIB (production guide Phase 4). Confirm reachability with `snmpwalk` (Step F) first.
 
 
 ---

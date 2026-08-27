@@ -146,14 +146,18 @@ else
     echo "  No database backup found, creating fresh ATM locations..."
     docker exec zabbix-db psql -U zabbix -d zabbix <<'SQLEOF'
 CREATE TABLE IF NOT EXISTS atm_locations (
-    atm_id VARCHAR(20) PRIMARY KEY, branch VARCHAR(100),
+    atm_id VARCHAR(20) PRIMARY KEY, atm_name VARCHAR(100), branch VARCHAR(100),
     district VARCHAR(100), city VARCHAR(100), region VARCHAR(100),
     latitude DECIMAL(10,7), longitude DECIMAL(10,7),
     terminal_id VARCHAR(20), vendor VARCHAR(50), model VARCHAR(50),
-    install_date DATE, status VARCHAR(20) DEFAULT 'active'
+    install_date DATE, status VARCHAR(20) DEFAULT 'active',
+    ip_address VARCHAR(45), snmp_community VARCHAR(100), snmp_version INT DEFAULT 2
 );
-INSERT INTO atm_locations VALUES
-('ATM-001','Addis Ababa Main Branch','Kirkos','Addis Ababa','Addis Ababa',9.0300,38.7578,'TID001','NCR','SelfServ 34','2023-01-15','active')
+INSERT INTO atm_locations
+  (atm_id, atm_name, branch, district, city, region, terminal_id, vendor, model, status, ip_address, snmp_community, snmp_version)
+VALUES
+  ('ATM-TEST-NCR','4 Kilo Test NCR','4 Kilo Building','Kirkos','Addis Ababa','Addis Ababa','TID-UAT-NCR','NCR','SelfServ 34','active','172.22.248.4','CHANGE_ME',2),
+  ('ATM-TEST-GRG','4 Kilo Test GRG','4 Kilo Building','Kirkos','Addis Ababa','Addis Ababa','TID-UAT-GRG','GRG','GRG AD2600','active','172.23.248.6','CHANGE_ME',2)
 ON CONFLICT (atm_id) DO NOTHING;
 SQLEOF
     echo "  Fresh ATM locations created"
