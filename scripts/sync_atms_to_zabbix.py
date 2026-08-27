@@ -51,6 +51,34 @@ def csv_atms():
     return atms
 
 
+def db_atms():
+    """Read ATM inventory from the postgres atm_locations table (single source of truth)."""
+    try:
+        import psycopg2
+    except ImportError:
+        print("  psycopg2 not installed - run 'pip install psycopg2-binary' or use --csv")
+        return None
+    try:
+        conn = psycopg2.connect(
+            host=os.environ.get('DB_HOST', 'postgres'),
+            dbname=os.environ.get('DB_NAME', 'zabbix'),
+            user=os.environ.get('DB_USER', 'zabbix'),
+            password=os.environ.get('DB_PASS', ''),
+        )
+        cur = conn.cursor()
+        cur.execute("""SELECT atm_id, atm_name, vendor, ip_address, snmp_community,
+                              snmp_version, district, terminal_id, branch, status
+                       FROM atm_locations""")
+        cols = [d[0] for d in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"  DB read failed: {e}")
+        return None
+
+
 class Zabbix:
     def __init__(self):
         self.token = None
@@ -137,7 +165,20 @@ class Zabbix:
         return None
 
     def create_host(self, host, visible_name, template_ids, group_ids, ip,
-                    proxy_id=None, community='dashen_sim', version=2):
+                    proxy_id=None, community='dashen_sim', version=2, snmp_v3=None):
+        details = {'version': version, 'bulk': 0}
+        if version == 3 and snmp_v3:
+            details.update({
+                'securityname': snmp_v3.get('user'),
+                'authpassphrase': snmp_v3.get('auth_pass'),
+                'privpassphrase': snmp_v3.get('priv_pass'),
+                'authprotocol': snmp_v3.get('auth_proto', 'SHA'),
+                'privprotocol': snmp_v3.get('priv_proto', 'AES'),
+                'securitylevel': snmp_v3.get('level', 'authPriv'),
+                'contextname': '',
+            })
+        else:
+            details['community'] = community
         interface = {
             'type': 2,  # SNMP
             'main': 1,
@@ -145,11 +186,7 @@ class Zabbix:
             'ip': ip,
             'dns': '',
             'port': '161',
-            'details': {
-                'version': version,
-                'bulk': 0,
-                'community': community,
-            }
+            'details': details,
         }
         params = {
             'host': host,
@@ -246,6 +283,17 @@ def do_apply(atms, import_templates=False):
         except ValueError:
             version = 2
 
+        snmp_v3 = None
+        if version == 3:
+            snmp_v3 = {
+                'user': a.get('snmp_v3_user') or os.environ.get('SNMPV3_USER'),
+                'auth_pass': a.get('snmp_v3_auth_pass') or os.environ.get('SNMPV3_AUTH_PASS'),
+                'priv_pass': a.get('snmp_v3_priv_pass') or os.environ.get('SNMPV3_PRIV_PASS'),
+                'auth_proto': a.get('snmp_v3_auth_proto') or os.environ.get('SNMPV3_AUTH_PROTO', 'SHA'),
+                'priv_proto': a.get('snmp_v3_priv_proto') or os.environ.get('SNMPV3_PRIV_PROTO', 'AES'),
+                'level': a.get('snmp_v3_level') or os.environ.get('SNMPV3_LEVEL', 'authPriv'),
+            }
+
         if not ip:
             no_ip += 1
             continue
@@ -278,7 +326,7 @@ def do_apply(atms, import_templates=False):
 
         proxy_id = proxy_ids.get(d)
 
-        ok = z.create_host(host, name, template_ids, group_ids, ip, proxy_id, community, version)
+        ok = z.create_host(host, name, template_ids, group_ids, ip, proxy_id, community, version, snmp_v3)
         if ok:
             created += 1
         else:
@@ -299,10 +347,21 @@ def main():
     parser.add_argument("--apply", action="store_true", help="Execute changes")
     parser.add_argument("--import-templates", action="store_true",
                         help="Also import NCR/GRG templates from XML files")
+    parser.add_argument("--csv", action="store_true",
+                        help="Read ATM inventory from config/postgres/atm_locations.csv instead of the DB")
     args = parser.parse_args()
 
-    atms = csv_atms()
-    print(f"Loaded {len(atms)} ATMs from CSV")
+    if args.csv:
+        atms = csv_atms()
+        src = "CSV"
+    else:
+        atms = db_atms()
+        src = "DB (atm_locations)"
+        if not atms:
+            print("  Falling back to CSV...")
+            atms = csv_atms()
+            src = "CSV (DB unavailable)"
+    print(f"Loaded {len(atms)} ATMs from {src}")
 
     if not args.apply:
         dry_run(atms)

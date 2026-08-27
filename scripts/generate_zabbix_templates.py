@@ -76,6 +76,8 @@ def remap_text(text, vendor, mappings):
 def process(template_dir, mapping_path, dry_run):
     by_vendor = load_mapping(mapping_path)
     total_mapped = 0
+    total_unmapped = 0
+    results = []  # (path, new_text) collected before any write
     for vendor, fname in TEMPLATES.items():
         path = os.path.join(template_dir, fname)
         if not os.path.exists(path):
@@ -85,20 +87,33 @@ def process(template_dir, mapping_path, dry_run):
             text = f.read()
         new_text, mapped, unmapped = remap_text(text, vendor, by_vendor)
         total_mapped += mapped
+        total_unmapped += len(unmapped)
         print(f"  {vendor} ({fname}): {mapped} OID(s) remapped, {len(unmapped)} unmapped")
         for u in sorted(set(unmapped)):
             print(f"      unmapped sim_oid: {u}")
-        if dry_run:
-            continue
-        bak = path + ".simulator.bak"
-        if not os.path.exists(bak):
-            shutil.copy2(path, bak)
-            print(f"      backup -> {bak}")
-        with open(path, "w") as f:
-            f.write(new_text)
-    print(f"  Done. Total remapped: {total_mapped}")
+        results.append((path, new_text))
+
+    # Refuse to write a partially-remapped template: if any OID still points at the
+    # simulator root, abort BEFORE touching any file so nothing is left unsupported.
+    if not dry_run and total_unmapped > 0:
+        print(f"  ABORT: {total_unmapped} OID(s) still point at the simulator root "
+              f"1.3.6.1.4.1.99999.* and have no real-OID row in {mapping_path}.")
+        print("         Fill those rows in oid_mapping.csv first; refusing to write a "
+              "partially-remapped template so no items are left silently unsupported.")
+        return False
+
+    if not dry_run:
+        for path, new_text in results:
+            bak = path + ".simulator.bak"
+            if not os.path.exists(bak):
+                shutil.copy2(path, bak)
+                print(f"      backup -> {bak}")
+            with open(path, "w") as f:
+                f.write(new_text)
+    print(f"  Done. Total remapped: {total_mapped}, still unmapped: {total_unmapped}")
     if dry_run:
         print("  (dry-run: no files written)")
+    return True
 
 
 def main():
@@ -113,7 +128,9 @@ def main():
     print(f"Mapping:   {os.path.abspath(args.mapping)}")
     if args.dry_run:
         print("Mode: DRY RUN")
-    process(args.template_dir, args.mapping, args.dry_run)
+    ok = process(args.template_dir, args.mapping, args.dry_run)
+    if not ok:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

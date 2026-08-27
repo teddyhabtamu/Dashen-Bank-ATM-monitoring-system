@@ -36,7 +36,22 @@ ATM_PORTS = {
     'ATM-004': 1164, 'ATM-005': 1165,
     'GRG-001': 1166, 'GRG-002': 1167,
 }
-CASSETTE_MAX = 2500  # notes-per-cassette capacity used for fill %
+CASSETTE_MAX = 2500  # default notes-per-cassette capacity used for fill %
+
+_CASSETTE_CAP_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                  'config', 'cassette_capacity.json')
+
+
+def load_cassette_capacity():
+    """Per-ATM notes-per-cassette capacity override (avoids a DB schema change).
+    config/cassette_capacity.json maps atm_id -> int; falls back to CASSETTE_MAX."""
+    try:
+        with open(_CASSETTE_CAP_PATH) as f:
+            data = json.load(f)
+        data.pop('_comment', None)
+        return data
+    except Exception:
+        return {}
 
 
 def get_sim_port(atm_id):
@@ -190,33 +205,40 @@ def fetch_zabbix_metrics(atm_id):
 
 def determine_live_state(vendor, metrics):
     """Derive ATM state from live Zabbix item values (mirrors state_manager.determine_state)."""
-    if not metrics:
-        return None
-    def m(key, default=0):
-        v = metrics.get(key)
-        try:
-            return int(v) if v is not None else default
-        except (TypeError, ValueError):
-            return default
-    status = m('atm.status')
-    net = m('atm.net.link')
-    cash1 = m('atm.cash.cassette1')
-    cash2 = m('atm.cash.cassette2')
-    cash_jam = m('atm.cash.jam')
-    card = m('atm.card.reader')
-    if net == 2:
-        return 'OFFLINE'
-    if status == 2:
-        return 'OUT_OF_SERVICE'
-    if status == 4:
-        return 'IN_SUPERVISOR'
-    if cash1 == 0 and cash2 == 0:
-        return 'OUT_OF_CASH'
-    if cash_jam == 1 or card == 2:
-        return 'HARDWARE_FAULT'
-    if status == 1:
-        return 'IN_SERVICE'
-    return 'UNKNOWN'
+    try:
+        import sys as _sys, os as _os
+        _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '..', '..'))
+        from zabbix_modules.status_rules import interpret_state
+        return interpret_state(vendor, metrics)
+    except Exception:
+        # Fallback kept in sync with zabbix_modules/status_rules.py
+        if not metrics:
+            return None
+        def m(key, default=0):
+            v = metrics.get(key)
+            try:
+                return int(v) if v is not None else default
+            except (TypeError, ValueError):
+                return default
+        status = m('atm.status')
+        net = m('atm.net.link')
+        cash1 = m('atm.cash.cassette1')
+        cash2 = m('atm.cash.cassette2')
+        cash_jam = m('atm.cash.jam')
+        card = m('atm.card.reader')
+        if net == 2:
+            return 'OFFLINE'
+        if status == 2:
+            return 'OUT_OF_SERVICE'
+        if status == 4:
+            return 'IN_SUPERVISOR'
+        if cash1 == 0 and cash2 == 0:
+            return 'OUT_OF_CASH'
+        if cash_jam == 1 or card == 2:
+            return 'HARDWARE_FAULT'
+        if status == 1:
+            return 'IN_SERVICE'
+        return 'UNKNOWN'
 
 
 def batch_fetch_live_states(atms):
@@ -250,7 +272,7 @@ def batch_fetch_live_states(atms):
     return {r[0]: (r[1], r[2]) for r in results if r[1] is not None}
 
 
-def build_cassettes(vendor, m):
+def build_cassettes(vendor, m, capacity=CASSETTE_MAX):
     """Cash-cassette / module layout inside the ATM 'vault' with SVG geometry + fill level.
     Coordinates are expressed in the 320x540 viewBox used by the detail-page SVG."""
     # Vault interior area (matches the <rect> drawn in the template)
@@ -265,7 +287,7 @@ def build_cassettes(vendor, m):
             val = int(val)
         except (TypeError, ValueError):
             val = 0
-        pct = max(0, min(100, round(val / CASSETTE_MAX * 100)))
+        pct = max(0, min(100, round(val / capacity * 100)))
         fh = round(h * pct / 100)
         color = 'green' if pct > 40 else ('amber' if pct >= 15 else 'red')
         return {'label': label, 'x': x, 'y': y, 'w': w, 'h': h,
@@ -468,7 +490,9 @@ def atm_detail(atm_id):
 
         metrics = fetch_metrics(atm_id, port=atm.get('sim_port')) if ENABLE_SIMULATORS \
             else fetch_zabbix_metrics(atm_id)
-        cassettes = build_cassettes(vendor, metrics) if metrics else []
+        cap_map = load_cassette_capacity()
+        cassette_cap = cap_map.get(atm_id, CASSETTE_MAX)
+        cassettes = build_cassettes(vendor, metrics, cassette_cap) if metrics else []
         hardware = build_hardware(vendor, metrics) if metrics else []
 
         # Override current_state with live data for consistency

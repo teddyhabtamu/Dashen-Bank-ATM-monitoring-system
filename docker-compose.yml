@@ -150,6 +150,9 @@ services:
       ZABBIX_PASS: "${ZBX_PASS}"
     volumes:
       - ./report-portal:/app:rw
+      - ./zabbix_modules:/app/zabbix_modules:ro
+      - ./config/status_map.json:/app/config/status_map.json:ro
+      - ./config/cassette_capacity.json:/app/config/cassette_capacity.json:ro
     ports:
       - "8888:8888"
     depends_on:
@@ -206,8 +209,8 @@ services:
 
   state-manager:
     build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
+      context: .
+      dockerfile: simulators/Dockerfile.atm-simulator
     container_name: state-manager
     command: python3 /app/state_manager.py
     environment:

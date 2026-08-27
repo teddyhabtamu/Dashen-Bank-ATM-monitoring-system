@@ -5,6 +5,11 @@ import json
 import psycopg2
 import urllib.request
 import urllib.error
+import sys
+import os
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+from zabbix_modules.status_rules import interpret_state
 
 DB_HOST = os.environ.get('DB_HOST', 'postgres')
 DB_NAME = os.environ.get('DB_NAME', 'zabbix')
@@ -75,29 +80,8 @@ def fetch_host_metrics(auth, host):
     return {it['key_']: it.get('lastvalue') for it in items}
 
 
-def determine_state(m):
-    if not m:
-        return 'UNREACHABLE'
-    status = _to_int(m.get('atm.status'), 1)
-    net = _to_int(m.get('atm.net.link'), 1)
-    cash1 = _to_int(m.get('atm.cash.cassette1'), 0)
-    cash2 = _to_int(m.get('atm.cash.cassette2'), 0)
-    cash_jam = _to_int(m.get('atm.cash.jam'), 0)
-    card = _to_int(m.get('atm.card.reader'), 0)
-
-    if net == 2:
-        return 'OFFLINE'
-    if status == 2:
-        return 'OUT_OF_SERVICE'
-    if status == 4:
-        return 'IN_SUPERVISOR'
-    if cash1 == 0 and cash2 == 0:
-        return 'OUT_OF_CASH'
-    if cash_jam == 1 or card == 2:
-        return 'HARDWARE_FAULT'
-    if status == 1:
-        return 'IN_SERVICE'
-    return 'UNKNOWN'
+def determine_state(m, vendor='NCR'):
+    return interpret_state(vendor, m)
 
 
 def update_states(auth):
@@ -113,7 +97,7 @@ def update_states(auth):
     results = []
     for atm_id, vendor in atms:
         m = fetch_host_metrics(auth, atm_id)
-        state = determine_state(m) if m is not None else 'UNREACHABLE'
+        state = determine_state(m, vendor) if m is not None else 'UNREACHABLE'
         results.append((atm_id, vendor or 'NCR', state))
 
     conn = get_db()
