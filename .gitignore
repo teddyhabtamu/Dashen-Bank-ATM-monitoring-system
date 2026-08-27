@@ -22,3 +22,6 @@ glpi_backup/
 # Full Zabbix DB dumps (too large for git — regenerate locally)
 zabbix_full_*.sql.gz
 config/postgres/atm_custom_tables.sql
+
+# Zabbix template backups created by scripts/generate_zabbix_templates.py
+config/zabbix/*.simulator.bak
