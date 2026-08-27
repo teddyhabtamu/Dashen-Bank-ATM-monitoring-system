@@ -4,7 +4,7 @@
 ## From one laptop to two servers — a step-by-step cookbook
 
 **Companion:** `docs/Production_Migration_Guide_v2.md` (Production Migration Guide v3)
-**Scope:** UAT environment — RHEL 9, **2 VMs**, 10–20 simulated ATMs collected over **real SNMP**
+**Scope:** UAT environment — RHEL 9, **2 VMs**, **2 real test ATMs** collected over **real SNMP** (vendor OIDs)
 **Purpose:** Install, configure, and customize the system on the UAT servers exactly as it will later run in production.
 
 ---
@@ -15,12 +15,12 @@
 |---|---|---|---|
 | Where it runs | 1 laptop, 1 `docker-compose.yml` | UAT-01 + UAT-02 | APPS-01 + DATA-01 + GWY-01 |
 | How services talk | container names (Docker DNS) | same-VM = container name; **cross-VM = IP** | same idea |
-| How ATMs are polled | HTTP agent (simulators) | **SNMP agent** (simulators serve real SNMP) | SNMP agent (real ATMs) |
+| How ATMs are polled | HTTP agent (simulators) | **SNMP agent** (real test ATMs, vendor OIDs) | SNMP agent (real ATMs) |
 | Why | PoC | prove the multi-server architecture | run the bank |
 
 The important UAT work is two-fold:
 1. **Split the one compose file into two** (already done — the files are at the repo root: `docker-compose.yml` (VM1 / apps+data), `docker-compose.gateway.yml` (VM2 / search+gateway), and `.env.uat` for variables).
-2. **Make collection SNMP-native** — the simulators already answer genuine SNMP GETs (community `dashen_sim`, OID root `.1.3.6.1.4.1.99999`). This is the same mechanism production uses for real ATMs; only the port (161) and the real vendor OID tree change later.
+2. **Collect from real ATMs over SNMP** — UAT polls the bank's 2 real test ATMs via SNMP (UDP 161, vendor community/OIDs captured in `config/snmp/`). This is exactly the production mechanism; the only difference is scale. No simulators run in UAT.
 
 > Two things are handled by other departments (verify only): VM provisioning, VLANs, security groups, and firewall rules. You only **install, configure, and customize** — then check the connections work.
 
@@ -68,7 +68,7 @@ sudo systemctl enable --now docker
 sudo usermod -aG docker $USER
 exit                                   # log back in so the group applies
 
-# 2. git + net-snmp (the latter is needed to verify simulator SNMP later)
+# 2. git + net-snmp (the latter is needed to verify ATM SNMP reachability later)
 sudo dnf install -y git net-snmp-utils
 
 # 3. OpenSearch needs a higher mmap limit — set it on BOTH (UAT-02 especially)
@@ -108,7 +108,7 @@ The repo root ships **two** compose files, one per VM:
 
 | File | Runs on |
 |---|---|
-| `docker-compose.yml` | UAT-01 (VM1 — Zabbix, GLPI, Grafana, Report Portal, simulators, Filebeat, PostgreSQL) |
+| `docker-compose.yml` | UAT-01 (VM1 — Zabbix, GLPI, Grafana, Report Portal, anomaly-detector, network-correlator, state-manager, Filebeat, PostgreSQL) |
 | `docker-compose.gateway.yml` | UAT-02 (VM2 — OpenSearch, OpenSearch Dashboards, ISO 8583 gateway) |
 
 Each server only brings up its own stack. After cloning, **delete the other VM's file and rename yours to the default name** so both servers end up with a plain `docker-compose.yml` and use the identical command `docker compose up -d` (no `-f`, no env var).
@@ -169,7 +169,7 @@ curl -s -X PUT "http://localhost:9200/_index_template/atm-ej-live" \
 
 ---
 
-# 5. Step D — Deploy UAT-01 (PostgreSQL + Zabbix + Grafana + GLPI + simulators)
+# 5. Step D — Deploy UAT-01 (PostgreSQL + Zabbix + Grafana + GLPI + analysis services)
 
 ```bash
 ssh <your-user>@172.26.208.176
@@ -282,18 +282,22 @@ Browse to **http://172.26.208.176:8080** (`Admin` / `zabbix`).
 2. **Configuration → Hosts → Import** → `config/zabbix/zbx_export_hosts.xml` (the VM's own Zabbix-agent host)
 3. **Administration → Media types → Import** → `config/zabbix/zbx_export_mediatypes.xml`
 
-Now create the simulator hosts (SNMP, not HTTP):
+> **UAT pilot = the 2 real test ATMs (§8.1), not simulators.** Create the two real-ATM SNMP hosts
+> described in §8.1 (port 161, vendor OIDs from `config/snmp/oid_mapping.csv`). The simulator-host steps
+> below are a **dev/PoC fallback only** — keep them solely for synthetic dashboard demos; do **not** use
+> them for the UAT pilot.
 
-1. **Configuration → Hosts → Create host**
-2. **Host name:** `ATM-001 | NCR | Sim`
-3. **Host groups:** `Dashen Bank ATMs` (create if missing)
-4. **Interfaces → Add → SNMP:** IP `127.0.0.1`, **Port `1161`**, SNMPv2, community `dashen_sim`
-5. **Templates:** link `Dashen Bank ATM Hardware` (NCR) or `… - GRG`
-6. **Macros:** `{$ATM_PORT}` = `1161`, `{$ATM_VENDOR}` = `NCR`
-7. **Add**
-8. Repeat for a few ATMs (next port `1162`, `1163`, …)
+> *Dev fallback (optional):* to stand up simulated SNMP hosts, create them as SNMP (not HTTP):
+>
+> 1. **Configuration → Hosts → Create host**
+> 2. **Host name:** `ATM-001 | NCR | Sim`
+> 3. **Host groups:** `Dashen Bank ATMs` (create if missing)
+> 4. **Interfaces → Add → SNMP:** IP `127.0.0.1`, **Port `1161`**, SNMPv2, community `dashen_sim`
+> 5. **Templates:** link `Dashen Bank ATM Hardware` (NCR) or `… - GRG`
+> 6. **Macros:** `{$ATM_PORT}` = `1161`, `{$ATM_VENDOR}` = `NCR`
+> 7. **Add**, then repeat for a few ATMs (ports `1162`, `1163`, …)
 
-After 1–2 min: **Monitoring → Latest data** for `ATM-001` should show all ~30 items populated.
+> After 1–2 min, **Monitoring → Latest data** for a host should show all ~30 items populated.
 
 ### 8.1 Real test ATMs (4 Kilo Building)
 
@@ -318,9 +322,9 @@ Create them as real SNMP hosts (port **161**, not the simulator 1161):
 
 # 9. Step H — Configure & customize the rest
 
-**Grafana** (http://172.26.208.176:3000): the `datasources-uat.yml` already provisions the 3 datasources (Zabbix-ATM, ATM-Transactions, EJ-OpenSearch) — open **Connections → Data sources** and confirm each says "Success". All 6 dashboards should show simulator data.
+**Grafana** (http://172.26.208.176:3000): the `datasources-uat.yml` already provisions the 3 datasources (Zabbix-ATM, ATM-Transactions, EJ-OpenSearch) — open **Connections → Data sources** and confirm each says "Success". All 6 dashboards should show live data from the real test ATMs.
 
-**GLPI** (http://172.26.208.176:8082): complete the install wizard → **Setup → General → API** enable REST API and create an API client → in Zabbix **Administration → Media types** set the GLPI Ticket media type `glpi_url` = `http://172.26.208.176:8082`. Trigger a fault on a simulator ATM and confirm a ticket is created.
+**GLPI** (http://172.26.208.176:8082): complete the install wizard → **Setup → General → API** enable REST API and create an API client → in Zabbix **Administration → Media types** set the GLPI Ticket media type `glpi_url` = `http://172.26.208.176:8082`. Trigger a fault on a real test ATM (via its management interface) and confirm a ticket is created.
 
 **Report Portal** (http://172.26.208.176:8888): generate a PDF/Excel/CSV report. EJ counts come from UAT-02's OpenSearch.
 
@@ -345,7 +349,7 @@ output.elasticsearch:
 - [ ] All containers `Up` on both servers
 - [ ] `snmpwalk … 127.0.0.1:1161 ….99999.8` returns data
 - [ ] Zabbix shows every item for each ATM host (no "Not supported")
-- [ ] A simulator fault creates a Zabbix problem **and** a GLPI ticket
+- [ ] A real-ATM fault creates a Zabbix problem **and** a GLPI ticket
 - [ ] Grafana: 6 dashboards live; 3 datasources test OK
 - [ ] Report Portal generates all report types
 - [ ] `ISO8583_SIM` rows growing in `atm_transactions`
@@ -368,7 +372,7 @@ Do **not** deploy production until: SNMP path proven, templates final, cross-VM 
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `snmpwalk` empty on 1161 | simulator SNMP responder not up / UDP not published | `docker logs atm-sim-engine` → `[SNMP]`; check `1161-1260/udp` in compose |
+| `snmpwalk` to ATM fails | SNMP not enabled / wrong community / firewall | `snmpwalk -v2c -c <community> <atm-ip> .1.3.6.1.2.1.1`; verify community, VLAN/firewall UAT-01↔ATM |
 | Zabbix item "Not supported" | HTTP/agent interface, or wrong port/community | SNMP interface, `{$ATM_PORT}`, community `dashen_sim`, correct vendor template |
 | Report Portal can't reach OpenSearch | wrong `OS_HOST` or firewall | `curl http://172.26.21.50:9200` from UAT-01; check `OS_HOST: 172.26.21.50:9200` |
 | Gateway crash-loops | `DB_HOST` wrong / PG not remote-ready | `docker logs iso8583-gateway`; verify `listen_addresses='*'` + `172.26.21.0/24` in `pg_hba.conf` |
@@ -390,7 +394,7 @@ For the rest, the stack is identical to production — see `docs/Production_Migr
 | UAT datasources | `config/grafana/datasources-uat.yml` |
 | UAT Postgres tuning | `config/postgres-uat/postgresql-custom.conf` |
 | SNMP templates | `config/zabbix/template_ncr_snmp.xml`, `template_grg_snmp.xml` |
-| Simulator SNMP responder | `simulators/snmp_agent.py` |
+| Simulator SNMP responder (dev fallback only) | `simulators/snmp_agent.py` |
 | Filebeat config | `filebeat.yml` (output edited per environment) |
 | Production reference | `docs/Production_Migration_Guide_v2.md` |
 

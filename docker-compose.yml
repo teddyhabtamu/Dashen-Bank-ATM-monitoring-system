@@ -215,62 +215,13 @@ services:
       - postgres
     restart: unless-stopped
 
-  atm-sim-engine:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-sim-engine
-    command: python3 -u sim_engine.py
-    environment:
-      DB_HOST: "postgres"
-      DB_NAME: "zabbix"
-      DB_USER: "zabbix"
-      DB_PASS: "${DB_PASS}"
-      SIM_PORT_MIN: "1161"
-      SIM_PORT_MAX: "1260"
-      MAX_SIMULATED_ATMS: "${MAX_SIMULATED_ATMS:-20}"
-    ports:
-      - "1161-1260:1161-1260/udp"
-    depends_on:
-      - postgres
-    restart: unless-stopped
-
-  atm-txn-engine:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-txn-engine
-    command: python3 -u txn_engine.py
-    environment:
-      DB_HOST: "postgres"
-      DB_NAME: "zabbix"
-      DB_USER: "zabbix"
-      DB_PASS: "${DB_PASS}"
-    depends_on:
-      - postgres
-    restart: unless-stopped
-
-  atm-ej-engine:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-ej-engine
-    command: python3 -u ej_engine.py
-    environment:
-      DB_HOST: "postgres"
-      DB_NAME: "zabbix"
-      DB_USER: "zabbix"
-      DB_PASS: "${DB_PASS}"
-    volumes:
-      - ./ej-logs:/app/ej-logs
-    depends_on:
-      - postgres
-    restart: unless-stopped
-
   filebeat:
     image: docker.elastic.co/beats/filebeat-oss:7.12.1
     container_name: filebeat
     user: root
+    ports:
+      - "514:514/udp"
+      - "514:514/tcp"
     volumes:
       - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - ./ej-logs:/var/log/atm-ej:ro

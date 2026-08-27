@@ -1,13 +1,14 @@
 # Dashen Bank ATM Monitoring System — UAT Deployment
 
 > **Branch:** `uat-prep` · **Repository is now PRIVATE** (clone requires a GitHub SSH key or token).
-> This branch deploys the UAT environment across **2 VMs** using real SNMP polling against simulated ATMs.
+> This branch deploys the UAT environment across **2 VMs** using real SNMP polling against the bank's **2 real test ATMs**.
 > For the full step-by-step cookbook, see [`docs/UAT_Migration_Guide.md`](docs/UAT_Migration_Guide.md);
 > for the 45-day readiness plan see [`docs/uat-pilot-checklist.md`](docs/uat-pilot-checklist.md).
 
-Monitors **1,209 ATMs** (797 GRG, 412 NCR) across **14 districts** in Ethiopia.
-UAT proves the multi-server architecture end-to-end; ATMs are simulated but polled over **real SNMP**
-(community `dashen_sim`, OID root `1.3.6.1.4.1.99999`) — the same mechanism production uses against real ATMs.
+Built to monitor **1,209 ATMs** (797 GRG, 412 NCR) across **14 districts** in Ethiopia.
+UAT proves the multi-server architecture end-to-end against **2 real test ATMs** polled over real SNMP
+(vendor OIDs from `config/snmp/oid_mapping.csv`). ATM Electronic Journal is collected from the real ATMs
+via syslog (UDP/TCP 514) into OpenSearch. No simulators run in UAT.
 
 ---
 
@@ -15,7 +16,7 @@ UAT proves the multi-server architecture end-to-end; ATMs are simulated but poll
 
 | Server | Name | IP | Runs |
 |---|---|---|---|
-| **UAT-01** (VM1) | DBHQUATATMMONAPP | 172.26.208.176 | PostgreSQL, Zabbix (server/web/agent), GLPI, Grafana, Report Portal, simulators (EJ/txn/state/anomaly/network-correlator), Filebeat |
+| **UAT-01** (VM1) | DBHQUATATMMONAPP | 172.26.208.176 | PostgreSQL, Zabbix (server/web/agent), GLPI, Grafana, Report Portal, anomaly-detector, network-correlator, state-manager, Filebeat (EJ collected from real ATMs via syslog 514) |
 | **UAT-02** (VM2) | DBHQUATATMMONDB | 172.26.21.50 | OpenSearch, OpenSearch Dashboards, ISO 8583 gateway |
 
 Cross-VM wiring (set in `.env.uat`): VM1 → VM2 `9200` (OpenSearch); VM2 → VM1 `5432` (PostgreSQL).
