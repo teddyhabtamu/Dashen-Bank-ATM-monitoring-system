@@ -37,7 +37,15 @@ The important UAT work is three-fold:
   | UAT-02 (data) | dbtcatmmondbuat | 172.22.10.0/24 (VLAN/gw — confirm with IT) | 172.22.10.60 |
 
   Sizes: UAT-01 = 4 vCPU / 8 GB / 500 GB; UAT-02 = 4 vCPU / 8 GB / 200 GB.
-- [ ] **SSH access** to both (security groups being added by Cloud & Core)
+- [ ] **SSH access** via the bastion (confirmed working):
+
+  ```bash
+  ssh tewodros@196.189.126.63 -p 1006   # UAT-01 app  (dbtcatmmonappuat, 172.22.10.45)
+  ssh tewodros@196.189.126.63 -p 1007   # UAT-02 data (dbtcatmmondbuat, 172.22.10.60)
+  ```
+
+  > Wherever steps below show `ssh <your-user>@<internal-ip>`, use the
+  > bastion mapping above for that VM.
 - [ ] **RHEL 9** with subscription / repo access on both
 - [ ] **GitHub SSH key or token** on both (to clone the repo)
 - [ ] (Handled by other teams, verify later) firewall/VLAN rules:
