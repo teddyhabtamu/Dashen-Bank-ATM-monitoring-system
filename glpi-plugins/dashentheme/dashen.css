@@ -211,6 +211,38 @@ aside.navbar .nav-link {
     font-weight: 600;
 }
 
+/* Expanded inline submenus: core paints the open menu with a dark translucent
+   overlay (near-navy), so items must be light. Scoped to the expanded sidebar
+   only — collapsed flyouts keep the light menu / dark text default. */
+body:not(.navbar-collapsed) .sidebar .dropdown-menu,
+body:not(.navbar-collapsed) .navbar-vertical .dropdown-menu,
+body:not(.navbar-collapsed) aside.navbar .dropdown-menu {
+    background-color: rgba(0, 0, 0, 0.12);
+}
+body:not(.navbar-collapsed) .sidebar .dropdown-menu .dropdown-item,
+body:not(.navbar-collapsed) .navbar-vertical .dropdown-menu .dropdown-item,
+body:not(.navbar-collapsed) aside.navbar .dropdown-menu .dropdown-item {
+    color: #FFFFFF !important;
+    border-left: 3px solid transparent;
+}
+body:not(.navbar-collapsed) .sidebar .dropdown-menu .dropdown-item:hover,
+body:not(.navbar-collapsed) .navbar-vertical .dropdown-menu .dropdown-item:hover,
+body:not(.navbar-collapsed) aside.navbar .dropdown-menu .dropdown-item:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: var(--dashen-gold) !important;
+}
+body:not(.navbar-collapsed) .sidebar .dropdown-menu .dropdown-item.active,
+body:not(.navbar-collapsed) .navbar-vertical .dropdown-menu .dropdown-item.active,
+body:not(.navbar-collapsed) aside.navbar .dropdown-menu .dropdown-item.active {
+    background-color: rgba(253, 215, 154, 0.14);
+    border-left-color: var(--dashen-gold);
+    color: var(--dashen-gold) !important;
+}
+body:not(.navbar-collapsed) .sidebar .dropdown-menu .dropdown-header,
+body:not(.navbar-collapsed) .navbar-vertical .dropdown-menu .dropdown-header {
+    color: var(--dashen-gold) !important;
+}
+
 /* --------------------------------------------------------------------------
  * 5. Buttons (every variant keeps readable text)
  * -------------------------------------------------------------------------- */
