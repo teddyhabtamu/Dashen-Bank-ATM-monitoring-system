@@ -90,7 +90,11 @@ def ensure(entity, data, h, name_field="name"):
         print(f"  Updated {entity}: {name} (ID {existing})")
         return existing, False
     res = api("POST", entity, h, data)
-    new_id = res.get("id") or (res[0].get("id") if isinstance(res, list) else None)
+    # GLPI returns a list[{"id":...}] on create, a dict on some endpoints.
+    if isinstance(res, list):
+        new_id = res[0].get("id") if res and isinstance(res[0], dict) else None
+    else:
+        new_id = res.get("id")
     if new_id:
         print(f"  Created {entity}: {name} (ID {new_id})")
     else:
