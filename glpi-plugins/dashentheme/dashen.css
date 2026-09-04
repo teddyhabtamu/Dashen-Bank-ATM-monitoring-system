@@ -1,0 +1,318 @@
+/* ==========================================================================
+ * Dashen Bank Theme for GLPI  •  sample v1.0
+ * Palette (official brand): navy #012169  •  indigo #273274  •  gold #FDD79A
+ *
+ * Loaded by the "Dashen Bank Theme" plugin (setup.php, add_css hook).
+ * Targets GLPI 10.x (Tabler-based UI). Selectors marked [CHECK] are the few
+ * GLPI-specific ones — confirm once with browser devtools (F12) against your
+ * exact GLPI version and adjust if a rule doesn't stick.
+ * ========================================================================== */
+
+:root {
+    --dashen-navy:        #012169;
+    --dashen-navy-dark:   #001642;
+    --dashen-blue:        #273274;
+    --dashen-blue-light:  #3D4A9E;
+    --dashen-gold:        #FDD79A;
+    --dashen-gold-dark:   #E9A93F;
+    --dashen-bg:          #F2F4F9;
+    --dashen-card-border: #DCE3F1;
+    --dashen-text:        #1B2340;
+    --dashen-muted:       #5B6B8C;
+}
+
+/* --------------------------------------------------------------------------
+ * 0. Logo (bundled: pics/dashen-logo.svg + .png — official Dashen mark)
+ * The swap hides GLPI's default <img> (layout preserved) and paints the
+ * Dashen mark on the parent link. Paths are relative to this CSS file, so
+ * they resolve wherever the plugin is installed (plugins/ or marketplace/).
+ * If a rule misses on your version, F12 the logo and adjust the parent.
+ * -------------------------------------------------------------------------- */
+.navbar-brand {
+    background: url("pics/dashen-logo.svg") no-repeat left center;
+    background-size: contain;
+    min-width: 170px;
+    min-height: 38px;
+}
+.navbar-brand img { visibility: hidden; }
+
+/* Login page logo  [CHECK] parent selector against your version */
+.login .card img[src*="logo"],
+#boxlogin img,
+.card img[src*="logo-GLPI"],
+.card img[src*="logo-G"] {
+    visibility: hidden;
+    height: 0;
+}
+.login .card,
+#boxlogin .card {
+    padding-top: 84px;
+    background-image: url("pics/dashen-logo.svg");
+    background-repeat: no-repeat;
+    background-position: center 18px;
+    background-size: 64px 64px;
+}
+
+/* --------------------------------------------------------------------------
+ * 1. Base
+ * -------------------------------------------------------------------------- */
+body {
+    background-color: var(--dashen-bg);
+    color: var(--dashen-text);
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+a { color: var(--dashen-blue); }
+a:hover { color: var(--dashen-navy); }
+
+h1, h2, h3, .card-title, .page-title {
+    color: var(--dashen-navy);
+}
+
+/* --------------------------------------------------------------------------
+ * 2. Top header / navbar  [CHECK] .navbar-brand against your version
+ * -------------------------------------------------------------------------- */
+.navbar,
+header.navbar {
+    background: linear-gradient(90deg, var(--dashen-navy-dark) 0%, var(--dashen-navy) 55%, var(--dashen-blue) 100%) !important;
+    border-bottom: 3px solid var(--dashen-gold);
+}
+
+.navbar .navbar-brand,
+.navbar .nav-link,
+.navbar .navbar-nav .nav-link,
+header.navbar a {
+    color: #FFFFFF !important;
+}
+
+.navbar .nav-link:hover,
+.navbar .navbar-nav .nav-link:hover,
+.navbar .nav-link.active {
+    color: var(--dashen-gold) !important;
+}
+
+/* Header search box on dark background */
+.navbar input[type="text"],
+.navbar .form-control {
+    background-color: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #FFFFFF;
+}
+.navbar input::placeholder { color: rgba(255, 255, 255, 0.6); }
+
+/* (Header logo is swapped in §0 above.) */
+
+/* --------------------------------------------------------------------------
+ * 3. Left menu / sidebar  [CHECK] .sidebar against your version
+ * -------------------------------------------------------------------------- */
+.sidebar,
+.navbar-vertical,
+aside.navbar {
+    background-color: var(--dashen-navy) !important;
+}
+
+.sidebar .nav-link,
+.navbar-vertical .nav-link,
+aside.navbar .nav-link {
+    color: #C9D2EA !important;
+    border-left: 3px solid transparent;
+}
+
+.sidebar .nav-link:hover,
+.navbar-vertical .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.07);
+    color: #FFFFFF !important;
+}
+
+.sidebar .nav-link.active,
+.navbar-vertical .nav-link.active {
+    background-color: rgba(253, 215, 154, 0.14);
+    border-left-color: var(--dashen-gold);
+    color: var(--dashen-gold) !important;
+    font-weight: 600;
+}
+
+.sidebar .nav-link i,
+.navbar-vertical .nav-link i {
+    color: var(--dashen-gold);
+}
+
+/* --------------------------------------------------------------------------
+ * 4. Buttons
+ * -------------------------------------------------------------------------- */
+.btn-primary {
+    background-color: var(--dashen-blue);
+    border-color: var(--dashen-blue);
+}
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+    background-color: var(--dashen-navy) !important;
+    border-color: var(--dashen-navy) !important;
+}
+
+.btn-outline-primary {
+    color: var(--dashen-blue);
+    border-color: var(--dashen-blue);
+}
+.btn-outline-primary:hover {
+    background-color: var(--dashen-blue);
+    border-color: var(--dashen-blue);
+    color: #FFFFFF;
+}
+
+/* Gold accent for the main submit action on forms */
+form .btn-primary[type="submit"] {
+    box-shadow: 0 1px 0 var(--dashen-gold-dark);
+}
+
+.btn:focus, .btn-primary:focus {
+    box-shadow: 0 0 0 0.25rem rgba(39, 50, 116, 0.25);
+}
+
+/* --------------------------------------------------------------------------
+ * 5. Cards & page headers
+ * -------------------------------------------------------------------------- */
+.card {
+    border: 1px solid var(--dashen-card-border);
+    border-top: 3px solid var(--dashen-blue);
+}
+
+.card-header {
+    background-color: #FFFFFF;
+    border-bottom: 1px solid var(--dashen-card-border);
+}
+.card-header .card-title { color: var(--dashen-navy); }
+
+.page-header {
+    border-bottom: 2px solid var(--dashen-gold);
+}
+
+/* --------------------------------------------------------------------------
+ * 6. Tables (ticket lists, assets, …)
+ * -------------------------------------------------------------------------- */
+.table thead th,
+table.tab_cadre thead th,
+.tab_cadrehov th {
+    background-color: var(--dashen-navy);
+    color: #FFFFFF;
+    border-color: var(--dashen-navy-dark);
+}
+.table thead th a { color: var(--dashen-gold); }
+
+.table-hover tbody tr:hover,
+table.tab_cadre tbody tr:hover {
+    background-color: #E9EDF7;
+}
+
+.table tbody tr:nth-child(even) { background-color: #F7F9FD; }
+
+/* Pagination active page */
+.pagination .page-item.active .page-link {
+    background-color: var(--dashen-blue);
+    border-color: var(--dashen-blue);
+}
+
+/* --------------------------------------------------------------------------
+ * 7. Tabs
+ * -------------------------------------------------------------------------- */
+.nav-tabs .nav-link { color: var(--dashen-muted); }
+.nav-tabs .nav-link:hover { color: var(--dashen-navy); }
+.nav-tabs .nav-link.active {
+    color: var(--dashen-navy) !important;
+    border-bottom: 3px solid var(--dashen-gold) !important;
+    font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+ * 8. Forms, inputs, dropdowns (incl. Select2)
+ * -------------------------------------------------------------------------- */
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--dashen-gold-dark);
+    box-shadow: 0 0 0 0.25rem rgba(253, 215, 154, 0.45);
+}
+
+.form-label, legend { color: var(--dashen-navy); font-weight: 600; }
+
+/* Select2 single dropdown */
+.select2-container--default .select2-selection--single {
+    border: 1px solid #DCE3F1;
+}
+.select2-container--default.select2-container--focus .select2-selection--single {
+    border-color: var(--dashen-gold-dark);
+    box-shadow: 0 0 0 0.25rem rgba(253, 215, 154, 0.45);
+}
+/* Select2 highlighted option */
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: var(--dashen-blue);
+}
+/* Select2 already-selected option */
+.select2-container--default .select2-results__option[aria-selected="true"] {
+    background-color: var(--dashen-navy);
+    color: #FFFFFF;
+}
+/* Multi-select chips */
+.select2-container--default .select2-selection--multiple .select2-selection__choice {
+    background-color: var(--dashen-navy);
+    border-color: var(--dashen-navy-dark);
+    color: #FFFFFF;
+}
+
+/* Checkboxes / radios / switches */
+.form-check-input:checked {
+    background-color: var(--dashen-blue);
+    border-color: var(--dashen-blue);
+}
+
+/* --------------------------------------------------------------------------
+ * 9. Badges, alerts, progress
+ * -------------------------------------------------------------------------- */
+.badge.bg-primary, .badge.badge-primary {
+    background-color: var(--dashen-blue) !important;
+}
+.alert-info {
+    background-color: #E9EDF7;
+    border-color: var(--dashen-blue-light);
+    color: var(--dashen-navy);
+}
+.progress-bar { background-color: var(--dashen-blue); }
+
+/* Ticket priority accents (kept semantic, tinted to brand) */
+.badge.priority-6, .badge.bg-red { box-shadow: inset 0 -2px 0 var(--dashen-gold-dark); }
+
+/* --------------------------------------------------------------------------
+ * 10. Login page  [CHECK] selectors against your version
+ * -------------------------------------------------------------------------- */
+body.login,
+.login-page,
+#boxlogin {
+    background: linear-gradient(135deg, var(--dashen-navy-dark) 0%, var(--dashen-navy) 60%, var(--dashen-blue) 100%);
+}
+
+.login .card,
+#boxlogin .card {
+    border: none;
+    border-top: 4px solid var(--dashen-gold);
+    box-shadow: 0 12px 40px rgba(0, 10, 40, 0.45);
+}
+
+.login .btn-primary,
+#boxlogin .btn-primary {
+    background-color: var(--dashen-blue);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+.login .btn-primary:hover,
+#boxlogin .btn-primary:hover {
+    background-color: var(--dashen-navy);
+}
+
+/* (Login logo is swapped in §0 above.) */
+
+/* --------------------------------------------------------------------------
+ * 11. Footer touch
+ * -------------------------------------------------------------------------- */
+footer.footer, .footer {
+    border-top: 2px solid var(--dashen-gold);
+}
