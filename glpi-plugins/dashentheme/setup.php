@@ -16,6 +16,9 @@ function plugin_init_dashentheme() {
     // the login page; the regular hook covers authenticated pages.
     $PLUGIN_HOOKS['add_css']['dashentheme'][] = 'dashen.css';
     $PLUGIN_HOOKS['add_css_anonymous_page']['dashentheme'][] = 'dashen.css';
+    // Logo <img> swap (see dashen.js header for why CSS alone is not enough).
+    $PLUGIN_HOOKS['add_javascript']['dashentheme'][] = 'dashen.js';
+    $PLUGIN_HOOKS['add_javascript_anonymous_page']['dashentheme'][] = 'dashen.js';
 }
 
 function plugin_version_dashentheme() {
