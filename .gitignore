@@ -17,6 +17,7 @@ glpi_backup/
 *.pdf
 *.xlsx
 *.csv
+!config/snmp/oid_mapping.csv.example
 .DS_Store
 
 # Full Zabbix DB dumps (too large for git — regenerate locally)

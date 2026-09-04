@@ -15,7 +15,9 @@ echo "-- inventory (docker) --"
 command -v docker >/dev/null 2>&1 && ok "docker present" || bad "docker missing"
 
 echo "-- Zabbix API reachable --"
-if curl -s --max-time 5 -o /dev/null -w "%{http_code}" "http://${ZBX_HOST}:${ZBX_PORT}/api_jsonrpc.php" | grep -q 200; then
+# NOTE: plain GET on api_jsonrpc.php answers 412 (not 200) — either code proves
+# the PHP endpoint is up; only connection failure/timeout means unreachable.
+if curl -s --max-time 5 -o /dev/null -w "%{http_code}" "http://${ZBX_HOST}:${ZBX_PORT}/api_jsonrpc.php" | grep -q "200\|412"; then
   ok "Zabbix API on ${ZBX_HOST}:${ZBX_PORT}"
 else
   bad "Zabbix API unreachable on ${ZBX_HOST}:${ZBX_PORT}"
@@ -29,7 +31,7 @@ else
 fi
 
 echo "-- SNMP loader present --"
-command -v snmpwalk >/dev/null 2>&1 && ok "snmpwalk present" || bad "snmpwalk missing (apt install snmp)"
+command -v snmpwalk >/dev/null 2>&1 && ok "snmpwalk present" || bad "snmpwalk missing (sudo dnf install -y net-snmp-utils)"
 
 echo "-- OpenSearch reachable from UAT-01 --"
 if curl -s --max-time 5 -o /dev/null -w "%{http_code}" "http://${DATA_VM_IP}:9200" | grep -q 200; then
@@ -75,7 +77,7 @@ if [ -f config/snmp/oid_mapping.csv ]; then
     echo "  [WARN] oid_mapping.csv is still the stub — run capture_walk.sh then fill real OIDs"
   fi
 else
-  bad "config/snmp/oid_mapping.csv missing"
+  bad "config/snmp/oid_mapping.csv missing (cp config/snmp/oid_mapping.csv.example config/snmp/oid_mapping.csv, then fill real OIDs per Runbook §3-4)"
 fi
 
 echo "-- template remap dry-run (guardrail preview) --"

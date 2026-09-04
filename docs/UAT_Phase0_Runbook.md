@@ -63,11 +63,13 @@ snmpwalk -v2c -c <REAL_COMMUNITY> -On 172.22.248.4 .1.3.6.1.2.1.1
 ```
 
 ## 4. Fill `config/snmp/oid_mapping.csv`
-For every OID the walk exposes that we monitor, add a row:
-`sim_oid,real_oid,item_name,vendor,data_type`
+Start from the tracked header-only template, then add one row per monitored OID:
+```bash
+cp config/snmp/oid_mapping.csv.example config/snmp/oid_mapping.csv
+```
+Row format: `sim_oid,real_oid,item_name,vendor,data_type`
 - `sim_oid` = the suffix used in the current templates (e.g. `1.1.0` for ATM Operational Status).
-- `real_oid` = the real vendor enterprise OID from the walk (e.g. `.1.3.6.1.4.1.37513.1.1.0`).
-The first example row is NCR ATM Operational Status — extend it, do **not** delete it.
+- `real_oid` = the real vendor enterprise OID from the walk (e.g. `.1.3.6.1.4.1.37513.1.1.0` for NCR ATM Operational Status).
 
 ## 5. Remap the Zabbix templates (one command)
 ```bash
