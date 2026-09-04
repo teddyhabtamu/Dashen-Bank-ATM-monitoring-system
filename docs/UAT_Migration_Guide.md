@@ -48,11 +48,20 @@ The important UAT work is three-fold:
   > bastion mapping above for that VM.
 - [ ] **RHEL 9** with subscription / repo access on both
 - [ ] **GitHub SSH key or token** on both (to clone the repo)
-- [ ] (Handled by other teams, verify later) firewall/VLAN rules:
-  - UAT-01 (app, 172.22.10.45) → UAT-02 (data, 172.22.10.60) **TCP 9200** (OpenSearch)
-  - UAT-02 (data, 172.22.10.60) → UAT-01 (app, 172.22.10.45) **TCP 5432** (PostgreSQL)
-  - UAT-01: **8080, 3000, 8082, 8888** reachable from your laptop
-  - Repo server 172.25.37.4 → both servers **TCP 443, 80** (updates)
+- [ ] Firewall rules requested from Cloud team (use this table in the change request —
+  return traffic on established connections is assumed):
+
+  | # | Source | Destination | Port / Proto | Purpose | Required |
+  |---|--------|-------------|--------------|---------|----------|
+  | 1 | UAT-01 app (172.22.10.45) | UAT-02 data (172.22.10.60) | TCP 9200 | OpenSearch API — Filebeat EJ shipping, Report Portal EJ counts, health checks | Yes |
+  | 2 | UAT-02 data (172.22.10.60) | UAT-01 app (172.22.10.45) | TCP 5432 | PostgreSQL — ISO 8583 gateway writes `atm_transactions` | Yes |
+  | 3 | UAT-01 ↔ UAT-02 | both ways | TCP 22 | SSH between the VMs (admin, `scp` file copies during deploy) | Recommended |
+  | 4 | UAT-01 (172.22.10.45) | Test ATMs 172.22.248.4, 172.23.248.6 | UDP 161 | SNMP polling of the 2 real test ATMs | Yes |
+  | 5 | Test ATMs 172.22.248.4, 172.23.248.6 | UAT-01 (172.22.10.45) | UDP + TCP 514 | EJ syslog forwarding to Filebeat | Yes |
+  | 6 | ISO 8583 switch | UAT-02 (172.22.10.60) | TCP 9876 | Real transaction feed into the gateway | Only if real ISO 8583 is in scope |
+  | 7 | Admin laptop | UAT-01 (172.22.10.45) | TCP 8080, 3000, 8082, 8888 | Zabbix, Grafana, GLPI, Report Portal UIs | Yes |
+  | 8 | Admin laptop | UAT-02 (172.22.10.60) | TCP 5601, 9200 | OpenSearch Dashboards + API checks | Yes |
+  | 9 | Repo server 172.25.37.4 | Both UAT VMs | TCP 443, 80 | OS/package updates | Yes |
 
 ---
 
