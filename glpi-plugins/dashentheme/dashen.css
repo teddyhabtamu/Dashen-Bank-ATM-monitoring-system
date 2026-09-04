@@ -30,12 +30,10 @@
  * with a direct !important rule. No badge — the white lockup reads as-is
  * on the navy header. Path is relative to this CSS file.
  * -------------------------------------------------------------------------- */
-span.glpi-logo {
-    background-image: url("pics/dashen-bank-logo.png") !important;
-    background-repeat: no-repeat !important;
-    background-position: center !important;
-    background-size: contain !important;
-    background-color: transparent !important;
+span.glpi-logo,
+.page-anonymous span.glpi-logo,
+.navbar-brand span.glpi-logo {
+    background: transparent url("pics/dashen-bank-logo.png") no-repeat center / contain !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -117,6 +115,40 @@ header.navbar a,
     color: #FFFFFF;
 }
 .navbar input::placeholder { color: rgba(255, 255, 255, 0.65); }
+
+/* Header dropdown menus (profile/user menu): light menu, dark text.
+   Scoped !important because the header forces its links white. */
+.navbar .dropdown-menu,
+header.navbar .dropdown-menu {
+    background-color: #FFFFFF;
+    border: 1px solid var(--dashen-border);
+}
+.navbar .dropdown-menu .dropdown-item,
+.navbar .dropdown-menu a.dropdown-item,
+header.navbar .dropdown-menu a {
+    color: var(--dashen-text) !important;
+}
+.navbar .dropdown-menu .dropdown-item:hover,
+.navbar .dropdown-menu .dropdown-item:focus {
+    background-color: #E9EDF7;
+    color: var(--dashen-navy) !important;
+}
+.navbar .dropdown-menu .dropdown-item.active,
+.navbar .dropdown-menu .dropdown-item:active {
+    background-color: var(--dashen-blue);
+    color: #FFFFFF !important;
+}
+.navbar .dropdown-menu .dropdown-header {
+    color: var(--dashen-gold-dark) !important;
+}
+.navbar .dropdown-menu .dropdown-item-text,
+.navbar .dropdown-menu .dropdown-divider + span,
+.navbar .dropdown-menu span.text-muted {
+    color: var(--dashen-muted) !important;
+}
+.navbar .dropdown-menu .dropdown-divider {
+    border-color: var(--dashen-border);
+}
 
 /* --------------------------------------------------------------------------
  * 4. Left menu / sidebar (solid navy) + all its text
@@ -419,6 +451,7 @@ select.form-select option:checked {
  * -------------------------------------------------------------------------- */
 body.login,
 .login-page,
+.page-anonymous,
 #boxlogin {
     background-color: var(--dashen-navy);
     color: var(--dashen-text);
