@@ -204,9 +204,13 @@ for i in {1..30}; do
   echo "waiting for PostgreSQL ($i/30)"; sleep 3
 done
 
-# 2. Create the custom tables (atm_locations, atm_transactions, ...)
-docker exec -i zabbix-db psql -U zabbix -d zabbix < config/postgres/atm_custom_tables.sql
+# 2. Create the UAT tables + seed the 2 test ATMs
+docker exec -i zabbix-db psql -U zabbix -d zabbix < config/postgres/uat_tables.sql
+docker exec -i zabbix-db psql -U zabbix -d zabbix < config/postgres/seed_uat_atms.sql
 docker exec zabbix-db psql -U zabbix -d zabbix -c "\dt"     # confirm the custom tables exist
+docker exec zabbix-db psql -U zabbix -d zabbix -c "SELECT atm_id, vendor, ip_address FROM atm_locations;"
+# Export the CSV the Zabbix sync script reads (gitignored, regenerated here)
+docker exec zabbix-db psql -U zabbix -d zabbix -c "COPY atm_locations TO STDOUT WITH CSV HEADER" > config/postgres/atm_locations.csv
 
 # 3. Let the UAT-02 gateway reach this DB over the network
 docker exec zabbix-db bash -c "echo \"listen_addresses = '*'\" >> /var/lib/postgresql/data/postgresql.conf"
@@ -214,8 +218,9 @@ docker exec zabbix-db bash -c "echo 'host all all 172.22.10.0/24 md5' >> /var/li
 docker compose -f docker-compose.yml restart postgres
 
 # 4. Build the images that come from this repo, then start everything
-docker compose -f docker-compose.yml build --no-cache \
-  atm-sim-engine atm-txn-engine atm-ej-engine state-manager report-portal
+# (UAT has no simulator engines — only the analysis/portal services build locally)
+docker compose -f docker-compose.yml build \
+  state-manager anomaly-detector network-correlator report-portal
 docker compose -f docker-compose.yml up -d
 sleep 60
 
