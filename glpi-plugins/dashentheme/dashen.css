@@ -36,6 +36,18 @@ span.glpi-logo,
     background: transparent url("pics/dashen-bank-logo.png") no-repeat center / contain !important;
 }
 
+/* Login page paints its mark via `content:` (generated content), not a
+   background — clear it or both logos stack (core: .page-anonymous .glpi-logo
+   sets `content: var(--logo)` + 200x110). */
+.page-anonymous .glpi-logo {
+    content: normal !important;
+}
+
+/* The anonymous <body> itself (viewport margin around <main>). */
+body.welcome-anonymous {
+    background-color: var(--dashen-navy);
+}
+
 /* --------------------------------------------------------------------------
  * 1. Base text
  * -------------------------------------------------------------------------- */
