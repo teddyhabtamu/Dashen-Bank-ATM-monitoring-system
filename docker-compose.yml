@@ -161,8 +161,8 @@ services:
 
   anomaly-detector:
     build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
+      context: .
+      dockerfile: simulators/Dockerfile.atm-simulator
     container_name: anomaly-detector
     command: python3 /app/anomaly_detector.py
     environment:
@@ -186,8 +186,8 @@ services:
 
   network-correlator:
     build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
+      context: .
+      dockerfile: simulators/Dockerfile.atm-simulator
     container_name: network-correlator
     command: python3 /app/network_correlator.py
     environment:
