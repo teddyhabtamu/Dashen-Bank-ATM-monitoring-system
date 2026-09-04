@@ -77,7 +77,8 @@ CARDS = [
 def get_db():
     return psycopg2.connect(
         host=DB_HOST, dbname=DB_NAME,
-        user=DB_USER, password=DB_PASS
+        user=DB_USER, password=DB_PASS,
+        connect_timeout=10  # fail fast so the retry loop stays visible (cross-VM link)
     )
 
 def load_atms_from_db(conn):
