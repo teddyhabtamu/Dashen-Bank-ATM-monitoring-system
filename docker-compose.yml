@@ -166,6 +166,7 @@ services:
     container_name: anomaly-detector
     command: python3 /app/anomaly_detector.py
     environment:
+      PYTHONUNBUFFERED: "1"
       DB_HOST: "postgres"
       DB_NAME: "zabbix"
       DB_USER: "zabbix"
@@ -191,6 +192,7 @@ services:
     container_name: network-correlator
     command: python3 /app/network_correlator.py
     environment:
+      PYTHONUNBUFFERED: "1"
       DB_HOST: "postgres"
       DB_NAME: "zabbix"
       DB_USER: "zabbix"
@@ -214,6 +216,7 @@ services:
     container_name: state-manager
     command: python3 /app/state_manager.py
     environment:
+      PYTHONUNBUFFERED: "1"
       DB_HOST: "postgres"
       DB_NAME: "zabbix"
       DB_USER: "zabbix"
