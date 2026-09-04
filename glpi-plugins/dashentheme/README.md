@@ -4,22 +4,33 @@ Applies Dashen branding — navy `#012169` / indigo `#273274` / gold `#FDD79A` �
 to GLPI 10.x (Tabler UI): header, menu, buttons, cards, tables, tabs, forms,
 Select2 dropdowns, badges, and the login page.
 
-## Install (local laptop or UAT-01 app server)
+## Install
+
+**Fresh deploy (compose handles files):** the `glpi` service mounts this folder
+to both `marketplace/dashentheme` (registration) and `public/plugins/dashentheme`
+(web serving — GLPI 10 serves plugin assets from there). After `docker compose up -d`:
 
 ```bash
-# 1. Copy the plugin into GLPI (diouxx image path):
-docker cp glpi-plugins/dashentheme glpi:/var/www/html/glpi/marketplace/dashentheme
-docker exec glpi chown -R www-data:www-data /var/www/html/glpi/marketplace/dashentheme
-
-# 2. Enable it — either in the UI:
-#      Setup > Plugins > "Dashen Bank Theme" > Install + Enable
-#    or via CLI:
-docker exec glpi php /var/www/html/glpi/bin/console plugin:install dashentheme
-docker exec glpi php /var/www/html/glpi/bin/console plugin:activate dashentheme
+# Enable it — either in the UI:
+#   Setup > Plugins > "Dashen Bank Theme" > Install + Enable
+# or via CLI (as www-data, not root):
+docker exec -u www-data glpi php /var/www/html/glpi/bin/console plugin:install dashentheme
+docker exec -u www-data glpi php /var/www/html/glpi/bin/console plugin:activate dashentheme
 ```
 
-Hard-refresh the browser (`Ctrl+Shift+R`). To persist across recreates, the
-`glpi-root` volume already covers `marketplace/`, so nothing else is needed.
+**Existing install (manual file copy):**
+
+```bash
+docker cp glpi-plugins/dashentheme glpi:/var/www/html/glpi/marketplace/dashentheme
+docker exec glpi chown -R www-data:www-data /var/www/html/glpi/marketplace/dashentheme
+# web-serving symlink (DocumentRoot is glpi/public):
+docker exec glpi mkdir -p /var/www/html/glpi/public/plugins
+docker exec glpi ln -sfn ../../marketplace/dashentheme /var/www/html/glpi/public/plugins/dashentheme
+# then Install + Enable as above
+```
+
+Hard-refresh the browser (`Ctrl+Shift+R`). The `glpi-root` volume persists
+everything, so the theme survives container recreates.
 
 ## Logo
 

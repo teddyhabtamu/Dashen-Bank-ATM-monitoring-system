@@ -83,6 +83,10 @@ services:
       - "8082:80"
     volumes:
       - glpi-root:/var/www/html/glpi
+      # Dashen Bank theme plugin (repo-tracked). The public/ mount is what the
+      # web server actually serves (/plugins/dashentheme/...) — see README.
+      - ./glpi-plugins/dashentheme:/var/www/html/glpi/marketplace/dashentheme:ro
+      - ./glpi-plugins/dashentheme:/var/www/html/glpi/public/plugins/dashentheme:ro
     depends_on:
       - mariadb
     restart: unless-stopped

@@ -12,8 +12,10 @@ define('PLUGIN_DASHENTHEME_VERSION', '1.0.0');
 
 function plugin_init_dashentheme() {
     global $PLUGIN_HOOKS;
-    // Path is relative to this plugin's directory.
+    // Path is relative to this plugin's directory. The anonymous hook covers
+    // the login page; the regular hook covers authenticated pages.
     $PLUGIN_HOOKS['add_css']['dashentheme'][] = 'dashen.css';
+    $PLUGIN_HOOKS['add_css_anonymous_page']['dashentheme'][] = 'dashen.css';
 }
 
 function plugin_version_dashentheme() {
