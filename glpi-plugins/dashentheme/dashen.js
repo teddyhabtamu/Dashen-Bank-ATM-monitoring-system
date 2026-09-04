@@ -30,7 +30,10 @@
             var img = document.createElement('img');
             img.src = LOGO_URL;
             img.alt = 'Dashen Bank';
-            img.style.cssText = 'max-width:100%;max-height:100%;width:auto;height:auto;';
+            // block (not inline): an inline img sits on the text baseline and
+            // renders a few px below a CSS background of the same box, which
+            // reads as a doubled/ghosted logo.
+            img.style.cssText = 'display:block;max-width:100%;max-height:100%;width:auto;height:auto;margin:auto;';
             el.appendChild(img);
         });
     }
