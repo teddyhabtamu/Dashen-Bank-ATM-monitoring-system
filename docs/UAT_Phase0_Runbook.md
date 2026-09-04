@@ -36,14 +36,14 @@ The seed uses a `CHANGE_ME` placeholder. Replace it with the bank-provided strin
 For **v2c**:
 ```bash
 docker exec -i zabbix-db psql -U zabbix -d zabbix -c \
-  "UPDATE atm_locations SET snmp_community='<REAL_COMMUNITY>', snmp_version='v2c' WHERE atm_id IN ('ATM-TEST-NCR','ATM-TEST-GRG');"
+  "UPDATE atm_locations SET snmp_community='<REAL_COMMUNITY>', snmp_version=2 WHERE atm_id IN ('ATM-TEST-NCR','ATM-TEST-GRG');"
 ```
 For **v3**, `atm_locations` only stores `snmp_version` (it has no columns for v3
 credentials), so set the version in the DB and supply the v3 secrets via environment
 variables when you run the sync in Step 6:
 ```bash
 docker exec -i zabbix-db psql -U zabbix -d zabbix -c \
-  "UPDATE atm_locations SET snmp_version='v3' WHERE atm_id IN ('ATM-TEST-NCR','ATM-TEST-GRG');"
+  "UPDATE atm_locations SET snmp_version=3 WHERE atm_id IN ('ATM-TEST-NCR','ATM-TEST-GRG');"
 export SNMPV3_USER=<user> SNMPV3_AUTH_PROTO=SHA SNMPV3_AUTH_PASS=<authpass> \
        SNMPV3_PRIV_PROTO=AES SNMPV3_PRIV_PASS=<privpass> SNMPV3_LEVEL=authPriv
 ```
@@ -88,7 +88,7 @@ docker compose build state-manager
 python3 scripts/sync_atms_to_zabbix.py --apply --import-templates
 ```
 This imports the remapped templates and creates Zabbix hosts named by `atm_id`
-(`ATM-TEST-NCR`, `ATM-TEST-GRG`) with SNMP v2c (or v3 if `snmp_version='v3'` and the
+(`ATM-TEST-NCR`, `ATM-TEST-GRG`) with SNMP v2c (or v3 if `snmp_version=3` and the
 `SNMPV3_*` env vars are exported — see Step 2), port 161, and the real community.
 After a successful remap, **commit the rewritten templates to `uat-prep`** so the
 cutover is reproducible:

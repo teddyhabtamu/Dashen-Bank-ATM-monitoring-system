@@ -587,7 +587,7 @@ INSERT INTO atm_locations (
     '2026-07-29',                 -- install_date: when the ATM was installed
     'active',                     -- status: 'active' (or 'inactive' to disable)
     'dashen_atm',                 -- snmp_community: SNMP community string
-    'v2c',                        -- snmp_version: SNMP version (v2c)
+    2,                            -- snmp_version: SNMP version as INT (2=v2c, 3=v3)
     'NCR_APTRA',                  -- ej_log_format: EJ log format (NCR_APTRA or GRG)
     'Bole International Branch ATM', -- atm_name: display name
     '192.168.1.100'               -- ip_address: real ATM IP
