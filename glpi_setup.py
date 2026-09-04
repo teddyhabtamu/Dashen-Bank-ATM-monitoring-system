@@ -14,24 +14,33 @@ import requests, json, os, sys, base64, time
 GLPI_URL = os.environ.get('GLPI_URL', "http://glpi:80/apirest.php")
 # No secrets in source — provide via environment (see .env / setup_new_machine.sh):
 #   GLPI_APP_TOKEN       GLPI API client app token
-#   GLPI_USER            GLPI API user (default: glpi)
-#   GLPI_API_PASSWORD    GLPI API user password
+#   GLPI_USER_TOKEN      GLPI *user* token (Setup → Users → glpi → API).
+#                        Preferred: works even when "login with credentials"
+#                        is disabled in Setup → General → API.
+#   GLPI_USER            GLPI API user (default: glpi) — legacy fallback only
+#   GLPI_API_PASSWORD    GLPI API user password — legacy fallback only
 APP_TOKEN = os.environ.get('GLPI_APP_TOKEN', '')
+USER_TOKEN = os.environ.get('GLPI_USER_TOKEN', '')
 USER = os.environ.get('GLPI_USER', "glpi")
 PASS = os.environ.get('GLPI_API_PASSWORD', '')
 
-if not APP_TOKEN or not PASS:
-    sys.exit("ERROR: set GLPI_APP_TOKEN and GLPI_API_PASSWORD environment "
-             "variables before running glpi_setup.py (they are machine-specific "
-             "and must not be committed to git).")
+if not APP_TOKEN or (not USER_TOKEN and not PASS):
+    sys.exit("ERROR: set GLPI_APP_TOKEN plus GLPI_USER_TOKEN (preferred) or "
+             "GLPI_API_PASSWORD environment variables before running "
+             "glpi_setup.py (they are machine-specific and must not be "
+             "committed to git).")
 
 headers = {"Content-Type": "application/json", "App-Token": APP_TOKEN}
 
 def get_session():
-    auth = base64.b64encode(f"{USER}:{PASS}".encode()).decode()
+    if USER_TOKEN:
+        auth_header = {"Authorization": f"user_token {USER_TOKEN}"}
+    else:
+        auth = base64.b64encode(f"{USER}:{PASS}".encode()).decode()
+        auth_header = {"Authorization": f"Basic {auth}"}
     try:
         r = requests.get(f"{GLPI_URL}/initSession",
-            headers={**headers, "Authorization": f"Basic {auth}"},
+            headers={**headers, **auth_header},
             params={"expand_dropdowns": True}, timeout=20)
     except requests.RequestException as e:
         print(f"  FAIL: cannot reach GLPI API at {GLPI_URL} — {e}")
