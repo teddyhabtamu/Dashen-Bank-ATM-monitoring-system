@@ -23,34 +23,29 @@
 
 /* --------------------------------------------------------------------------
  * 0. Logo (bundled: pics/dashen-logo.svg + .png — official Dashen mark)
- * The swap hides GLPI's default <img> (layout preserved) and paints the
- * Dashen mark on the parent link. Paths are relative to this CSS file, so
- * they resolve wherever the plugin is installed (plugins/ or marketplace/).
- * If a rule misses on your version, F12 the logo and adjust the parent.
+ * GLPI renders its logo as <span class="glpi-logo"> painted from the
+ * --glpi-logo* variables (core: css/includes/_base.scss). We point those
+ * variables at the Dashen mark. The mark itself is dark navy, so it sits on
+ * a white rounded badge to stay visible on the navy header.
+ * Paths are relative to this CSS file (/plugins/dashentheme/).
  * -------------------------------------------------------------------------- */
-.navbar-brand {
-    background: url("pics/dashen-logo.svg") no-repeat left center;
-    background-size: contain;
-    min-width: 170px;
-    min-height: 38px;
+:root {
+    --glpi-logo:                 url("pics/dashen-logo.svg");
+    --glpi-logo-reduced:         url("pics/dashen-logo.svg");
+    --glpi-logo-light:           url("pics/dashen-logo.svg");
+    --glpi-logo-light-reduced:   url("pics/dashen-logo.svg");
+    --glpi-logo-dark:            url("pics/dashen-logo.svg");
+    --glpi-logo-dark-reduced:    url("pics/dashen-logo.svg");
+    --glpi-logo-dark-login:      url("pics/dashen-logo.svg");
+    --glpi-logo-light-login:     url("pics/dashen-logo.svg");
 }
-.navbar-brand img { visibility: hidden; }
 
-/* Login page logo  [CHECK] parent selector against your version */
-.login .card img[src*="logo"],
-#boxlogin img,
-.card img[src*="logo-GLPI"],
-.card img[src*="logo-G"] {
-    visibility: hidden;
-    height: 0;
-}
-.login .card,
-#boxlogin .card {
-    padding-top: 84px;
-    background-image: url("pics/dashen-logo.svg");
-    background-repeat: no-repeat;
-    background-position: center 18px;
-    background-size: 64px 64px;
+/* White badge so the navy mark reads on the navy header (both the main and
+   the anonymous/login headers use span.glpi-logo). */
+.navbar-brand .glpi-logo,
+a.navbar-brand > span.glpi-logo {
+    background-color: #FFFFFF !important;
+    border-radius: 9px;
 }
 
 /* --------------------------------------------------------------------------
