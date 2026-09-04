@@ -18,6 +18,12 @@ filebeat.inputs:
     enabled: true
     protocol.udp:
       host: "0.0.0.0:514"
+    fields:
+      log_type: atm_ej
+    fields_under_root: true
+
+  - type: syslog
+    enabled: true
     protocol.tcp:
       host: "0.0.0.0:514"
     fields:
