@@ -1,55 +1,47 @@
 /* ==========================================================================
- * Dashen Bank Theme for GLPI  •  sample v1.0
+ * Dashen Bank Theme for GLPI  •  v1.1 (solid, no gradients)
  * Palette (official brand): navy #012169  •  indigo #273274  •  gold #FDD79A
  *
- * Loaded by the "Dashen Bank Theme" plugin (setup.php, add_css hook).
- * Targets GLPI 10.x (Tabler-based UI). Selectors marked [CHECK] are the few
- * GLPI-specific ones — confirm once with browser devtools (F12) against your
- * exact GLPI version and adjust if a rule doesn't stick.
+ * Loaded by the "Dashen Bank Theme" plugin (setup.php: add_css +
+ * add_css_anonymous_page hooks). Targets GLPI 10.x (Tabler-based UI).
+ * Flat solid colors throughout — no gradients by design.
  * ========================================================================== */
 
 :root {
     --dashen-navy:        #012169;
     --dashen-navy-dark:   #001642;
     --dashen-blue:        #273274;
-    --dashen-blue-light:  #3D4A9E;
+    --dashen-blue-hover:  #1B2459;
     --dashen-gold:        #FDD79A;
-    --dashen-gold-dark:   #E9A93F;
+    --dashen-gold-dark:   #D99426;
     --dashen-bg:          #F2F4F9;
-    --dashen-card-border: #DCE3F1;
+    --dashen-surface:     #FFFFFF;
+    --dashen-border:      #DCE3F1;
     --dashen-text:        #1B2340;
     --dashen-muted:       #5B6B8C;
+    --dashen-header-text: #FFFFFF;
+    --dashen-menu-text:   #C9D2EA;
 }
 
 /* --------------------------------------------------------------------------
- * 0. Logo (bundled: pics/dashen-logo.svg + .png — official Dashen mark)
- * GLPI renders its logo as <span class="glpi-logo"> painted from the
- * --glpi-logo* variables (core: css/includes/_base.scss). We point those
- * variables at the Dashen mark. The mark itself is dark navy, so it sits on
- * a white rounded badge to stay visible on the navy header.
- * Paths are relative to this CSS file (/plugins/dashentheme/).
+ * 0. Logo — official Dashen mark, bundled (pics/dashen-logo.svg).
+ * GLPI paints <span class="glpi-logo"> from theme variables; we bypass them
+ * with a direct !important rule so the mark shows regardless of which
+ * variable the active palette uses. The mark is dark navy on transparency,
+ * so it sits on a white rounded badge — without it the logo is invisible
+ * on the navy header. Path is relative to this CSS file.
  * -------------------------------------------------------------------------- */
-:root {
-    --glpi-logo:                 url("pics/dashen-logo.svg");
-    --glpi-logo-reduced:         url("pics/dashen-logo.svg");
-    --glpi-logo-light:           url("pics/dashen-logo.svg");
-    --glpi-logo-light-reduced:   url("pics/dashen-logo.svg");
-    --glpi-logo-dark:            url("pics/dashen-logo.svg");
-    --glpi-logo-dark-reduced:    url("pics/dashen-logo.svg");
-    --glpi-logo-dark-login:      url("pics/dashen-logo.svg");
-    --glpi-logo-light-login:     url("pics/dashen-logo.svg");
-}
-
-/* White badge so the navy mark reads on the navy header (both the main and
-   the anonymous/login headers use span.glpi-logo). */
-.navbar-brand .glpi-logo,
-a.navbar-brand > span.glpi-logo {
+span.glpi-logo {
+    background-image: url("pics/dashen-logo.svg") !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 76% 76% !important;
     background-color: #FFFFFF !important;
     border-radius: 9px;
 }
 
 /* --------------------------------------------------------------------------
- * 1. Base
+ * 1. Base text
  * -------------------------------------------------------------------------- */
 body {
     background-color: var(--dashen-bg);
@@ -57,48 +49,79 @@ body {
     font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
-a { color: var(--dashen-blue); }
-a:hover { color: var(--dashen-navy); }
+p, span, div, td, th, li, label { color: inherit; }
 
-h1, h2, h3, .card-title, .page-title {
-    color: var(--dashen-navy);
+.text-muted, .form-text, small.text-muted, .blockquote-footer {
+    color: var(--dashen-muted) !important;
+}
+
+small, .small { color: var(--dashen-muted); }
+
+code { color: var(--dashen-blue); }
+
+::placeholder { color: #8A97B5 !important; opacity: 1; }
+::-webkit-input-placeholder { color: #8A97B5 !important; }
+::-moz-placeholder { color: #8A97B5 !important; opacity: 1; }
+
+:focus-visible {
+    outline: 2px solid var(--dashen-gold-dark);
+    outline-offset: 1px;
 }
 
 /* --------------------------------------------------------------------------
- * 2. Top header / navbar  [CHECK] .navbar-brand against your version
+ * 2. Links & headings
+ * -------------------------------------------------------------------------- */
+a { color: var(--dashen-blue); }
+a:hover, a:focus { color: var(--dashen-navy); }
+
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6,
+.page-title, .card-title, .modal-title, legend {
+    color: var(--dashen-navy);
+}
+
+.card-subtitle, .page-subtitle, .page-pretitle {
+    color: var(--dashen-muted);
+}
+
+/* --------------------------------------------------------------------------
+ * 3. Top header (solid navy) + header text
  * -------------------------------------------------------------------------- */
 .navbar,
 header.navbar {
-    background: linear-gradient(90deg, var(--dashen-navy-dark) 0%, var(--dashen-navy) 55%, var(--dashen-blue) 100%) !important;
+    background-color: var(--dashen-navy) !important;
     border-bottom: 3px solid var(--dashen-gold);
 }
 
 .navbar .navbar-brand,
 .navbar .nav-link,
 .navbar .navbar-nav .nav-link,
-header.navbar a {
-    color: #FFFFFF !important;
+header.navbar a,
+.navbar .dropdown-toggle {
+    color: var(--dashen-header-text) !important;
 }
 
 .navbar .nav-link:hover,
 .navbar .navbar-nav .nav-link:hover,
-.navbar .nav-link.active {
+.navbar .nav-link.active,
+.navbar .nav-link.show {
     color: var(--dashen-gold) !important;
 }
 
-/* Header search box on dark background */
+.navbar .navbar-text { color: var(--dashen-menu-text); }
+
+/* Header search + user-menu inputs on the dark background */
 .navbar input[type="text"],
+.navbar input[type="search"],
 .navbar .form-control {
     background-color: rgba(255, 255, 255, 0.12);
     border-color: rgba(255, 255, 255, 0.25);
     color: #FFFFFF;
 }
-.navbar input::placeholder { color: rgba(255, 255, 255, 0.6); }
-
-/* (Header logo is swapped in §0 above.) */
+.navbar input::placeholder { color: rgba(255, 255, 255, 0.65); }
 
 /* --------------------------------------------------------------------------
- * 3. Left menu / sidebar  [CHECK] .sidebar against your version
+ * 4. Left menu / sidebar (solid navy) + all its text
  * -------------------------------------------------------------------------- */
 .sidebar,
 .navbar-vertical,
@@ -109,7 +132,7 @@ aside.navbar {
 .sidebar .nav-link,
 .navbar-vertical .nav-link,
 aside.navbar .nav-link {
-    color: #C9D2EA !important;
+    color: var(--dashen-menu-text) !important;
     border-left: 3px solid transparent;
 }
 
@@ -128,64 +151,107 @@ aside.navbar .nav-link {
 }
 
 .sidebar .nav-link i,
-.navbar-vertical .nav-link i {
+.navbar-vertical .nav-link i,
+.sidebar .nav-link .ti,
+.navbar-vertical .nav-link .ti {
     color: var(--dashen-gold);
 }
 
+.sidebar .nav-link .badge,
+.navbar-vertical .nav-link .badge {
+    background-color: var(--dashen-gold);
+    color: var(--dashen-navy);
+}
+
+.sidebar .navbar-heading,
+.navbar-vertical .navbar-heading {
+    color: var(--dashen-gold);
+    font-weight: 600;
+}
+
 /* --------------------------------------------------------------------------
- * 4. Buttons
+ * 5. Buttons (every variant keeps readable text)
  * -------------------------------------------------------------------------- */
 .btn-primary {
     background-color: var(--dashen-blue);
     border-color: var(--dashen-blue);
+    color: #FFFFFF;
 }
 .btn-primary:hover,
 .btn-primary:focus,
-.btn-primary:active {
-    background-color: var(--dashen-navy) !important;
-    border-color: var(--dashen-navy) !important;
+.btn-primary:active,
+.btn-primary.active {
+    background-color: var(--dashen-blue-hover) !important;
+    border-color: var(--dashen-blue-hover) !important;
+    color: #FFFFFF !important;
 }
 
 .btn-outline-primary {
     color: var(--dashen-blue);
     border-color: var(--dashen-blue);
 }
-.btn-outline-primary:hover {
+.btn-outline-primary:hover,
+.btn-outline-primary:active {
     background-color: var(--dashen-blue);
     border-color: var(--dashen-blue);
     color: #FFFFFF;
 }
 
-/* Gold accent for the main submit action on forms */
-form .btn-primary[type="submit"] {
-    box-shadow: 0 1px 0 var(--dashen-gold-dark);
+.btn-link { color: var(--dashen-blue); }
+.btn-link:hover { color: var(--dashen-navy); }
+
+.btn-ghost-primary, .btn-ghost {
+    color: var(--dashen-blue);
+}
+.btn-ghost-primary:hover, .btn-ghost:hover {
+    background-color: #E9EDF7;
+    color: var(--dashen-navy);
 }
 
-.btn:focus, .btn-primary:focus {
+.btn:focus {
     box-shadow: 0 0 0 0.25rem rgba(39, 50, 116, 0.25);
 }
 
 /* --------------------------------------------------------------------------
- * 5. Cards & page headers
+ * 6. Cards, page headers, modals, lists
  * -------------------------------------------------------------------------- */
 .card {
-    border: 1px solid var(--dashen-card-border);
+    border: 1px solid var(--dashen-border);
     border-top: 3px solid var(--dashen-blue);
+    color: var(--dashen-text);
 }
 
 .card-header {
-    background-color: #FFFFFF;
-    border-bottom: 1px solid var(--dashen-card-border);
+    background-color: var(--dashen-surface);
+    border-bottom: 1px solid var(--dashen-border);
 }
 .card-header .card-title { color: var(--dashen-navy); }
+.card-header .card-subtitle { color: var(--dashen-muted); }
+.card-footer { color: var(--dashen-muted); }
 
-.page-header {
-    border-bottom: 2px solid var(--dashen-gold);
+.page-header { border-bottom: 2px solid var(--dashen-gold); }
+
+.modal-header { border-bottom: 2px solid var(--dashen-gold); }
+.modal-header .modal-title { color: var(--dashen-navy); }
+.modal-footer { color: var(--dashen-muted); }
+
+.list-group-item { color: var(--dashen-text); }
+.list-group-item.active {
+    background-color: var(--dashen-blue);
+    border-color: var(--dashen-blue);
+    color: #FFFFFF;
 }
+.list-group-item small, .list-group-item .text-muted { color: inherit; }
+.list-group-item.active small { color: var(--dashen-menu-text); }
+
+/* Empty states */
+.empty-title { color: var(--dashen-navy); }
+.empty-subtitle { color: var(--dashen-muted); }
 
 /* --------------------------------------------------------------------------
- * 6. Tables (ticket lists, assets, …)
+ * 7. Tables (ticket/asset lists) — header white-on-navy, cells dark
  * -------------------------------------------------------------------------- */
+.table { color: var(--dashen-text); }
 .table thead th,
 table.tab_cadre thead th,
 .tab_cadrehov th {
@@ -194,23 +260,30 @@ table.tab_cadre thead th,
     border-color: var(--dashen-navy-dark);
 }
 .table thead th a { color: var(--dashen-gold); }
+.table thead th a:hover { color: #FFFFFF; }
 
+.table tbody td { color: var(--dashen-text); }
+.table tbody td a { color: var(--dashen-blue); }
+.table tbody tr:nth-child(even) { background-color: #F7F9FD; }
 .table-hover tbody tr:hover,
 table.tab_cadre tbody tr:hover {
     background-color: #E9EDF7;
 }
+.table .text-muted { color: var(--dashen-muted) !important; }
 
-.table tbody tr:nth-child(even) { background-color: #F7F9FD; }
-
-/* Pagination active page */
+/* Pagination */
+.pagination .page-link { color: var(--dashen-blue); }
 .pagination .page-item.active .page-link {
     background-color: var(--dashen-blue);
     border-color: var(--dashen-blue);
+    color: #FFFFFF;
 }
+.pagination .page-item.disabled .page-link { color: var(--dashen-muted); }
 
 /* --------------------------------------------------------------------------
- * 7. Tabs
+ * 8. Tabs + breadcrumbs
  * -------------------------------------------------------------------------- */
+.nav-tabs { border-bottom-color: var(--dashen-border); }
 .nav-tabs .nav-link { color: var(--dashen-muted); }
 .nav-tabs .nav-link:hover { color: var(--dashen-navy); }
 .nav-tabs .nav-link.active {
@@ -218,40 +291,98 @@ table.tab_cadre tbody tr:hover {
     border-bottom: 3px solid var(--dashen-gold) !important;
     font-weight: 600;
 }
+.nav-tabs .nav-link .badge {
+    background-color: var(--dashen-blue);
+    color: #FFFFFF;
+}
+
+.breadcrumb-item { color: var(--dashen-muted); }
+.breadcrumb-item a { color: var(--dashen-blue); }
+.breadcrumb-item.active { color: var(--dashen-navy); }
 
 /* --------------------------------------------------------------------------
- * 8. Forms, inputs, dropdowns (incl. Select2)
+ * 9. Forms, inputs, dropdown menus, Select2 (all text states)
  * -------------------------------------------------------------------------- */
+.form-label, legend, .col-form-label {
+    color: var(--dashen-navy);
+    font-weight: 600;
+}
+.form-text, .invalid-feedback, .valid-feedback { font-size: 0.85em; }
+.form-text { color: var(--dashen-muted); }
+
+.form-control, .form-select {
+    color: var(--dashen-text);
+    border-color: var(--dashen-border);
+}
 .form-control:focus,
 .form-select:focus {
+    color: var(--dashen-text);
     border-color: var(--dashen-gold-dark);
     box-shadow: 0 0 0 0.25rem rgba(253, 215, 154, 0.45);
 }
-
-.form-label, legend { color: var(--dashen-navy); font-weight: 600; }
-
-/* Select2 single dropdown */
-.select2-container--default .select2-selection--single {
-    border: 1px solid #DCE3F1;
+.form-control:disabled, .form-control[readonly],
+.form-select:disabled {
+    color: var(--dashen-muted);
+    background-color: #EEF1F7;
 }
-.select2-container--default.select2-container--focus .select2-selection--single {
+
+/* Required-field asterisk stays red (semantic) */
+.required::after, span.required::after { color: #D63939; }
+
+/* Native dropdown options */
+select.form-select option { color: var(--dashen-text); }
+select.form-select option:checked {
+    background-color: var(--dashen-blue);
+    color: #FFFFFF;
+}
+
+/* Bootstrap dropdown menus */
+.dropdown-menu { color: var(--dashen-text); }
+.dropdown-item { color: var(--dashen-text); }
+.dropdown-item:hover, .dropdown-item:focus {
+    background-color: #E9EDF7;
+    color: var(--dashen-navy);
+}
+.dropdown-item.active, .dropdown-item:active {
+    background-color: var(--dashen-blue);
+    color: #FFFFFF;
+}
+.dropdown-header { color: var(--dashen-gold-dark); }
+.dropdown-item-text { color: var(--dashen-muted); }
+
+/* Select2 — rendered value, placeholder, search box, results */
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: var(--dashen-text);
+}
+.select2-container--default .select2-selection--single .select2-selection__placeholder {
+    color: #8A97B5;
+}
+.select2-container--default .select2-search--dropdown .select2-search__field {
+    color: var(--dashen-text);
+    border-color: var(--dashen-border);
+}
+.select2-container--default .select2-search--dropdown .select2-search__field:focus {
     border-color: var(--dashen-gold-dark);
     box-shadow: 0 0 0 0.25rem rgba(253, 215, 154, 0.45);
+    outline: none;
 }
-/* Select2 highlighted option */
+.select2-container--default .select2-results__option { color: var(--dashen-text); }
 .select2-container--default .select2-results__option--highlighted[aria-selected] {
     background-color: var(--dashen-blue);
+    color: #FFFFFF;
 }
-/* Select2 already-selected option */
 .select2-container--default .select2-results__option[aria-selected="true"] {
     background-color: var(--dashen-navy);
     color: #FFFFFF;
 }
-/* Multi-select chips */
+.select2-container--default .select2-results__message { color: var(--dashen-muted); }
 .select2-container--default .select2-selection--multiple .select2-selection__choice {
     background-color: var(--dashen-navy);
     border-color: var(--dashen-navy-dark);
     color: #FFFFFF;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+    color: var(--dashen-gold);
 }
 
 /* Checkboxes / radios / switches */
@@ -259,30 +390,40 @@ table.tab_cadre tbody tr:hover {
     background-color: var(--dashen-blue);
     border-color: var(--dashen-blue);
 }
+.form-check-label { color: var(--dashen-text); }
 
 /* --------------------------------------------------------------------------
- * 9. Badges, alerts, progress
+ * 10. Badges, alerts, progress, toasts
  * -------------------------------------------------------------------------- */
 .badge.bg-primary, .badge.badge-primary {
     background-color: var(--dashen-blue) !important;
+    color: #FFFFFF;
 }
+.badge.bg-secondary { color: #FFFFFF; }
+
+.alert { color: var(--dashen-text); }
 .alert-info {
     background-color: #E9EDF7;
-    border-color: var(--dashen-blue-light);
+    border-color: var(--dashen-blue);
     color: var(--dashen-navy);
 }
+.alert-warning { color: #5C3D00; }
+.alert .alert-title { color: inherit; font-weight: 600; }
+
+.progress { background-color: #E4E9F4; }
 .progress-bar { background-color: var(--dashen-blue); }
 
-/* Ticket priority accents (kept semantic, tinted to brand) */
-.badge.priority-6, .badge.bg-red { box-shadow: inset 0 -2px 0 var(--dashen-gold-dark); }
+.toast { color: var(--dashen-text); }
+.toast-header { color: var(--dashen-navy); }
 
 /* --------------------------------------------------------------------------
- * 10. Login page  [CHECK] selectors against your version
+ * 11. Login page (solid navy, white card, gold accents)
  * -------------------------------------------------------------------------- */
 body.login,
 .login-page,
 #boxlogin {
-    background: linear-gradient(135deg, var(--dashen-navy-dark) 0%, var(--dashen-navy) 60%, var(--dashen-blue) 100%);
+    background-color: var(--dashen-navy);
+    color: var(--dashen-text);
 }
 
 .login .card,
@@ -290,24 +431,35 @@ body.login,
     border: none;
     border-top: 4px solid var(--dashen-gold);
     box-shadow: 0 12px 40px rgba(0, 10, 40, 0.45);
+    color: var(--dashen-text);
 }
-
+.login .card .card-title,
+#boxlogin .card-title {
+    color: var(--dashen-navy);
+}
+.login label, .login .form-label,
+#boxlogin label {
+    color: var(--dashen-navy);
+}
+.login a, #boxlogin a { color: var(--dashen-blue); }
 .login .btn-primary,
 #boxlogin .btn-primary {
     background-color: var(--dashen-blue);
     font-weight: 600;
     letter-spacing: 0.02em;
+    color: #FFFFFF;
 }
 .login .btn-primary:hover,
 #boxlogin .btn-primary:hover {
-    background-color: var(--dashen-navy);
+    background-color: var(--dashen-blue-hover);
 }
-
-/* (Login logo is swapped in §0 above.) */
+.login .text-muted, #boxlogin .text-muted { color: var(--dashen-muted) !important; }
 
 /* --------------------------------------------------------------------------
- * 11. Footer touch
+ * 12. Footer
  * -------------------------------------------------------------------------- */
 footer.footer, .footer {
     border-top: 2px solid var(--dashen-gold);
+    color: var(--dashen-muted);
 }
+footer.footer a, .footer a { color: var(--dashen-blue); }
