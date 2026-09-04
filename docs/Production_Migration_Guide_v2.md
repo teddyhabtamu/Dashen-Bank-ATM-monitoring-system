@@ -165,7 +165,7 @@ UAT replicates the **shape** of the system, not its 1,202-ATM scale — 10–20 
 
 > **Division of labor (confirmed August 2026):** VM provisioning, VLANs, security groups, and firewall rules are handled by the Cloud & Core / Network / Security teams (see the Rahel Kiros & Jemil J. email thread). **You do not request these — you verify them.** The tables below are the reference; the phases include a connectivity check after each deployment step.
 
-**Network layout (confirmed with Cloud & Core / Security, August 2026):** APPS-01 and GWY-01 sit on **VLAN 4055** (172.26.18.64/28), DATA-01 on **VLAN 4056** (172.26.18.96/28) — production traffic between APPS/GWY and DATA-01 is therefore **inter-VLAN**. UAT-01 is on VLAN 4029 (172.26.208.0/24), UAT-02 on VLAN 4021 (172.26.21.0/24) — also inter-VLAN. The central repo server **172.25.37.4** reaches all 5 RHEL servers for update activity.
+**Network layout (confirmed with Cloud & Core / Security, August 2026):** APPS-01 and GWY-01 sit on **VLAN 4055** (172.26.18.64/28), DATA-01 on **VLAN 4056** (172.26.18.96/28) — production traffic between APPS/GWY and DATA-01 is therefore **inter-VLAN**. UAT-01 `dbtcatmmonappuat` (172.22.10.45) and UAT-02 `dbtcatmmondbuat` (172.22.10.60) sit on 172.22.10.0/24 (VLAN — confirm with IT). The central repo server **172.25.37.4** reaches all 5 RHEL servers for update activity.
 
 | From | To | Port | Purpose |
 |---|---|---|---|
@@ -219,7 +219,7 @@ Before deploying any VMs or splitting compose files, validate that a real ATM ca
 ## Priority 2 — Confirm SNMP Credentials and Network Path
 
 1. Verify SNMP community string with the bank (is it v2c? v3? one community across all ATMs or per-vendor?)
-2. Request firewall rules: UDP 161 from the Zabbix server IP (APPS-01, 172.26.18.74) to the ATM subnets **172.22.248.0/24** and **172.23.248.0/24** (the two test ATM subnets). The same UDP 161 opening is needed from UAT-01 (172.26.208.176) for UAT validation.
+2. Request firewall rules: UDP 161 from the Zabbix server IP (APPS-01, 172.26.18.74) to the ATM subnets **172.22.248.0/24** and **172.23.248.0/24** (the two test ATM subnets). The same UDP 161 opening is needed from UAT-01 (172.22.10.45) for UAT validation.
 3. Test reachability to a representative ATM from the UAT VM1 (not just sandbox)
 
 ## Priority 3 — Pilot 20–50 ATMs Across Different Districts
@@ -320,8 +320,8 @@ Your actual IPs (confirmed with IT, August 2026):
 | APPS-01 (Zabbix/dashboards) | DBHQPRODATMMONAPP | VLAN 4055 — 172.26.18.64/28 (gw 172.26.18.65) | 172.26.18.74 |
 | DATA-01 (PostgreSQL/OpenSearch) | DBHQPRODATMMONDB | VLAN 4056 — 172.26.18.96/28 (gw 172.26.18.97) | 172.26.18.102 |
 | GWY-01 (ISO 8583 Gateway) | DBHQPRODATMMONGW | VLAN 4055 — 172.26.18.64/28 (gw 172.26.18.65) | 172.26.18.76 |
-| UAT-01 (all-in-one) | DBHQUATATMMONAPP | VLAN 4029 — 172.26.208.0/24 (gw 172.26.208.1) | 172.26.208.176 |
-| UAT-02 (OpenSearch) | DBHQUATATMMONDB | VLAN 4021 — 172.26.21.0/24 (gw 172.26.21.1) | 172.26.21.50 |
+| UAT-01 (all-in-one) | dbtcatmmonappuat | 172.22.10.0/24 (VLAN/gw — confirm with IT) | 172.22.10.45 |
+| UAT-02 (OpenSearch) | dbtcatmmondbuat | 172.22.10.0/24 (VLAN/gw — confirm with IT) | 172.22.10.60 |
 
 ## 4.3 Step-by-Step: Create Per-VM Compose Files
 
@@ -775,7 +775,7 @@ The rest of this section is the quick version for reference.
 ### Step 5.1.1 — SSH into UAT-02
 
 ```bash
-ssh <your-username>@172.26.21.50
+ssh <your-username>@172.22.10.60
 ```
 
 ### Step 5.1.2 — Install Docker on RHEL 9
@@ -859,7 +859,7 @@ curl -s http://localhost:9200/_cat/indices?v
 ### Step 5.2.1 — SSH into UAT-01
 
 ```bash
-ssh <your-username>@172.26.208.176
+ssh <your-username>@172.22.10.45
 ```
 
 ### Step 5.2.2 — Install Docker + clone repo (same as steps 5.1.2–5.1.3)
@@ -931,7 +931,7 @@ docker exec zabbix-db psql -U zabbix -d zabbix -c "SELECT atm_id, branch FROM at
 
 ## 5.3 Import Zabbix Configuration
 
-1. Browse to `http://172.26.208.176:8080`, log in `Admin` / `zabbix`
+1. Browse to `http://172.22.10.45:8080`, log in `Admin` / `zabbix`
 2. **Configuration → Templates → Import** → `config/zabbix/zbx_export_templates.xml` → Import
 3. **Configuration → Hosts → Import** → `config/zabbix/zbx_export_hosts.xml` → Import
 4. **Administration → Media types → Import** → `config/zabbix/zbx_export_mediatypes.xml` → Import
@@ -939,9 +939,9 @@ docker exec zabbix-db psql -U zabbix -d zabbix -c "SELECT atm_id, branch FROM at
 
 ## 5.4 Verify Grafana, Report Portal, GLPI
 
-- Grafana at `http://172.26.208.176:3000` — 6 dashboards, Zabbix-ATM + ATM-Transactions datasources test OK
-- Report Portal at `http://172.26.208.176:8888` — generate a PDF/Excel/CSV report
-- GLPI at `http://172.26.208.176:8082` — complete install wizard, enable REST API, create API client, wire the Zabbix media type
+- Grafana at `http://172.22.10.45:3000` — 6 dashboards, Zabbix-ATM + ATM-Transactions datasources test OK
+- Report Portal at `http://172.22.10.45:8888` — generate a PDF/Excel/CSV report
+- GLPI at `http://172.22.10.45:8082` — complete install wizard, enable REST API, create API client, wire the Zabbix media type
 
 ## 5.5 UAT End-to-End Sign-Off
 

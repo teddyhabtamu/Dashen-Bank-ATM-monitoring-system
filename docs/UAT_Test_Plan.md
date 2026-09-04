@@ -62,8 +62,8 @@ EJ ingestion, and alerting — using the bank's two designated test terminals.
 
 | Role | Host | IP |
 |------|------|-----|
-| App / monitoring server (UAT-01) | Postgres, Zabbix, Grafana, GLPI, Report Portal, state-manager, filebeat | `172.26.208.176` |
-| Data server (UAT-02) | OpenSearch, OpenSearch Dashboards, ISO 8583 gateway | `172.26.21.50` |
+| App / monitoring server (UAT-01, `dbtcatmmonappuat`) | Postgres, Zabbix, Grafana, GLPI, Report Portal, state-manager, filebeat | `172.22.10.45` |
+| Data server (UAT-02, `dbtcatmmondbuat`) | OpenSearch, OpenSearch Dashboards, ISO 8583 gateway | `172.22.10.60` |
 | Test ATM — NCR | NCR | `172.22.248.4` |
 | Test ATM — GRG | GRG | `172.23.248.6` |
 
@@ -98,11 +98,11 @@ and ISO 8583 transaction monitoring **unless** the bank routes real traffic (see
 
 | Component | Host / IP | Role in UAT | Verify via |
 |-----------|-----------|-------------|------------|
-| PostgreSQL + Zabbix | UAT-01 `172.26.208.176` | Inventory + metrics store | Zabbix UI `:8080` |
+| PostgreSQL + Zabbix | UAT-01 `172.22.10.45` | Inventory + metrics store | Zabbix UI `:8080` |
 | Grafana | UAT-01 `:3000` | Live dashboards | Grafana UI |
 | GLPI | UAT-01 `:8082` | Ticket system | GLPI UI |
 | Report Portal | UAT-01 `:8888` | ATM detail / EJ search | Portal UI |
-| OpenSearch + Dashboards | UAT-02 `172.26.21.50:9200 / :5601` | EJ storage + search | OSD UI |
+| OpenSearch + Dashboards | UAT-02 `172.22.10.60:9200 / :5601` | EJ storage + search | OSD UI |
 | filebeat | UAT-01 | Forwards ATM EJ (`:514`) → OpenSearch | `ss -lun :514` |
 | state-manager | UAT-01 | Computes `atm_current_state` from Zabbix | `atm_current_state` table |
 | Test ATM NCR | `172.22.248.4` | SNMP source | `snmpwalk` |

@@ -25,7 +25,7 @@ filebeat.inputs:
     fields_under_root: true
 
 output.elasticsearch:
-  hosts: ["172.26.21.50:9200"]
+  hosts: ["172.22.10.60:9200"]
   index: "atm-ej-live-%{+yyyy.MM.dd}"
   pipeline: "atm_ej_parser"
 

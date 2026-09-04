@@ -33,5 +33,5 @@ real values are filled in during UAT once the ATM team provides IPs + community.
 - NCR ATM: 172.22.248.4  (SNMP UDP 161)
 - GRG ATM Terminal: 172.23.248.6  (SNMP UDP 161)
 
-The Network/Cloud team must open UDP 161 from UAT-01 (172.26.208.176, VLAN 4029)
+The Network/Cloud team must open UDP 161 from UAT-01 (172.22.10.45)
 to both ATM IPs.

@@ -2,9 +2,9 @@
 # UAT Phase 0 preflight — run on UAT-01 before executing the runbook.
 # Fails fast if a prerequisite is missing so you don't discover it mid-cutover.
 set -u
-ZBX_HOST="${ZABBIX_HOST:-172.26.208.176}"
+ZBX_HOST="${ZABBIX_HOST:-172.22.10.45}"
 ZBX_PORT="${ZABBIX_PORT:-8080}"
-DATA_VM_IP="${DATA_VM_IP:-172.26.21.50}"
+DATA_VM_IP="${DATA_VM_IP:-172.22.10.60}"
 fail=0
 
 ok()   { echo "  [OK]   $1"; }

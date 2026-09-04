@@ -8,7 +8,7 @@ data. Everything here is executed on UAT-01 unless noted.
 ## 0. Action items to send to IT / bank NOW (while waiting for the UAT VMs)
 These are the only things that unblock the cutover and can be requested today:
 - **Network / firewall openings** (raise with IT / network team):
-  - UAT-01 (`172.26.208.176`) → test ATMs on **UDP 161** (SNMP poll).
+  - UAT-01 (`172.22.10.45`) → test ATMs on **UDP 161** (SNMP poll).
   - Test ATMs → **UAT-01:514** (UDP/TCP) for EJ forwarding.
   - ISO 8583 switch → **UAT-02:9876** (TCP) — only if real transactions are in scope.
 - **SNMP credentials** (request from the ATM / Channel Support team):
@@ -18,9 +18,9 @@ These are the only things that unblock the cutover and can be requested today:
   - Until these arrive, the seed holds `CHANGE_ME` placeholders (Steps 2–3 cannot run).
 
 ## 0. Prerequisites (bank / network)
-- UAT-01 (`172.26.208.176`) can reach both test ATMs on **UDP 161** (VLAN/firewall open).
+- UAT-01 (`172.22.10.45`) can reach both test ATMs on **UDP 161** (VLAN/firewall open).
 - The 2 test ATMs forward EJ to **UAT-01:514** (UDP/TCP) — confirm with the ATM/Channel Support team.
-- OpenSearch on UAT-02 (`172.26.21.50`) is reachable from UAT-01 on **9200**.
+- OpenSearch on UAT-02 (`172.22.10.60`) is reachable from UAT-01 on **9200**.
 - ISO 8583 switch can reach **UAT-02:9876** (only if using real transactions).
 
 ## 1. Confirm inventory + Zabbix reachability
@@ -28,7 +28,7 @@ These are the only things that unblock the cutover and can be requested today:
 # ATMs must already be seeded (fresh setup does this) — verify:
 docker exec zabbix-db psql -U zabbix -d zabbix -c "SELECT atm_id, vendor, ip_address, status FROM atm_locations;"
 # Zabbix API reachable?
-curl -s -o /dev/null -w "%{http_code}\n" http://172.26.208.176:8080/api_jsonrpc.php
+curl -s -o /dev/null -w "%{http_code}\n" http://172.22.10.45:8080/api_jsonrpc.php
 ```
 
 ## 2. Set the real SNMP community / version

@@ -59,16 +59,16 @@
 
 ### Step 1.1 — Pre-deployment
 - [ ] Confirm UAT servers are provisioned (per the revised spec — see `docs/UAT_Migration_Guide.md`):
-  - UAT-01 `DBHQUATATMMONAPP` 172.26.208.176 — 4 vCPU, 8 GB RAM, 500 GB
-  - UAT-02 `DBHQUATATMMONDB` 172.26.21.50 — 4 vCPU, 8 GB RAM, 200 GB
+  - UAT-01 `dbtcatmmonappuat` 172.22.10.45 — 4 vCPU, 8 GB RAM, 500 GB
+  - UAT-02 `dbtcatmmondbuat` 172.22.10.60 — 4 vCPU, 8 GB RAM, 200 GB
 - [ ] Confirm SSH access to both VMs
 - [ ] Confirm RHEL 9 subscription or repo access
 - [ ] Firewall/VLAN rules handled by Cloud & Core / Network teams — verify reachability only:
-  - UAT-01 (VLAN 4029) → UAT-02 (VLAN 4021) TCP 9200 (OpenSearch)
-  - UAT-02 (VLAN 4021) → UAT-01 (VLAN 4029) TCP 5432 (PostgreSQL)
+  - UAT-01 (172.22.10.45) → UAT-02 (172.22.10.60) TCP 9200 (OpenSearch)
+  - UAT-02 (172.22.10.60) → UAT-01 (172.22.10.45) TCP 5432 (PostgreSQL)
   - UAT-01:8080, 3000, 8082, 8888 ← your laptop access
 
-### Step 1.2 — Deploy UAT-02 (OpenSearch + Dashboards, `DBHQUATATMMONDB`)
+### Step 1.2 — Deploy UAT-02 (OpenSearch + Dashboards, `dbtcatmmondbuat`)
 - [ ] SSH into UAT-02
 - [ ] Install Docker (see Production_Migration_Guide §5.1.2)
 - [ ] Clone the repo
@@ -91,7 +91,7 @@
   ```
 - [ ] OpenSearch Dashboards shows Dashen branding (applied via `config/osd` mount)
 
-### Step 1.3 — Deploy UAT-01 (everything else, `DBHQUATATMMONAPP`)
+### Step 1.3 — Deploy UAT-01 (everything else, `dbtcatmmonappuat`)
 - [ ] SSH into UAT-01
 - [ ] Install Docker, clone repo
 - [ ] After cloning, delete the VM2 compose file (keep `docker-compose.yml`): `rm -f docker-compose.gateway.yml`

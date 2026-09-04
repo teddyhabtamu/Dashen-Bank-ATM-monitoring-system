@@ -16,8 +16,8 @@ via syslog (UDP/TCP 514) into OpenSearch. No simulators run in UAT.
 
 | Server | Name | IP | Runs |
 |---|---|---|---|
-| **UAT-01** (VM1) | DBHQUATATMMONAPP | 172.26.208.176 | PostgreSQL, Zabbix (server/web/agent), GLPI, Grafana, Report Portal, anomaly-detector, network-correlator, state-manager, Filebeat (EJ collected from real ATMs via syslog 514) |
-| **UAT-02** (VM2) | DBHQUATATMMONDB | 172.26.21.50 | OpenSearch, OpenSearch Dashboards, ISO 8583 gateway |
+| **UAT-01** (VM1) | dbtcatmmonappuat | 172.22.10.45 | PostgreSQL, Zabbix (server/web/agent), GLPI, Grafana, Report Portal, anomaly-detector, network-correlator, state-manager, Filebeat (EJ collected from real ATMs via syslog 514) |
+| **UAT-02** (VM2) | dbtcatmmondbuat | 172.22.10.60 | OpenSearch, OpenSearch Dashboards, ISO 8583 gateway |
 
 Cross-VM wiring (set in `.env.uat`): VM1 → VM2 `9200` (OpenSearch); VM2 → VM1 `5432` (PostgreSQL).
 
@@ -66,12 +66,12 @@ bash scripts/uat_preflight.sh
 
 | Service | URL | Login |
 |---|---|---|
-| Zabbix | http://172.26.208.176:8080 | `ZBX_USER` / `ZBX_PASS` (change factory default) |
-| Grafana | http://172.26.208.176:3000 | admin / `GRAFANA_ADMIN_PASSWORD` |
-| GLPI | http://172.26.208.176:8082 | glpi / `GLPI_API_PASSWORD` |
-| Report Portal | http://172.26.208.176:8888 | admin / `ADMIN_PASS` |
-| OpenSearch Dashboards | http://172.26.21.50:5601 | admin / admin (security plugin disabled — restrict network) |
-| OpenSearch (API) | http://172.26.21.50:9200 | — |
+| Zabbix | http://172.22.10.45:8080 | `ZBX_USER` / `ZBX_PASS` (change factory default) |
+| Grafana | http://172.22.10.45:3000 | admin / `GRAFANA_ADMIN_PASSWORD` |
+| GLPI | http://172.22.10.45:8082 | glpi / `GLPI_API_PASSWORD` |
+| Report Portal | http://172.22.10.45:8888 | admin / `ADMIN_PASS` |
+| OpenSearch Dashboards | http://172.22.10.60:5601 | admin / admin (security plugin disabled — restrict network) |
+| OpenSearch (API) | http://172.22.10.60:9200 | — |
 
 ---
 

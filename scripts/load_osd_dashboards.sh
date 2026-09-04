@@ -3,7 +3,7 @@
 # Every *.ndjson file in config/osd/saved_objects/ is imported (idempotent; overwrite=true).
 #
 # Usage:
-#   OSD_HOST=172.26.21.50:5601 ./load_osd_dashboards.sh
+#   OSD_HOST=172.22.10.60:5601 ./load_osd_dashboards.sh
 #
 # (If you build dashboards in the OSD UI during UAT, export them from
 #  Stack Management -> Saved Objects and drop the .ndjson here for reuse.)
