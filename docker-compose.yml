@@ -14,7 +14,7 @@ services:
     restart: unless-stopped
 
   zabbix-server:
-    image: zabbix/zabbix-server-pgsql:rhel-6.4-latest
+    image: zabbix/zabbix-server-pgsql:ubuntu-6.4-latest
     container_name: zabbix-server
     environment:
       DB_SERVER_HOST: "postgres"
@@ -28,7 +28,7 @@ services:
     restart: unless-stopped
 
   zabbix-web:
-    image: zabbix/zabbix-web-nginx-pgsql:rhel-6.4-latest
+    image: zabbix/zabbix-web-nginx-pgsql:ubuntu-6.4-latest
     container_name: zabbix-web
     environment:
       DB_SERVER_HOST: "postgres"
@@ -44,7 +44,7 @@ services:
     restart: unless-stopped
 
   zabbix-agent:
-    image: zabbix/zabbix-agent2:rhel-6.4-latest
+    image: zabbix/zabbix-agent2:ubuntu-6.4-latest
     container_name: zabbix-agent
     network_mode: "host"
     privileged: true

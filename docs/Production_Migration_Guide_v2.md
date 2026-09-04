@@ -341,7 +341,7 @@ Create `deploy/production/docker-compose-apps.yml`:
 ```yaml
 services:
   zabbix-server:
-    image: zabbix/zabbix-server-pgsql:rhel-6.4-latest
+    image: zabbix/zabbix-server-pgsql:ubuntu-6.4-latest
     container_name: zabbix-server
     environment:
       DB_SERVER_HOST: "172.26.18.102"
@@ -353,7 +353,7 @@ services:
     restart: unless-stopped
 
   zabbix-web:
-    image: zabbix/zabbix-web-nginx-pgsql:rhel-6.4-latest
+    image: zabbix/zabbix-web-nginx-pgsql:ubuntu-6.4-latest
     container_name: zabbix-web
     environment:
       DB_SERVER_HOST: "172.26.18.102"
@@ -369,7 +369,7 @@ services:
     restart: unless-stopped
 
   zabbix-agent:
-    image: zabbix/zabbix-agent2:rhel-6.4-latest
+    image: zabbix/zabbix-agent2:ubuntu-6.4-latest
     container_name: zabbix-agent
     network_mode: "host"
     privileged: true
@@ -727,7 +727,7 @@ datasources:
 
 The UAT deployment is covered in full by **`docs/UAT_Migration_Guide.md`**. In short:
 
-- `docker-compose.yml` — all services except OpenSearch/Dashboards (same as the current PoC, with `rhel-6.4-latest` Zabbix images and Report Portal's `OS_HOST` pointing to UAT-02's IP)
+- `docker-compose.yml` — all services except OpenSearch/Dashboards (same as the current PoC, with `ubuntu-6.4-latest` Zabbix images and Report Portal's `OS_HOST` pointing to UAT-02's IP)
 - `docker-compose.gateway.yml` — OpenSearch + OpenSearch Dashboards + Filebeat + ISO 8583 Gateway
 
 ### Step 4.3.8 — Production .env file
