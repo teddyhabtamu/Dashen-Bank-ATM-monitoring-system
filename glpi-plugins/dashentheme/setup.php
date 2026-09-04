@@ -38,3 +38,12 @@ function plugin_dashentheme_check_prerequisites() {
 function plugin_dashentheme_check_config() {
     return true;
 }
+
+// No DB tables or config needed — pure stylesheet. Stubs satisfy the installer.
+function plugin_dashentheme_install() {
+    return true;
+}
+
+function plugin_dashentheme_uninstall() {
+    return true;
+}
