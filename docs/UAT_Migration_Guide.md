@@ -368,7 +368,7 @@ The `iso8583-gateway` (VM2) feeds `atm_transactions`, which drives the transacti
 
 **Grafana** (http://172.22.10.45:3000): the `datasources-uat.yml` already provisions the 3 datasources (Zabbix-ATM, ATM-Transactions, EJ-OpenSearch) — open **Connections → Data sources** and confirm each says "Success". All 6 dashboards should show live data from the real test ATMs.
 
-**GLPI** (http://172.22.10.45:8082): complete the install wizard → **Setup → General → API** enable REST API and create an API client → in Zabbix **Administration → Media types** set the GLPI Ticket media type `glpi_url` = `http://172.22.10.45:8082`. Trigger a fault on a real test ATM (via its management interface) and confirm a ticket is created.
+**GLPI** (http://172.22.10.45:8082): complete the install wizard → **Setup → General → API** enable REST API and create an API client (app token) → **Setup → Users → `glpi`** copy the **user token** (different from the app token!) → in Zabbix **Administration → Media types → GLPi**: set `glpi_url` = `http://glpi/apirest.php` (container-internal — the Zabbix *server container* calls it, not your laptop), `glpi_token` = user token, add `glpi_app_token` = app token. **This GLPI mandates App-Token on every call**, so the stock webhook script must be patched to send `App-Token` on initSession + all requests (done on UAT-01 via API; verified with a create/read/delete round-trip). Trigger a fault on a real test ATM (via its management interface) and confirm a ticket is created.
 
 **Report Portal** (http://172.22.10.45:8888): generate a PDF/Excel/CSV report. EJ counts come from UAT-02's OpenSearch.
 
