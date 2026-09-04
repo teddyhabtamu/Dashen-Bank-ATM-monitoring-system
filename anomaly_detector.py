@@ -352,6 +352,12 @@ def run():
                 pass
         except Exception as e:
             log.error(f"Scan error: {e}", exc_info=True)
+            try:
+                # A failed statement poisons the whole transaction; roll back
+                # so the next cycle starts clean instead of failing forever.
+                conn.rollback()
+            except Exception:
+                pass
 
         time.sleep(CHECK_INTERVAL)
 
