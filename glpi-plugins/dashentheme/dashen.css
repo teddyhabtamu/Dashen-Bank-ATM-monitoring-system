@@ -30,6 +30,11 @@
  * with a direct !important rule. No badge — the white lockup reads as-is
  * on the navy header. Path is relative to this CSS file.
  * -------------------------------------------------------------------------- */
+/* Login lockup size (core gives the slot 200x110 — slightly trim the mark). */
+.page-anonymous span.glpi-logo img {
+    max-height: 76px !important;
+}
+
 /* Logo paint lives in dashen.js (single <img> per span — one mechanism only,
    so background + img can never ghost/double). This rule just clears any
    generated-content mark core may add. */
