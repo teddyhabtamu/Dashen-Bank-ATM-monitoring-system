@@ -32,16 +32,16 @@ The important UAT work is two-fold:
 
   | Server | Name | VLAN / Network | IP |
   |---|---|---|---|
-  | UAT-01 | DBHQUATATMMONAPP | VLAN 4029 — 172.26.208.0/24 (gw 172.26.208.1) | 172.26.208.176 |
-  | UAT-02 | DBHQUATATMMONDB | VLAN 4021 — 172.26.21.0/24 (gw 172.26.21.1) | 172.26.21.50 |
+  | UAT-01 (app) | dbtcatmmonappuat | 172.22.10.0/24 (VLAN/gw — confirm with IT) | 172.22.10.45 |
+  | UAT-02 (data) | dbtcatmmondbuat | 172.22.10.0/24 (VLAN/gw — confirm with IT) | 172.22.10.60 |
 
   Sizes: UAT-01 = 4 vCPU / 8 GB / 500 GB; UAT-02 = 4 vCPU / 8 GB / 200 GB.
 - [ ] **SSH access** to both (security groups being added by Cloud & Core)
 - [ ] **RHEL 9** with subscription / repo access on both
 - [ ] **GitHub SSH key or token** on both (to clone the repo)
 - [ ] (Handled by other teams, verify later) firewall/VLAN rules:
-  - UAT-01 (VLAN 4029) → UAT-02 (VLAN 4021) **TCP 9200** (OpenSearch)
-  - UAT-02 (VLAN 4021) → UAT-01 (VLAN 4029) **TCP 5432** (PostgreSQL)
+  - UAT-01 (app, 172.22.10.45) → UAT-02 (data, 172.22.10.60) **TCP 9200** (OpenSearch)
+  - UAT-02 (data, 172.22.10.60) → UAT-01 (app, 172.22.10.45) **TCP 5432** (PostgreSQL)
   - UAT-01: **8080, 3000, 8082, 8888** reachable from your laptop
   - Repo server 172.25.37.4 → both servers **TCP 443, 80** (updates)
 
@@ -52,9 +52,9 @@ The important UAT work is two-fold:
 Run these on **both** UAT-01 and UAT-02.
 
 ```bash
-ssh <your-user>@172.26.208.176        # on UAT-01
+ssh <your-user>@172.22.10.45        # on UAT-01
 # --- and separately ---
-ssh <your-user>@172.26.21.50          # on UAT-02
+ssh <your-user>@172.22.10.60          # on UAT-02
 ```
 
 On each:
@@ -117,7 +117,7 @@ openssl rand -base64 16     # run 4 times
 Do this **first** — UAT-01's Report Portal and Filebeat depend on OpenSearch.
 
 ```bash
-ssh <your-user>@172.26.21.50
+ssh <your-user>@172.22.10.60
 cd /opt/atm-monitoring
 
 # Start OpenSearch + Dashboards (the gateway needs UAT-01's DB, so start it later in Step E)
@@ -132,7 +132,7 @@ curl -s http://localhost:9200/_cat/indices?v
 # 5. Step D — Deploy UAT-01 (PostgreSQL + Zabbix + Grafana + GLPI + simulators)
 
 ```bash
-ssh <your-user>@172.26.208.176
+ssh <your-user>@172.22.10.45
 cd /opt/atm-monitoring
 
 # Create the local dirs the compose mounts
@@ -152,7 +152,7 @@ docker exec zabbix-db psql -U zabbix -d zabbix -c "\dt"     # confirm the custom
 
 # 3. Let the UAT-02 gateway reach this DB over the network
 docker exec zabbix-db bash -c "echo \"listen_addresses = '*'\" >> /var/lib/postgresql/data/postgresql.conf"
-docker exec zabbix-db bash -c "echo 'host all all 172.26.21.0/24 md5' >> /var/lib/postgresql/data/pg_hba.conf"
+docker exec zabbix-db bash -c "echo 'host all all 172.22.10.0/24 md5' >> /var/lib/postgresql/data/pg_hba.conf"
 docker compose -f deploy/uat/docker-compose-uat-vm1.yml restart postgres
 
 # 4. Build the images that come from this repo, then start everything
@@ -180,7 +180,7 @@ If empty: `docker logs atm-sim-engine --tail 50` — look for `[SNMP] ... respon
 # 6. Step E — Start the ISO 8583 gateway (on UAT-02, needs UAT-01's DB)
 
 ```bash
-ssh <your-user>@172.26.21.50
+ssh <your-user>@172.22.10.60
 cd /opt/atm-monitoring
 docker compose -f deploy/uat/docker-compose-uat-vm2.yml up -d iso8583-gateway
 sleep 15
@@ -190,7 +190,7 @@ docker logs iso8583-gateway --tail 5        # "MODE: SIMULATION", generating tra
 Verify transactions landed on UAT-01:
 
 ```bash
-ssh <your-user>@172.26.208.176
+ssh <your-user>@172.22.10.45
 docker exec zabbix-db psql -U zabbix -d zabbix -c \
   "SELECT source, COUNT(*) FROM atm_transactions GROUP BY source;"
 # Expect source = 'ISO8583_SIM', count growing
@@ -204,16 +204,16 @@ These must succeed (if not, open a ticket with the Network/Cloud team):
 
 ```bash
 # From UAT-01: reach UAT-02's OpenSearch
-curl -s http://172.26.21.50:9200/_cat/indices?v
+curl -s http://172.22.10.60:9200/_cat/indices?v
 
 # From UAT-02: reach UAT-01's PostgreSQL
-pg_isready -h 172.26.208.176 -U zabbix -d zabbix      # (or: psql -h 172.26.208.176 ...)
+pg_isready -h 172.22.10.45 -U zabbix -d zabbix      # (or: psql -h 172.22.10.45 ...)
 
 # From your laptop: the web UIs on UAT-01
-#   http://172.26.208.176:8080  Zabbix
-#   http://172.26.208.176:3000  Grafana
-#   http://172.26.208.176:8082  GLPI
-#   http://172.26.208.176:8888  Report Portal
+#   http://172.22.10.45:8080  Zabbix
+#   http://172.22.10.45:3000  Grafana
+#   http://172.22.10.45:8082  GLPI
+#   http://172.22.10.45:8888  Report Portal
 
 # From UAT-01: reach the two real test ATMs (SNMP UDP 161) — 4 Kilo Building
 #   NCR ATM           172.22.248.4
@@ -221,14 +221,14 @@ pg_isready -h 172.26.208.176 -U zabbix -d zabbix      # (or: psql -h 172.26.208.
 snmpwalk -v2c -c <ATM_COMMUNITY> 172.22.248.4 .1.3.6.1.2.1.1
 snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.6 .1.3.6.1.2.1.1
 # If these time out, the Network/Cloud team must open UDP 161 from UAT-01
-# (172.26.208.176, VLAN 4029) to 172.22.248.4 and 172.23.248.6.
+# (172.22.10.45) to 172.22.248.4 and 172.23.248.6.
 ```
 
 ---
 
 # 8. Step G — Configure Zabbix (import + create ATM hosts)
 
-Browse to **http://172.26.208.176:8080** (`Admin` / `zabbix`).
+Browse to **http://172.22.10.45:8080** (`Admin` / `zabbix`).
 
 1. **Configuration → Templates → Import**
    - `config/zabbix/template_ncr_snmp.xml` (template `Dashen Bank ATM Hardware`)
@@ -272,23 +272,23 @@ Create them as real SNMP hosts (port **161**, not the simulator 1161):
 
 # 9. Step H — Configure & customize the rest
 
-**Grafana** (http://172.26.208.176:3000): the `datasources-uat.yml` already provisions the 3 datasources (Zabbix-ATM, ATM-Transactions, EJ-OpenSearch) — open **Connections → Data sources** and confirm each says "Success". All 6 dashboards should show simulator data.
+**Grafana** (http://172.22.10.45:3000): the `datasources-uat.yml` already provisions the 3 datasources (Zabbix-ATM, ATM-Transactions, EJ-OpenSearch) — open **Connections → Data sources** and confirm each says "Success". All 6 dashboards should show simulator data.
 
-**GLPI** (http://172.26.208.176:8082): complete the install wizard → **Setup → General → API** enable REST API and create an API client → in Zabbix **Administration → Media types** set the GLPI Ticket media type `glpi_url` = `http://172.26.208.176:8082`. Trigger a fault on a simulator ATM and confirm a ticket is created.
+**GLPI** (http://172.22.10.45:8082): complete the install wizard → **Setup → General → API** enable REST API and create an API client → in Zabbix **Administration → Media types** set the GLPI Ticket media type `glpi_url` = `http://172.22.10.45:8082`. Trigger a fault on a simulator ATM and confirm a ticket is created.
 
-**Report Portal** (http://172.26.208.176:8888): generate a PDF/Excel/CSV report. EJ counts come from UAT-02's OpenSearch.
+**Report Portal** (http://172.22.10.45:8888): generate a PDF/Excel/CSV report. EJ counts come from UAT-02's OpenSearch.
 
 **EJ logs → OpenSearch:** `ej-logs/` on UAT-01 is shipped by Filebeat to UAT-02. Check:
 ```bash
-ssh <your-user>@172.26.21.50
+ssh <your-user>@172.22.10.60
 curl -s http://localhost:9200/_cat/indices?v     # atm-ej-live-YYYY.MM.DD present
 ```
-Open OpenSearch Dashboards (http://172.26.21.50:5601), create index pattern `atm-ej-live-*` (time field `@timestamp`).
+Open OpenSearch Dashboards (http://172.22.10.60:5601), create index pattern `atm-ej-live-*` (time field `@timestamp`).
 
 **Filebeat output note:** the repo `filebeat.yml` is edited per environment. For UAT it must point at the UAT-02 IP:
 ```yaml
 output.elasticsearch:
-  hosts: ["172.26.21.50:9200"]
+  hosts: ["172.22.10.60:9200"]
 ```
 (For production it becomes `localhost:9200` and adds `/data/real-ej-logs/*.log`.)
 
@@ -320,8 +320,8 @@ Do **not** deploy production until: SNMP path proven, templates final, cross-VM 
 |---|---|---|
 | `snmpwalk` empty on 1161 | simulator SNMP responder not up / UDP not published | `docker logs atm-sim-engine` → `[SNMP]`; check `1161-1260/udp` in compose |
 | Zabbix item "Not supported" | HTTP/agent interface, or wrong port/community | SNMP interface, `{$ATM_PORT}`, community `dashen_sim`, correct vendor template |
-| Report Portal can't reach OpenSearch | wrong `OS_HOST` or firewall | `curl http://172.26.21.50:9200` from UAT-01; check `OS_HOST: 172.26.21.50:9200` |
-| Gateway crash-loops | `DB_HOST` wrong / PG not remote-ready | `docker logs iso8583-gateway`; verify `listen_addresses='*'` + `172.26.21.0/24` in `pg_hba.conf` |
+| Report Portal can't reach OpenSearch | wrong `OS_HOST` or firewall | `curl http://172.22.10.60:9200` from UAT-01; check `OS_HOST: 172.22.10.60:9200` |
+| Gateway crash-loops | `DB_HOST` wrong / PG not remote-ready | `docker logs iso8583-gateway`; verify `listen_addresses='*'` + `172.22.10.0/24` in `pg_hba.conf` |
 | Filebeat ships nothing | `ej-logs/` perms or `filebeat.yml` ownership | `sudo chown -R $USER:$USER ej-logs/`; `sudo chown root:root filebeat.yml` |
 | OpenSearch won't start | `vm.max_map_count` missing | `sudo sysctl -w vm.max_map_count=262144` (Step A.3) |
 | GLPI 502 | wizard not finished / PHP timeout | finish wizard at :8082; restart GLPI container |

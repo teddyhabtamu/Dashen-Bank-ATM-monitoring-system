@@ -37,7 +37,7 @@ services:
     container_name: iso8583-gateway
     environment:
       MODE: "simulation"
-      DB_HOST: "172.26.208.176"
+      DB_HOST: "172.22.10.45"
       DB_NAME: "zabbix"
       DB_USER: "zabbix"
       DB_PASS: "${DB_PASS}"

@@ -4,7 +4,7 @@ datasources:
   - name: Zabbix-ATM
     type: alexanderzobnin-zabbix-datasource
     access: proxy
-    url: http://172.26.208.176:8080/api_jsonrpc.php
+    url: http://172.22.10.45:8080/api_jsonrpc.php
     jsonData:
       username: Admin
     secureJsonData:
@@ -12,7 +12,7 @@ datasources:
 
   - name: ATM-Transactions
     type: postgres
-    url: 172.26.208.176:5432
+    url: 172.22.10.45:5432
     database: zabbix
     user: zabbix
     secureJsonData:
@@ -23,7 +23,7 @@ datasources:
 
   - name: EJ-OpenSearch
     type: elasticsearch
-    url: http://172.26.21.50:9200
+    url: http://172.22.10.60:9200
     jsonData:
       index: atm-*
       timeField: "@timestamp"
