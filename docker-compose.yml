@@ -50,7 +50,9 @@ services:
     privileged: true
     environment:
       ZBX_HOSTNAME: "Zabbix-Server-UAT01"
-      ZBX_SERVER_HOST: "127.0.0.1"
+      # Passive checks arrive from the Zabbix server container via the compose
+      # bridge network — allow it alongside localhost (else "connection rejected").
+      ZBX_SERVER_HOST: "127.0.0.1,172.18.0.0/16"
     restart: unless-stopped
     depends_on:
       - zabbix-server
