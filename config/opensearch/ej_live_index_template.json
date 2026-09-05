@@ -2,6 +2,10 @@
   "index_patterns": ["atm-ej-live-*"],
   "priority": 200,
   "template": {
+    "settings": {
+      "index.default_pipeline": "atm_ej_parser"
+    },
+    "mappings": {
     "mappings": {
       "dynamic_templates": [
         {
