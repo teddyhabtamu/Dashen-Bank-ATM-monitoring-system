@@ -97,6 +97,7 @@
         "field": "event_time",
         "target_field": "@timestamp",
         "formats": [
+          "yyyy-MM-dd'T'HH:mm:ss",
           "yyyy-MM-dd HH:mm:ss"
         ],
         "ignore_failure": true
