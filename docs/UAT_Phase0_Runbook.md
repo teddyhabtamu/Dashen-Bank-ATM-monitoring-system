@@ -82,6 +82,10 @@ run, if *any* simulator OID remains unmapped the generator aborts **before writi
 any file** (exits 1). You must complete `oid_mapping.csv` so all monitored OIDs are
 covered, then re-run; the run only succeeds once every item is mapped.
 
+> If the walk forces `status_map.json` code changes, re-render triggers first
+> (`python3 scripts/build_zabbix_triggers.py` — thresholds read the map, so
+> they stay consistent), then import: the sync in Step 6 brings triggers along.
+
 ## 6. Re-import templates + register hosts
 The `state-manager` image must be rebuilt first — its `state_manager` now imports
 `zabbix_modules`, so the old image would crash on import:
