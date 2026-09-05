@@ -375,7 +375,11 @@ services:
     privileged: true
     environment:
       ZBX_HOSTNAME: "Zabbix-Server-APPS01"
-      ZBX_SERVER_HOST: "127.0.0.1"
+      # Passive checks arrive from the server container via the compose bridge —
+      # allow it or the agent rejects them ("connection rejected" in agent log
+      # and red availability in Zabbix). Find the subnet with
+      # `docker network inspect <project>_default | grep Subnet`.
+      ZBX_SERVER_HOST: "127.0.0.1,172.18.0.0/16"
     restart: unless-stopped
     depends_on:
       - zabbix-server

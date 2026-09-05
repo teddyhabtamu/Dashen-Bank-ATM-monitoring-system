@@ -228,6 +228,18 @@ sleep 60
 docker ps --format "table {{.Names}}\t{{.Status}}" | grep -v Exited
 ```
 
+# 5b. Match the Zabbix host to the agent (self-monitoring)
+The compose sets the agent hostname to `Zabbix-Server-UAT01`, but Zabbix ships
+a host named `Zabbix server` — until renamed, active checks log `host not
+found` and passive checks are rejected. Via Zabbix API (or UI):
+- Rename host `Zabbix server` → technical name `Zabbix-Server-UAT01`.
+- Set its agent interface IP to `172.22.10.45` (the server container reaches
+  the host-networked agent via the LAN IP, not `127.0.0.1`).
+- The compose already allows the bridge subnet (`ZBX_SERVER_HOST` includes
+  `172.18.0.0/16` — confirm with `docker network inspect atm-monitoring_default`).
+Verify: Monitoring → Latest data for `Zabbix-Server-UAT01` shows fresh values
+and `agent.ping` = 1.
+
 > **Report Portal external links** are driven by `.env.uat`: `GRAFANA_URL`,
 > `ZABBIX_UI_URL`, and `GLPI_UI_URL` (already wired into the compose). The top bar
 > shows **Live Dashboards → Grafana**, **Monitoring Center → Zabbix**, and
