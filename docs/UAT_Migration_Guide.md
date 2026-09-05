@@ -146,6 +146,12 @@ mv docker-compose.gateway.yml docker-compose.yml   # rename to the default name
 > matching `rm`/`mv` above. Prefer not to delete files? On UAT-02 instead run
 > `export COMPOSE_FILE=docker-compose.gateway.yml` (add it to `~/.bashrc`) — then
 > `docker compose up -d` also works without renaming. Both ways are fine.
+> **Pull trap on UAT-02:** the rename above dirties the worktree, so a plain
+> `git pull --ff-only` aborts once the remote touches either compose file.
+> Before pulling there, run `git checkout -- docker-compose.yml
+> docker-compose.gateway.yml`, pull, then redo the `rm`/`mv`. Always check
+> `git status` + `git log --oneline -1` after pulling — a silent abort leaves
+> stale code running with no error.
 
 Generate 4 distinct passwords:
 
