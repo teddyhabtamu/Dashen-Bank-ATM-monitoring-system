@@ -6,7 +6,6 @@
       "index.default_pipeline": "atm_ej_parser"
     },
     "mappings": {
-    "mappings": {
       "dynamic_templates": [
         {
           "strings_as_keyword": {
