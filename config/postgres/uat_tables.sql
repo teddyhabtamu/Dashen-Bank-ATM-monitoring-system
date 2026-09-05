@@ -40,3 +40,17 @@ CREATE TABLE IF NOT EXISTS atm_current_state (
     last_seen TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Cash replenishment log (BRD 6.3). Written by the Report Portal
+-- (/admin/cash) when cash teams load cassettes; read by the cash forecast
+-- and the cash reports. No service auto-creates it.
+CREATE TABLE IF NOT EXISTS cash_replenishments (
+    id SERIAL PRIMARY KEY,
+    atm_id VARCHAR(20) NOT NULL REFERENCES atm_locations(atm_id) ON DELETE CASCADE,
+    cassette INT NOT NULL CHECK (cassette BETWEEN 1 AND 4),
+    notes_added INT NOT NULL CHECK (notes_added > 0),
+    recorded_at TIMESTAMP DEFAULT NOW(),
+    recorded_by VARCHAR(100) DEFAULT 'system',
+    notes TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_cash_repl_atm_time ON cash_replenishments(atm_id, recorded_at DESC);

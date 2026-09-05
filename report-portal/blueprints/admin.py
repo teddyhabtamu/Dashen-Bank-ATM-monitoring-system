@@ -5,7 +5,7 @@ ATM Admin registration routes.
 import csv, io, re, os, json, concurrent.futures, urllib.request
 import requests
 from datetime import datetime, timezone, timedelta
-from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response, current_app, abort
+from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response, current_app, abort, session
 from werkzeug.security import generate_password_hash
 from blueprints.auth import login_required, role_required, ROLE_ADMIN, ROLE_OPERATOR, ROLE_VIEWER
 from db import get_db
@@ -754,6 +754,84 @@ def atm_check():
         existing = [r[0] for r in cur.fetchall()]
         cur.close()
     return jsonify({'existing': existing})
+
+
+@bp.route('/cash')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def cash_list():
+    """Cash replenishment log (BRD 6.3): recent loads + log form data."""
+    atm_filter = request.args.get('atm_id', '').strip()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT atm_id, atm_name FROM atm_locations "
+                    "WHERE status = 'active' ORDER BY atm_id")
+        atms = [{'atm_id': r[0], 'atm_name': r[1]} for r in cur.fetchall()]
+        if atm_filter:
+            cur.execute("SELECT id, atm_id, cassette, notes_added, recorded_at, "
+                        "recorded_by, notes FROM cash_replenishments "
+                        "WHERE atm_id = %s ORDER BY recorded_at DESC LIMIT 100",
+                        (atm_filter,))
+        else:
+            cur.execute("SELECT id, atm_id, cassette, notes_added, recorded_at, "
+                        "recorded_by, notes FROM cash_replenishments "
+                        "ORDER BY recorded_at DESC LIMIT 100")
+        cols = [d[0] for d in cur.description]
+        loads = [dict(zip(cols, r)) for r in cur.fetchall()]
+        cur.close()
+    return render_template('admin_cash.html', atms=atms, loads=loads,
+                           atm_filter=atm_filter)
+
+
+@bp.route('/cash/log', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def cash_log():
+    """Record one cassette load. Validated; audited."""
+    atm_id = request.form.get('atm_id', '').strip()
+    errors = []
+    try:
+        cassette = int(request.form.get('cassette', '0'))
+    except (ValueError, TypeError):
+        cassette = 0
+    try:
+        notes_added = int(request.form.get('notes_added', '0'))
+    except (ValueError, TypeError):
+        notes_added = 0
+    notes = request.form.get('notes', '').strip()[:500]
+    if not atm_id:
+        errors.append('ATM is required.')
+    if cassette not in (1, 2, 3, 4):
+        errors.append('Cassette must be 1–4.')
+    if notes_added <= 0:
+        errors.append('Notes added must be a positive number.')
+    if errors:
+        flash('Not saved: ' + ' '.join(errors), 'error')
+        return redirect('/admin/cash')
+    with get_db() as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT 1 FROM atm_locations WHERE atm_id = %s", (atm_id,))
+            if not cur.fetchone():
+                flash(f'Not saved: unknown ATM {atm_id}.', 'error')
+                return redirect('/admin/cash')
+            cur.execute(
+                "INSERT INTO cash_replenishments "
+                "(atm_id, cassette, notes_added, recorded_by, notes) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (atm_id, cassette, notes_added,
+                 session.get('username', 'system'), notes or None))
+            conn.commit()
+            log_action('CASH_LOAD',
+                       f'{notes_added} notes -> {atm_id} cassette {cassette}')
+        except Exception as e:
+            conn.rollback()
+            flash(f'Not saved: database error ({e}).', 'error')
+            return redirect('/admin/cash')
+        finally:
+            cur.close()
+    flash(f'Logged: {notes_added} notes into {atm_id} cassette {cassette}.', 'success')
+    return redirect(f'/admin/cash?atm_id={atm_id}')
 
 
 @bp.route('/atm/csv')
