@@ -280,7 +280,7 @@ def build_cassettes(vendor, m, capacity=CASSETTE_MAX):
 
     def slot(key, label, x, y, w, h):
         val = m.get(key)
-        if val is None:
+        if val is None or val == "":
             return {'label': label, 'x': x, 'y': y, 'w': w, 'h': h,
                     'pct': None, 'fill_h': 0, 'fill_y': y + h, 'color': 'grey', 'notes': None}
         try:
@@ -777,12 +777,14 @@ def cash_list():
                     "WHERE status = 'active' ORDER BY atm_id")
         atms = [{'atm_id': r[0], 'atm_name': r[1]} for r in cur.fetchall()]
         if atm_filter:
-            cur.execute("SELECT id, atm_id, cassette, notes_added, recorded_at, "
+            cur.execute("SELECT id, atm_id, cassette, notes_added, "
+                        "to_char(recorded_at, 'YYYY-MM-DD HH24:MI') AS recorded_at, "
                         "recorded_by, notes FROM cash_replenishments "
                         "WHERE atm_id = %s ORDER BY recorded_at DESC LIMIT 100",
                         (atm_filter,))
         else:
-            cur.execute("SELECT id, atm_id, cassette, notes_added, recorded_at, "
+            cur.execute("SELECT id, atm_id, cassette, notes_added, "
+                        "to_char(recorded_at, 'YYYY-MM-DD HH24:MI') AS recorded_at, "
                         "recorded_by, notes FROM cash_replenishments "
                         "ORDER BY recorded_at DESC LIMIT 100")
         cols = [d[0] for d in cur.description]

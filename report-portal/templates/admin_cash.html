@@ -1,5 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Cash Replenishment — Admin{% endblock %}
+{% block extra_style %}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;padding:24px}
+.form-grid .full{grid-column:1/-1}
+.form-actions{padding:0 24px 24px;display:flex;gap:10px;justify-content:flex-end}
+.form-actions .btn{padding:10px 20px}
+{% endblock %}
 {% block body %}
 <div class="page-header">
   <div class="page-header-icon"><i data-lucide="banknote"></i></div>

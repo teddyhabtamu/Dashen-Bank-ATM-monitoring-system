@@ -45,7 +45,10 @@ def interpret_state(vendor, m):
         return 'UNREACHABLE'
     # If even the core items were never collected, the ATM is unreachable
     # rather than (falsely) healthy. Guards against incomplete OID mapping.
-    if all(m.get(k) is None for k in ('atm.status', 'atm.net.link', 'atm.cash.cassette1')):
+    # Empty strings count as missing: Zabbix returns "" (not None) for items
+    # that exist but never collected, and "" must not masquerade as 0 —
+    # otherwise a dataless host reads OUT_OF_CASH instead of UNREACHABLE.
+    if all(m.get(k) in (None, "") for k in ('atm.status', 'atm.net.link', 'atm.cash.cassette1')):
         return 'UNREACHABLE'
 
     sm = load_status_map()
