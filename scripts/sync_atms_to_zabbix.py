@@ -17,7 +17,6 @@ ZBX_PASS = os.environ.get("ZBX_PASS", "zabbix")
 CSV_PATH = "config/postgres/atm_locations.csv"
 TEMPLATE_NCR_PATH = "config/zabbix/template_ncr_snmp.xml"
 TEMPLATE_GRG_PATH = "config/zabbix/template_grg_snmp.xml"
-VALUEMAPS_PATH = "config/zabbix/valuemaps.xml"
 
 TEMPLATE_NCR_NAME = "Dashen Bank ATM Hardware"
 TEMPLATE_GRG_NAME = "Dashen Bank ATM Hardware - GRG"
@@ -117,52 +116,6 @@ class Zabbix:
             print("  Authenticated")
         else:
             print(f"  Login failed: {r.text}")
-
-    def import_valuemaps(self, xml_path):
-        """Create/update the display value maps from config/zabbix/valuemaps.xml.
-
-        Template items reference these by name, so they must exist BEFORE the
-        templates import (configuration.import has no inline valuemap section
-        in 6.4 — a missing map aborts the whole template import).
-        """
-        import xml.etree.ElementTree as ET
-        try:
-            root = ET.parse(xml_path).getroot()
-        except Exception as e:
-            print(f"  ERROR reading {xml_path}: {e}")
-            return False
-        # namespace-agnostic: match by local tag name
-        def ln(tag):
-            return tag.rsplit('}', 1)[-1] if '}' in tag else tag
-        count = 0
-        for vm in root.iter():
-            if ln(vm.tag) != 'value_map':
-                continue
-            name_el = next((c for c in vm if ln(c.tag) == 'name'), None)
-            if name_el is None or not (name_el.text or '').strip():
-                continue
-            name = name_el.text.strip()
-            mappings = []
-            for m in vm.iter():
-                if ln(m.tag) != 'mapping':
-                    continue
-                v = next((c for c in m if ln(c.tag) == 'value'), None)
-                nv = next((c for c in m if ln(c.tag) == 'newvalue'), None)
-                if v is not None and nv is not None:
-                    mappings.append({'value': (v.text or '').strip(),
-                                     'newvalue': (nv.text or '').strip()})
-            existing = self.call('valuemap.get', {'filter': {'name': [name]},
-                                                  'output': ['valuemapid']}) or []
-            if existing:
-                self.call('valuemap.update', {'valuemapid': existing[0]['valuemapid'],
-                                              'mappings': mappings})
-                print(f"  Value map updated: {name} ({len(mappings)} entries)")
-            else:
-                self.call('valuemap.create', {'name': name, 'mappings': mappings})
-                print(f"  Value map created: {name} ({len(mappings)} entries)")
-            count += 1
-        print(f"  Value maps processed: {count}")
-        return True
 
     def import_template(self, xml_path):
         with open(xml_path) as f:
@@ -270,9 +223,9 @@ def do_apply(atms, import_templates=False):
     z = Zabbix()
     z.login()
 
-    # Step 1: Import templates if requested (value maps first — items reference them)
+    # Step 1: Import templates if requested (each template embeds its own
+    # value maps, so no separate valuemap step is needed)
     if import_templates:
-        z.import_valuemaps(VALUEMAPS_PATH)
         z.import_template(TEMPLATE_NCR_PATH)
         z.import_template(TEMPLATE_GRG_PATH)
         print("  Templates imported, waiting 3s for indexing...")
