@@ -5,7 +5,7 @@
          Import BEFORE the templates (sync script does this automatically).
          Mappings mirror the simulator healthy values + trigger semantics;
          text is cosmetic only: thresholds live in triggers.json. -->
-    <value_maps>
+    <valuemaps>
         <value_map>
             <uuid>fbd15d3ae9da4c34b34d21f5d3fd90b1</uuid>
             <name>ATM Operational Status</name>
@@ -130,5 +130,5 @@
                 </mapping>
             </mappings>
         </value_map>
-    </value_maps>
+    </valuemaps>
 </zabbix_export>
