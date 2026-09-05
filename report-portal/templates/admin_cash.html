@@ -10,15 +10,17 @@
 <div class="page-header">
   <div class="page-header-icon"><i data-lucide="banknote"></i></div>
   <div>
-    <h1 class="page-title">Cash Replenishment Log</h1>
-    <p class="page-subtitle">Record cassette loads per ATM (BRD 6.3). Feeds cash reports and the depletion forecast.</p>
+    <h1 class="page-title">Cash Load History</h1>
+    <p class="page-subtitle">Unified record: automatic detections (from cassette levels) plus manual entries for loads the system missed. Feeds cash reports and the depletion forecast (BRD 6.3).</p>
   </div>
 </div>
 
 <div class="page-content">
 <div class="card">
   <div class="card-header">
-    <span class="card-title">Log a cash load</span>
+    <span class="card-title">Log a missed load</span>
+  </div>
+  <p style="padding:0 24px;color:#64748B;font-size:12px">Levels detected automatically once SNMP flows — use this form only for loads the system missed (e.g. during monitoring outages).</p>
   </div>
   <form method="post" action="/admin/cash/log">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -73,7 +75,7 @@
   </div>
   <table>
     <thead>
-      <tr><th>When (EAT)</th><th>ATM</th><th>Cassette</th><th>Notes added</th><th>By</th><th>Note</th></tr>
+      <tr><th>When (EAT)</th><th>ATM</th><th>Cassette</th><th>Notes added</th><th>By</th><th>Source</th><th>Note</th></tr></tr>
     </thead>
     <tbody>
       {% for r in loads %}
@@ -83,10 +85,11 @@
         <td>{{ r.cassette }}</td>
         <td>{{ r.notes_added }}</td>
         <td>{{ r.recorded_by }}</td>
+        <td>{{ r.source }}</td>
         <td>{{ r.notes or '' }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="6" style="text-align:center;color:#94A3B8">No loads recorded yet.</td></tr>
+      <tr><td colspan="7" style="text-align:center;color:#94A3B8">No loads recorded yet.</td></tr>
       {% endfor %}
     </tbody>
   </table>

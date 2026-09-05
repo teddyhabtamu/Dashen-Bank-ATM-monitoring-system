@@ -51,6 +51,9 @@ CREATE TABLE IF NOT EXISTS cash_replenishments (
     notes_added INT NOT NULL CHECK (notes_added > 0),
     recorded_at TIMESTAMP DEFAULT NOW(),
     recorded_by VARCHAR(100) DEFAULT 'system',
-    notes TEXT DEFAULT ''
+    notes TEXT DEFAULT '',
+    -- MANUAL: human-logged (exception path — e.g. loads during SNMP outages).
+    -- AUTO:   system-detected from SNMP level jumps at/after cutover.
+    source VARCHAR(10) DEFAULT 'MANUAL'
 );
 CREATE INDEX IF NOT EXISTS idx_cash_repl_atm_time ON cash_replenishments(atm_id, recorded_at DESC);

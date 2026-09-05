@@ -782,13 +782,13 @@ def cash_list():
         if atm_filter:
             cur.execute("SELECT id, atm_id, cassette, notes_added, "
                         "to_char(recorded_at, 'YYYY-MM-DD HH24:MI') AS recorded_at, "
-                        "recorded_by, notes FROM cash_replenishments "
+                        "recorded_by, notes, source FROM cash_replenishments "
                         "WHERE atm_id = %s ORDER BY recorded_at DESC LIMIT 100",
                         (atm_filter,))
         else:
             cur.execute("SELECT id, atm_id, cassette, notes_added, "
                         "to_char(recorded_at, 'YYYY-MM-DD HH24:MI') AS recorded_at, "
-                        "recorded_by, notes FROM cash_replenishments "
+                        "recorded_by, notes, source FROM cash_replenishments "
                         "ORDER BY recorded_at DESC LIMIT 100")
         cols = [d[0] for d in cur.description]
         loads = [dict(zip(cols, r)) for r in cur.fetchall()]
@@ -831,8 +831,8 @@ def cash_log():
                 return redirect('/admin/cash')
             cur.execute(
                 "INSERT INTO cash_replenishments "
-                "(atm_id, cassette, notes_added, recorded_by, notes) "
-                "VALUES (%s, %s, %s, %s, %s)",
+                "(atm_id, cassette, notes_added, recorded_by, notes, source) "
+                "VALUES (%s, %s, %s, %s, %s, 'MANUAL')",
                 (atm_id, cassette, notes_added,
                  session.get('username', 'system'), notes or None))
             conn.commit()
