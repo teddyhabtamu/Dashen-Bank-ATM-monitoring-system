@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>6.4</version>
+    <!-- Display-text value maps referenced by template_ncr_snmp.xml /
+         template_grg_snmp.xml items. Import BEFORE the templates
+         (sync_atms_to_zabbix.py --import-templates does this automatically).
+         Mappings mirror the simulator healthy values + trigger semantics;
+         text is cosmetic only — thresholds live in triggers.json. -->
+    <value_maps>
+        <value_map>
+            <uuid>fbd15d3ae9da4c34b34d21f5d3fd90b1</uuid>
+            <name>ATM Operational Status</name>
+            <mappings>
+                <mapping>
+                    <value>0</value>
+                    <newvalue>Unknown</newvalue>
+                </mapping>
+                <mapping>
+                    <value>1</value>
+                    <newvalue>In Service</newvalue>
+                </mapping>
+                <mapping>
+                    <value>2</value>
+                    <newvalue>Out of Service</newvalue>
+                </mapping>
+                <mapping>
+                    <value>3</value>
+                    <newvalue>Partial Service</newvalue>
+                </mapping>
+                <mapping>
+                    <value>4</value>
+                    <newvalue>Supervisor/Maintenance</newvalue>
+                </mapping>
+            </mappings>
+        </value_map>
+        <value_map>
+            <uuid>64a55fe8cc2f403d9550b183af8dbeae</uuid>
+            <name>Hardware Component Status</name>
+            <mappings>
+                <mapping>
+                    <value>0</value>
+                    <newvalue>Unknown</newvalue>
+                </mapping>
+                <mapping>
+                    <value>1</value>
+                    <newvalue>OK</newvalue>
+                </mapping>
+                <mapping>
+                    <value>2</value>
+                    <newvalue>Error</newvalue>
+                </mapping>
+                <mapping>
+                    <value>3</value>
+                    <newvalue>Degraded</newvalue>
+                </mapping>
+                <mapping>
+                    <value>4</value>
+                    <newvalue>Fault</newvalue>
+                </mapping>
+            </mappings>
+        </value_map>
+        <value_map>
+            <uuid>c6d3800adfa84ea2b3f46f385b72a68a</uuid>
+            <name>Door Status</name>
+            <mappings>
+                <mapping>
+                    <value>0</value>
+                    <newvalue>Closed</newvalue>
+                </mapping>
+                <mapping>
+                    <value>1</value>
+                    <newvalue>Open</newvalue>
+                </mapping>
+            </mappings>
+        </value_map>
+        <value_map>
+            <uuid>672a013611df4a62a9402e49ffa4cbe9</uuid>
+            <name>Alert Detected</name>
+            <mappings>
+                <mapping>
+                    <value>0</value>
+                    <newvalue>No Alert</newvalue>
+                </mapping>
+                <mapping>
+                    <value>1</value>
+                    <newvalue>Alert</newvalue>
+                </mapping>
+            </mappings>
+        </value_map>
+        <value_map>
+            <uuid>dedff34a8484443b97e93ab3f826686c</uuid>
+            <name>UPS Status</name>
+            <mappings>
+                <mapping>
+                    <value>0</value>
+                    <newvalue>Unknown</newvalue>
+                </mapping>
+                <mapping>
+                    <value>1</value>
+                    <newvalue>Online</newvalue>
+                </mapping>
+                <mapping>
+                    <value>2</value>
+                    <newvalue>On Battery/Fault</newvalue>
+                </mapping>
+            </mappings>
+        </value_map>
+        <value_map>
+            <uuid>38cc71bb6bd443c2a5b21f1aa79e038e</uuid>
+            <name>Printer Status</name>
+            <mappings>
+                <mapping>
+                    <value>0</value>
+                    <newvalue>Unknown</newvalue>
+                </mapping>
+                <mapping>
+                    <value>1</value>
+                    <newvalue>OK</newvalue>
+                </mapping>
+                <mapping>
+                    <value>2</value>
+                    <newvalue>Warning</newvalue>
+                </mapping>
+                <mapping>
+                    <value>3</value>
+                    <newvalue>Low</newvalue>
+                </mapping>
+                <mapping>
+                    <value>4</value>
+                    <newvalue>Fault</newvalue>
+                </mapping>
+            </mappings>
+        </value_map>
+    </value_maps>
+</zabbix_export>
