@@ -1,0 +1,219 @@
+[
+  {
+    "_comment": "Authoritative Zabbix trigger set for the ATM SNMP templates. scripts/build_zabbix_triggers.py renders these into template_ncr_snmp.xml / template_grg_snmp.xml (a def applies to a template only if its item key exists there, so vendor differences are automatic). Re-run after editing this file OR status_map.json. value: number = literal threshold; {\"map\": k} = code from status_map.json (vendor override aware); {\"expr\": s} = raw right-hand side ({T} = template name). verify_at_walk: assumed SIM-era literal — confirm against the real SNMP walk during cutover."
+  },
+  {
+    "key": "atm.status", "name": "ATM {HOST.NAME} is Out of Service",
+    "func": "last", "op": "=", "value": {"map": "out_of_service"},
+    "priority": "DISASTER", "component": "system", "description": ""
+  },
+  {
+    "key": "atm.status", "name": "ATM {HOST.NAME} in Partial Service",
+    "func": "last", "op": "=", "value": {"map": "partial_service"},
+    "priority": "HIGH", "component": "system",
+    "description": "ATM is operating with degraded functionality."
+  },
+  {
+    "key": "atm.status", "name": "ATM {HOST.NAME} in Supervisor/Maintenance Mode",
+    "func": "last", "op": "=", "value": {"map": "supervisor"},
+    "priority": "WARNING", "component": "system", "description": ""
+  },
+  {
+    "key": "atm.status", "name": "No SNMP data from {HOST.NAME} for 5 minutes",
+    "func": "nodata", "func_param": "5m", "op": "=", "value": 1,
+    "priority": "DISASTER", "component": "system",
+    "description": "All SNMP items stale — ATM unreachable, SNMP broken, or poller down. Other triggers freeze on stale data; this one catches the silence."
+  },
+  {
+    "key": "atm.cash.cassette1", "name": "Cash Empty — Cassette 1 on {HOST.NAME}",
+    "func": "last", "op": "=", "value": 0,
+    "priority": "DISASTER", "component": "cash", "description": ""
+  },
+  {
+    "key": "atm.cash.cassette2", "name": "Cash Empty — Cassette 2 on {HOST.NAME}",
+    "func": "last", "op": "=", "value": 0,
+    "priority": "DISASTER", "component": "cash", "description": ""
+  },
+  {
+    "key": "atm.cash.cassette3", "name": "Cash Empty — Cassette 3 on {HOST.NAME}",
+    "func": "last", "op": "=", "value": 0,
+    "priority": "DISASTER", "component": "cash", "description": ""
+  },
+  {
+    "key": "atm.cash.cassette4", "name": "Cash Empty — Cassette 4 on {HOST.NAME}",
+    "func": "last", "op": "=", "value": 0,
+    "priority": "DISASTER", "component": "cash", "description": ""
+  },
+  {
+    "key": "atm.cash.cassette1", "name": "Cash Low — Cassette 1 on {HOST.NAME}",
+    "func": "last", "op": "<", "value": 200,
+    "priority": "HIGH", "component": "cash",
+    "description": "Cassette 1 has fewer than 200 notes remaining. Schedule replenishment."
+  },
+  {
+    "key": "atm.cash.cassette2", "name": "Cash Low — Cassette 2 on {HOST.NAME}",
+    "func": "last", "op": "<", "value": 200,
+    "priority": "HIGH", "component": "cash",
+    "description": "Cassette 2 has fewer than 200 notes remaining. Schedule replenishment."
+  },
+  {
+    "key": "atm.cash.cassette3", "name": "Cash Low — Cassette 3 on {HOST.NAME}",
+    "func": "last", "op": "<", "value": 200,
+    "priority": "HIGH", "component": "cash",
+    "description": "Cassette 3 has fewer than 200 notes remaining. Schedule replenishment."
+  },
+  {
+    "key": "atm.cash.cassette4", "name": "Cash Low — Cassette 4 on {HOST.NAME}",
+    "func": "last", "op": "<", "value": 200,
+    "priority": "HIGH", "component": "cash",
+    "description": "Cassette 4 has fewer than 200 notes remaining. Schedule replenishment."
+  },
+  {
+    "key": "atm.cash.jam", "name": "CASH JAM Detected on {HOST.NAME}",
+    "func": "last", "op": "=", "value": {"map": "cash_jam_fault"},
+    "priority": "DISASTER", "component": "cash",
+    "description": "Cash jam detected. ATM may be dispensing incorrectly."
+  },
+  {
+    "key": "atm.cash.rejectbin", "name": "Reject Bin Nearly Full on {HOST.NAME}",
+    "func": "last", "op": ">", "value": 80,
+    "priority": "WARNING", "component": "cash", "description": ""
+  },
+  {
+    "key": "atm.card.reader", "name": "Card Reader Error on {HOST.NAME}",
+    "func": "last", "op": "=", "value": {"map": "card_reader_fault"},
+    "priority": "HIGH", "component": "card", "description": ""
+  },
+  {
+    "key": "atm.card.shutter", "name": "Card Shutter Failure on {HOST.NAME}",
+    "func": "last", "op": "<>", "value": 1,
+    "priority": "HIGH", "component": "card", "description": "",
+    "verify_at_walk": true
+  },
+  {
+    "key": "atm.card.captures", "name": "High Card Capture Count on {HOST.NAME}",
+    "func": "last", "op": ">", "value": 5,
+    "priority": "AVERAGE", "component": "card",
+    "description": "Unusual number of card captures — possible card reader fault."
+  },
+  {
+    "key": "atm.printer.receipt", "name": "Receipt Printer Fault on {HOST.NAME}",
+    "func": "last", "op": "=", "value": 4,
+    "priority": "AVERAGE", "component": "printer", "description": "",
+    "verify_at_walk": true
+  },
+  {
+    "key": "atm.printer.paper", "name": "Receipt Paper Out on {HOST.NAME}",
+    "func": "last", "op": "=", "value": 0,
+    "priority": "HIGH", "component": "printer", "description": ""
+  },
+  {
+    "key": "atm.printer.paper", "name": "Receipt Paper Low on {HOST.NAME}",
+    "func": "last", "op": "<", "value": 20,
+    "priority": "WARNING", "component": "printer", "description": ""
+  },
+  {
+    "key": "atm.printer.journal", "name": "Journal Printer Fault on {HOST.NAME}",
+    "func": "last", "op": "<>", "value": 1,
+    "priority": "AVERAGE", "component": "printer", "description": "",
+    "verify_at_walk": true
+  },
+  {
+    "key": "atm.net.link", "name": "Network Link Down on {HOST.NAME}",
+    "func": "last", "op": "=", "value": {"map": "offline_net_link"},
+    "priority": "DISASTER", "component": "network", "description": ""
+  },
+  {
+    "key": "atm.net.latency", "name": "High Network Latency on {HOST.NAME}",
+    "func": "avg", "func_param": "5m", "op": ">", "value": 500,
+    "priority": "HIGH", "component": "network",
+    "description": "Average latency over 500ms for last 5 minutes — transactions may time out."
+  },
+  {
+    "key": "atm.net.packetloss", "name": "Packet Loss Detected on {HOST.NAME}",
+    "func": "last", "op": ">", "value": 10,
+    "priority": "HIGH", "component": "network", "description": ""
+  },
+  {
+    "key": "atm.power.main", "name": "Main Power Failure on {HOST.NAME}",
+    "func": "last", "op": "=", "value": 2,
+    "priority": "DISASTER", "component": "power", "description": "",
+    "verify_at_walk": true
+  },
+  {
+    "key": "atm.power.ups", "name": "UPS on Battery on {HOST.NAME}",
+    "func": "last", "op": "=", "value": 2,
+    "priority": "WARNING", "component": "power",
+    "description": "ATM running on UPS battery. Check main power supply.",
+    "verify_at_walk": true
+  },
+  {
+    "key": "atm.power.battery", "name": "UPS Battery Low on {HOST.NAME}",
+    "func": "last", "op": "<", "value": 20,
+    "priority": "HIGH", "component": "power", "description": ""
+  },
+  {
+    "key": "atm.power.battery", "name": "UPS Battery Critical on {HOST.NAME}",
+    "func": "last", "op": "<", "value": 5,
+    "priority": "DISASTER", "component": "power",
+    "description": "UPS battery near empty — ATM shutdown imminent."
+  },
+  {
+    "key": "atm.security.safedoor", "name": "SAFE DOOR OPEN on {HOST.NAME}",
+    "func": "last", "op": "=", "value": 1,
+    "priority": "DISASTER", "component": "security",
+    "description": "ATM safe door has been opened. Verify authorized maintenance."
+  },
+  {
+    "key": "atm.security.cabdoor", "name": "Cabinet Door Open on {HOST.NAME}",
+    "func": "last", "op": "=", "value": 1,
+    "priority": "HIGH", "component": "security", "description": ""
+  },
+  {
+    "key": "atm.security.intrusion", "name": "INTRUSION ALERT on {HOST.NAME}",
+    "func": "last", "op": "=", "value": 1,
+    "priority": "DISASTER", "component": "security",
+    "description": "Intrusion alert triggered. Contact security immediately."
+  },
+  {
+    "key": "atm.security.vibration", "name": "Vibration Alert on {HOST.NAME}",
+    "func": "last", "op": "=", "value": 1,
+    "priority": "DISASTER", "component": "security",
+    "description": "Vibration detected — possible ATM tampering or attack."
+  },
+  {
+    "key": "atm.env.temperature", "name": "High Temperature on {HOST.NAME}",
+    "func": "last", "op": ">", "value": 40,
+    "priority": "HIGH", "component": "environment",
+    "description": "ATM enclosure temperature exceeding safe limits."
+  },
+  {
+    "key": "atm.env.temperature", "name": "Critical Temperature on {HOST.NAME}",
+    "func": "last", "op": ">", "value": 50,
+    "priority": "DISASTER", "component": "environment", "description": ""
+  },
+  {
+    "key": "atm.cam.cam1", "name": "Camera 1 Fault on {HOST.NAME}",
+    "func": "last", "op": "<>", "value": 1,
+    "priority": "AVERAGE", "component": "camera", "description": "",
+    "verify_at_walk": true
+  },
+  {
+    "key": "atm.cam.cam2", "name": "Camera 2 Fault on {HOST.NAME}",
+    "func": "last", "op": "<>", "value": 1,
+    "priority": "AVERAGE", "component": "camera", "description": "",
+    "verify_at_walk": true
+  },
+  {
+    "key": "atm.cam.storage", "name": "Camera Storage Issue on {HOST.NAME}",
+    "func": "last", "op": "<>", "value": 1,
+    "priority": "HIGH", "component": "camera", "description": "",
+    "verify_at_walk": true
+  },
+  {
+    "key": "atm.txn.failed", "name": "High Transaction Failure Rate on {HOST.NAME}",
+    "func": "last", "op": ">", "value": {"expr": "last(/{T}/atm.txn.total)*0.2"},
+    "priority": "HIGH", "component": "transactions",
+    "description": "More than 20% of transactions are failing."
+  }
+]

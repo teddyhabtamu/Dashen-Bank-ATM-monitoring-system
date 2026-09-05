@@ -16,6 +16,7 @@ _PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config",
 DEFAULTS = {
     "in_service": 1,
     "out_of_service": 2,
+    "partial_service": 3,
     "supervisor": 4,
     "offline_net_link": 2,
     "cash_jam_fault": 1,
