@@ -107,6 +107,18 @@ def update_states(auth):
     conn = get_db()
     try:
         cur = conn.cursor()
+        # History table doubles as its own migration (older deploys lack it).
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS atm_state_history (
+                id SERIAL PRIMARY KEY,
+                atm_id VARCHAR(20) NOT NULL REFERENCES atm_locations(atm_id) ON DELETE CASCADE,
+                state VARCHAR(30) NOT NULL,
+                started_at TIMESTAMP DEFAULT NOW(),
+                ended_at TIMESTAMP
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_state_hist_atm "
+                    "ON atm_state_history(atm_id, started_at)")
         for atm_id, vendor, new_state in results:
             cur.execute("SELECT state FROM atm_current_state WHERE atm_id = %s", (atm_id,))
             row = cur.fetchone()
@@ -124,8 +136,22 @@ def update_states(auth):
                         last_seen = NOW(),
                         updated_at = NOW()
                 """, (atm_id, new_state, current_state))
+                # close the previous history segment, open the new one
+                cur.execute("UPDATE atm_state_history SET ended_at = NOW() "
+                            "WHERE atm_id = %s AND ended_at IS NULL", (atm_id,))
+                cur.execute("INSERT INTO atm_state_history (atm_id, state) "
+                            "VALUES (%s, %s)", (atm_id, new_state))
             else:
                 cur.execute("UPDATE atm_current_state SET last_seen = NOW(), updated_at = NOW() WHERE atm_id = %s", (atm_id,))
+                # backfill: ATMs whose current state predates history tracking
+                # get an open segment starting at their last change
+                cur.execute("""
+                    INSERT INTO atm_state_history (atm_id, state, started_at)
+                    SELECT %s, %s, COALESCE(
+                        (SELECT state_changed_at FROM atm_current_state WHERE atm_id = %s), NOW())
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM atm_state_history WHERE atm_id = %s AND ended_at IS NULL)
+                """, (atm_id, new_state, atm_id, atm_id))
         conn.commit()
     finally:
         cur.close()

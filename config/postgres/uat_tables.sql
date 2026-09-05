@@ -57,3 +57,15 @@ CREATE TABLE IF NOT EXISTS cash_replenishments (
     source VARCHAR(10) DEFAULT 'MANUAL'
 );
 CREATE INDEX IF NOT EXISTS idx_cash_repl_atm_time ON cash_replenishments(atm_id, recorded_at DESC);
+
+-- State history (BRD 6.1 availability: uptime %, downtime duration + reasons).
+-- state-manager opens a segment on every state change and closes the previous
+-- one; the availability report integrates these segments over the window.
+CREATE TABLE IF NOT EXISTS atm_state_history (
+    id SERIAL PRIMARY KEY,
+    atm_id VARCHAR(20) NOT NULL REFERENCES atm_locations(atm_id) ON DELETE CASCADE,
+    state VARCHAR(30) NOT NULL,
+    started_at TIMESTAMP DEFAULT NOW(),
+    ended_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_state_hist_atm ON atm_state_history(atm_id, started_at);

@@ -528,56 +528,82 @@ def report_availability(fmt):
 
     with get_db() as conn:
         cur = conn.cursor()
+        # True availability from state history (BRD 6.1): integrate each ATM's
+        # state segments over the window. Uptime = IN_SERVICE hours; downtime
+        # reasons = dominant non-service state. (The old query measured
+        # transaction *activity*, which misreads quiet-but-healthy ATMs as down.)
         sql = """
-            WITH hourly AS (
-                SELECT
-                    t.atm_id,
-                    l.branch,
-                    DATE_TRUNC('hour', t.recorded_at) as hour,
-                    COUNT(*) as txn_count
-                FROM atm_transactions t
-                JOIN atm_locations l ON t.atm_id = l.atm_id
-                WHERE t.recorded_at >= NOW() - INTERVAL %s
-                  AND l.status = 'active'
-            """ + (" AND t.atm_id = %s" if atm != 'all' else "") + """
-                GROUP BY t.atm_id, l.branch, DATE_TRUNC('hour', t.recorded_at)
+            WITH bounds AS (
+                SELECT NOW() - INTERVAL %s AS start_ts, NOW() AS end_ts,
+                       %s * 24.0 AS expected_hours
             ),
-            total_hours AS (
-                SELECT %s * 24 as expected_hours
+            segs AS (
+                SELECT l.atm_id, l.branch, h.state,
+                    EXTRACT(EPOCH FROM (
+                        COALESCE(LEAST(h.ended_at, (SELECT end_ts FROM bounds)),
+                                 (SELECT end_ts FROM bounds))
+                        - GREATEST(h.started_at, (SELECT start_ts FROM bounds))
+                    )) / 3600.0 AS hours
+                FROM atm_locations l
+                JOIN atm_state_history h ON h.atm_id = l.atm_id
+                WHERE l.status = 'active'
+                  AND h.started_at < (SELECT end_ts FROM bounds)
+                  AND (h.ended_at IS NULL OR h.ended_at > (SELECT start_ts FROM bounds))
+            """ + (" AND l.atm_id = %s" if atm != 'all' else "") + """
             ),
-            uptime AS (
+            agg AS (
+                SELECT atm_id, branch,
+                    COALESCE(SUM(hours) FILTER (WHERE state = 'IN_SERVICE'), 0) AS up_hours
+                FROM segs GROUP BY atm_id, branch
+            ),
+            reasons AS (
+                SELECT DISTINCT ON (atm_id) atm_id, state AS top_reason
+                FROM segs WHERE state <> 'IN_SERVICE' ORDER BY atm_id, hours DESC
+            ),
+            base AS (
+                SELECT atm_id, branch FROM atm_locations
+                WHERE status = 'active'
+            """ + (" AND atm_id = %s" if atm != 'all' else "") + """
+            ),
+            calc AS (
                 SELECT
-                    atm_id,
-                    branch,
-                    COUNT(*) as active_hours,
-                    (SELECT expected_hours FROM total_hours) as expected_hours,
-                    ROUND(100.0 * COUNT(*) / (SELECT expected_hours FROM total_hours), 2) as uptime_pct
-                FROM hourly
-                GROUP BY atm_id, branch
+                    b.atm_id,
+                    b.branch,
+                    ROUND(COALESCE(a.up_hours, 0), 1) AS active_hours,
+                    (SELECT expected_hours FROM bounds) AS expected_hours,
+                    ROUND(100.0 * COALESCE(a.up_hours, 0)
+                        / (SELECT expected_hours FROM bounds), 2) AS uptime_pct,
+                    COALESCE(r.top_reason,
+                        CASE WHEN COALESCE(a.up_hours, 0) >=
+                                  (SELECT expected_hours FROM bounds)
+                             THEN 'None' ELSE 'No data' END) AS top_reason
+                FROM base b
+                LEFT JOIN agg a USING (atm_id)
+                LEFT JOIN reasons r USING (atm_id)
             )
             SELECT
                 atm_id as "ATM ID",
                 branch as "Branch",
                 active_hours as "Active Hours",
                 expected_hours as "Expected Hours",
-                (expected_hours - active_hours) as "Downtime Hours",
+                ROUND(expected_hours - active_hours, 1) as "Downtime Hours",
                 uptime_pct as "Uptime",
                 CASE
                     WHEN uptime_pct >= 99.9 THEN 'Excellent'
                     WHEN uptime_pct >= 99.0 THEN 'Good'
                     WHEN uptime_pct >= 95.0 THEN 'Acceptable'
                     ELSE 'Below Target'
-                END as "SLA Status"
-            FROM uptime
-            ORDER BY uptime_pct DESC
+                END as "SLA Status",
+                top_reason as "Top Downtime Reason"
+            FROM calc
+            ORDER BY 6 DESC
         """
-        params = [f"{days} days"]
+        params = [f"{days} days", days]
         if atm != 'all':
             params.append(atm)
-        params.append(days)
+            params.append(atm)
         cur.execute(sql, tuple(params))
-        rows = cur.fetchall()
-        headers = [d[0] for d in cur.description]
+        rows = cur.fetchall(); headers = [d[0] for d in cur.description]
         cur.close()
 
     title = 'ATM Availability Report'
@@ -598,7 +624,7 @@ def report_availability(fmt):
             'Below Target': 'FFC7CE'
         }
         for idx, row in enumerate(rows):
-            sla_val = str(row[-1] or '') if row else ''
+            sla_val = str(row[6] or '') if row else ''
             fill_color = colors_map.get(sla_val, 'FFFFFF')
             cell = ws.cell(row=data_start + idx, column=len(headers))
             cell.fill = openpyxl.styles.PatternFill('solid', fgColor=fill_color)
