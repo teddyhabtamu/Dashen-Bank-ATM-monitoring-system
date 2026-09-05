@@ -116,7 +116,7 @@ services:
       - ./entrypoint.sh:/entrypoint.sh:ro
       - ./config/grafana/datasources-uat.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
       - ./config/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/provider.yml:ro
-      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards/files:ro
+      - ./config/grafana/dashboards:/etc/grafana/dashboards-json:ro
       - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
     entrypoint: ["sh", "/entrypoint.sh"]
     restart: unless-stopped
