@@ -194,11 +194,14 @@ def fetch_zabbix_metrics(atm_id):
             return None
         hostid = hosts[0]['hostid']
         items = _zbx_call('item.get', {'hostids': [hostid],
-                                       'output': ['key_', 'lastvalue'],
+                                       'output': ['key_', 'lastvalue', 'lastclock'],
                                        'filter': {'status': 0}}, auth)
         if not items:
             return None
-        return {it['key_']: it.get('lastvalue') for it in items}
+        # lastclock "0" = never collected (Zabbix still reports lastvalue "0"):
+        # map to None so the detail page shows grey no-data instead of fake zeros.
+        return {it['key_']: (it.get('lastvalue') if str(it.get('lastclock')) != '0' else None)
+                for it in items}
     except Exception:
         return None
 

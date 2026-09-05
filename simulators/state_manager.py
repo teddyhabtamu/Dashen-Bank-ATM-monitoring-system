@@ -73,11 +73,15 @@ def fetch_host_metrics(auth, host):
     if not hosts:
         return None
     hostid = hosts[0]['hostid']
-    items = zbx_call('item.get', {'output': ['key_', 'lastvalue'], 'hostids': [hostid],
+    items = zbx_call('item.get', {'output': ['key_', 'lastvalue', 'lastclock'], 'hostids': [hostid],
                                   'filter': {'key_': STATE_KEYS}}, auth)
     if not items:
         return {}
-    return {it['key_']: it.get('lastvalue') for it in items}
+    # Zabbix reports lastvalue "0" for items that never collected — use
+    # lastclock to tell those apart from genuine zeros, otherwise a dataless
+    # host reads OUT_OF_CASH instead of UNREACHABLE.
+    return {it['key_']: (it.get('lastvalue') if str(it.get('lastclock')) != '0' else None)
+            for it in items}
 
 
 def determine_state(m, vendor='NCR'):
