@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <zabbix_export>
     <version>6.4</version>
-    <!-- Display-text value maps referenced by template_ncr_snmp.xml /
-         template_grg_snmp.xml items. Import BEFORE the templates
-         (sync_atms_to_zabbix.py --import-templates does this automatically).
+    <!-- Display-text value maps referenced by the SNMP template items.
+         Import BEFORE the templates (sync script does this automatically).
          Mappings mirror the simulator healthy values + trigger semantics;
-         text is cosmetic only — thresholds live in triggers.json. -->
+         text is cosmetic only: thresholds live in triggers.json. -->
     <value_maps>
         <value_map>
             <uuid>fbd15d3ae9da4c34b34d21f5d3fd90b1</uuid>
