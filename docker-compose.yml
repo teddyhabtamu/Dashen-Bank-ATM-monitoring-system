@@ -100,6 +100,8 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: "admin"
       GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD}"
+      # Postgres datasource password (== DB_PASS); expanded inside datasources-uat.yml
+      GF_PG_PASSWORD: "${DB_PASS}"
       GF_INSTALL_PLUGINS: "alexanderzobnin-zabbix-app 4.4.5"
       GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: "alexanderzobnin-zabbix-datasource,alexanderzobnin-zabbix-app"
       GF_PANELS_DISABLE_SANITIZE_HTML: "true"
@@ -113,6 +115,8 @@ services:
       - ./logo.png:/usr/share/grafana/public/img/dashen-logo.png:ro
       - ./entrypoint.sh:/entrypoint.sh:ro
       - ./config/grafana/datasources-uat.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./config/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/provider.yml:ro
+      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards/files:ro
       - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
     entrypoint: ["sh", "/entrypoint.sh"]
     restart: unless-stopped

@@ -16,7 +16,9 @@ datasources:
     database: zabbix
     user: zabbix
     secureJsonData:
-      password: <uat-postgres-password>
+      # Injected from the GF_PG_PASSWORD container env (== DB_PASS) at startup
+      # so no real password is ever committed. See docker-compose.yml.
+      password: $GF_PG_PASSWORD
     jsonData:
       sslmode: disable
       postgresVersion: 1500
