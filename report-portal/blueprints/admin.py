@@ -325,16 +325,25 @@ def build_hardware(vendor, m):
     ATM state in `state_manager.determine_state` (cash_jam + card_reader),
     otherwise the detail page disagrees with the HARDWARE_FAULT badge.
     """
-    cash_jam = m.get('atm.cash.jam') or 0
-    card = m.get('atm.card.reader') or 0
+    def num(v, default=0):
+        # Zabbix API returns every value as a string (or None when an item
+        # has never collected). Coerce once so comparisons below are safe
+        # for live strings, dataless hosts, and real ints alike.
+        try:
+            return int(float(v))
+        except (TypeError, ValueError):
+            return default
+
+    cash_jam = num(m.get('atm.cash.jam'))
+    card = num(m.get('atm.card.reader'))
     comps = [
         ('Card reader', 'ok' if card == 1 else ('error' if card == 2 else 'error')),
-        ('Printer', 'ok' if m.get('atm.printer.paper') == 1 else 'error'),
+        ('Printer', 'ok' if num(m.get('atm.printer.paper'), None) == 1 else 'error'),
         ('Pin pad', 'ok'),
         ('Cash jam', 'error' if cash_jam == 1 else 'ok'),
-        ('Retract bin', 'ok' if (m.get('atm.cash.rejectbin') or 0) < 80 else 'warn'),
-        ('Network', 'ok' if m.get('atm.net.link') == 1 else 'error'),
-        ('UPS', 'ok' if (m.get('atm.power.ups') or 0) > 0 else 'error'),
+        ('Retract bin', 'ok' if num(m.get('atm.cash.rejectbin')) < 80 else 'warn'),
+        ('Network', 'ok' if num(m.get('atm.net.link'), None) == 1 else 'error'),
+        ('UPS', 'ok' if num(m.get('atm.power.ups')) > 0 else 'error'),
     ]
     return [{'name': n, 'status': s} for n, s in comps]
 
