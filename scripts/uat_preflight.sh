@@ -62,7 +62,7 @@ else
 fi
 
 echo "-- Zabbix hosts registered for the test ATMs --"
-if docker exec zabbix-db psql -U zabbix -d zabbix -tAc "SELECT count(*) FROM hosts WHERE name LIKE 'ATM-TEST%';" 2>/dev/null | grep -q 2; then
+if docker exec zabbix-db psql -U zabbix -d zabbix -tAc "SELECT count(*) FROM hosts WHERE COALESCE(NULLIF(name, ''), host) LIKE 'ATM-TEST%';" 2>/dev/null | grep -q 2; then
   ok "Zabbix hosts for ATM-TEST-NCR / ATM-TEST-GRG present"
 else
   echo "  [WARN] expected 2 Zabbix hosts named ATM-TEST* (run sync_atms_to_zabbix.py --apply)"
