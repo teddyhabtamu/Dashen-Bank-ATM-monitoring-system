@@ -18,7 +18,7 @@
 | Area | ✅ | 🟡 | ❌ |
 |------|----|----|----|
 | §5 Functional (5.1–5.6) | 2 | 4 | 0 (+2 sub-gaps) |
-| §6 Reporting (6.1–6.5) | 0 | 5 | 1 sub-gap |
+| §6 Reporting (6.1–6.5) | 2 | 3 | 0 |
 | §7 Non-functional (7.1–7.4) | 0 | 2 | 2 |
 | §8 Integrations | 2 | 3 | 4 |
 | §9 User roles | 1 | 2 | 0 |
@@ -56,7 +56,7 @@
 
 | Requirement | Status | Evidence / next step |
 |-------------|--------|----------------------|
-| Dispenser / card reader / printer / network / software errors + auto tickets | 🟡 | All classes in `status_map.json`; auto-ticket chain proven; live data pending |
+| Dispenser / card reader / printer / network / software errors + auto tickets | 🟡 | 38 NCR + 30 GRG triggers live in Zabbix (tags, nodata silence-catcher, uuid-stable regen via `build_zabbix_triggers.py`); 8+4 thresholds flagged verify-at-walk. Four severity actions route to GLPI with recovery ops — full lifecycle drill passed |
 
 ### 5.5 Alert and Notification System — 🟡
 
@@ -80,9 +80,9 @@
 
 | Requirement | Status | Evidence / next step |
 |-------------|--------|----------------------|
-| 6.1 Availability (uptime %, downtime, reasons; daily/weekly/monthly) | 🟡 | Report Portal + scheduler running; per-report number verification is UAT test-plan work |
+| 6.1 Availability (uptime %, downtime, reasons; daily/weekly/monthly) | ✅ | Rewritten off `atm_state_history` (was transaction-activity proxy — wrong metric); verified live: 0.0/168.0/0.00%/UNREACHABLE on real history. PDF/Excel/CSV paths checked |
 | 6.2 Transaction summary (totals, success rate, failed, value) | 🟡 | Queries exist in dashboards; same verification needed |
-| 6.3 Cash report (level, dispensed, replenishment history) | 🟡 | Level + dispensed present; replenishment history ❌ — no cash-load events recorded (needs portal form or EJ inference). Owner: TBD |
+| 6.3 Cash report (level, dispensed, replenishment history) | ✅ | Live on UAT: Cash Loads page (form + history + audit, AUTO/MANUAL source), verified submit→DB→list; test row cleaned |
 | 6.4 Error/incident (errors, resolution time, frequency) | 🟡 | GLPI holds the data; portal-side resolution-time view to verify |
 | 6.5 Performance (most/least used, peak hours) | 🟡 | Countable from `atm_transactions`; verify views |
 | PDF / Excel / CSV, scheduled + on-demand | ✅ | Portal export + scheduler ticking (observed) |
@@ -139,14 +139,14 @@
 | 5 | Security & sensors (doors, temp/humidity, vibration/intrusion) | 🟡 | Door states mapped; sensor OIDs confirmed at walk time |
 | 6 | Transactional monitoring (ISO 8583, outcomes, failure categories, anomaly, masked-PAN search, correlation) | 🟡 | Sim feed live; masked search + anomaly proven; reversed/timed-out + category coverage verified at cutover |
 | 7 | Network monitoring (link/latency/loss/jitter, MPLS/VSAT/GSM/Fiber, alerts, correlation) | 🟡 | network-correlator live on self-host; link-type agnostic (IP-level); ATM link data at cutover |
-| 8 | EJ management (collect, multi-vendor, search, correlate, dispute, export/retention) | 🟡 | Listener + pipeline + NCR/GRG grok + portal search built; ATM forwarding + firewall pending. Retention policy missing (ILM disabled) — define per regulatory need. Owner: bank + team |
+| 8 | EJ management (collect, multi-vendor, search, correlate, dispute, export/retention) | 🟡 | Transport + NCR/GRG grok + portal masked search proven with fixtures (5/5 parsed, 3/3 raw retained); EJ index pattern + OSD import done. Retention: 90d ISM policy live + PG daily sweep (periods TBD with Risk/Compliance). Raw-vendor multiline normalization: confirm at cutover whether ATMs send pre-normalized lines |
 | 9 | Camera & surveillance | ❌ | Unbuilt: no camera polling, snapshots, tampering alerts, or balance-check capture. Needs scope/Phase-2 decision + OID confirmation. Owner: bank + team |
 | 10 | Power & environmental (mains/UPS/battery, correlation) | ❌ | Unbuilt. Same decision path as row 9 |
-| 11 | Alert management (all triggers; email/SMS/push; severity/escalation; ack/suppress) | 🟡 | All except camera/power flow through proven chain; email needs relay; SMS/push missing; escalation = Zabbix action steps (configure at cutover) |
-| 12 | Incident/ticket/SLA (auto+manual, lifecycle, assign, SLA, RCA, attachments) | 🟡 | All proven except RCA-before-closure (GLPI can't enforce natively — process control, not code) |
+| 11 | Alert management (all triggers; email/SMS/push; severity/escalation; ack/suppress) | 🟡 | Four severity actions (Disaster/High/Average/Warning) route ATMs-group events to GLPI with recovery ops — full PROBLEM→solve lifecycle drill passed; escalation via GLPI SLAs. Email needs bank relay; SMS/push missing |
+| 12 | Incident/ticket/SLA (auto+manual, lifecycle, assign, SLA, RCA, attachments) | 🟡 | Auto-create + lifecycle + assign + SLAs proven live; **RCA**: `ATM Fault RCA` solution template in GLPI (root-cause/corrective/preventive/verified-by) + close-with-RCA process. Native enforcement still impossible — process control |
 | 13 | Mobile app (Android mandatory) | ❌ | Nothing exists. Scope decision required (build / waive / Phase 2); portal is mobile-browser-usable as mitigation. Owner: bank |
-| 14 | Dashboards (operational, KPI, geo-map, drill-down, widgets/filters) | 🟡 | 7 dashboards live; geo-map needs verification against lat/long data |
-| 15 | Txn reporting & analytics (uptime, downtime, SLA, vendor, success/failure, cash-out, export, scheduled) | 🟡 | Present; per-report verification at cutover |
+| 14 | Dashboards (operational, KPI, geo-map, drill-down, widgets/filters) | 🟡 | 7 dashboards live; geo-map pins verified for both test ATMs (4 Kilo coords seeded); EJ datasource green since :9200 opened |
+| 15 | Txn reporting & analytics (uptime, downtime, SLA, vendor, success/failure, cash-out, export, scheduled) | 🟡 | All 7 reports executed against live sim data and cross-checked (txn↔cash↔vendor agree to the birr); PDFs render; Complete report gained §6 Availability |
 | 16 | Integrations (switch, CBS, vendor tools, NMS, ISO/SNMP/NDC/REST) | 🟡 | See §8 |
 | 17 | Security & compliance (RBAC, audit, encryption, PCI, regulatory, retention) | 🟡 | Audit ✅ + masking ✅ (last-4 proven); encryption ❌; PCI scope + retention mapping pending with Risk/Compliance |
 | 18 | Non-functional (99.9%, HA, DR, scalable, web) | 🟡 | Scalable ✅ + web ✅ + backups ✅; HA/DR ❌ (see 7.1) |
