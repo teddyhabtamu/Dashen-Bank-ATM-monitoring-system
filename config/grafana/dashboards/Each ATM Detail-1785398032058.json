@@ -642,7 +642,7 @@
       "type": "barchart"
     }
   ],
-  "refresh": "10s",
+  "refresh": "30s",
   "schemaVersion": 39,
   "tags": [],
   "templating": {
@@ -674,7 +674,7 @@
     "to": "now"
   },
   "timepicker": {},
-  "timezone": "",
+  "timezone": "Africa/Addis_Ababa",
   "title": "Each ATM Detail",
   "uid": "db1ef76d-e1c0-41b8-bb9a-6699313b16a3",
   "version": 6,

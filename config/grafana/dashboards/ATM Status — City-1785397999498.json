@@ -269,7 +269,7 @@
       "type": "table"
     }
   ],
-  "refresh": "10s",
+  "refresh": "30s",
   "schemaVersion": 39,
   "tags": [
     "ATM",
@@ -283,7 +283,7 @@
     "to": "now"
   },
   "timepicker": {},
-  "timezone": "",
+  "timezone": "Africa/Addis_Ababa",
   "title": "ATM Status — City",
   "uid": "atm-status-city",
   "version": 4,
