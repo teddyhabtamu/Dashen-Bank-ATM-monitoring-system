@@ -1,6 +1,6 @@
 {
   "policy": {
-    "description": "ATM EJ retention (tunable, see _comment)",
+    "description": "ATM EJ retention 90d (tunable placeholder - confirm with Risk/Compliance)",
     "default_state": "hot",
     "states": [
       {
