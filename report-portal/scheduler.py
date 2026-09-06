@@ -16,6 +16,16 @@ from audit import log_action
 
 logger = logging.getLogger(__name__)
 
+# ── Data retention (BRD row 17) ─────────────────────────────────────────────
+# Runs daily ~03:00 EAT inside the schedule poll. Periods are PLACEHOLDERS —
+# confirm with Risk/Compliance (NBE requirements) and adjust. OpenSearch EJ
+# indices are governed separately by config/opensearch/ism_ej_retention.json.
+# cash_replenishments is NEVER auto-deleted (financial evidence).
+RETENTION_TXN_DAYS = int(os.environ.get('RETENTION_TXN_DAYS', '365'))
+RETENTION_AUDIT_DAYS = int(os.environ.get('RETENTION_AUDIT_DAYS', '365'))
+RETENTION_STATE_DAYS = int(os.environ.get('RETENTION_STATE_DAYS', '180'))
+_last_retention_date = None
+
 SCHEDULER_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS scheduled_reports (
     id          SERIAL PRIMARY KEY,
@@ -355,9 +365,42 @@ def _calc_next_run(schedule):
     return None
 
 
+def _run_retention():
+    """Delete rows older than the retention periods. Idempotent; runs daily."""
+    global _last_retention_date
+    today = datetime.now(timezone.utc).date()
+    if _last_retention_date == today:
+        return
+    _last_retention_date = today
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            total = 0
+            for table, col, days in (('atm_transactions', 'recorded_at', RETENTION_TXN_DAYS),
+                                    ('audit_log', 'performed_at', RETENTION_AUDIT_DAYS)):
+                cur.execute(
+                    f"DELETE FROM {table} WHERE {col} < NOW() - INTERVAL '%s days'",
+                    (days,))
+                total += cur.rowcount or 0
+            # State history: only CLOSED segments fully outside the window.
+            # Open segments are never deleted — they represent current state.
+            cur.execute(
+                "DELETE FROM atm_state_history WHERE ended_at IS NOT NULL"
+                " AND ended_at < NOW() - INTERVAL '%s days'",
+                (RETENTION_STATE_DAYS,))
+            total += cur.rowcount or 0
+            conn.commit()
+            cur.close()
+        logger.info('Retention sweep: %d old row(s) removed', total)
+    except Exception as e:
+        logger.error('Retention sweep failed: %s', e)
+
+
 def _check_schedules():
     try:
         now = datetime.now(timezone.utc)
+        if now.hour == 0:
+            _run_retention()
         with get_db() as conn:
             cur = conn.cursor()
             cur.execute(

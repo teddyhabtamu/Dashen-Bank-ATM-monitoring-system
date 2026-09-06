@@ -1,0 +1,26 @@
+{
+  "_comment": "EJ index retention. Auto-attaches to atm-ej-live-* at creation via ism_template. DEFAULT 90 DAYS IS A PLACEHOLDER — confirm the retention period with Risk/Compliance (NBE regulatory requirements) and adjust min_index_age. Apply: PUT _plugins/_ism/policies/atm_ej_retention (done once per cluster; template reapplies to new indices automatically).",
+  "policy": {
+    "description": "ATM EJ retention (tunable, see _comment)",
+    "default_state": "hot",
+    "states": [
+      {
+        "name": "hot",
+        "actions": [],
+        "transitions": [
+          {
+            "state_name": "delete",
+            "conditions": { "min_index_age": "90d" }
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "actions": [ { "delete": {} } ]
+      }
+    ],
+    "ism_template": [
+      { "index_patterns": ["atm-ej-live-*"], "priority": 100 }
+    ]
+  }
+}
