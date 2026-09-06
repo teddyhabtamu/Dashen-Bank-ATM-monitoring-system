@@ -32,6 +32,69 @@ _VENDOR_SQL = """
     GROUP BY l.vendor ORDER BY 3 DESC
 """
 
+# Availability from state history (shared by the availability report and the
+# complete report §6). Params: (interval_str, days). No ATM filter — the full
+# report covers all active ATMs, mirroring its other sections.
+_AVAIL_SQL = """
+    WITH bounds AS (
+        SELECT NOW() - INTERVAL %s AS start_ts, NOW() AS end_ts,
+               %s * 24.0 AS expected_hours
+    ),
+    segs AS (
+        SELECT l.atm_id, l.branch, h.state,
+            EXTRACT(EPOCH FROM (
+                COALESCE(LEAST(h.ended_at, (SELECT end_ts FROM bounds)),
+                         (SELECT end_ts FROM bounds))
+                - GREATEST(h.started_at, (SELECT start_ts FROM bounds))
+            )) / 3600.0 AS hours
+        FROM atm_locations l
+        JOIN atm_state_history h ON h.atm_id = l.atm_id
+        WHERE l.status = 'active'
+          AND h.started_at < (SELECT end_ts FROM bounds)
+          AND (h.ended_at IS NULL OR h.ended_at > (SELECT start_ts FROM bounds))
+    ),
+    agg AS (
+        SELECT atm_id, branch,
+            COALESCE(SUM(hours) FILTER (WHERE state = 'IN_SERVICE'), 0) AS up_hours
+        FROM segs GROUP BY atm_id, branch
+    ),
+    reasons AS (
+        SELECT DISTINCT ON (atm_id) atm_id, state AS top_reason
+        FROM segs WHERE state <> 'IN_SERVICE' ORDER BY atm_id, hours DESC
+    ),
+    base AS (
+        SELECT atm_id, branch FROM atm_locations WHERE status = 'active'
+    ),
+    calc AS (
+        SELECT
+            b.atm_id,
+            b.branch,
+            ROUND(COALESCE(a.up_hours, 0), 1) AS active_hours,
+            (SELECT expected_hours FROM bounds) AS expected_hours,
+            ROUND(100.0 * COALESCE(a.up_hours, 0)
+                / (SELECT expected_hours FROM bounds), 2) AS uptime_pct,
+            COALESCE(r.top_reason,
+                CASE WHEN COALESCE(a.up_hours, 0) >=
+                          (SELECT expected_hours FROM bounds)
+                     THEN 'None' ELSE 'No data' END) AS top_reason
+        FROM base b
+        LEFT JOIN agg a USING (atm_id)
+        LEFT JOIN reasons r USING (atm_id)
+    )
+    SELECT
+        atm_id, branch, active_hours, expected_hours,
+        ROUND(expected_hours - active_hours, 1),
+        uptime_pct,
+        CASE
+            WHEN uptime_pct >= 99.9 THEN 'Excellent'
+            WHEN uptime_pct >= 99.0 THEN 'Good'
+            WHEN uptime_pct >= 95.0 THEN 'Acceptable'
+            ELSE 'Below Target'
+        END,
+        top_reason
+    FROM calc ORDER BY 6 DESC
+"""
+
 
 @bp.route('/api/atms')
 @login_required
@@ -769,6 +832,13 @@ def report_full(fmt):
             xl_append_section(ws, '5. Vendor Performance', h5, cur.fetchall())
             cur.close()
 
+            # 6. Availability
+            cur = conn.cursor()
+            cur.execute(_AVAIL_SQL, (interval_str, days))
+            h6 = ['ATM', 'Branch', 'Active Hours', 'Expected Hours', 'Downtime Hours', 'Uptime %', 'SLA Status', 'Top Downtime Reason']
+            xl_append_section(ws, '6. Availability', h6, cur.fetchall())
+            cur.close()
+
             xl_autosize(ws)
 
             log_action('EXPORT', f'Complete report (excel) - days={days}, atm={atm}')
@@ -845,6 +915,13 @@ def report_full(fmt):
             w.writerow(['5. VENDOR PERFORMANCE'])
             w.writerow(['Vendor', 'ATMs', 'Total Txns', 'Approved', 'Declined', 'Errors', 'Success Rate %', 'Cash Dispensed ETB'])
             w.writerows([[str(v) if v is not None else '—' for v in r] for r in rows5])
+            w.writerow([])
+            cur = conn.cursor()
+            cur.execute(_AVAIL_SQL, [interval_str, days])
+            rows6 = cur.fetchall(); cur.close()
+            w.writerow(['6. AVAILABILITY'])
+            w.writerow(['ATM', 'Branch', 'Active Hours', 'Expected Hours', 'Downtime Hours', 'Uptime %', 'SLA Status', 'Top Downtime Reason'])
+            w.writerows([[str(v) if v is not None else '—' for v in r] for r in rows6])
             w.writerow([])
             w.writerow(['Dashen Bank ATM Monitoring System | Confidential Management Report'])
 
@@ -945,6 +1022,14 @@ def report_full(fmt):
             if res5:
                 story += [Paragraph('<b><font color="#012169">5. Vendor Performance</font></b>', style_sec),
                           mktable(['Vendor', 'ATMs', 'Total Txns', 'Approved', 'Declined', 'Errors', 'Success Rate %', 'Cash Dispensed ETB'], res5),
+                          Spacer(1, 0.8 * cm)]
+
+            # 6. Availability
+            cur.execute(_AVAIL_SQL, [interval_str, days])
+            res6 = cur.fetchall()
+            if res6:
+                story += [Paragraph('<b><font color="#012169">6. Availability</font></b>', style_sec),
+                          mktable(['ATM', 'Branch', 'Active Hours', 'Expected Hours', 'Downtime Hours', 'Uptime %', 'SLA Status', 'Top Downtime Reason'], res6),
                           Spacer(1, 0.8 * cm)]
 
             story.append(Paragraph(
