@@ -73,13 +73,6 @@
     },
     {
       "set": {
-        "if": "ctx.vendor == null",
-        "field": "vendor",
-        "value": "NCR"
-      }
-    },
-    {
-      "set": {
         "if": "ctx.event?.category == null && ctx.transaction != null",
         "field": "event.category",
         "value": "TXN"
