@@ -23,3 +23,7 @@ ON CONFLICT (atm_id) DO UPDATE SET
   vendor = EXCLUDED.vendor, model = EXCLUDED.model, status = EXCLUDED.status,
   ip_address = EXCLUDED.ip_address, snmp_community = EXCLUDED.snmp_community,
   snmp_version = EXCLUDED.snmp_version;
+
+-- 4 Kilo Building, Addis Ababa (approx; refine with survey GPS if needed).
+UPDATE atm_locations SET latitude = 9.0054, longitude = 38.7636
+  WHERE atm_id IN ('ATM-TEST-NCR','ATM-TEST-GRG') AND latitude IS NULL;
