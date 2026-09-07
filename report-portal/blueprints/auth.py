@@ -119,13 +119,15 @@ def _ldap_auth(username, password):
             svc.unbind()
             return False, None, True
         user_dn = svc.entries[0].entry_dn
-        user = Connection(server, user=user_dn, password=password,
-                          auto_bind=True)
-        user.search(LDAP_BASE_DN,
-                    f'(&(objectClass=groupOfNames)(member={user_dn}))',
-                    attributes=['cn'])
-        groups = {str(e.cn) for e in user.entries}
-        user.unbind()
+        # Password check first (bind as the user; failures raise).
+        Connection(server, user=user_dn, password=password,
+                   auto_bind=True).unbind()
+        # Group lookup on the service connection: least privilege issues,
+        # works even when users cannot read the groups branch themselves.
+        svc.search(LDAP_BASE_DN,
+                   f'(&(objectClass=groupOfNames)(member={user_dn}))',
+                   attributes=['cn'])
+        groups = {str(e.cn) for e in svc.entries}
         svc.unbind()
         if LDAP_ADMINS_GROUP in groups:
             role = ROLE_ADMIN
