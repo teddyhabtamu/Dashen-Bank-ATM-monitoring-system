@@ -101,14 +101,21 @@ reconfiguration, full EJ regression after.
 | GLPI app/user tokens | Server `.env` | Never in repo |
 | Future: AD bind password, CA cert | Server env/files only | Never in repo |
 
-## 6. Future: true SSO (SAML/OIDC)
+## 6. Future: one login page (SSO) — decided, not started
 
-Requires, in order: (a) TLS on every UI (prerequisite for any SSO flow);
-(b) an IdP both sides agree on (bank Entra ID/ADFS or Keycloak);
-(c) per-app registration (Zabbix SAML native; Grafana OAuth/SAML native;
-GLPI via plugin — weakest link; OpenSearch via security plugin;
-portal via OIDC client lib). Track as decision **D7** (matrix §8):
-do not start before TLS + AD-directory cutover are done and stable.
+LDAP gives one *identity* (same credential everywhere); a single login *page*
+needs a session layer on top. Decision (recorded, not scoped work):
+
+- **Chosen path (later): Keycloak broker.** One IdP container, LDAP-federated
+  to bank AD. Apps use native protocols (OIDC: Grafana/OpenSearch/portal;
+  SAML: Zabbix; plugin: GLPI). Later Entra migration = federate Keycloak
+  once, touch zero apps. Cost ≈ 1–2 weeks, gated on TLS + AD cutover first.
+- **Rejected: forward-auth proxy.** Faster to stand up, permanent session
+  fragility across five different session models. Not worth it.
+- **Accepted interim:** same credential everywhere + portal deep-links
+  (≈80% of the UX, 0% new infrastructure).
+- **Hard prerequisite:** TLS on every UI before any SSO cookies exist.
+- Sequence: LDAP cutover → TLS everywhere → Keycloak evaluation → SSO.
 
 ## 7. Traceability
 

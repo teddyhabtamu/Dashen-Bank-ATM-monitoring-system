@@ -164,7 +164,7 @@
 | D4 | Production HA + encryption design | M-rows 17–18, UAT is single-host | IT + architect |
 | D5 | CBS / Card-system / NDC scope for UAT vs production | §8 + row 16 gaps | Bank + Channel Support |
 | D6 | SMS provider + cash forecast + replenishment tracking | Small builds, schedule post-cutover | Team |
-| D7 | Directory auth cutover + TLS + true SSO path | LDAP proven per app (see `docs/LDAP_Integration.md`); needs IAM answers, then TLS, then optional SAML/OIDC | IT/IAM + team |
+| D7 | Directory auth cutover + TLS + true SSO path | LDAP proven per app (see `docs/LDAP_Integration.md`); needs IAM answers, then TLS, then optional Keycloak-brokered SSO (rejected: forward-auth proxy). Sequence: LDAP → TLS → Keycloak eval → SSO | IT/IAM + team |
 
 ## 9. Traceability
 
