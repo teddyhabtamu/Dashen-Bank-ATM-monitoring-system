@@ -251,8 +251,36 @@ services:
       - postgres
     restart: unless-stopped
 
+  # ── Mock LDAP lab (NOT part of UAT) ──────────────────────────────────────
+  # Stand-in for bank Active Directory while IAM access is pending. Starts
+  # ONLY with `--profile ldap`, so normal `up` is unaffected. See
+  # config/ldap/README.md for the switchover checklist.
+  mock-ldap:
+    image: osixia/openldap:1.5.0
+    container_name: mock-ldap
+    profiles:
+      - ldap
+    command: --copy-service --loglevel info
+    environment:
+      LDAP_ORGANISATION: "ATM Monitoring Lab"
+      LDAP_DOMAIN: "atmmon.local"
+      LDAP_BASE_DN: "dc=atmmon,dc=local"
+      LDAP_ADMIN_PASSWORD: "${LDAP_ADMIN_PASSWORD:-LabAdminPass123!}"
+      LDAP_CONFIG_PASSWORD: "${LDAP_ADMIN_PASSWORD:-LabAdminPass123!}"
+      LDAP_READONLY_USER: "false"
+      LDAP_TLS: "false"
+    volumes:
+      - ./config/ldap/seed.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/seed.ldif:ro
+      - ldap-data:/var/lib/ldap
+      - ldap-config:/etc/ldap/slapd.d
+    ports:
+      - "3890:389"
+    restart: "no"
+
 volumes:
   pgdata:
   mariadb-data:
   glpi-root:
   grafana-data:
+  ldap-data:
+  ldap-config:
