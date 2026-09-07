@@ -35,3 +35,13 @@ Only these change per app (Grafana/Zabbix/GLPI/portal/OpenSearch):
 
 Keep a rollback path: `AUTH_MODE=local` on the portal, local users intact
 everywhere, until the AD cutover is verified with a leaver test.
+
+## Status (verified against the mock on UAT)
+
+| App | Mechanism | Proven |
+|-----|-----------|--------|
+| Report Portal | `AUTH_MODE=ldap` + ldap3 bind, group→role map, local fallback on directory-down only | ✅ matrix tested (admin/operator/viewer/reject) |
+| Grafana | `ldap.toml` + `GF_AUTH_LDAP_ENABLED` | ✅ roles verified (Admin/Editor), local admin intact |
+| Zabbix | user directory + per-user `userdirectoryid` + global `ldap_auth_enabled` | ✅ login verified, local Admin intact |
+| GLPI | Native: Setup → Authentication → LDAP directories (manual, ~15 min) | Runbook only — not yet executed |
+| OpenSearch | Security plugin enablement (users/roles YAML + dashboards rewire) | Design only — recommend production gate, not UAT scope |
