@@ -1,0 +1,31 @@
+# Grafana LDAP authentication (lab mock values; see config/ldap/README.md).
+# Enabled via GF_AUTH_LDAP_ENABLED=true + GF_AUTH_LDAP_CONFIG_FILE.
+# Local Grafana accounts keep working alongside LDAP.
+[[servers]]
+host = "mock-ldap"
+port = 389
+use_ssl = false
+bind_dn = "cn=admin,dc=atmmon,dc=local"
+bind_password = """$__env{LDAP_ADMIN_PASSWORD}"""
+search_filter = "(uid=%s)"
+search_base_dns = ["ou=users,dc=atmmon,dc=local"]
+
+[servers.attributes]
+name = "cn"
+surname = "sn"
+username = "uid"
+member_of = "dn"
+email = "mail"
+
+# ATM-Admins -> Grafana Admin, ATM-Operators -> Editor, others -> Viewer.
+[[servers.group_mappings]]
+group_dn = "cn=ATM-Admins,ou=groups,dc=atmmon,dc=local"
+org_role = "Admin"
+
+[[servers.group_mappings]]
+group_dn = "cn=ATM-Operators,ou=groups,dc=atmmon,dc=local"
+org_role = "Editor"
+
+[[servers.group_mappings]]
+group_dn = "*"
+org_role = "Viewer"
