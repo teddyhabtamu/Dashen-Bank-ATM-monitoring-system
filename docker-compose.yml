@@ -104,6 +104,9 @@ services:
       # Disabled by default; local accounts always keep working.
       GF_AUTH_LDAP_ENABLED: "${GF_AUTH_LDAP_ENABLED:-false}"
       GF_AUTH_LDAP_CONFIG_FILE: "/etc/grafana/ldap.toml"
+      # Consumed by ldap.toml ($__env) for the directory bind. Empty by
+      # default; set on hosts where LDAP is enabled.
+      LDAP_ADMIN_PASSWORD: "${LDAP_ADMIN_PASSWORD:-}"
       # Postgres datasource password (== DB_PASS); expanded inside datasources-uat.yml
       GF_PG_PASSWORD: "${DB_PASS}"
       GF_INSTALL_PLUGINS: "alexanderzobnin-zabbix-app 4.4.5"
