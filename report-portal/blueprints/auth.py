@@ -114,7 +114,7 @@ def _ldap_auth(username, password):
             bind_kwargs.update(user=LDAP_BIND_DN, password=LDAP_BIND_PASSWORD)
         svc = Connection(server, **bind_kwargs)
         svc.search(LDAP_BASE_DN, f'({LDAP_LOGIN_ATTR}={username})',
-                   attributes=['dn'])
+                   attributes=['cn'])
         if not svc.entries:
             svc.unbind()
             return False, None, True
