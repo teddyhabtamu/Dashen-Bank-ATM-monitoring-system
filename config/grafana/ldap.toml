@@ -9,6 +9,9 @@ bind_dn = "cn=admin,dc=atmmon,dc=local"
 bind_password = """$__env{LDAP_ADMIN_PASSWORD}"""
 search_filter = "(uid=%s)"
 search_base_dns = ["ou=users,dc=atmmon,dc=local"]
+# Find the user's groups for the mappings below (member DNs, as seeded).
+group_search_filter = "(member=%s)"
+group_search_base_dns = ["ou=groups,dc=atmmon,dc=local"]
 
 [servers.attributes]
 name = "cn"
