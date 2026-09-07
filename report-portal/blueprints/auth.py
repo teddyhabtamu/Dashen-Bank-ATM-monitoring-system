@@ -16,6 +16,27 @@ ADMIN_USER = os.environ.get('ADMIN_USER', 'admin')
 ADMIN_PASS = os.environ.get('ADMIN_PASS', '')
 INTERNAL_API_KEY = os.environ.get('INTERNAL_API_KEY', '')
 
+# Directory auth (bank AD down the road, mock LDAP in the lab).
+# AUTH_MODE=local (default): DB users only — current UAT behavior, untouched.
+# AUTH_MODE=ldap: directory first; local DB only if the directory is DOWN
+# (bad directory credentials never fall through to local).
+AUTH_MODE = os.environ.get('AUTH_MODE', 'local').strip().lower()
+LDAP_HOST = os.environ.get('LDAP_HOST', '')
+LDAP_PORT = int(os.environ.get('LDAP_PORT', '389') or 389)
+LDAP_BASE_DN = os.environ.get('LDAP_BASE_DN', '')
+LDAP_BIND_DN = os.environ.get('LDAP_BIND_DN', '')
+LDAP_BIND_PASSWORD = os.environ.get('LDAP_BIND_PASSWORD', '')
+LDAP_LOGIN_ATTR = os.environ.get('LDAP_LOGIN_ATTR', 'uid')  # sAMAccountName on AD
+LDAP_ADMINS_GROUP = os.environ.get('LDAP_ADMINS_GROUP', 'ATM-Admins')
+LDAP_OPERATORS_GROUP = os.environ.get('LDAP_OPERATORS_GROUP', 'ATM-Operators')
+
+try:
+    from ldap3 import Server, Connection, ALL
+    from ldap3.core.exceptions import LDAPSocketOpenError
+    _LDAP_LIB = True
+except ImportError:
+    _LDAP_LIB = False
+
 # Rate limiting: {ip: [(timestamp, attempt_count)]}
 _login_attempts = {}
 RATE_LIMIT = int(os.environ.get('LOGIN_RATE_LIMIT', '5'))
@@ -73,6 +94,54 @@ def init_admin_user():
             cur.close()
     except Exception as e:
         logger.warning('Could not seed admin user (non-fatal): %s', e)
+
+
+def _ldap_auth(username, password):
+    """Directory bind + group→role mapping.
+
+    Returns (ok, role, reachable). Bad credentials yield (False, None, True)
+    and must NOT fall through to local auth; only an unreachable directory
+    yields reachable=False (caller may then fail over to local).
+    """
+    if not _LDAP_LIB or not LDAP_HOST or not LDAP_BASE_DN or not password:
+        logger.error('LDAP auth unavailable (lib/host/base-dn misconfigured)')
+        return False, None, False
+    try:
+        server = Server(LDAP_HOST, port=LDAP_PORT, get_info=ALL,
+                        connect_timeout=5)
+        bind_kwargs = {'auto_bind': True}
+        if LDAP_BIND_DN:
+            bind_kwargs.update(user=LDAP_BIND_DN, password=LDAP_BIND_PASSWORD)
+        svc = Connection(server, **bind_kwargs)
+        svc.search(LDAP_BASE_DN, f'({LDAP_LOGIN_ATTR}={username})',
+                   attributes=['dn'])
+        if not svc.entries:
+            svc.unbind()
+            return False, None, True
+        user_dn = svc.entries[0].entry_dn
+        user = Connection(server, user=user_dn, password=password,
+                          auto_bind=True)
+        user.search(LDAP_BASE_DN,
+                    f'(&(objectClass=groupOfNames)(member={user_dn}))',
+                    attributes=['cn'])
+        groups = {str(e.cn) for e in user.entries}
+        user.unbind()
+        svc.unbind()
+        if LDAP_ADMINS_GROUP in groups:
+            role = ROLE_ADMIN
+        elif LDAP_OPERATORS_GROUP in groups:
+            role = ROLE_OPERATOR
+        else:
+            role = ROLE_VIEWER
+        return True, role, True
+    except LDAPSocketOpenError as e:
+        # Directory itself unreachable: caller may fail over to local auth.
+        logger.warning('LDAP directory unreachable: %s', e)
+        return False, None, False
+    except Exception as e:
+        # Server answered (bad credentials, unknown user, ...): no fallback.
+        logger.warning('LDAP auth refused for user=%s: %s', username, e)
+        return False, None, True
 
 
 def _check_password(username, password):
@@ -159,15 +228,26 @@ def login():
             error = f'Too many login attempts. Please wait {RATE_WINDOW} seconds.'
             return render_template('login.html', error=error, next=next_page)
 
-        if not ADMIN_PASS:
+        if AUTH_MODE != 'ldap' and not ADMIN_PASS:
             logger.error('Login failed: ADMIN_PASS not set on server')
             error = 'ADMIN_PASS environment variable is not set on the server.'
             return render_template('login.html', error=error)
 
-        if _check_password(username, password):
+        authed, role = False, None
+        if AUTH_MODE == 'ldap':
+            authed, role, reachable = _ldap_auth(username, password)
+            if not authed and not reachable:
+                logger.warning('LDAP unreachable, failing over to local auth')
+                if _check_password(username, password):
+                    authed, role = True, _get_role(username)
+        else:
+            if _check_password(username, password):
+                authed, role = True, _get_role(username)
+
+        if authed:
             session['logged_in'] = True
             session['username'] = username
-            session['role'] = _get_role(username)
+            session['role'] = role
             try:
                 with get_db() as conn:
                     cur = conn.cursor()
