@@ -96,3 +96,77 @@ def test_long_tid_rejected(sender):
             tid='TID-UAT-NCR', pan='4000000000001234', stan='1',
             amount_cents=100, processing_code='012000',
             response_code='00', auth_code='1')
+
+
+class _Cursor:
+    def __init__(self, rec):
+        self.rec = rec
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def execute(self, sql, params):
+        assert 'INSERT INTO atm_transactions' in sql
+        self.rec.append(params)
+
+
+class _Conn:
+    def __init__(self):
+        self.rows = []
+
+    def cursor(self):
+        return _Cursor(self.rows)
+
+    def commit(self):
+        pass
+
+
+def test_live_socket_through_tcp_handler(sender, gateway):
+    """Real TCP: sender bytes -> handle_switch_connection -> store call."""
+    import socket
+    import threading
+
+    gateway.ATMS = [{'id': 'ATM-TEST', 'tid': 'TIDTEST1',
+                     'branch': 'Bole'}]
+    db = _Conn()
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(('127.0.0.1', 0))
+    srv.listen(1)
+    port = srv.getsockname()[1]
+
+    def serve():
+        client, addr = srv.accept()
+        gateway.handle_switch_connection(client, addr, db)
+        srv.close()
+
+    t = threading.Thread(target=serve, daemon=True)
+    t.start()
+    cli = socket.create_connection(('127.0.0.1', port), timeout=10)
+    try:
+        cli.sendall(sender.build_0210(
+            tid='TIDTEST1', pan='4000000000001234', stan='999999',
+            amount_cents=200000, processing_code='012000',
+            response_code='00', auth_code='222333'))
+        # Split send: header and body apart — TCP may fragment anyway.
+        wire = sender.build_0210(
+            tid='TIDTEST1', pan='4000000000001234', stan='999998',
+            amount_cents=10000, processing_code='310000',
+            response_code='00', auth_code='222334')
+        cli.sendall(wire[:2])
+        cli.sendall(wire[2:10])
+        cli.sendall(wire[10:])
+    finally:
+        cli.close()
+    t.join(timeout=10)
+    assert not t.is_alive(), 'handler did not exit on disconnect'
+    assert len(db.rows) == 2
+    first = db.rows[0]
+    assert first[0] == 'ATM-TEST'          # atm_id
+    assert first[3] == 'WITHDRAWAL'        # txn_type
+    assert first[7] == 'APPROVED'          # status
+    assert first[14] == 'ISO8583_REAL'      # source
+    assert db.rows[1][3] == 'BALANCE_INQ'
