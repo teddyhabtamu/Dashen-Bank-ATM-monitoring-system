@@ -136,11 +136,13 @@ def parse_iso8583_message(raw_data):
     Parse real ISO 8583 binary message from ATM switch.
     This is what runs in production with real ATMs.
 
-    Real ISO 8583 format:
-    - Bytes 0-1:  Message Length (2 bytes, big-endian)
-    - Bytes 2-3:  MTI (Message Type Indicator)
-    - Bytes 4-11: Primary Bitmap (8 bytes)
-    - Remaining:  Data Elements
+    Real ISO 8583 format on the wire (TCP, MODE=tcp):
+    - 2-byte big-endian length header, consumed by the reader —
+      NOT part of raw_data here.
+    - Bytes 0-3:  MTI (Message Type Indicator, ASCII)
+    - Bytes 4-11: Primary Bitmap (8 bytes, fields 1-64)
+    - Remaining:  Data Elements in ascending field order.
+      Field 41 (TID) is fixed 8 ASCII chars, space-padded.
 
     In simulation mode this function receives
     pre-parsed dict instead of raw bytes.
@@ -150,15 +152,15 @@ def parse_iso8583_message(raw_data):
 
     try:
         # Parse MTI
-        mti = raw_data[2:6].decode('ascii')
+        mti = raw_data[0:4].decode('ascii')
 
         # Parse bitmap (indicates which fields present)
-        bitmap_bytes = raw_data[6:14]
+        bitmap_bytes = raw_data[4:12]
         bitmap = int.from_bytes(
             bitmap_bytes, 'big')
 
         fields = {}
-        pos = 14
+        pos = 12
         field_num = 1
 
         # Parse data elements based on bitmap
@@ -224,7 +226,28 @@ def parse_iso8583_message(raw_data):
         status, err = RESPONSE_CODES.get(
             rc, ('UNKNOWN', None))
 
+        # Map field 41 (TID) to the fleet row loaded from atm_locations.
+        # Unknown TIDs are stored, never dropped, flagged UNKNOWN so a
+        # dialect surprise is visible instead of silently lost.
+        tid = fields.get(41, '')
+        atm = next(
+            (a for a in ATMS if a.get('tid') == tid),
+            None)
+        if atm:
+            atm_id = atm['id']
+            terminal_id = atm['tid']
+            branch = atm['branch']
+        else:
+            print(f"WARNING: unknown TID '{tid}' — "
+                  f"storing with branch=UNKNOWN")
+            atm_id = tid or 'UNKNOWN'
+            terminal_id = tid or 'UNKNOWN'
+            branch = 'UNKNOWN'
+
         return {
+            'atm_id': atm_id,
+            'terminal_id': terminal_id,
+            'branch': branch,
             'mti': mti,
             'processing_code': pc,
             'txn_type': PROCESSING_CODES.get(
@@ -298,6 +321,17 @@ def generate_simulated_iso8583():
     }
 
 # ─── TCP SERVER (Production mode) ─────────────────────────────────────────────
+def recv_exact(sock, n):
+    """Read exactly n bytes or return None on disconnect."""
+    buf = b''
+    while len(buf) < n:
+        chunk = sock.recv(n - len(buf))
+        if not chunk:
+            return None
+        buf += chunk
+    return buf
+
+
 def handle_switch_connection(conn_sock, addr,
                               db_conn):
     """
@@ -307,26 +341,31 @@ def handle_switch_connection(conn_sock, addr,
     print(f"Switch connected: {addr}")
     try:
         while True:
-            # Read message length (2 bytes)
-            length_bytes = conn_sock.recv(2)
-            if not length_bytes:
+            # Read message length (2 bytes, big-endian,
+            # count of following bytes, header excluded)
+            length_bytes = recv_exact(conn_sock, 2)
+            if length_bytes is None:
                 break
             msg_len = struct.unpack(
                 '>H', length_bytes)[0]
+            if msg_len <= 0 or msg_len > 8192:
+                print(f"Bad message length {msg_len} "
+                      f"from {addr} — dropping connection")
+                break
 
-            # Read full message
-            raw_msg = b''
-            while len(raw_msg) < msg_len:
-                chunk = conn_sock.recv(
-                    msg_len - len(raw_msg))
-                if not chunk:
-                    break
-                raw_msg += chunk
+            # Read full message (loop: TCP may split it)
+            raw_msg = recv_exact(conn_sock, msg_len)
+            if raw_msg is None:
+                break
 
             # Parse and store
             txn = parse_iso8583_message(raw_msg)
             if txn:
-                store_transaction(db_conn, txn)
+                try:
+                    store_transaction(db_conn, txn)
+                except Exception as e:
+                    print(f"Store error: {e}")
+                    continue
                 print(f"[REAL] {txn['atm_id']} "
                       f"{txn['txn_type']} "
                       f"{txn['status']}")
@@ -363,70 +402,75 @@ def start_tcp_server(db_conn):
         t.start()
 
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
-print("=" * 50)
-print("DASHEN BANK ISO 8583 GATEWAY")
-print(f"Mode: {MODE.upper()}")
-print(f"DB: {DB_HOST}/{DB_NAME}")
-if MODE == 'tcp':
-    print(f"Switch port: {SWITCH_PORT}")
-print("=" * 50)
+def main():
+    print("=" * 50)
+    print("DASHEN BANK ISO 8583 GATEWAY")
+    print(f"Mode: {MODE.upper()}")
+    print(f"DB: {DB_HOST}/{DB_NAME}")
+    if MODE == 'tcp':
+        print(f"Switch port: {SWITCH_PORT}")
+    print("=" * 50)
 
-# Connect to database with retry
-conn = None
-for attempt in range(30):
-    try:
-        conn = get_db()
-        print(f"Connected to PostgreSQL")
-        break
-    except Exception as e:
-        print(f"Waiting for DB "
-              f"({attempt+1}/30): {e}")
-        time.sleep(5)
-
-if not conn:
-    print("Cannot connect to database. Exiting.")
-    exit(1)
-
-# Load ATMs from database (dynamic)
-load_atms_from_db(conn)
-
-print(f"\nISO 8583 Gateway ready")
-print(f"Writing to: atm_transactions table")
-print(f"Source tag: ISO8583_SIM "
-      f"(change to ISO8583_REAL "
-      f"when switch connected)")
-
-if MODE == 'tcp':
-    # Production: listen for real switch
-    start_tcp_server(conn)
-else:
-    # Simulation: generate test messages
-    print(f"\nSimulation mode: generating "
-          f"1 transaction every "
-          f"{INTERVAL} seconds")
-    print("To switch to production mode:")
-    print("  Set MODE=tcp in environment")
-    print("  Set SWITCH_HOST to ATM switch IP")
-    print("")
-
-    txn_count = 0
-    while True:
+    # Connect to database with retry
+    conn = None
+    for attempt in range(30):
         try:
-            txn = generate_simulated_iso8583()
-            store_transaction(conn, txn)
-            txn_count += 1
-            print(f"[{txn['atm_id']}] "
-                  f"ISO8583 "
-                  f"{txn['txn_type']:15s} "
-                  f"{txn['status']:10s} "
-                  f"{'ETB '+str(txn['amount']) if txn['amount'] else 'N/A':15s} "
-                  f"(total: {txn_count})")
-            time.sleep(INTERVAL)
-
+            conn = get_db()
+            print(f"Connected to PostgreSQL")
+            break
         except Exception as e:
-            print(f"Error: {e}")
-            time.sleep(10)
+            print(f"Waiting for DB "
+                  f"({attempt+1}/30): {e}")
+            time.sleep(5)
+
+    if not conn:
+        print("Cannot connect to database. Exiting.")
+        exit(1)
+
+    # Load ATMs from database (dynamic, not hardcoded)
+    load_atms_from_db(conn)
+
+    print(f"\nISO 8583 Gateway ready")
+    print(f"Writing to: atm_transactions table")
+    print(f"Source tag: ISO8583_SIM "
+          f"(change to ISO8583_REAL "
+          f"when switch connected)")
+
+    if MODE == 'tcp':
+        # Production: listen for real switch
+        start_tcp_server(conn)
+    else:
+        # Simulation: generate test messages
+        print(f"\nSimulation mode: generating "
+              f"1 transaction every "
+              f"{INTERVAL} seconds")
+        print("To switch to production mode:")
+        print("  Set MODE=tcp in environment")
+        print("  Set SWITCH_HOST to ATM switch IP")
+        print("")
+
+        txn_count = 0
+        while True:
             try:
-                conn = get_db()
-            except:
-                pass
+                txn = generate_simulated_iso8583()
+                store_transaction(conn, txn)
+                txn_count += 1
+                print(f"[{txn['atm_id']}] "
+                      f"ISO8583 "
+                      f"{txn['txn_type']:15s} "
+                      f"{txn['status']:10s} "
+                      f"{'ETB '+str(txn['amount']) if txn['amount'] else 'N/A':15s} "
+                      f"(total: {txn_count})")
+                time.sleep(INTERVAL)
+
+            except Exception as e:
+                print(f"Error: {e}")
+                time.sleep(10)
+                try:
+                    conn = get_db()
+                except:
+                    pass
+
+
+if __name__ == "__main__":
+    main()
