@@ -365,6 +365,10 @@ FIELDS = [
     ('model',       'Model',        'text',   50),
     ('install_date','Install Date', 'date',   None),
     ('status',      'Status',       'select', None),
+    ('ip_address',  'IP Address',   'text',   45),
+    ('snmp_community', 'SNMP Community', 'password', 100),
+    ('snmp_version','SNMP Version', 'select', None),
+    ('ej_log_format','EJ Format',   'select', None),
 ]
 
 
@@ -609,8 +613,9 @@ def atm_save():
             cur.execute("""
                 INSERT INTO atm_locations
                     (atm_id, atm_name, branch, district, city, region, latitude, longitude,
-                     terminal_id, vendor, model, install_date, status)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                     terminal_id, vendor, model, install_date, status,
+                     ip_address, snmp_community, snmp_version, ej_log_format)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (atm_id) DO UPDATE SET
                     atm_name     = EXCLUDED.atm_name,
                     branch       = EXCLUDED.branch,
@@ -623,12 +628,20 @@ def atm_save():
                     vendor       = EXCLUDED.vendor,
                     model        = EXCLUDED.model,
                     install_date = EXCLUDED.install_date,
-                    status       = EXCLUDED.status
+                    status       = EXCLUDED.status,
+                    -- Network fields: only overwrite when the form supplied a
+                    -- value, so editing branch/city never wipes SNMP/IP data.
+                    ip_address   = COALESCE(EXCLUDED.ip_address, atm_locations.ip_address),
+                    snmp_community = COALESCE(EXCLUDED.snmp_community, atm_locations.snmp_community),
+                    snmp_version = COALESCE(EXCLUDED.snmp_version, atm_locations.snmp_version),
+                    ej_log_format = COALESCE(EXCLUDED.ej_log_format, atm_locations.ej_log_format)
             """, (
                 data['atm_id'], data['atm_name'], data['branch'], data['district'], data['city'],
                 data['region'], data['latitude'], data['longitude'],
                 data['terminal_id'], data['vendor'], data['model'],
-                data['install_date'], data['status']
+                data['install_date'], data['status'],
+                data.get('ip_address'), data.get('snmp_community'),
+                data.get('snmp_version'), data.get('ej_log_format')
             ))
             # Seed initial state; inactive ATMs get a dedicated state
             if data['status'] == 'inactive':
@@ -925,8 +938,9 @@ def atm_import():
                     cur.execute("""
                         INSERT INTO atm_locations
                             (atm_id, atm_name, branch, district, city, region, latitude, longitude,
-                             terminal_id, vendor, model, install_date, status)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                             terminal_id, vendor, model, install_date, status,
+                             ip_address, snmp_community, snmp_version, ej_log_format)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         ON CONFLICT (atm_id) DO UPDATE SET
                             atm_name     = EXCLUDED.atm_name,
                             branch       = EXCLUDED.branch,
@@ -939,13 +953,19 @@ def atm_import():
                             vendor       = EXCLUDED.vendor,
                             model        = EXCLUDED.model,
                             install_date = EXCLUDED.install_date,
-                            status       = EXCLUDED.status
+                            status       = EXCLUDED.status,
+                            ip_address   = COALESCE(EXCLUDED.ip_address, atm_locations.ip_address),
+                            snmp_community = COALESCE(EXCLUDED.snmp_community, atm_locations.snmp_community),
+                            snmp_version = COALESCE(EXCLUDED.snmp_version, atm_locations.snmp_version),
+                            ej_log_format = COALESCE(EXCLUDED.ej_log_format, atm_locations.ej_log_format)
                     """, (
                         row['atm_id'], name, row.get('branch'), row.get('district'),
                         row.get('city'), row.get('region'), row.get('latitude'),
                         row.get('longitude'), row.get('terminal_id'),
                         row.get('vendor'), row.get('model'),
-                        row.get('install_date'), row.get('status')
+                        row.get('install_date'), row.get('status'),
+                        row.get('ip_address') or None, row.get('snmp_community') or None,
+                        row.get('snmp_version') or None, row.get('ej_log_format') or None
                     ))
                     imported += 1
                 except Exception as e:
@@ -976,11 +996,22 @@ def _validate(data):
     if data.get('atm_id') and len(data['atm_id']) < 3:
         errors['atm_id'] = 'ATM ID must be at least 3 characters'
     maxlens = {'atm_id': 20, 'branch': 100, 'district': 100, 'city': 100,
-               'region': 100, 'terminal_id': 20, 'vendor': 50, 'model': 50}
+               'region': 100, 'terminal_id': 20, 'vendor': 50, 'model': 50,
+               'ip_address': 45, 'snmp_community': 100, 'ej_log_format': 20}
     for field, maxlen in maxlens.items():
         val = data.get(field)
         if val and len(val) > maxlen:
             errors[field] = f'Max {maxlen} characters'
+    # Network fields are optional (older rows lack them) — validate shape only.
+    if data.get('ip_address'):
+        import re as _re
+        if not _re.match(r'^(\d{1,3}\.){3}\d{1,3}$', data['ip_address']) or \
+                any(int(p) > 255 for p in data['ip_address'].split('.')):
+            errors['ip_address'] = 'Must be a valid IPv4 address'
+    if data.get('snmp_version') and str(data['snmp_version']) not in ('2', '3'):
+        errors['snmp_version'] = 'Must be 2 or 3'
+    if data.get('ej_log_format') and data['ej_log_format'] not in ('NCR_APTRA', 'GRG'):
+        errors['ej_log_format'] = 'Must be NCR_APTRA or GRG'
     if data.get('latitude'):
         try:
             n = float(data['latitude'])
