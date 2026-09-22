@@ -38,7 +38,7 @@ encryption (see §12 decisions).
 |------|------|----|--------|
 | App / monitoring server (UAT-01) | Postgres, Zabbix, Grafana, GLPI, Report Portal, state-manager, Filebeat | `172.22.10.45` | Zabbix `:8080`, Grafana `:3000`, GLPI `:8082`, Portal `:8888` |
 | Data server (UAT-02) | OpenSearch, OpenSearch Dashboards, ISO 8583 gateway | `172.22.10.60` | Dashboards `:5601`, API `:9200`, gateway `:9876` |
-| Test ATM — NCR | `ATM-TEST-NCR` / terminal `TID-UAT-NCR` | `172.22.248.4` | SNMP UDP 161 |
+| Test ATM — NCR | `ATM-TEST-NCR` / terminal `TID-UAT-NCR` | `172.23.248.4` | SNMP UDP 161 |
 | Test ATM — GRG | `ATM-TEST-GRG` / terminal `TID-UAT-GRG` | `172.23.248.6` | SNMP UDP 161 |
 
 Entry firewall state: UAT-01 → test ATMs UDP 161; test ATMs → UAT-01 UDP+TCP

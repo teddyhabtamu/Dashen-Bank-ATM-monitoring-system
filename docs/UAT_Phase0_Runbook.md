@@ -51,15 +51,15 @@ export SNMPV3_USER=<user> SNMPV3_AUTH_PROTO=SHA SNMPV3_AUTH_PASS=<authpass> \
 ## 3. Capture a real SNMP walk (per vendor)
 ```bash
 # v2c:
-./config/snmp/capture_walk.sh NCR 172.22.248.4 <REAL_COMMUNITY>
+./config/snmp/capture_walk.sh NCR 172.23.248.4 <REAL_COMMUNITY>
 ./config/snmp/capture_walk.sh GRG 172.23.248.6 <REAL_COMMUNITY>
 # v3 (community arg is ignored):
-./config/snmp/capture_walk.sh NCR 172.22.248.4 '' -v3 -u <user> -a SHA -A <authpass> -x AES -X <privpass> -l authPriv
+./config/snmp/capture_walk.sh NCR 172.23.248.4 '' -v3 -u <user> -a SHA -A <authpass> -x AES -X <privpass> -l authPriv
 ./config/snmp/capture_walk.sh GRG 172.23.248.6 '' -v3 -u <user> -a SHA -A <authpass> -x AES -X <privpass> -l authPriv
 ```
 Sanity-check reachability first (v2c shown; use `-v3 …` flags for v3):
 ```bash
-snmpwalk -v2c -c <REAL_COMMUNITY> -On 172.22.248.4 .1.3.6.1.2.1.1
+snmpwalk -v2c -c <REAL_COMMUNITY> -On 172.23.248.4 .1.3.6.1.2.1.1
 ```
 
 ## 4. Fill `config/snmp/oid_mapping.csv`

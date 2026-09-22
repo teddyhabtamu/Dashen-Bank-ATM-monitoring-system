@@ -8,7 +8,7 @@ real values are filled in during UAT once the ATM team provides IPs + community.
 
 1. **Capture** a walk from each test ATM:
    ```bash
-   ./capture_walk.sh NCR 172.22.248.4 <community>
+   ./capture_walk.sh NCR 172.23.248.4 <community>
    ./capture_walk.sh GRG 172.23.248.6 <community>
    ```
    Produces `real_atm_snmpwalk_<VENDOR>.txt`.
@@ -25,12 +25,12 @@ real values are filled in during UAT once the ATM team provides IPs + community.
    ```bash
    python3 scripts/sync_atms_to_zabbix.py --apply --import-templates
    ```
-   (the two test ATMs — `ATM-TEST-NCR` @ 172.22.248.4, `ATM-TEST-GRG` @ 172.23.248.6 —
+   (the two test ATMs — `ATM-TEST-NCR` @ 172.23.248.4, `ATM-TEST-GRG` @ 172.23.248.6 —
    must exist in the `atm_locations` inventory first; import them via
    `scripts/import_atms_from_excel.py --apply` from Abinet's Excel).
 
 ## Test ATM endpoints (from docs/UAT_Migration_Guide.md Step F)
-- NCR ATM: 172.22.248.4  (SNMP UDP 161)
+- NCR ATM: 172.23.248.4  (SNMP UDP 161)
 - GRG ATM Terminal: 172.23.248.6  (SNMP UDP 161)
 
 The Network/Cloud team must open UDP 161 from UAT-01 (172.22.10.45)

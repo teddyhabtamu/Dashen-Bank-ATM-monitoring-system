@@ -6,8 +6,8 @@
 #   ./capture_walk.sh <VENDOR:NCR|GRG> <ATM_IP> <COMMUNITY> [OPTIONS]
 #
 # Examples:
-#   ./capture_walk.sh NCR 172.22.248.4 public
-#   ./capture_walk.sh NCR 172.22.248.4 '' -v3 -u snmpuser -a SHA -A authpass -x AES -X privpass -l authPriv
+#   ./capture_walk.sh NCR 172.23.248.4 public
+#   ./capture_walk.sh NCR 172.23.248.4 '' -v3 -u snmpuser -a SHA -A authpass -x AES -X privpass -l authPriv
 #
 # Options:
 #   -v, --version VERSION   SNMP version: 2c (default) or 3

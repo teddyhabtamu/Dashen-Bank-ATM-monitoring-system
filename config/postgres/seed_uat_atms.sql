@@ -15,7 +15,7 @@
 INSERT INTO atm_locations
   (atm_id, atm_name, branch, district, city, region, terminal_id, vendor, model, status, ip_address, snmp_community, snmp_version)
 VALUES
-  ('ATM-TEST-NCR','4 Kilo Test NCR','4 Kilo Building','Kirkos','Addis Ababa','Addis Ababa','TID-UAT-NCR','NCR','SelfServ 34','active','172.22.248.4','CHANGE_ME',2),
+  ('ATM-TEST-NCR','4 Kilo Test NCR','4 Kilo Building','Kirkos','Addis Ababa','Addis Ababa','TID-UAT-NCR','NCR','SelfServ 34','active','172.23.248.4','CHANGE_ME',2),
   ('ATM-TEST-GRG','4 Kilo Test GRG','4 Kilo Building','Kirkos','Addis Ababa','Addis Ababa','TID-UAT-GRG','GRG','GRG AD2600','active','172.23.248.6','CHANGE_ME',2)
 ON CONFLICT (atm_id) DO UPDATE SET
   atm_name = EXCLUDED.atm_name, branch = EXCLUDED.branch, district = EXCLUDED.district,

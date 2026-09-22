@@ -56,8 +56,8 @@ The important UAT work is three-fold:
   | 1 | UAT-01 app (172.22.10.45) | UAT-02 data (172.22.10.60) | TCP 9200 | OpenSearch API — Filebeat EJ shipping, Report Portal EJ counts, health checks | Yes |
   | 2 | UAT-02 data (172.22.10.60) | UAT-01 app (172.22.10.45) | TCP 5432 | PostgreSQL — ISO 8583 gateway writes `atm_transactions` | Yes |
   | 3 | UAT-01 ↔ UAT-02 | both ways | TCP 22 | SSH between the VMs (admin, `scp` file copies during deploy) | Recommended |
-  | 4 | UAT-01 (172.22.10.45) | Test ATMs 172.22.248.4, 172.23.248.6 | UDP 161 | SNMP polling of the 2 real test ATMs | Yes |
-  | 5 | Test ATMs 172.22.248.4, 172.23.248.6 | UAT-01 (172.22.10.45) | UDP + TCP 514 | EJ syslog forwarding to Filebeat | Yes |
+  | 4 | UAT-01 (172.22.10.45) | Test ATMs 172.23.248.4, 172.23.248.6 | UDP 161 | SNMP polling of the 2 real test ATMs | Yes |
+  | 5 | Test ATMs 172.23.248.4, 172.23.248.6 | UAT-01 (172.22.10.45) | UDP + TCP 514 | EJ syslog forwarding to Filebeat | Yes |
   | 6 | ISO 8583 switch | UAT-02 (172.22.10.60) | TCP 9876 | Real transaction feed into the gateway | Only if real ISO 8583 is in scope |
   | 7 | Admin laptop | UAT-01 (172.22.10.45) | TCP 8080, 3000, 8082, 8888 | Zabbix, Grafana, GLPI, Report Portal UIs | Yes |
   | 8 | Admin laptop | UAT-02 (172.22.10.60) | TCP 5601, 9200 | OpenSearch Dashboards + API checks | Yes |
@@ -303,12 +303,12 @@ pg_isready -h 172.22.10.45 -U zabbix -d zabbix      # (or: psql -h 172.22.10.45 
 #   http://172.22.10.45:8888  Report Portal
 
 # From UAT-01: reach the two real test ATMs (SNMP UDP 161) — 4 Kilo Building
-#   NCR ATM           172.22.248.4
+#   NCR ATM           172.23.248.4
 #   GRG ATM Terminal  172.23.248.6
-snmpwalk -v2c -c <ATM_COMMUNITY> 172.22.248.4 .1.3.6.1.2.1.1
+snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.4 .1.3.6.1.2.1.1
 snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.6 .1.3.6.1.2.1.1
 # If these time out, the Network/Cloud team must open UDP 161 from UAT-01
-# (172.22.10.45) to 172.22.248.4 and 172.23.248.6.
+# (172.22.10.45) to 172.23.248.4 and 172.23.248.6.
 ```
 
 ---
@@ -346,7 +346,7 @@ Two real test ATMs are monitored from UAT-01 to validate SNMP collection end-to-
 
 | ATM (`atm_id`) | Vendor | IP | Subnet |
 |---|---|---|---|
-| ATM-TEST-NCR | NCR | 172.22.248.4 | 172.22.248.0/24 |
+| ATM-TEST-NCR | NCR | 172.23.248.4 | 172.23.248.0/24 |
 | ATM-TEST-GRG | GRG | 172.23.248.6 | 172.23.248.0/24 |
 
 **Automated (preferred):** a fresh UAT DB is seeded with these two ATMs (`config/postgres/seed_uat_atms.sql`). Before syncing to Zabbix, set the real SNMP community (from ATM/Channel Support):
@@ -358,7 +358,7 @@ python3 scripts/sync_atms_to_zabbix.py --apply --import-templates
 ```
 The sync creates Zabbix hosts **named by `atm_id`** (this is the name `state-manager` and `network-correlator` query), with the correct IP, SNMP v2, and community.
 
-**Manual alternative:** Configuration → Hosts → Create host → **Host name** `ATM-TEST-NCR` (must equal the `atm_id`), SNMP interface IP `172.22.248.4` port `161` v2 community `<REAL_COMMUNITY>`, link template `Dashen Bank ATM Hardware` (NCR); repeat for `ATM-TEST-GRG` (IP `172.23.248.6`, GRG template).
+**Manual alternative:** Configuration → Hosts → Create host → **Host name** `ATM-TEST-NCR` (must equal the `atm_id`), SNMP interface IP `172.23.248.4` port `161` v2 community `<REAL_COMMUNITY>`, link template `Dashen Bank ATM Hardware` (NCR); repeat for `ATM-TEST-GRG` (IP `172.23.248.6`, GRG template).
 
 > The shipped SNMP templates use the **simulation** OID tree (`.1.3.6.1.4.1.99999`). Real NCR/GRG ATMs expose different vendor OIDs, so items read "Not supported" until re-mapped to the real vendor MIB (production guide Phase 4). Confirm reachability with `snmpwalk` (Step F) first.
 

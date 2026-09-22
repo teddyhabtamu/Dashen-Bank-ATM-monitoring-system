@@ -156,7 +156,7 @@ UAT replicates the **shape** of the system, not its 1,202-ATM scale — 10–20 
 - [ ] **Docker** installed (instructions in Phase 1 — same for all VMs)
 - [ ] **Git** installed on all VMs
 - [ ] **GitHub SSH key** or personal access token to clone the repo
-- [ ] **Test ATMs** for validation — two are available at the 4 Kilo Building: **NCR 172.22.248.4** and **GRG 172.23.248.6**. Obtain the **SNMP community string** from the ATM/Channel Support team (the IPs are known; the community is not yet).
+- [ ] **Test ATMs** for validation — two are available at the 4 Kilo Building: **NCR 172.23.248.4** and **GRG 172.23.248.6**. Obtain the **SNMP community string** from the ATM/Channel Support team (the IPs are known; the community is not yet).
 - [ ] **Contact person** on the ATM Switch team (for ISO 8583)
 - [ ] **Contact person** on the ATM Hardware/Vendor team (for SNMP OIDs and EJ paths)
 - [ ] **Branch network spreadsheet** with ATM IDs, branch names, GPS coordinates, terminal IDs, vendor, model, install dates
@@ -173,7 +173,7 @@ UAT replicates the **shape** of the system, not its 1,202-ATM scale — 10–20 
 | APPS-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 9200 | Report Portal EJ search queries |
 | GWY-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 5432 | ISO 8583 writes transactions |
 | GWY-01 (Gateway) | ATM Switch | TCP 9876 | ISO 8583 messages |
-| APPS-01 (VLAN 4055) | ATM subnets: 172.22.248.0/24 (NCR), 172.23.248.0/24 (GRG) | UDP 161 | SNMP polling (test ATMs at 4 Kilo Building: 172.22.248.4, 172.23.248.6) |
+| APPS-01 (VLAN 4055) | ATM subnets: 172.22.248.0/24 (NCR), 172.23.248.0/24 (GRG) | UDP 161 | SNMP polling (test ATMs at 4 Kilo Building: 172.23.248.4, 172.23.248.6) |
 | Staff workstations | APPS-01 | TCP 8080, 3000, 8082, 8888 | Zabbix web, Grafana, GLPI, Report Portal |
 | Staff workstations | DATA-01 | TCP 5601 | OpenSearch Dashboards (optional) |
 | Repo server 172.25.37.4 | All 5 RHEL servers | TCP 443, 80 | Update activity (requested by Cloud & Core, Aug 12) |
@@ -209,8 +209,8 @@ The original phase ordering (deploy VMs → import templates → connect ATMs) a
 
 Before deploying any VMs or splitting compose files, validate that a real ATM can be monitored:
 
-1. Get **the two test ATM IPs** and their SNMP community string from the ATM/Channel Support team — the IPs are known (NCR 172.22.248.4, GRG 172.23.248.6 at 4 Kilo Building); the community string is still required
-2. From the sandbox (or any Linux machine): `snmpwalk -v2c -c <community> 172.22.248.4 .1.3.6.1.4.1.37513` (NCR) or similar vendor OID
+1. Get **the two test ATM IPs** and their SNMP community string from the ATM/Channel Support team — the IPs are known (NCR 172.23.248.4, GRG 172.23.248.6 at 4 Kilo Building); the community string is still required
+2. From the sandbox (or any Linux machine): `snmpwalk -v2c -c <community> 172.23.248.4 .1.3.6.1.4.1.37513` (NCR) or similar vendor OID
 3. Map real OIDs to our sim OIDs — build the translation table
 4. Confirm the real ATM responds to SNMP at all (some vendors disable SNMP by default)
 
@@ -1140,7 +1140,7 @@ Browse to **http://172.26.18.74:8080** (`Admin` / `zabbix`).
 1. **Configuration → Templates → Import** → `config/zabbix/template_ncr_snmp.xml` and `template_grg_snmp.xml` (the SNMP-agent templates).
 2. **Configuration → Hosts → Import** → `config/zabbix/zbx_export_hosts.xml`.
 3. **Administration → Media types → Import** → `config/zabbix/zbx_export_mediatypes.xml`.
-4. Create ATM hosts with an **SNMP interface** (port 161, community = real bank community) and link the NCR/GRG SNMP template. The first two to create are the **4 Kilo Building test ATMs**: `ATM-TEST-NCR` → IP `172.22.248.4`, `ATM-TEST-GRG` → IP `172.23.248.6` (see **Phase 4** for the full walkthrough: SNMP walk, OID mapping, SNMPv3, and the firewall opening UDP 161 from APPS-01 to `172.22.248.0/24` + `172.23.248.0/24`).
+4. Create ATM hosts with an **SNMP interface** (port 161, community = real bank community) and link the NCR/GRG SNMP template. The first two to create are the **4 Kilo Building test ATMs**: `ATM-TEST-NCR` → IP `172.23.248.4`, `ATM-TEST-GRG` → IP `172.23.248.6` (see **Phase 4** for the full walkthrough: SNMP walk, OID mapping, SNMPv3, and the firewall opening UDP 161 from APPS-01 to `172.22.248.0/24` + `172.23.248.0/24`).
 
 ---
 
@@ -1198,7 +1198,7 @@ http://172.17.0.1:1161/oid/1.1.0
 
 For real ATMs, items must use **SNMP agent** type, polling UDP port 161 against the real vendor MIB:
 ```
-SNMP GET 172.22.248.4:161 .1.3.6.1.4.1.37513.1.1.0   (real NCR OID — NOT the sim's 1.1.0)
+SNMP GET 172.23.248.4:161 .1.3.6.1.4.1.37513.1.1.0   (real NCR OID — NOT the sim's 1.1.0)
 ```
 
 Two things change, not one:
@@ -1221,14 +1221,14 @@ The two real test ATMs are at the 4 Kilo Building (provided by the ATM/Channel S
 
 | ATM | Vendor | IP | Subnet |
 |---|---|---|---|
-| Test ATM 1 | NCR | 172.22.248.4 | 172.22.248.0/24 |
+| Test ATM 1 | NCR | 172.23.248.4 | 172.23.248.0/24 |
 | Test ATM 2 | GRG | 172.23.248.6 | 172.23.248.0/24 |
 
 Obtain the **SNMP community string** from the ATM team (replace `<ATM_COMMUNITY>` below). UDP 161 from APPS-01 (172.26.18.74, VLAN 4055) to both ATM subnets must be open first — see the firewall request in §3.4.
 
 ```bash
 # NCR test ATM — basic connectivity
-snmpwalk -v2c -c <ATM_COMMUNITY> 172.22.248.4 .1.3.6.1.2.1.1
+snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.4 .1.3.6.1.2.1.1
 
 # GRG test ATM — basic connectivity
 snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.6 .1.3.6.1.2.1.1
@@ -1238,7 +1238,7 @@ Then walk the vendor-specific enterprise OID (the example below is NCR; the GRG 
 
 ```bash
 # NCR enterprise OID:
-snmpwalk -v2c -c <ATM_COMMUNITY> 172.22.248.4 .1.3.6.1.4.1.37513
+snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.4 .1.3.6.1.4.1.37513
 # GRG enterprise OID (replace with the real GRG enterprise number):
 snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.6 .1.3.6.1.4.1.<GRG_ENTERPRISE>
 ```
@@ -1246,7 +1246,7 @@ snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.6 .1.3.6.1.4.1.<GRG_ENTERPRISE>
 **Save the output — it is your map:**
 
 ```bash
-snmpwalk -v2c -c <ATM_COMMUNITY> 172.22.248.4 .1.3.6.1.4.1.37513 > /tmp/ncr_atm_snmpwalk_output.txt
+snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.4 .1.3.6.1.4.1.37513 > /tmp/ncr_atm_snmpwalk_output.txt
 snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.6 .1.3.6.1.4.1.<GRG_ENTERPRISE> > /tmp/grg_atm_snmpwalk_output.txt
 ```
 
@@ -1313,13 +1313,13 @@ Click **Update**.
 
 Create one host per test ATM, both linked to the real SNMP template:
 
-### Step 8.4.1 — NCR test ATM (172.22.248.4)
+### Step 8.4.1 — NCR test ATM (172.23.248.4)
 
 1. **Configuration → Hosts → Create host**
 2. **Host name:** `ATM-TEST-NCR | NCR | 4 Kilo Building` (convention: `<ID> | <VENDOR> | <LOCATION>`)
 3. **Host groups:** Select "Dashen Bank ATMs"
 4. **Interfaces → Add → SNMP:**
-   - IP: `172.22.248.4`
+   - IP: `172.23.248.4`
    - Port: `161`
    - SNMP version: `SNMPv2`
    - Community: `{$SNMP_COMMUNITY}`

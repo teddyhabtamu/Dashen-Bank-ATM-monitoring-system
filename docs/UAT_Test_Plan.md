@@ -64,7 +64,7 @@ EJ ingestion, and alerting — using the bank's two designated test terminals.
 |------|------|-----|
 | App / monitoring server (UAT-01, `dbtcatmmonappuat`) | Postgres, Zabbix, Grafana, GLPI, Report Portal, state-manager, filebeat | `172.22.10.45` |
 | Data server (UAT-02, `dbtcatmmondbuat`) | OpenSearch, OpenSearch Dashboards, ISO 8583 gateway | `172.22.10.60` |
-| Test ATM — NCR | NCR | `172.22.248.4` |
+| Test ATM — NCR | NCR | `172.23.248.4` |
 | Test ATM — GRG | GRG | `172.23.248.6` |
 
 **Phasing:** this plan covers **Phase 0** (validate the two real ATMs). The broader 45-day
@@ -105,7 +105,7 @@ and ISO 8583 transaction monitoring **unless** the bank routes real traffic (see
 | OpenSearch + Dashboards | UAT-02 `172.22.10.60:9200 / :5601` | EJ storage + search | OSD UI |
 | filebeat | UAT-01 | Forwards ATM EJ (`:514`) → OpenSearch | `ss -lun :514` |
 | state-manager | UAT-01 | Computes `atm_current_state` from Zabbix | `atm_current_state` table |
-| Test ATM NCR | `172.22.248.4` | SNMP source | `snmpwalk` |
+| Test ATM NCR | `172.23.248.4` | SNMP source | `snmpwalk` |
 | Test ATM GRG | `172.23.248.6` | SNMP source | `snmpwalk` |
 
 ---
