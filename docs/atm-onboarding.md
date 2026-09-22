@@ -71,9 +71,12 @@ automatically:
       Portal (or bulk-import a CSV — see `sample_atm_import.csv`). The
       **Name** field is optional and defaults to the branch if left
       blank; **Vendor** is a dropdown (NCR / GRG, plus any existing
-      vendors) with a "+ Add new vendor…" option. A free `sim_port`
+      vendors) with a "+ Add new vendor…" option. The form also captures
+      **IP Address**, **SNMP Community / Version**, and **EJ Format** —
+      no manual SQL patch needed. A free `sim_port`
       is assigned automatically so the simulator picks the ATM up
-      without a manual restart.
+      without a manual restart. When editing, blank network fields keep
+      their existing values (they only overwrite when filled).
 - [ ] If inserting manually, always name the columns (the table has
       grown past the old positional layout):
   ```bash
@@ -81,12 +84,14 @@ automatically:
   INSERT INTO atm_locations
     (atm_id, atm_name, branch, district, city, region,
      latitude, longitude, terminal_id, vendor, model,
-     install_date, status)
+     install_date, status,
+     ip_address, snmp_community, snmp_version, ej_log_format)
   VALUES
     ('ATM-0XX','<Name (optional)>','<Branch Name>',
      '<District>','<City>','<Region>',
      <latitude>,<longitude>,'<Terminal ID>','<Vendor>','<Model>',
-     '<install_date>','active')
+     '<install_date>','active',
+     '<IP>','<community>',2,'<NCR_APTRA|GRG>')
   ON CONFLICT (atm_id) DO NOTHING;
   SQL
   ```
