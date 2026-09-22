@@ -84,7 +84,17 @@ login per role. Rollback: disable the directory (local logins unaffected).
 
 ## 6. Acceptance (same sitting, all apps)
 
-- [ ] Matrix per app: admin OK, operator OK, wrong password rejected, unknown user rejected, local break-glass OK
+Run the checker first (real portal code + toml consistency; browser spot-checks after):
+
+```bash
+# Lab defaults target the mock; on AD day export the DIR_* values from §0.
+venv/bin/python -m pytest tests/test_directory.py -q
+# Leaver test (after disabling the test account in the directory):
+DIR_MODE=locked DIR_OPS_USER=<disabled-user> DIR_OPS_PASS=<old-pass> \
+  venv/bin/python -m pytest tests/test_directory.py -q -k Locked
+```
+
+- [ ] Checker green: admin OK, operator OK, wrong password rejected, unknown user rejected, toml group DNs resolve; Grafana/Zabbix/GLPI login spot-checks in browsers; local break-glass OK everywhere
 - [ ] **Leaver test:** disable one AD test account → confirm lockout on portal, Grafana, Zabbix (and GLPI) within one login attempt each; re-enable, confirm access returns
 - [ ] `mock-ldap` stopped (`docker compose --profile ldap down`); lab users documented as retired
 - [ ] Record committed: real group DNs, role mapping, date, who ran it (append to `docs/LDAP_Integration.md` §3 table)
