@@ -56,7 +56,7 @@ The important UAT work is three-fold:
   | 1 | UAT-01 app (172.22.10.45) | UAT-02 data (172.22.10.60) | TCP 9200 | OpenSearch API — Filebeat EJ shipping, Report Portal EJ counts, health checks | Yes |
   | 2 | UAT-02 data (172.22.10.60) | UAT-01 app (172.22.10.45) | TCP 5432 | PostgreSQL — ISO 8583 gateway writes `atm_transactions` | Yes |
   | 3 | UAT-01 ↔ UAT-02 | both ways | TCP 22 | SSH between the VMs (admin, `scp` file copies during deploy) | Recommended |
-  | 4 | UAT-01 (172.22.10.45) | Test ATMs 172.23.248.4, 172.23.248.6 | UDP 161 | SNMP polling of the 2 real test ATMs | Yes |
+  | 4 | UAT-01 (172.22.10.45) | Test ATMs via NAT 10.41.30.114, 10.41.30.115 (real 172.23.248.4/.6) | UDP 161 | SNMP polling of the 2 real test ATMs | Yes |
   | 5 | Test ATMs 172.23.248.4, 172.23.248.6 | UAT-01 (172.22.10.45) | UDP + TCP 514 | EJ syslog forwarding to Filebeat | Yes |
   | 6 | ISO 8583 switch | UAT-02 (172.22.10.60) | TCP 9876 | Real transaction feed into the gateway | Only if real ISO 8583 is in scope |
   | 7 | Admin laptop | UAT-01 (172.22.10.45) | TCP 8080, 3000, 8082, 8888 | Zabbix, Grafana, GLPI, Report Portal UIs | Yes |
@@ -302,13 +302,13 @@ pg_isready -h 172.22.10.45 -U zabbix -d zabbix      # (or: psql -h 172.22.10.45 
 #   http://172.22.10.45:8082  GLPI
 #   http://172.22.10.45:8888  Report Portal
 
-# From UAT-01: reach the two real test ATMs (SNMP UDP 161) — 4 Kilo Building
-#   NCR ATM           172.23.248.4
-#   GRG ATM Terminal  172.23.248.6
-snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.4 .1.3.6.1.2.1.1
-snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.6 .1.3.6.1.2.1.1
+# From UAT-01: reach the two real test ATMs via NAT (SNMP UDP 161) — 4 Kilo Building
+#   NCR ATM real 172.23.248.4 -> poll 10.41.30.114
+#   GRG ATM real 172.23.248.6 -> poll 10.41.30.115
+snmpwalk -v2c -c <ATM_COMMUNITY> 10.41.30.114 .1.3.6.1.2.1.1
+snmpwalk -v2c -c <ATM_COMMUNITY> 10.41.30.115 .1.3.6.1.2.1.1
 # If these time out, the Network/Cloud team must open UDP 161 from UAT-01
-# (172.22.10.45) to 172.23.248.4 and 172.23.248.6.
+# (172.22.10.45) to 10.41.30.114 and 10.41.30.115.
 ```
 
 ---

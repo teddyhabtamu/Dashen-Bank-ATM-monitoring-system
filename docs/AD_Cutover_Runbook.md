@@ -14,15 +14,16 @@
 - [ ] Two test accounts: one operator, one admin — plus permission to disable one for the leaver test
 - [ ] Firewall: UAT-01 (`172.22.10.45`) → AD host on TCP 636
 
-## 1. Pre-work: portal TLS support (code — the one build item)
+## 1. Portal TLS support (done — verify, don't build)
 
-`report-portal/blueprints/auth.py::_ldap_auth` currently builds a plain
-`Server()` with no TLS path, and the lab runs unencrypted. AD requires LDAPS,
-so before cutover day add env-driven TLS:
-
-- New vars: `LDAP_USE_SSL` (`true` for AD) and `LDAP_CA_CERT_FILE` (container path of the CA PEM, mounted read-only).
-- `Server(LDAP_HOST, port=LDAP_PORT, use_ssl=<flag>, tls=<Tls(validate=CERT_REQUIRED, ca_certs_file=...)>)`; fail closed if the CA file is missing while SSL is on.
-- No behavior change when `LDAP_USE_SSL` is unset (lab keeps working byte-identical).
+`report-portal/blueprints/auth.py::_ldap_auth` now honors `LDAP_USE_SSL`
++ `LDAP_CA_CERT_FILE`: `Server(..., use_ssl=True, tls=...)`, fail-closed
+when the CA file is configured but missing. Lab default
+(`LDAP_USE_SSL` unset) is plain and byte-identical — proven by
+`tests/test_directory.py` (6 passed) + fail-closed check
+`(False, None, False)` on missing CA.
+Cutover-day vars: `LDAP_USE_SSL=true` + `LDAP_CA_CERT_FILE` (container path
+of the CA PEM, mounted read-only).
 - Review bar: password never logged, TLS errors surface as unreachable (local fallback) only on socket failure — bad credentials still hard-reject.
 
 Grafana, Zabbix, and GLPI need **no code**: all three speak LDAPS natively

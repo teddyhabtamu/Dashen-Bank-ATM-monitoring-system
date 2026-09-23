@@ -6,12 +6,12 @@ real values are filled in during UAT once the ATM team provides IPs + community.
 
 ## Flow (see `docs/uat-pilot-checklist.md` Phase 0)
 
-1. **Capture** a walk from each test ATM:
-   ```bash
-   ./capture_walk.sh NCR 172.23.248.4 <community>
-   ./capture_walk.sh GRG 172.23.248.6 <community>
-   ```
-   Produces `real_atm_snmpwalk_<VENDOR>.txt`.
+1. **Capture** a walk from each test ATM (via NAT from UAT-01):
+    ```bash
+    ./capture_walk.sh NCR 10.41.30.114 <community>
+    ./capture_walk.sh GRG 10.41.30.115 <community>
+    ```
+    Produces `real_atm_snmpwalk_<VENDOR>.txt`.
 
 2. **Map** real OIDs → our Zabbix item names in `oid_mapping.csv`
    (columns: `sim_oid,real_oid,item_name,vendor,data_type`). The first row is an
@@ -29,9 +29,10 @@ real values are filled in during UAT once the ATM team provides IPs + community.
    must exist in the `atm_locations` inventory first; import them via
    `scripts/import_atms_from_excel.py --apply` from Abinet's Excel).
 
-## Test ATM endpoints (from docs/UAT_Migration_Guide.md Step F)
-- NCR ATM: 172.23.248.4  (SNMP UDP 161)
-- GRG ATM Terminal: 172.23.248.6  (SNMP UDP 161)
+## Test ATM endpoints (real IP = identity; NAT IP = UAT polling path)
+- NCR ATM: real 172.23.248.4, poll via 10.41.30.114 (SNMP UDP 161)
+- GRG ATM Terminal: real 172.23.248.6, poll via 10.41.30.115 (SNMP UDP 161)
 
 The Network/Cloud team must open UDP 161 from UAT-01 (172.22.10.45)
-to both ATM IPs.
+to both NAT IPs. `atm_locations.ip_address` keeps the real IP;
+Zabbix SNMP interfaces use the NAT IPs.

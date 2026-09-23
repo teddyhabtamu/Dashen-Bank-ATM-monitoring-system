@@ -29,13 +29,22 @@ LDAP_BIND_PASSWORD = os.environ.get('LDAP_BIND_PASSWORD', '')
 LDAP_LOGIN_ATTR = os.environ.get('LDAP_LOGIN_ATTR', 'uid')  # sAMAccountName on AD
 LDAP_ADMINS_GROUP = os.environ.get('LDAP_ADMINS_GROUP', 'ATM-Admins')
 LDAP_OPERATORS_GROUP = os.environ.get('LDAP_OPERATORS_GROUP', 'ATM-Operators')
+# TLS for real AD (LDAPS). Lab default: unset/false = plain, byte-identical.
+LDAP_USE_SSL = os.environ.get('LDAP_USE_SSL', 'false').strip().lower() == 'true'
+LDAP_CA_CERT_FILE = os.environ.get('LDAP_CA_CERT_FILE', '').strip()
 
 try:
-    from ldap3 import Server, Connection, ALL
+    from ldap3 import Server, Connection, ALL, Tls
     from ldap3.core.exceptions import LDAPSocketOpenError
     _LDAP_LIB = True
+    try:
+        from ssl import CERT_REQUIRED
+        _SSL_FLAG = True
+    except ImportError:
+        _SSL_FLAG = False
 except ImportError:
     _LDAP_LIB = False
+    _SSL_FLAG = False
 
 # Rate limiting: {ip: [(timestamp, attempt_count)]}
 _login_attempts = {}
@@ -106,9 +115,22 @@ def _ldap_auth(username, password):
     if not _LDAP_LIB or not LDAP_HOST or not LDAP_BASE_DN or not password:
         logger.error('LDAP auth unavailable (lib/host/base-dn misconfigured)')
         return False, None, False
+    # TLS setup for LDAPS (AD). Fail closed: SSL on + CA configured but
+    # file missing => do not connect insecurely.
+    tls = None
+    if LDAP_USE_SSL:
+        if LDAP_CA_CERT_FILE:
+            import os as _os
+            if not _os.path.isfile(LDAP_CA_CERT_FILE):
+                logger.error('LDAP CA file missing: %s', LDAP_CA_CERT_FILE)
+                return False, None, False
+            tls = Tls(ca_certs_file=LDAP_CA_CERT_FILE,
+                      validate=CERT_REQUIRED) if _SSL_FLAG else Tls(
+                          ca_certs_file=LDAP_CA_CERT_FILE)
+        # No CA file: system trust (AD cert from public/internal CA in store).
     try:
         server = Server(LDAP_HOST, port=LDAP_PORT, get_info=ALL,
-                        connect_timeout=5)
+                        connect_timeout=5, use_ssl=LDAP_USE_SSL, tls=tls)
         bind_kwargs = {'auto_bind': True}
         if LDAP_BIND_DN:
             bind_kwargs.update(user=LDAP_BIND_DN, password=LDAP_BIND_PASSWORD)
