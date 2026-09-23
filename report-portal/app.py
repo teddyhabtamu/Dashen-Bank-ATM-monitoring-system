@@ -81,7 +81,7 @@ def create_app():
         """UI links for the sidebar/header — configurable per environment
         (localhost defaults keep laptop dev working unchanged)."""
         return {
-            'grafana_url': os.environ.get('GRAFANA_URL', 'http://localhost:3002'),
+            'grafana_url': os.environ.get('GRAFANA_URL', 'http://localhost:3000'),
             'zabbix_ui_url': os.environ.get('ZABBIX_UI_URL', 'http://localhost:8080'),
             'glpi_ui_url': os.environ.get('GLPI_UI_URL', 'http://localhost:8082'),
         }
