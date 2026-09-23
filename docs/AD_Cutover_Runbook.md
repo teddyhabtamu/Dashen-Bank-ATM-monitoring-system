@@ -76,12 +76,23 @@ search attribute `sAMAccountName`), or the same fields via API. Then:
   their `sAMAccountName` on first login (or pre-create + set directory).
 - Local `Admin` stays break-glass. Rollback: disable the directory / unlink user.
 
-## 5. GLPI cutover (fourth — UI, ~15 min)
+## 5. GLPI cutover (fourth — UI, ~15 min, lab-proven)
 
-Setup → Authentication → LDAP directories → Add: host, port 636 (+ CA),
-base DN, bind DN/password, login field `sAMAccountName`, group mapping to
-GLPI profiles (admins group → super-admin, operators → technician). Verify one
-login per role. Rollback: disable the directory (local logins unaffected).
+Setup → Authentication → LDAP directories → Add (lab values in brackets,
+AD values after →):
+- Name: `ATM-Mock` → AD name (e.g. `Bank-AD`); Active Yes, Default server Yes
+- Server: `mock-ldap` → AD host, Port `389` → `636` (+ CA)
+- Connection filter: empty; Base DN `dc=atmmon,dc=local` → bank base DN
+- RootDN `cn=admin,dc=atmmon,dc=local` → service account DN, Password → from IAM
+- Login field `uid` → `sAMAccountName`, Synchronization field `uid` → `sAMAccountName`
+- Save → Test (must succeed before importing)
+- Administration → Users → LDAP directory link → Import New Users → Search
+  (empty) → import operator + admin accounts
+- Authorizations (per user): Entity `Root Entity`, Recursive Yes,
+  Profile `Super-Admin` (admins) / `Technician` (operators).
+  Lab proof: `admin1` → Super-Admin Central dashboard; `ops1` → Technician.
+  Fresh imports default to Self-Service `(D)` — the explicit row overrides it.
+- Verify one login per role. Rollback: disable the directory (local logins unaffected).
 
 ## 6. Acceptance (same sitting, all apps)
 
