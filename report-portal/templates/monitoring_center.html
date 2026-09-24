@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Monitoring Center{% endblock %}
+{% block extra_style %}
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.stat-card{background:#fff;border-radius:12px;border:1px solid #EEF1F6;box-shadow:0 1px 3px rgba(1,33,105,.04);padding:16px 18px;animation:fadeSlideUp .3s ease}
+.stat-card .num{font-size:26px;font-weight:800;color:#0F172A}
+.stat-card .lbl{font-size:11px;color:#64748B;font-weight:600;margin-top:2px}
+.stat-card.up .num{color:#16A34A}
+.stat-card.down .num{color:#DC2626}
+.stat-card.prob .num{color:#D97706}
+.mc-table{width:100%;border-collapse:collapse;font-size:12px}
+.mc-table th{text-align:left;padding:10px 12px;background:#FAFBFC;color:#64748B;font-weight:700;font-size:11px;border-bottom:1px solid #EEF1F6;white-space:nowrap}
+.mc-table td{padding:10px 12px;border-bottom:1px solid #F1F5F9;vertical-align:top}
+.mc-table tr:last-child td{border-bottom:none}
+.sev{display:inline-block;padding:2px 10px;border-radius:100px;font-size:10px;font-weight:700;color:#fff;white-space:nowrap}
+.ack-y{display:inline-block;padding:2px 8px;border-radius:100px;font-size:10px;font-weight:600;background:#DCFCE7;color:#166534}
+.ack-n{display:inline-block;padding:2px 8px;border-radius:100px;font-size:10px;font-weight:600;background:#FEF9C3;color:#854D0E}
+.host-up{color:#16A34A;font-weight:700;font-size:11px}
+.host-down{color:#DC2626;font-weight:700;font-size:11px}
+.host-unk{color:#94A3B8;font-weight:700;font-size:11px}
+.filter-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.filter-row select{padding:7px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;outline:none;font-family:inherit}
+.err-banner{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;padding:12px 16px;border-radius:10px;font-size:12px;margin-bottom:16px}
+.empty-row td{text-align:center;color:#94A3B8;padding:22px !important}
+@media(max-width:768px){.mc-table-wrap{overflow-x:auto}}
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="activity"></i></div>
+  <div>
+    <h1 class="page-title">Monitoring Center</h1>
+    <p class="page-subtitle">Live host states and active problems from Zabbix — no second login.</p>
+  </div>
+  <a href="{{ zabbix_ui_url }}" target="_blank" rel="noopener" class="btn-live btn-outline"><i data-lucide="external-link"></i> Open in Zabbix</a>
+</div>
+<div class="page-content">
+
+  {% if error %}
+  <div class="err-banner">{{ error }}</div>
+  {% endif %}
+
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">{{ summary.hosts }}</div><div class="lbl">Monitored Hosts</div></div>
+    <div class="stat-card up"><div class="num">{{ summary.up }}</div><div class="lbl">Up</div></div>
+    <div class="stat-card down"><div class="num">{{ summary.down }}</div><div class="lbl">Down</div></div>
+    <div class="stat-card prob"><div class="num">{{ summary.problems }}</div><div class="lbl">Active Problems</div></div>
+    <div class="stat-card"><div class="num">{{ summary.unacked }}</div><div class="lbl">Unacknowledged</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header">
+      <h2>Active Problems ({{ problems|length }})</h2>
+      <form method="get" action="/monitoring" class="filter-row">
+        <select name="severity" onchange="this.form.submit()">
+          <option value="">All Severities</option>
+          {% for sid, sname in severities.items() %}
+          <option value="{{ sid }}" {% if f_severity == sid %}selected{% endif %}>{{ sname }}</option>
+          {% endfor %}
+        </select>
+        <select name="ack" onchange="this.form.submit()">
+          <option value="">All</option>
+          <option value="no" {% if f_ack == 'no' %}selected{% endif %}>Unacknowledged</option>
+          <option value="yes" {% if f_ack == 'yes' %}selected{% endif %}>Acknowledged</option>
+        </select>
+        {% if f_severity or f_ack %}
+        <a href="/monitoring" class="btn btn-outline" style="font-size:11px">Clear</a>
+        {% endif %}
+      </form>
+    </div>
+    <div class="mc-table-wrap">
+      <table class="mc-table">
+        <thead><tr><th>Time</th><th>Severity</th><th>Host</th><th>Problem</th><th>Ack</th></tr></thead>
+        <tbody>
+          {% for p in problems %}
+          <tr>
+            <td style="white-space:nowrap">{{ p.clock }}</td>
+            <td><span class="sev" style="background:{{ sev_colors.get(p.severity, '#97AAB3') }}">{{ p.severity_name }}</span></td>
+            <td>{{ p.host }}</td>
+            <td>{{ p.name }}</td>
+            <td>{% if p.acknowledged %}<span class="ack-y">Yes</span>{% else %}<span class="ack-n">No</span>{% endif %}</td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="5">No active problems.{% if error %} Zabbix may be unreachable.{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Hosts ({{ hosts|length }})</h2></div>
+    <div class="mc-table-wrap">
+      <table class="mc-table">
+        <thead><tr><th>Host</th><th>Name</th><th>IP</th><th>State</th></tr></thead>
+        <tbody>
+          {% for h in hosts %}
+          <tr>
+            <td style="font-family:monospace">{{ h.host }}</td>
+            <td>{{ h.name }}</td>
+            <td style="font-family:monospace">{{ h.ip }}</td>
+            <td>
+              {% if h.state == 'UP' %}<span class="host-up">● UP</span>
+              {% elif h.state == 'DOWN' %}<span class="host-down">● DOWN</span>
+              {% else %}<span class="host-unk">● UNKNOWN</span>{% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="4">No monitored hosts found.{% if error %} Zabbix may be unreachable.{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

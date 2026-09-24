@@ -54,6 +54,7 @@ def create_app():
     from blueprints.admin      import bp as admin_bp
     from blueprints.ej_search  import bp as ej_bp
     from blueprints.anomalies  import bp as anomalies_bp
+    from blueprints.monitoring import bp as monitoring_bp
     from routes                import bp as report_bp
     from audit                 import init_audit_schema
     from scheduler             import init_scheduler_table, create_scheduler
@@ -63,6 +64,7 @@ def create_app():
     app.register_blueprint(admin_bp)
     app.register_blueprint(ej_bp)
     app.register_blueprint(anomalies_bp)
+    app.register_blueprint(monitoring_bp)
     app.register_blueprint(report_bp)
 
     csrf.exempt(app.view_functions['auth.login'])

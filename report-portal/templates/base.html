@@ -378,8 +378,8 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
       <i data-lucide="bar-chart-3"></i>
       <span>Live Dashboards</span>
     </a>
-    <a href="{{ zabbix_ui_url }}" target="_blank" rel="noopener" class="nav-item"
-       title="Zabbix — hosts, metrics and problems">
+    <a href="/monitoring" class="nav-item {% if request.path.startswith('/monitoring') %}active{% endif %}"
+       title="Monitoring Center — hosts and problems, no second login">
       <i data-lucide="activity"></i>
       <span>Monitoring Center</span>
     </a>
