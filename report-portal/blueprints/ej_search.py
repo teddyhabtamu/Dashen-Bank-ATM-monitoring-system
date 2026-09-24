@@ -104,15 +104,16 @@ def _parse_ej_log_line(src):
 
 
 def _is_junk_hit(src):
-    """Drop empty syslog datagrams (no message, no ATM identity).
+    """Drop non-EJ noise (empty datagrams, binary garbage on :514).
 
-    Stray empty UDP packets to Filebeat :514 index as docs with blank
-    message/ej_raw; they render as all-dash rows. Real unparsed lines
-    always carry a non-empty message, so they are kept.
+    Stray UDP packets to Filebeat :514 index as docs with blank or binary
+    messages; they render as all-dash rows. A displayable EJ row needs an
+    ATM identity or a pipe-delimited line, so anything with neither is
+    skipped. Real NCR/GRG journal lines always contain '|'.
     """
     if src.get('atm_id'):
         return False
-    return not (src.get('message') or '').strip()
+    return '|' not in (src.get('message') or '')
 
 
 def _build_must(keyword, card, date_from, date_to, atm_id,
