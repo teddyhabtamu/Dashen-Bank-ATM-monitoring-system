@@ -1337,6 +1337,16 @@ document.addEventListener('click', function(){
   });
 });
 
+function selectedIds(){
+  // Each ATM renders two .row-checkbox inputs (desktop table + mobile card);
+  // dedupe by value so hidden duplicates never double-count.
+  var ids = [];
+  document.querySelectorAll('.row-checkbox:checked').forEach(function(cb){
+    if(ids.indexOf(cb.value) === -1) ids.push(cb.value);
+  });
+  return ids;
+}
+
 function toggleSelectAll(){
   var checked = document.getElementById('selectAll').checked;
   document.querySelectorAll('.row-checkbox').forEach(function(cb){ cb.checked = checked; });
@@ -1345,18 +1355,16 @@ function toggleSelectAll(){
 }
 
 function updateSelection(){
-  var checked = document.querySelectorAll('.row-checkbox:checked');
-  var count = checked.length;
+  var ids = selectedIds();
+  var count = ids.length;
   var bar = document.getElementById('selectionBar');
   var delBtn = document.getElementById('bulkDeleteBtn');
   document.getElementById('selectedCount').textContent = count;
   var expBtn = document.getElementById('atmExportBtn');
-  if(!expBtn) expBtn = document.querySelector('a[href*=\"/admin/atm/csv\"]');
+  if(!expBtn) expBtn = document.querySelector('a[href*="/admin/atm/csv"]');
   if(count > 0){
     bar.style.display = 'flex';
     delBtn.disabled = false;
-    var ids = [];
-    checked.forEach(function(cb){ ids.push(cb.value); });
     if(expBtn){
       expBtn.href = '/admin/atm/csv?ids=' + encodeURIComponent(ids.join(','));
       expBtn.innerHTML = '<i data-lucide="download" style="width:14px;height:14px"></i> Export CSV (' + count + ')';
@@ -1369,14 +1377,16 @@ function updateSelection(){
       expBtn.innerHTML = '<i data-lucide="download" style="width:14px;height:14px"></i> Export CSV';
     }
   }
-  document.getElementById('selectAll').checked = document.querySelectorAll('.row-checkbox').length === count && count > 0;
+  var allIds = [];
+  document.querySelectorAll('.row-checkbox').forEach(function(cb){
+    if(allIds.indexOf(cb.value) === -1) allIds.push(cb.value);
+  });
+  document.getElementById('selectAll').checked = allIds.length === count && count > 0;
   lucide.createIcons();
 }
 
 function openBulkDeleteModal(){
-  var checked = document.querySelectorAll('.row-checkbox:checked');
-  var ids = [];
-  checked.forEach(function(cb){ ids.push(cb.value); });
+  var ids = selectedIds();
   if(ids.length === 0) return;
   document.getElementById('bulkDeleteCount').textContent = ids.length;
   document.getElementById('bulkDeleteCount2').textContent = ids.length;
@@ -1401,8 +1411,7 @@ function confirmBulkDelete(){
   var spn = btn.querySelector('svg');
   if(spn) spn.style.animation = 'spin 1s linear infinite';
 
-  var ids = [];
-  document.querySelectorAll('.row-checkbox:checked').forEach(function(cb){ ids.push(cb.value); });
+  var ids = selectedIds();
 
   fetch('/admin/atm/bulk-delete', {
     method: 'POST',

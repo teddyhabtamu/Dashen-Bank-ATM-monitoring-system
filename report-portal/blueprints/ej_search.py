@@ -228,6 +228,7 @@ def ej_search():
         if not must:
             error = "Please provide at least one search filter."
         else:
+            skipped = 0
             try:
                 resp = requests.get(
                     f"http://{ES_HOST}/{ES_INDEX}/_search?ignore_unavailable=true",
@@ -243,9 +244,11 @@ def ej_search():
                 if resp.status_code == 200:
                     body  = resp.json()
                     total = body.get('hits', {}).get('total', {}).get('value', 0)
+                    skipped = 0
                     for hit in body.get('hits', {}).get('hits', []):
                         src = _parse_ej_log_line(hit['_source'])
                         if _is_junk_hit(src):
+                            skipped += 1
                             continue
                         results.append({
                             'timestamp':   _fmt_ts(src.get('@timestamp', '')),
@@ -267,6 +270,10 @@ def ej_search():
                 else:
                     error = f"OpenSearch returned status {resp.status_code}"
                     logger.warning('OS search failed: status=%s query=%s', resp.status_code, keyword or '(no keyword)')
+                # Junk datagrams are hidden from the listing, so the header
+                # count must exclude them too (else "N Results" + empty table).
+                if not error:
+                    total = max(0, total - skipped)
             except requests.exceptions.ConnectionError:
                 error = f"Cannot connect to OpenSearch at {ES_HOST}"
                 logger.error('OS connection error: host=%s', ES_HOST)
