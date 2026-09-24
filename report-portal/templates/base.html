@@ -342,6 +342,11 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
       <i data-lucide="layout-dashboard"></i>
       <span>Dashboard</span>
     </a>
+    <a href="/operations" class="nav-item {% if request.path.startswith('/operations') %}active{% endif %}"
+       title="Operations — live transactions and fleet health, no second login">
+      <i data-lucide="gauge"></i>
+      <span>Operations</span>
+    </a>
     <a href="/admin/atm" class="nav-item {% if request.path.startswith('/admin/atm') %}active{% endif %}">
       <i data-lucide="settings"></i>
       <span>ATM Registration</span>

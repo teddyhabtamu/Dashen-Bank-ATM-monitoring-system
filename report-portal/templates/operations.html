@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Operations{% endblock %}
+{% block extra_style %}
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.stat-card{background:#fff;border-radius:12px;border:1px solid #EEF1F6;box-shadow:0 1px 3px rgba(1,33,105,.04);padding:16px 18px;animation:fadeSlideUp .3s ease}
+.stat-card .num{font-size:26px;font-weight:800;color:#0F172A}
+.stat-card .num small{font-size:14px;font-weight:600;color:#64748B}
+.stat-card .lbl{font-size:11px;color:#64748B;font-weight:600;margin-top:2px}
+.stat-card.ok .num{color:#2563EB}
+.stat-card.rate-low .num{color:#DC2626}
+.stat-card.warn .num{color:#D97706}
+.op-table{width:100%;border-collapse:collapse;font-size:12px}
+.op-table th{text-align:left;padding:10px 12px;background:#FAFBFC;color:#64748B;font-weight:700;font-size:11px;border-bottom:1px solid #EEF1F6;white-space:nowrap}
+.op-table td{padding:10px 12px;border-bottom:1px solid #F1F5F9}
+.op-table tr:last-child td{border-bottom:none}
+.pill{display:inline-block;padding:2px 10px;border-radius:100px;font-size:10px;font-weight:700;white-space:nowrap}
+.pill-healthy{background:#DCFCE7;color:#166534}
+.pill-degraded{background:#FEF9C3;color:#854D0E}
+.pill-critical{background:#FEE2E2;color:#991B1B}
+.pill-nodata{background:#F1F5F9;color:#64748B}
+.st-approved{color:#16A34A;font-weight:700}
+.st-declined{color:#D97706;font-weight:700}
+.st-error{color:#DC2626;font-weight:700}
+.chart-wrap{position:relative;width:100%;height:240px}
+.empty-row td{text-align:center;color:#94A3B8;padding:22px !important}
+@media(max-width:768px){.op-table-wrap{overflow-x:auto}.chart-wrap{height:200px}}
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="gauge"></i></div>
+  <div>
+    <h1 class="page-title">Operations</h1>
+    <p class="page-subtitle">Live transaction flow and fleet health — same numbers as Grafana, no second login.</p>
+  </div>
+  <a href="{{ grafana_url }}" target="_blank" rel="noopener" class="btn-live btn-outline"><i data-lucide="external-link"></i> Open in Grafana</a>
+</div>
+<div class="page-content">
+
+  <div class="stat-row">
+    <div class="stat-card ok"><div class="num">{{ '{:,.0f}'.format(cash_today) }} <small>ETB</small></div><div class="lbl">Cash Dispensed Today</div></div>
+    <div class="stat-card {% if success_rate is not none and success_rate < 80 %}rate-low{% endif %}">
+      <div class="num">{% if success_rate is none %}—{% else %}{{ success_rate }}<small>%</small>{% endif %}</div>
+      <div class="lbl">Success Rate — Last 1 Hour</div>
+    </div>
+    <div class="stat-card {% if unacked %}warn{% endif %}"><div class="num">{{ unacked }}</div><div class="lbl">Unacknowledged Anomalies (1h)</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h2>Transactions Per Hour — Last 12 Hours</h2></div>
+    <div style="padding:16px 18px"><div class="chart-wrap"><canvas id="hourlyChart"></canvas></div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h2>Fleet Overview — Last 1 Hour</h2></div>
+    <div class="op-table-wrap">
+      <table class="op-table">
+        <thead><tr><th>ATM ID</th><th>Branch</th><th>City</th><th>Vendor</th><th>Txns</th><th>Approved</th><th>Success %</th><th>Cash (ETB)</th><th>Health</th></tr></thead>
+        <tbody>
+          {% for r in fleet %}
+          <tr>
+            <td style="font-family:monospace">{{ r.atm_id }}</td>
+            <td>{{ r.branch or '—' }}</td><td>{{ r.city or '—' }}</td><td>{{ r.vendor or '—' }}</td>
+            <td>{{ r.txns }}</td><td>{{ r.approved }}</td><td>{{ r.success_rate }}</td>
+            <td>{{ '{:,.0f}'.format(r.cash|float) }}</td>
+            <td><span class="pill pill-{{ r.health|lower|replace(' ', '') }}">{{ r.health }}</span></td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="9">No ATMs registered.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h2>Live Transaction Feed</h2></div>
+    <div class="op-table-wrap">
+      <table class="op-table">
+        <thead><tr><th>Time</th><th>ATM</th><th>Branch</th><th>Type</th><th>Card</th><th>Amount (ETB)</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for r in feed %}
+          <tr>
+            <td style="white-space:nowrap">{{ r.recorded_at }}</td>
+            <td style="font-family:monospace">{{ r.atm_id }}</td>
+            <td>{{ r.branch or '—' }}</td><td>{{ r.txn_type or '—' }}</td>
+            <td style="font-family:monospace">{{ r.card_masked or '—' }}</td>
+            <td>{{ r.amount if r.amount is not none else '—' }}</td>
+            <td class="st-{{ (r.status or '')|lower }}">{{ r.status or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="7">No transactions yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Transaction Summary — Last 24 Hours</h2></div>
+    <div class="op-table-wrap">
+      <table class="op-table">
+        <thead><tr><th>ATM ID</th><th>Total</th><th>Approved</th><th>Declined</th><th>Errors</th></tr></thead>
+        <tbody>
+          {% for r in summary %}
+          <tr>
+            <td style="font-family:monospace">{{ r.atm_id }}</td>
+            <td>{{ r.total }}</td><td>{{ r.approved }}</td><td>{{ r.declined }}</td><td>{{ r.errors }}</td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="5">No transactions in the last 24 hours.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+<script src="/static/chart.umd.min.js"></script>
+<script>
+(function(){
+  var el = document.getElementById('hourlyChart');
+  if(!el || typeof Chart === 'undefined') return;
+  new Chart(el, {type:'bar',
+    data:{labels:{{ chart.labels|tojson }},
+      datasets:[
+        {label:'Approved', data:{{ chart.approved|tojson }}, backgroundColor:'#16A34A'},
+        {label:'Failed', data:{{ chart.failed|tojson }}, backgroundColor:'#DC2626'}]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom', labels:{boxWidth:12, font:{size:11}}}},
+      scales:{x:{stacked:true, ticks:{font:{size:10}}}, y:{stacked:true, beginAtZero:true, ticks:{precision:0}}}}});
+})();
+</script>
+{% endblock %}
