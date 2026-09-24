@@ -121,7 +121,25 @@ def center():
                 'severity_name': SEVERITIES.get(str(p.get('severity', '0')), '?'),
                 'acknowledged': str(p.get('acknowledged')) == '1',
                 'host': host.get('name') or host.get('host') or '—',
+                'objectid': p.get('objectid'),
             })
+        # Fallback: some builds drop selectHosts on problem.get — resolve the
+        # missing host names through their triggers in one batch call.
+        missing = [p['objectid'] for p in problems
+                   if p['host'] == '—' and p.get('objectid')]
+        if missing:
+            triggers = _zbx_call('trigger.get', {
+                'triggerids': missing,
+                'output': ['triggerid'],
+                'selectHosts': ['hostid', 'host', 'name'],
+            }, auth) or []
+            tmap = {}
+            for t in triggers:
+                th = (t.get('hosts') or [{}])[0]
+                tmap[t.get('triggerid')] = th.get('name') or th.get('host') or '—'
+            for p in problems:
+                if p['host'] == '—' and p.get('objectid') in tmap:
+                    p['host'] = tmap[p['objectid']]
         summary['problems'] = len(problems)
         summary['unacked'] = sum(1 for p in problems if not p['acknowledged'])
 
