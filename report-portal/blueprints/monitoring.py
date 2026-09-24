@@ -86,7 +86,9 @@ def center():
         params = {
             'output': ['eventid', 'clock', 'name', 'severity', 'acknowledged', 'objectid'],
             'selectHosts': ['hostid', 'host', 'name'],
-            'sortfield': ['clock', 'eventid'],
+            # NB: problem.get allows sorting by eventid only (clock is
+            # rejected); eventids grow with time so DESC is newest-first.
+            'sortfield': 'eventid',
             'sortorder': 'DESC',
             'limit': 100,
         }
