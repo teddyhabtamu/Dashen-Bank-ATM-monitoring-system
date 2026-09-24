@@ -103,6 +103,18 @@ def _parse_ej_log_line(src):
     return src
 
 
+def _is_junk_hit(src):
+    """Drop empty syslog datagrams (no message, no ATM identity).
+
+    Stray empty UDP packets to Filebeat :514 index as docs with blank
+    message/ej_raw; they render as all-dash rows. Real unparsed lines
+    always carry a non-empty message, so they are kept.
+    """
+    if src.get('atm_id'):
+        return False
+    return not (src.get('message') or '').strip()
+
+
 def _build_must(keyword, card, date_from, date_to, atm_id,
                 event_type, status, min_amount, max_amount, auth_code):
     """
@@ -232,6 +244,8 @@ def ej_search():
                     total = body.get('hits', {}).get('total', {}).get('value', 0)
                     for hit in body.get('hits', {}).get('hits', []):
                         src = _parse_ej_log_line(hit['_source'])
+                        if _is_junk_hit(src):
+                            continue
                         results.append({
                             'timestamp':   _fmt_ts(src.get('@timestamp', '')),
                             'atm_id':      src.get('atm_id', ''),
@@ -331,6 +345,8 @@ def ej_search_csv():
                     if selected_set and idx not in selected_set:
                         continue
                     src = _parse_ej_log_line(hit['_source'])
+                    if _is_junk_hit(src):
+                        continue
                     rows.append([
                         _fmt_ts(src.get('@timestamp', '')),
                         src.get('atm_id', ''),
