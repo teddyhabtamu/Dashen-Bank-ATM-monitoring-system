@@ -378,11 +378,13 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
     </a>
     {% endif %}
     <div class="nav-section-label" style="margin-top:8px">Quick Links</div>
+    {% if session.get('role') == 'admin' %}
     <a href="{{ grafana_url }}" target="_blank" rel="noopener" class="nav-item"
        title="Grafana — live dashboards">
       <i data-lucide="bar-chart-3"></i>
       <span>Live Dashboards</span>
     </a>
+    {% endif %}
     <a href="/monitoring" class="nav-item {% if request.path.startswith('/monitoring') %}active{% endif %}"
        title="Monitoring Center — hosts and problems, no second login">
       <i data-lucide="activity"></i>
