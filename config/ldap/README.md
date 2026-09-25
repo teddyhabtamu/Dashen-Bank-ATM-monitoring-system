@@ -22,7 +22,11 @@ docker exec mock-ldap ldapsearch -x -H ldap://localhost \
   "(objectClass=groupOfNames)" cn member
 ```
 
-Tear down: `docker compose --profile ldap down` (add `-v` to wipe lab data).
+Tear down: `docker compose --profile ldap stop mock-ldap`.
+⚠️ Never `down` for this — `down` removes the ENTIRE project stack
+(all app containers), the profile flag only adds mock-ldap to the set.
+Add `-v` to `stop`? No — volumes hold real data; wipe lab data only via
+explicit `docker volume rm` of the `openldap-data` volume.
 
 ## Switchover to real AD (when IAM answers)
 

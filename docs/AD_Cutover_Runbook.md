@@ -108,7 +108,7 @@ DIR_MODE=locked DIR_OPS_USER=<disabled-user> DIR_OPS_PASS=<old-pass> \
 
 - [ ] Checker green: admin OK, operator OK, wrong password rejected, unknown user rejected, toml group DNs resolve; Grafana/Zabbix/GLPI login spot-checks in browsers; local break-glass OK everywhere
 - [ ] **Leaver test:** disable one AD test account → confirm lockout on portal, Grafana, Zabbix (and GLPI) within one login attempt each; re-enable, confirm access returns
-- [ ] `mock-ldap` stopped (`docker compose --profile ldap down`); lab users documented as retired
+- [ ] `mock-ldap` stopped (`docker compose --profile ldap stop mock-ldap` — never `down`, which removes the whole stack); lab users documented as retired
 - [ ] Record committed: real group DNs, role mapping, date, who ran it (append to `docs/LDAP_Integration.md` §3 table)
 
 ## 7. Explicitly after (not this runbook)

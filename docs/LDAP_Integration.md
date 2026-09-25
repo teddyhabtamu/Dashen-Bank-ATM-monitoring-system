@@ -6,7 +6,7 @@
 | Version | 1.0 |
 | Date | 2026-09-07 |
 | Branch | `uat-prep` |
-| Status | Lab-proven against mock directory; production cutover pending IAM answers |
+| Status | Lab-proven + UAT-proven; DECISION 2026-09-24: run on local accounts, LDAP parked (see §4.4) |
 
 ## 1. What this is — and is not
 
@@ -68,12 +68,13 @@ and the silent global `ldap_auth_enabled` switch.
 
 ## 4. Remaining work (runbooked, not yet executed)
 
-### 4.1 GLPI LDAP (~15 min, manual UI)
-Setup → Authentication → LDAP directories → Add: host, port 389 (636 +
-CA cert for real AD), base DN, bind DN/password, login field (`uid`, later
-`sAMAccountName`), group mapping to GLPI profiles (admin/super-admin for
-ATM-Admins, technician for ATM-Operators). Verify: directory user logs in;
-disable the test user in the directory and confirm lockout.
+### 4.1 GLPI LDAP (done 2026-09-24 — lab + UAT proven)
+Same flow both sides: LDAP directory entry (`mock-ldap:389`,
+`dc=atmmon,dc=local`, bind `cn=admin,...`, login `uid`), Test green,
+then users via auto-create-on-first-login (UAT) or bulk import (lab),
+Authorizations `admin1`→Super-Admin / `ops1`→Technician, Recursive Yes.
+Fresh imports default to Self-Service — the explicit row overrides it.
+Field map for AD day lives in `docs/AD_Cutover_Runbook.md` §5.
 
 ### 4.2 OpenSearch security (production gate — do NOT do in UAT)
 Enabling the security plugin rewires authentication for OpenSearch +
@@ -82,7 +83,7 @@ the proven EJ pipeline for zero UAT benefit. Schedule with the TLS work
 (§6): internal users file, roles mapping to directory groups, Dashboards
 reconfiguration, full EJ regression after.
 
-### 4.3 Real-AD cutover checklist (needs IAM answers first)
+### 4.3 Real-AD cutover checklist (PARKED 2026-09-24 — keep, do not execute)
 1. Service account (`svc-atm-monitor`, bind+search only), LDAPS endpoint +
    CA cert, base DN, `ATM-Operators` / `ATM-Admins` groups
 2. Apply the 4-line change per app (§5 table in `config/ldap/README.md`)
@@ -91,6 +92,20 @@ reconfiguration, full EJ regression after.
    local break-glass accounts confirmed working
 4. Rollback per app: portal `AUTH_MODE=local`; grafana `GF_AUTH_LDAP_ENABLED=false`;
    Zabbix disable directory / unlink user; all instant, all tested paths
+
+### 4.4 Decision record 2026-09-24: local accounts, LDAP parked
+Small single-department user base → manual per-app accounts; no bank-AD
+dependency. LDAP code, checker (`tests/test_directory.py`), and runbook stay
+in git, maintained, unexecuted. UAT runs `AUTH_MODE=local`, lab directory down.
+Revisit when ANY fires: >~20 users, a second department onboards, or audit
+flags decentralized identity.
+
+Leaver checklist (run ALL four — no directory to do it at once):
+1. Portal: User Management → delete/disable
+2. Grafana: Server Admin → Users → delete
+3. Zabbix: Users → Users → disable (keeps history)
+4. GLPI: Administration → Users → deactivate
+Confirm: each disabled login rejected within one attempt.
 
 ## 5. Secrets inventory
 
@@ -112,8 +127,11 @@ needs a session layer on top. Decision (recorded, not scoped work):
   once, touch zero apps. Cost ≈ 1–2 weeks, gated on TLS + AD cutover first.
 - **Rejected: forward-auth proxy.** Faster to stand up, permanent session
   fragility across five different session models. Not worth it.
-- **Accepted interim:** same credential everywhere + portal deep-links
-  (≈80% of the UX, 0% new infrastructure).
+- **Accepted interim (evolved 2026-09-24):** portal-embedded pages instead of
+  deep-links — Monitoring Center (`/monitoring`, Zabbix problems+hosts) and
+  Operations (`/operations`, PG transactions+KPIs) render natively under the
+  portal login; Grafana/Zabbix/GLPI direct UIs stay admin-only. Same effect
+  as the link strategy (0 new infrastructure) without the second login.
 - **Hard prerequisite:** TLS on every UI before any SSO cookies exist.
 - Sequence: LDAP cutover → TLS everywhere → Keycloak evaluation → SSO.
 
