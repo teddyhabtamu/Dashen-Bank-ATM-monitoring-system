@@ -112,7 +112,7 @@
   if(el1) new Chart(el1, {type:'line',
     data:{labels:{{ chart.avail_labels|tojson }}, datasets:[{label:'Availability %', data:{{ chart.avail|tojson }},
       borderColor:'#16A34A', backgroundColor:'rgba(22,163,74,.12)', fill:true, tension:.3, pointRadius:3}]},
-    options:Object.assign({}, base, {scales:{y:{min:0, max:100}}}));
+    options:Object.assign({}, base, {scales:{y:{min:0, max:100}}});
   var el2 = document.getElementById('errChart');
   if(el2) new Chart(el2, {type:'doughnut',
     data:{labels:{{ chart.err_labels|tojson }}, datasets:[{data:{{ chart.err_data|tojson }},
