@@ -173,6 +173,8 @@ docker exec zabbix-db psql -U zabbix -d zabbix \
 # ── Step 8 — Import Zabbix templates & hosts ───
 echo ""
 echo "Step 8: Importing Zabbix templates and registering hosts..."
+# sync_atms_to_zabbix.py reads the shell environment (no dotenv) — export .env first.
+set -a; source .env 2>/dev/null; set +a
 python3 scripts/sync_atms_to_zabbix.py --apply --import-templates || {
     echo "  WARNING: Zabbix host sync failed. Re-run:"
     echo "  python3 scripts/sync_atms_to_zabbix.py --apply --import-templates"
