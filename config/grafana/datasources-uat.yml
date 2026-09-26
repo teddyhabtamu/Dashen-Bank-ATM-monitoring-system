@@ -8,7 +8,8 @@ datasources:
     jsonData:
       username: Admin
     secureJsonData:
-      password: zabbix
+      # Injected from GF_ZBX_PASSWORD (== ZBX_PASS); never commit the real one.
+      password: $GF_ZBX_PASSWORD
 
   - name: ATM-Transactions
     type: postgres

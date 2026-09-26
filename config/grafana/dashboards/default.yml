@@ -1,0 +1,16 @@
+# File-based dashboard provider: the JSONs beside this file (tracked in git)
+# auto-import on every boot, so a lost grafana-data volume never loses
+# dashboards again. allowUiUpdates lets admins tweak in the UI; a container
+# recreate re-applies the git version.
+apiVersion: 1
+
+providers:
+  - name: 'ATM Monitoring'
+    orgId: 1
+    folder: 'ATM Monitoring'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
