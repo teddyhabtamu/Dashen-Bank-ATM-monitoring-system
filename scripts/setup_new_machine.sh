@@ -180,6 +180,16 @@ python3 scripts/sync_atms_to_zabbix.py --apply --import-templates || {
     echo "  python3 scripts/sync_atms_to_zabbix.py --apply --import-templates"
 }
 
+# Media types (GLPI webhook) + trigger action — idempotent, warn-only on failure.
+python3 scripts/import_zabbix_mediatypes.py || {
+    echo "  WARNING: mediatype import failed (GLPI_* env needed). Re-run:"
+    echo "  python3 scripts/import_zabbix_mediatypes.py"
+}
+python3 scripts/setup_zabbix_actions.py || {
+    echo "  WARNING: action setup failed. Re-run:"
+    echo "  python3 scripts/setup_zabbix_actions.py"
+}
+
 # ── Step 9/10 — MOVED to Step 12b ──────────────
 # The mediatype XML now contains __PLACEHOLDER__ tokens instead of real
 # credentials, so it is rendered with values from .env AFTER the GLPI API
