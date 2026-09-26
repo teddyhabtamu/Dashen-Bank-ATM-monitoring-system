@@ -129,7 +129,7 @@ def api_stats():
                   AND l.status = 'active'
             """)
             r = cur.fetchone(); cur.close()
-        return jsonify({'total_txns': int(r[0]), 'success_rate': float(r[1]), 'cash_today': float(r[2]), 'atm_count': int(r[3])})
+        return jsonify({'total_txns': int(r[0] or 0), 'success_rate': float(r[1]) if r[1] is not None else 0.0, 'cash_today': float(r[2] or 0), 'atm_count': int(r[3] or 0)})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
