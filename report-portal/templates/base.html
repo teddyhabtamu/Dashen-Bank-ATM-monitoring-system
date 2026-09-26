@@ -439,8 +439,8 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
       <i data-lucide="activity"></i>
       <span>Monitoring Center</span>
     </a>
-    <a href="{{ glpi_ui_url }}" target="_blank" rel="noopener" class="nav-item"
-       title="GLPI — tickets, SLA and RCA">
+    <a href="/incidents" class="nav-item {% if request.path.startswith('/incidents') %}active{% endif %}"
+       title="Incident Management — GLPI tickets, no second login">
       <i data-lucide="ticket"></i>
       <span>Incident Management</span>
     </a>

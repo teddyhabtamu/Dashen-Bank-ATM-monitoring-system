@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Incident Management{% endblock %}
+{% block extra_style %}
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.stat-card{background:#fff;border-radius:12px;border:1px solid #EEF1F6;box-shadow:0 1px 3px rgba(1,33,105,.04);padding:16px 18px;animation:fadeSlideUp .3s ease}
+.stat-card .num{font-size:26px;font-weight:800;color:#0F172A}
+.stat-card .lbl{font-size:11px;color:#64748B;font-weight:600;margin-top:2px}
+.stat-card.open .num{color:#D97706}
+.stat-card.solved .num{color:#16A34A}
+.tab-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.tab{padding:7px 16px;border-radius:8px;font-size:12px;font-weight:600;color:#64748B;text-decoration:none;background:#fff;border:1px solid #EEF1F6}
+.tab.active{background:#012169;color:#fff;border-color:#012169}
+.inc-table{width:100%;border-collapse:collapse;font-size:12px}
+.inc-table th{text-align:left;padding:10px 12px;background:#FAFBFC;color:#64748B;font-weight:700;font-size:11px;border-bottom:1px solid #EEF1F6;white-space:nowrap}
+.inc-table td{padding:10px 12px;border-bottom:1px solid #F1F5F9;vertical-align:top}
+.inc-table tr:last-child td{border-bottom:none}
+.st{font-weight:700;font-size:11px}
+.st-open{color:#D97706}.st-pending{color:#2563EB}.st-solved{color:#16A34A}
+.pr-high{color:#DC2626;font-weight:700}
+.err-banner{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;padding:12px 16px;border-radius:10px;font-size:12px;margin-bottom:16px}
+.empty-row td{text-align:center;color:#94A3B8;padding:22px !important}
+@media(max-width:768px){.inc-table-wrap{overflow-x:auto}}
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="ticket"></i></div>
+  <div>
+    <h1 class="page-title">Incident Management</h1>
+    <p class="page-subtitle">GLPI tickets without leaving the portal — no second login.</p>
+  </div>
+  <a href="{{ glpi_ui_url }}" target="_blank" rel="noopener" class="btn-live btn-outline"><i data-lucide="external-link"></i> Open in GLPI</a>
+</div>
+<div class="page-content">
+
+  {% if error %}
+  <div class="err-banner">{{ error }}</div>
+  {% endif %}
+
+  <div class="stat-row">
+    <div class="stat-card open"><div class="num">{{ counts.open }}</div><div class="lbl">Open</div></div>
+    <div class="stat-card"><div class="num">{{ counts.pending }}</div><div class="lbl">Pending</div></div>
+    <div class="stat-card solved"><div class="num">{{ counts.solved }}</div><div class="lbl">Solved / Closed</div></div>
+  </div>
+
+  <div class="tab-bar">
+    <a href="/incidents" class="tab {% if not f_status %}active{% endif %}">All</a>
+    <a href="/incidents?status=open" class="tab {% if f_status == 'open' %}active{% endif %}">Open</a>
+    <a href="/incidents?status=pending" class="tab {% if f_status == 'pending' %}active{% endif %}">Pending</a>
+    <a href="/incidents?status=solved" class="tab {% if f_status == 'solved' %}active{% endif %}">Solved</a>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Tickets ({{ tickets|length }})</h2></div>
+    <div class="inc-table-wrap">
+      <table class="inc-table">
+        <thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Priority</th><th>Category</th><th>Requester</th><th>Created</th><th>Updated</th></tr></thead>
+        <tbody>
+          {% for t in tickets %}
+          <tr>
+            <td style="font-family:monospace">{{ t.id }}</td>
+            <td>{{ t.title }}</td>
+            <td class="st {% if t.status in ('New','Processing (assigned)','Processing (planned)') %}st-open{% elif t.status == 'Pending' %}st-pending{% else %}st-solved{% endif %}">{{ t.status }}</td>
+            <td class="{% if t.priority_n >= 4 %}pr-high{% endif %}">{{ t.priority }}</td>
+            <td>{{ t.category }}</td>
+            <td>{{ t.requester }}</td>
+            <td style="white-space:nowrap">{{ t.created }}</td>
+            <td style="white-space:nowrap">{{ t.updated }}</td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="8">No tickets found.{% if error %} GLPI may be unreachable.{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
