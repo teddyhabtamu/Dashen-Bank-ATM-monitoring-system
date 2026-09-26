@@ -108,6 +108,42 @@ div:has(.login-content-box)::before {
 ::-webkit-scrollbar-track { background: #011a52; }
 ::-webkit-scrollbar-thumb { background: rgba(253,215,154,0.4); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(253,215,154,0.7); }
+
+/* ---- TOP BAR (experimental, 2026-09-26: navy + logo only) ----
+   Narrowest selectors that achieve it. If a Grafana upgrade
+   breaks this block, delete from here to the marker and keep
+   the rest — everything above stays valid. */
+header,
+[data-testid="navigation-bar"] {
+  background-color: #012169 !important;
+  border-bottom: 2px solid rgba(253,215,154,0.35) !important;
+}
+
+header *,
+[data-testid="navigation-bar"] * {
+  color: #ffffff !important;
+}
+
+header a[href="/"] img,
+header a[href="/"] svg,
+[data-testid="navigation-bar"] a[href="/"] img,
+[data-testid="navigation-bar"] a[href="/"] svg {
+  display: none !important;
+}
+
+header a[href="/"]::after,
+[data-testid="navigation-bar"] a[href="/"]::after {
+  content: "" !important;
+  display: inline-block !important;
+  width: 90px !important;
+  height: 40px !important;
+  background-image: url("/public/img/dashen-logo.png") !important;
+  background-repeat: no-repeat !important;
+  background-position: center left !important;
+  background-size: contain !important;
+  vertical-align: middle !important;
+}
+/* ---- END TOP BAR EXPERIMENT ---- */
 '
 
 if [ -n "$DARK_CSS" ]; then
