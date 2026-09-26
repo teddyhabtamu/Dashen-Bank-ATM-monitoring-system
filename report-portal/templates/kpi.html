@@ -73,7 +73,8 @@
           {% for d in days %}
           <tr><th>{{ d }}</th>
             {% for v in heat[d] %}
-            <td style="background:rgba(1,33,105,{{ (0.04 + 0.86 * v / peak_max) if peak_max else 0.04 }})" title="{{ d }} {{ loop.index0 }}:00 — {{ v }}">{{ v or '' }}</td>
+            {% set frac = (v / peak_max) if peak_max else 0 %}
+            <td style="background:rgba(1,33,105,{{ 0.04 + 0.86 * frac }}){% if frac > 0.5 %};color:#fff{% endif %}" title="{{ d }} {{ loop.index0 }}:00 — {{ v }}">{{ v or '' }}</td>
             {% endfor %}
           </tr>
           {% endfor %}
