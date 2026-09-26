@@ -100,7 +100,7 @@
     {
       "datasource": {
         "type": "alexanderzobnin-zabbix-datasource",
-        "uid": "${DS_ZABBIX-ATM}"
+        "uid": "Zabbix-ATM"
       },
       "gridPos": {
         "h": 3,
@@ -127,7 +127,7 @@
           "countTriggersBy": "",
           "datasource": {
             "type": "alexanderzobnin-zabbix-datasource",
-            "uid": "${DS_ZABBIX-ATM}"
+            "uid": "Zabbix-ATM"
           },
           "evaltype": "0",
           "functions": [],
@@ -178,7 +178,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_ATM-TRANSACTIONS}"
+        "uid": "ATM-Transactions"
       },
       "fieldConfig": {
         "defaults": {
@@ -259,7 +259,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_ATM-TRANSACTIONS}"
+            "uid": "ATM-Transactions"
           },
           "editorMode": "code",
           "format": "table",
@@ -292,7 +292,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_ATM-TRANSACTIONS}"
+        "uid": "ATM-Transactions"
       },
       "fieldConfig": {
         "defaults": {
@@ -344,7 +344,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_ATM-TRANSACTIONS}"
+            "uid": "ATM-Transactions"
           },
           "editorMode": "code",
           "format": "table",
@@ -376,7 +376,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_ATM-TRANSACTIONS}"
+        "uid": "ATM-Transactions"
       },
       "fieldConfig": {
         "defaults": {
@@ -436,7 +436,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_ATM-TRANSACTIONS}"
+            "uid": "ATM-Transactions"
           },
           "editorMode": "code",
           "format": "table",
@@ -468,7 +468,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_ATM-TRANSACTIONS}"
+        "uid": "ATM-Transactions"
       },
       "fieldConfig": {
         "defaults": {
@@ -526,7 +526,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_ATM-TRANSACTIONS}"
+            "uid": "ATM-Transactions"
           },
           "editorMode": "code",
           "format": "table",
@@ -559,7 +559,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_ATM-TRANSACTIONS}"
+        "uid": "ATM-Transactions"
       },
       "fieldConfig": {
         "defaults": {
@@ -613,7 +613,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_ATM-TRANSACTIONS}"
+            "uid": "ATM-Transactions"
           },
           "editorMode": "code",
           "format": "table",
@@ -646,7 +646,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_ATM-TRANSACTIONS}"
+        "uid": "ATM-Transactions"
       },
       "fieldConfig": {
         "defaults": {
@@ -823,7 +823,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_ATM-TRANSACTIONS}"
+            "uid": "ATM-Transactions"
           },
           "editorMode": "code",
           "format": "table",
@@ -855,7 +855,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_ATM-TRANSACTIONS}"
+        "uid": "ATM-Transactions"
       },
       "fieldConfig": {
         "defaults": {
@@ -932,7 +932,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_ATM-TRANSACTIONS}"
+            "uid": "ATM-Transactions"
           },
           "editorMode": "code",
           "format": "table",
@@ -964,7 +964,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_ATM-TRANSACTIONS}"
+        "uid": "ATM-Transactions"
       },
       "fieldConfig": {
         "defaults": {
@@ -1042,7 +1042,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_ATM-TRANSACTIONS}"
+            "uid": "ATM-Transactions"
           },
           "editorMode": "code",
           "format": "table",
@@ -1074,7 +1074,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_ATM-TRANSACTIONS}"
+        "uid": "ATM-Transactions"
       },
       "fieldConfig": {
         "defaults": {
@@ -1128,7 +1128,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_ATM-TRANSACTIONS}"
+            "uid": "ATM-Transactions"
           },
           "editorMode": "code",
           "format": "table",
@@ -1160,7 +1160,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_ATM-TRANSACTIONS}"
+        "uid": "ATM-Transactions"
       },
       "fieldConfig": {
         "defaults": {
@@ -1238,7 +1238,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_ATM-TRANSACTIONS}"
+            "uid": "ATM-Transactions"
           },
           "editorMode": "code",
           "format": "table",
@@ -1270,7 +1270,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_ATM-TRANSACTIONS}"
+        "uid": "ATM-Transactions"
       },
       "fieldConfig": {
         "defaults": {
@@ -1324,7 +1324,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_ATM-TRANSACTIONS}"
+            "uid": "ATM-Transactions"
           },
           "editorMode": "code",
           "format": "table",
@@ -1356,7 +1356,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_ATM-TRANSACTIONS}"
+        "uid": "ATM-Transactions"
       },
       "fieldConfig": {
         "defaults": {
@@ -1434,7 +1434,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_ATM-TRANSACTIONS}"
+            "uid": "ATM-Transactions"
           },
           "editorMode": "code",
           "format": "table",
@@ -1474,7 +1474,7 @@
         "current": {},
         "datasource": {
           "type": "grafana-postgresql-datasource",
-          "uid": "${DS_ATM-TRANSACTIONS}"
+          "uid": "ATM-Transactions"
         },
         "definition": "SELECT DISTINCT district FROM atm_locations\nORDER BY district",
         "hide": 0,
@@ -1494,7 +1494,7 @@
         "current": {},
         "datasource": {
           "type": "grafana-postgresql-datasource",
-          "uid": "${DS_ATM-TRANSACTIONS}"
+          "uid": "ATM-Transactions"
         },
         "definition": "SELECT DISTINCT branch FROM atm_locations\nWHERE district IN (${district:sqlstring})\nORDER BY branch",
         "hide": 0,
@@ -1602,7 +1602,7 @@
         "current": {},
         "datasource": {
           "type": "grafana-postgresql-datasource",
-          "uid": "${DS_ATM-TRANSACTIONS}"
+          "uid": "ATM-Transactions"
         },
         "definition": "SELECT DISTINCT atm_id FROM atm_network_metrics ORDER BY atm_id",
         "hide": 0,

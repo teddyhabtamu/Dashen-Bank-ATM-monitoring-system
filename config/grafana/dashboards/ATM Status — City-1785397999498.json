@@ -76,7 +76,7 @@
     {
       "datasource": {
         "type": "alexanderzobnin-zabbix-datasource",
-        "uid": "${DS_ZABBIX-ATM}"
+        "uid": "Zabbix-ATM"
       },
       "gridPos": {
         "h": 8,
@@ -105,7 +105,7 @@
           "countTriggersBy": "",
           "datasource": {
             "type": "alexanderzobnin-zabbix-datasource",
-            "uid": "${DS_ZABBIX-ATM}"
+            "uid": "Zabbix-ATM"
           },
           "evaltype": "0",
           "functions": [],
@@ -157,7 +157,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_ATM-TRANSACTIONS}"
+        "uid": "ATM-Transactions"
       },
       "fieldConfig": {
         "defaults": {
@@ -238,7 +238,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_ATM-TRANSACTIONS}"
+            "uid": "ATM-Transactions"
           },
           "editorMode": "code",
           "format": "table",
