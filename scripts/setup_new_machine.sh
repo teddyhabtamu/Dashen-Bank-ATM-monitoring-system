@@ -75,9 +75,10 @@ echo "Directories OK"
 # ── Step 5 — Build Docker images ───────────────
 echo ""
 echo "Step 5: Building Docker images..."
-docker compose build \
-    atm-sim-engine atm-txn-engine atm-ej-engine state-manager \
-    report-portal iso8583-gateway
+# Build every service that has a build context (report-portal, analysis
+# engines). Plain `build` with no names so renamed/removed services can
+# never break this step again (it once named simulator-era services).
+docker compose build
 echo "Build OK"
 
 # ── Step 6 — Start all services ────────────────
