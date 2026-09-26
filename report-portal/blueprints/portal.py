@@ -13,3 +13,10 @@ bp = Blueprint('portal', __name__)
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def index():
     return render_template('portal.html')
+
+
+@bp.route('/reports')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def reports():
+    return render_template('reports.html')

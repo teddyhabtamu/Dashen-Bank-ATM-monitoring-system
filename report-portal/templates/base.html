@@ -363,6 +363,11 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
         </a>
       </div>
     </div>
+    <a href="/reports" class="nav-item {% if request.path.startswith('/reports') %}active{% endif %}"
+       title="Reports — downloadable management and operational reports">
+      <i data-lucide="file-text"></i>
+      <span>Reports</span>
+    </a>
     <a href="/admin/atm" class="nav-item {% if request.path.startswith('/admin/atm') %}active{% endif %}">
       <i data-lucide="settings"></i>
       <span>ATM Registration</span>
