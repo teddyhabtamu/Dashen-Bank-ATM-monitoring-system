@@ -44,6 +44,14 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .nav-item span{opacity:1;transition:opacity .2s ease .15s}
 .sidebar.collapsed .nav-item span{opacity:0;width:0;margin:0;padding:0;pointer-events:none}
 .nav-section-label{padding:16px 12px 6px;font-size:9px;font-weight:600;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.8px;overflow:hidden;white-space:nowrap;transition:opacity .2s ease}
+.nav-group .nav-group-items{display:none;flex-direction:column;gap:2px;padding:2px 0 2px 27px}
+.nav-group.open .nav-group-items{display:flex}
+.nav-group-header{width:100%;background:none;border:none;cursor:pointer;font-family:inherit}
+.nav-group-header .chev{margin-left:auto;transition:transform .2s ease}
+.nav-group.open .nav-group-header .chev{transform:rotate(180deg)}
+.nav-group-items .nav-item{min-height:34px;font-size:12px}
+.sidebar.collapsed .nav-group-items{display:none}
+.sidebar.collapsed .nav-group-header .chev{display:none}
 .sidebar.collapsed .nav-section-label{opacity:0;height:0;padding:0 12px;margin:0;overflow:hidden;pointer-events:none}
 
 /* ── PROFILE DROPDOWN ── */
@@ -338,15 +346,23 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
   </div>
   <nav class="sidebar-nav">
     <div class="nav-section-label">Navigation</div>
-    <a href="/" class="nav-item {% if request.path == '/' %}active{% endif %}">
-      <i data-lucide="layout-dashboard"></i>
-      <span>Dashboard</span>
-    </a>
-    <a href="/operations" class="nav-item {% if request.path.startswith('/operations') %}active{% endif %}"
-       title="Operations — live transactions and fleet health, no second login">
-      <i data-lucide="gauge"></i>
-      <span>Operations</span>
-    </a>
+    {% set dash_active = request.path == '/' or request.path.startswith('/operations') %}
+    <div class="nav-group {% if dash_active %}open{% endif %}">
+      <button class="nav-item nav-group-header {% if dash_active %}active{% endif %}" onclick="toggleNavGroup(this)" aria-expanded="{{ 'true' if dash_active else 'false' }}">
+        <i data-lucide="layout-dashboard"></i>
+        <span>Dashboard</span>
+        <i data-lucide="chevron-down" class="chev"></i>
+      </button>
+      <div class="nav-group-items">
+        <a href="/" class="nav-item {% if request.path == '/' %}active{% endif %}">
+          <span>Overview</span>
+        </a>
+        <a href="/operations" class="nav-item {% if request.path.startswith('/operations') %}active{% endif %}"
+           title="Operations — live transactions and fleet health, no second login">
+          <span>Operations</span>
+        </a>
+      </div>
+    </div>
     <a href="/admin/atm" class="nav-item {% if request.path.startswith('/admin/atm') %}active{% endif %}">
       <i data-lucide="settings"></i>
       <span>ATM Registration</span>
@@ -485,6 +501,11 @@ function toggleCollapse(){
 }
 
 // ── MOBILE ──
+function toggleNavGroup(btn){
+  var g = btn.closest('.nav-group');
+  var open = g.classList.toggle('open');
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
 function toggleMobile(){
   var s = document.getElementById('sidebar');
   if(s.classList.contains('open')) return closeMobile();
