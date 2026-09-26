@@ -370,7 +370,7 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
   </div>
   <nav class="sidebar-nav">
     <div class="nav-section-label">Navigation</div>
-    {% set dash_active = request.path == '/' or request.path.startswith('/operations') %}
+    {% set dash_active = request.path == '/' or request.path.startswith('/operations') or request.path.startswith('/kpi') %}
     <div class="nav-group {% if dash_active %}open{% endif %}">
       <button class="nav-item nav-group-header {% if dash_active %}active{% endif %}" onclick="toggleNavGroup(this)" aria-expanded="{{ 'true' if dash_active else 'false' }}">
         <i data-lucide="layout-dashboard"></i>
@@ -384,6 +384,10 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
         <a href="/operations" class="nav-item {% if request.path.startswith('/operations') %}active{% endif %}"
            title="Operations — live transactions and fleet health, no second login">
           <span>Operations</span>
+        </a>
+        <a href="/kpi" class="nav-item {% if request.path.startswith('/kpi') %}active{% endif %}"
+           title="Management KPI — 7-day network performance, no second login">
+          <span>KPIs</span>
         </a>
       </div>
     </div>

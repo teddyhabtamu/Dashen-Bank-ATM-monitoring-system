@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Management KPI{% endblock %}
+{% block extra_style %}
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.stat-card{background:#fff;border-radius:12px;border:1px solid #EEF1F6;box-shadow:0 1px 3px rgba(1,33,105,.04);padding:16px 18px;animation:fadeSlideUp .3s ease}
+.stat-card .num{font-size:26px;font-weight:800;color:#0F172A}
+.stat-card .lbl{font-size:11px;color:#64748B;font-weight:600;margin-top:2px}
+.kpi-table{width:100%;border-collapse:collapse;font-size:12px}
+.kpi-table th{text-align:left;padding:10px 12px;background:#FAFBFC;color:#64748B;font-weight:700;font-size:11px;border-bottom:1px solid #EEF1F6;white-space:nowrap}
+.kpi-table td{padding:10px 12px;border-bottom:1px solid #F1F5F9}
+.kpi-table tr:last-child td{border-bottom:none}
+.chart-wrap{position:relative;width:100%;height:240px}
+.heat{border-collapse:collapse;font-size:10px;margin:0 auto}
+.heat th{padding:4px 6px;color:#64748B;font-weight:600}
+.heat td{width:26px;height:22px;text-align:center;border-radius:4px;color:#0F172A}
+.empty-row td{text-align:center;color:#94A3B8;padding:22px !important}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.two-col{grid-template-columns:1fr}.chart-wrap{height:200px}.kpi-table-wrap{overflow-x:auto}}
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="bar-chart-2"></i></div>
+  <div>
+    <h1 class="page-title">Management KPI</h1>
+    <p class="page-subtitle">7-day network performance — same numbers as Grafana, no second login.</p>
+  </div>
+  <a href="{{ grafana_url }}" target="_blank" rel="noopener" class="btn-live btn-outline"><i data-lucide="external-link"></i> Open in Grafana</a>
+</div>
+<div class="page-content">
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h2>7-Day Availability Trend</h2></div>
+    <div style="padding:16px 18px"><div class="chart-wrap"><canvas id="availChart"></canvas></div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h2>ATM Performance Ranking — Last 7 Days</h2></div>
+    <div class="kpi-table-wrap">
+      <table class="kpi-table">
+        <thead><tr><th>ATM</th><th>Branch</th><th>Total Transactions</th><th>Success Rate %</th><th>Cash Dispensed (ETB)</th></tr></thead>
+        <tbody>
+          {% for r in ranking %}
+          <tr>
+            <td style="font-family:monospace">{{ r.atm_id }}</td><td>{{ r.branch or '—' }}</td>
+            <td>{{ r.total }}</td><td>{{ r.success }}</td><td>{{ '{:,.0f}'.format(r.cash|float) }}</td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="5">No transactions in the last 7 days.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="two-col" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-header"><h2>Error Distribution — Last 7 Days</h2></div>
+      <div style="padding:16px 18px"><div class="chart-wrap"><canvas id="errChart"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h2>Fault Distribution</h2></div>
+      <div style="padding:16px 18px"><div class="chart-wrap"><canvas id="faultChart"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h2>Peak Transaction Hours — Last 7 Days</h2></div>
+    <div style="padding:16px 18px;overflow-x:auto">
+      <table class="heat">
+        <thead><tr><th></th>{% for h in range(24) %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          {% for d in days %}
+          <tr><th>{{ d }}</th>
+            {% for v in heat[d] %}
+            <td style="background:rgba(1,33,105,{{ (0.04 + 0.86 * v / peak_max) if peak_max else 0.04 }})" title="{{ d }} {{ loop.index0 }}:00 — {{ v }}">{{ v or '' }}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Per-ATM Fault List — Last 7 Days</h2></div>
+    <div class="kpi-table-wrap">
+      <table class="kpi-table">
+        <thead><tr><th>Name</th><th>Branch</th><th>ATM</th><th>Fault</th><th>Count</th></tr></thead>
+        <tbody>
+          {% for r in faults %}
+          <tr>
+            <td>{{ r.name or '—' }}</td><td>{{ r.branch or '—' }}</td>
+            <td style="font-family:monospace">{{ r.atm }}</td><td>{{ r.fault or '—' }}</td><td>{{ r.cnt }}</td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="5">No faults recorded in the last 7 days.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+<script src="/static/chart.umd.min.js"></script>
+<script>
+(function(){
+  if(typeof Chart === 'undefined') return;
+  var base = {responsive:true, maintainAspectRatio:false,
+    plugins:{legend:{position:'bottom', labels:{boxWidth:12, font:{size:11}}}}};
+  var el1 = document.getElementById('availChart');
+  if(el1) new Chart(el1, {type:'line',
+    data:{labels:{{ chart.avail_labels|tojson }}, datasets:[{label:'Availability %', data:{{ chart.avail|tojson }},
+      borderColor:'#16A34A', backgroundColor:'rgba(22,163,74,.12)', fill:true, tension:.3, pointRadius:3}]},
+    options:Object.assign({}, base, {scales:{y:{min:0, max:100}}}}));
+  var el2 = document.getElementById('errChart');
+  if(el2) new Chart(el2, {type:'doughnut',
+    data:{labels:{{ chart.err_labels|tojson }}, datasets:[{data:{{ chart.err_data|tojson }},
+      backgroundColor:['#012169','#D97706','#DC2626','#2563EB','#059669','#7C3AED','#DB2777']}]}, options:base});
+  var el3 = document.getElementById('faultChart');
+  if(el3) new Chart(el3, {type:'bar',
+    data:{labels:{{ chart.fault_labels|tojson }}, datasets:[{label:'Count', data:{{ chart.fault_data|tojson }},
+      backgroundColor:'#012169'}]}, options:Object.assign({}, base, {plugins:{legend:{display:false}}})});
+})();
+</script>
+{% endblock %}
