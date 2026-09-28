@@ -49,6 +49,10 @@ SMTP_USER = os.environ.get('SMTP_USER', '')
 SMTP_PASS = os.environ.get('SMTP_PASS', '')
 SMTP_FROM = os.environ.get('SMTP_FROM', 'atm-monitor@dashenbank.com')
 BASE_URL  = os.environ.get('BASE_URL', 'http://localhost:8888')
+# Internal generation URL: the scheduler runs INSIDE the portal container,
+# so it always reaches the app via loopback — never via the public BASE_URL
+# (which may be a reviewer tunnel or LAN hostname unreachable from in here).
+_INTERNAL_BASE = f"http://localhost:{os.environ.get('REPORT_PORTAL_PORT', '8888')}"
 INTERNAL_API_KEY = os.environ.get('INTERNAL_API_KEY', '')
 
 # Embedded logo (CID attachment — renders in every client, unlike remote URLs).
@@ -84,7 +88,7 @@ def _generate_report(report_type, fmt, days=7, atm='all'):
     filename = f'Dashen_Bank_{label.replace(" ", "_")}{atm_part}_{today}.{fmt}'
     if fmt == 'csv':
         import requests
-        url = f'{BASE_URL}/report/{report_type}/csv?days={days}&atm={atm}'
+        url = f'{_INTERNAL_BASE}/report/{report_type}/csv?days={days}&atm={atm}'
         try:
             resp = requests.get(url, timeout=30, headers=_headers)
             if resp.status_code == 200:
@@ -96,7 +100,7 @@ def _generate_report(report_type, fmt, days=7, atm='all'):
             return None, None, None
     else:
         import requests
-        url = f'{BASE_URL}/report/{report_type}/pdf?days={days}&atm={atm}'
+        url = f'{_INTERNAL_BASE}/report/{report_type}/pdf?days={days}&atm={atm}'
         try:
             resp = requests.get(url, timeout=60, headers=_headers)
             if resp.status_code == 200:
