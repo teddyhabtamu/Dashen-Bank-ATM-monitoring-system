@@ -7,6 +7,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
+from email.mime.text import MIMEText
 from email import encoders
 from datetime import datetime, date, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
