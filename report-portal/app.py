@@ -111,6 +111,10 @@ def create_app():
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
         if not FLASK_DEBUG:
             response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        # Static assets are versioned by deploy (container recreate), so a
+        # short client cache kills ~850KB of re-downloads per page load.
+        if request.path.startswith('/static/'):
+            response.headers['Cache-Control'] = 'public, max-age=3600'
         return response
 
     @app.errorhandler(403)

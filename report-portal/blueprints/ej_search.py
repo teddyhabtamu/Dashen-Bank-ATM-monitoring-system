@@ -239,7 +239,7 @@ def ej_search():
                         "sort": [{"@timestamp": "desc"}],
                         "track_total_hits": True,
                     },
-                    timeout=45,
+                    timeout=20,
                 )
                 if resp.status_code == 200:
                     body  = resp.json()

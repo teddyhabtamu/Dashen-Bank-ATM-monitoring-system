@@ -33,6 +33,30 @@ PRIORITY_NAMES = {
 
 EAT = timezone(timedelta(hours=3))
 
+# Short-lived cache: one page load costs 3 sequential GLPI round-trips
+# (session open, list, close). 60s TTL; filters apply per request.
+_cache = {'ts': 0.0, 'tickets': None}
+CACHE_TTL = 60.0
+
+
+def _cached_tickets():
+    """Return raw ticket rows, refreshing at most every CACHE_TTL."""
+    import time
+    now = time.time()
+    if _cache['tickets'] is not None and now - _cache['ts'] < CACHE_TTL:
+        return _cache['tickets']
+    token = _session()
+    if not token:
+        return None
+    try:
+        raw = _tickets(token)
+        if raw is None and _cache['tickets'] is not None:
+            return _cache['tickets']  # hiccup: serve stale
+        _cache.update(ts=now, tickets=raw or [])
+        return raw or []
+    finally:
+        _close(token)
+
 
 def _fmt_ts(ts):
     if not ts:
@@ -53,7 +77,7 @@ def _session():
             f'{GLPI_URL}/apirest.php/initSession',
             headers={'App-Token': GLPI_APP_TOKEN},
             auth=(GLPI_USER, GLPI_API_PASSWORD),
-            timeout=10,
+            timeout=6,
         )
         if r.status_code == 200:
             return r.json().get('session_token')
@@ -78,7 +102,7 @@ def _tickets(token):
             f'{GLPI_URL}/apirest.php/Ticket/',
             params={'range': '0-99', 'order': 'DESC', 'expand_dropdowns': 'true'},
             headers={'App-Token': GLPI_APP_TOKEN, 'Session-Token': token},
-            timeout=20,
+            timeout=12,
         )
         if r.status_code == 200:
             return r.json()
@@ -97,50 +121,44 @@ def board():
     tickets = []
     counts = {'open': 0, 'pending': 0, 'solved': 0}
 
-    token = _session()
-    if not token:
+    raw = _cached_tickets()
+    if raw is None:
         error = ('Cannot reach the GLPI API — check GLPI_APP_TOKEN / GLPI_USER / '
                  'GLPI_API_PASSWORD and that the API client is enabled.')
+        raw = []
     else:
-        try:
-            raw = _tickets(token)
-            if raw is None:
-                error = 'Ticket query failed.'
-                raw = []
-            for t in raw:
-                try:
-                    st = int(t.get('status', 0))
-                except (TypeError, ValueError):
-                    st = 0
-                if st in (1, 2, 3):
-                    counts['open'] += 1
-                elif st == 4:
-                    counts['pending'] += 1
-                elif st in (5, 6):
-                    counts['solved'] += 1
-                if status == 'open' and st not in (1, 2, 3):
-                    continue
-                if status == 'pending' and st != 4:
-                    continue
-                if status == 'solved' and st not in (5, 6):
-                    continue
-                try:
-                    pr = int(t.get('priority', 0))
-                except (TypeError, ValueError):
-                    pr = 0
-                tickets.append({
-                    'id': t.get('id'),
-                    'title': t.get('name') or '(no title)',
-                    'status': STATUS_NAMES.get(st, str(st)),
-                    'priority': PRIORITY_NAMES.get(pr, str(pr) if pr else '—'),
-                    'priority_n': pr,
-                    'category': t.get('itilcategories_id') or '—',
-                    'requester': t.get('users_id_recipient') or '—',
-                    'created': _fmt_ts(t.get('date_creation')),
-                    'updated': _fmt_ts(t.get('date_mod')),
-                })
-        finally:
-            _close(token)
+        for t in raw:
+            try:
+                st = int(t.get('status', 0))
+            except (TypeError, ValueError):
+                st = 0
+            if st in (1, 2, 3):
+                counts['open'] += 1
+            elif st == 4:
+                counts['pending'] += 1
+            elif st in (5, 6):
+                counts['solved'] += 1
+            if status == 'open' and st not in (1, 2, 3):
+                continue
+            if status == 'pending' and st != 4:
+                continue
+            if status == 'solved' and st not in (5, 6):
+                continue
+            try:
+                pr = int(t.get('priority', 0))
+            except (TypeError, ValueError):
+                pr = 0
+            tickets.append({
+                'id': t.get('id'),
+                'title': t.get('name') or '(no title)',
+                'status': STATUS_NAMES.get(st, str(st)),
+                'priority': PRIORITY_NAMES.get(pr, str(pr) if pr else '—'),
+                'priority_n': pr,
+                'category': t.get('itilcategories_id') or '—',
+                'requester': t.get('users_id_recipient') or '—',
+                'created': _fmt_ts(t.get('date_creation')),
+                'updated': _fmt_ts(t.get('date_mod')),
+            })
 
     return render_template('incidents.html', tickets=tickets, counts=counts,
                            f_status=status, error=error)
