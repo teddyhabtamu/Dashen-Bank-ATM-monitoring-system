@@ -6,7 +6,7 @@ import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
-from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
 from email import encoders
 from datetime import datetime, date, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -50,11 +50,12 @@ SMTP_FROM = os.environ.get('SMTP_FROM', 'atm-monitor@dashenbank.com')
 BASE_URL  = os.environ.get('BASE_URL', 'http://localhost:8888')
 INTERNAL_API_KEY = os.environ.get('INTERNAL_API_KEY', '')
 
-_LOGO_DATA_URI = None
+# Embedded logo (CID attachment — renders in every client, unlike remote URLs).
+_LOGO_BYTES = None
 _logo_path = os.path.join(os.path.dirname(__file__), 'static', 'logo.png')
 try:
     with open(_logo_path, 'rb') as _f:
-        _LOGO_DATA_URI = 'data:image/png;base64,' + base64.b64encode(_f.read()).decode()
+        _LOGO_BYTES = _f.read()
 except Exception:
     pass
 
@@ -118,6 +119,12 @@ def _send_email(recipients, subject, body, filename, filedata, mimetype):
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'html'))
 
+        if _LOGO_BYTES:
+            logo = MIMEImage(_LOGO_BYTES)
+            logo.add_header('Content-ID', '<dashen-logo>')
+            logo.add_header('Content-Disposition', 'inline', filename='dashen-logo.png')
+            msg.attach(logo)
+
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(filedata.read())
         encoders.encode_base64(part)
@@ -151,7 +158,7 @@ def _email_body(report_type, fmt, days, atm):
     label = REPORT_TYPE_LABELS.get(report_type, report_type.title())
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
     atm_display = atm if atm and atm != 'all' else 'All ATMs'
-    logo_url = 'https://i.ibb.co/93gSRkjS/id-CVy-MSM-1-logos.png'
+    logo_url = 'cid:dashen-logo'
     return f'''<!DOCTYPE html>
 <html>
 <head>
