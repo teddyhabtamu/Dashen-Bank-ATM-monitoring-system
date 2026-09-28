@@ -535,7 +535,19 @@ function toggleCollapse(){
 
 // ── MOBILE ──
 function toggleNavGroup(btn){
+  var s = document.getElementById('sidebar');
   var g = btn.closest('.nav-group');
+  if(s.classList.contains('collapsed')){
+    // Collapsed: first click expands the sidebar (children are hidden
+    // while collapsed), second click toggles the group.
+    s.classList.remove('collapsed');
+    localStorage.setItem('sidebarCollapsed', 'false');
+    var icon = s.querySelector('.collapse-icon polyline');
+    if(icon) icon.setAttribute('points', '16 15 11 12 16 9');
+    g.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+    return;
+  }
   var open = g.classList.toggle('open');
   btn.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
