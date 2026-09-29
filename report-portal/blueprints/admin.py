@@ -919,6 +919,34 @@ def atm_csv_export():
     )
 
 
+@bp.route('/atm/template')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def atm_csv_template():
+    """Blank import template (header + examples) — generated from the live
+    required/optional column set so it can never drift from validation."""
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(['atm_id', 'atm_name', 'branch', 'district', 'city', 'region',
+                'latitude', 'longitude', 'terminal_id', 'vendor', 'model',
+                'install_date', 'status',
+                'ip_address', 'snmp_community', 'snmp_version', 'ej_log_format'])
+    w.writerow(['ATM-1001', 'Bole Medhanialem ATM', 'Bole Medhanialem Branch', 'Bole',
+                'Addis Ababa', 'Addis Ababa', '8.9950', '38.7896', 'TID10001',
+                'NCR', 'SelfServ 22', '2023-03-15', 'active',
+                '192.168.1.101', 'CHANGE_ME', '2', 'NCR_APTRA'])
+    w.writerow(['ATM-1002', 'Piassa ATM', 'Piassa Branch', 'Arada',
+                'Addis Ababa', 'Addis Ababa', '9.0356', '38.7521', 'TID10002',
+                'GRG', 'H68N', '2022-11-02', 'active',
+                '192.168.1.102', 'CHANGE_ME', '2', 'GRG'])
+    log_action('EXPORT', 'ATM import template downloaded')
+    return Response(
+        buf.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=atm_import_template.csv'}
+    )
+
+
 @bp.route('/atm/import', methods=['POST'])
 @login_required
 @role_required(ROLE_OPERATOR, ROLE_ADMIN)
