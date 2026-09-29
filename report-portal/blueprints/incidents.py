@@ -11,6 +11,7 @@ attributed to the portal user in the followup text + portal audit log.
 import logging
 import requests
 import os
+import time
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, render_template, request, jsonify, session, Response
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
@@ -40,6 +41,11 @@ EAT = timezone(timedelta(hours=3))
 # (session open, list, close). 60s TTL; filters apply per request.
 _cache = {'ts': 0.0, 'tickets': None}
 CACHE_TTL = 60.0
+# Per-ticket detail cache (same TTL): the detail view fans out to 10+
+# sequential GLPI calls (ticket, followups, solutions, tasks, user labels,
+# per-message documents). Shared across users — entries hold no per-user
+# state (unread/seen is computed separately per request).
+_detail_cache = {}
 
 
 def _ensure_seen_table():
@@ -183,6 +189,35 @@ def _invalidate_cache():
     _cache.update(ts=0.0, tickets=None)
 
 
+def _invalidate_detail(ticket_id):
+    """Drop one ticket's detail entry (called after any mutation)."""
+    try:
+        _detail_cache.pop(int(ticket_id), None)
+    except (TypeError, ValueError):
+        pass
+
+
+def _get_detail(ticket_id):
+    """Fresh cached detail or None."""
+    try:
+        entry = _detail_cache.get(int(ticket_id))
+    except (TypeError, ValueError):
+        return None
+    if entry and time.time() - entry['ts'] < CACHE_TTL:
+        return entry
+    return None
+
+
+def _put_detail(ticket_id, ticket, timeline, ticket_files):
+    try:
+        _detail_cache[int(ticket_id)] = {
+            'ts': time.time(), 'ticket': ticket,
+            'timeline': timeline, 'ticket_files': ticket_files,
+        }
+    except (TypeError, ValueError):
+        pass
+
+
 def _api(token, method, path, payload=None):
     """One GLPI call; returns (ok, data_or_error). Never raises."""
     try:
@@ -297,6 +332,7 @@ def _mutate(ticket_id, fn):
         _close(token)
     if ok:
         _invalidate_cache()
+        _invalidate_detail(ticket_id)
         try:
             _mark_seen(session.get('username', ''), ticket_id)
         except Exception:
@@ -555,11 +591,16 @@ def board():
 def detail(ticket_id):
     error = None
     ticket, timeline, ticket_files = None, [], []
-    token = _session()
-    if not token:
+    hit = _get_detail(ticket_id)
+    if hit is not None:
+        ticket, timeline, ticket_files = hit['ticket'], hit['timeline'], hit['ticket_files']
+        token = None
+    else:
+        token = _session()
+    if ticket is None and token is None:
         error = ('Cannot reach the GLPI API — check GLPI_APP_TOKEN / GLPI_USER / '
                  'GLPI_API_PASSWORD and that the API client is enabled.')
-    else:
+    elif ticket is None:
         try:
             r = requests.get(f'{GLPI_URL}/apirest.php/Ticket/{ticket_id}',
                              params={'expand_dropdowns': 'true'},
@@ -656,6 +697,8 @@ def detail(ticket_id):
                 ticket_files = _linked_docs(token, 'Ticket', ticket_id)
         finally:
             _close(token)
+    if ticket is not None and hit is None:
+        _put_detail(ticket_id, ticket, timeline, ticket_files)
     if ticket is not None:
         try:
             _mark_seen(session.get('username', ''), ticket_id)
