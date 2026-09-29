@@ -2,7 +2,7 @@
 blueprints/admin.py
 ATM Admin registration routes.
 """
-import csv, io, re, os, json, concurrent.futures, urllib.request
+import csv, io, re, os, json, logging, threading, concurrent.futures, urllib.request
 import requests
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response, current_app, abort, session
@@ -10,6 +10,28 @@ from werkzeug.security import generate_password_hash
 from blueprints.auth import login_required, role_required, ROLE_ADMIN, ROLE_OPERATOR, ROLE_VIEWER
 from db import get_db
 from audit import log_action
+
+logger = logging.getLogger(__name__)
+
+
+def _bg_zabbix_sync(rows):
+    """Best-effort background host creation — never fails the request."""
+    try:
+        from zabbix_sync import sync_hosts
+        s = sync_hosts(rows)
+        log_action('ZABBIX_SYNC', f'auto: created={s["created"]} skipped={s["skipped"]} no_ip={s["no_ip"]} failed={s["failed"]}')
+    except Exception as e:
+        logger.warning('background Zabbix sync failed: %s', e)
+
+
+def _bg_zabbix_disable(atm_ids):
+    """Best-effort background host disable on portal delete."""
+    try:
+        from zabbix_sync import disable_hosts
+        s = disable_hosts(atm_ids)
+        log_action('ZABBIX_DISABLE', f'auto: disabled={s["disabled"]} skipped={s["skipped"]} failed={s["failed"]}')
+    except Exception as e:
+        logger.warning('background Zabbix disable failed: %s', e)
 
 EAT = timezone(timedelta(hours=3))
 
@@ -677,9 +699,11 @@ def atm_save():
 
     if is_ajax:
         log_action('ATM_SAVE', f'ATM {data["atm_id"]} saved/updated')
+        threading.Thread(target=_bg_zabbix_sync, args=([dict(data)],), daemon=True).start()
         return jsonify({'success': True, 'atm_id': data['atm_id']})
 
     log_action('ATM_SAVE', f'ATM {data["atm_id"]} saved/updated')
+    threading.Thread(target=_bg_zabbix_sync, args=([dict(data)],), daemon=True).start()
     return _guide_page(data)
 
 
@@ -722,8 +746,10 @@ def atm_delete():
 
     if is_ajax:
         log_action('ATM_DELETE', f'ATM {atm_id} deleted')
+        threading.Thread(target=_bg_zabbix_disable, args=([atm_id],), daemon=True).start()
         return jsonify({'success': True, 'atm_id': atm_id})
     log_action('ATM_DELETE', f'ATM {atm_id} deleted')
+    threading.Thread(target=_bg_zabbix_disable, args=([atm_id],), daemon=True).start()
     return redirect('/admin/atm')
 
 
@@ -759,6 +785,7 @@ def atm_bulk_delete():
             cur.close()
 
     log_action('ATM_BULK_DELETE', f'{deleted} ATMs deleted: {",".join(ids)}')
+    threading.Thread(target=_bg_zabbix_disable, args=(list(ids),), daemon=True).start()
     return jsonify({'success': True, 'deleted': deleted})
 
 
@@ -989,6 +1016,11 @@ def atm_import():
             cur.close()
 
     log_action('ATM_IMPORT', f'Imported {imported}, skipped {len(errors)}, db_errors {len(db_errors)}')
+    if imported:
+        failed_ids = {d.get('atm_id') for d in db_errors}
+        ok_rows = [dict(r) for r in rows if r.get('atm_id') not in failed_ids]
+        if ok_rows:
+            threading.Thread(target=_bg_zabbix_sync, args=(ok_rows,), daemon=True).start()
     return jsonify({
         'success': True,
         'imported': imported,
@@ -996,6 +1028,45 @@ def atm_import():
         'db_errors': db_errors,
         'import_errors': errors
     })
+
+
+@bp.route('/atm/zabbix-sync', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def atm_zabbix_sync():
+    """On-demand server-side sync: create missing Zabbix hosts for given (or all) ATMs."""
+    from zabbix_sync import MAX_BATCH, sync_hosts
+    data = request.get_json(silent=True) or {}
+    ids = [str(i).strip() for i in (data.get('ids') or []) if str(i).strip()][:MAX_BATCH]
+    with get_db() as conn:
+        cur = conn.cursor()
+        if ids:
+            placeholders = ','.join(['%s'] * len(ids))
+            cur.execute(f"""SELECT atm_id, atm_name, ip_address, vendor,
+                                   snmp_community, snmp_version, district
+                            FROM atm_locations WHERE atm_id IN ({placeholders})""", ids)
+        else:
+            cur.execute(f"""SELECT atm_id, atm_name, ip_address, vendor,
+                                   snmp_community, snmp_version, district
+                            FROM atm_locations WHERE status = 'active'
+                            ORDER BY atm_id LIMIT {MAX_BATCH}""")
+        cols = [d[0] for d in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        cur.close()
+    summary = sync_hosts(rows)
+    log_action('ZABBIX_SYNC', f'manual: created={summary["created"]} skipped={summary["skipped"]} '
+                              f'no_ip={summary["no_ip"]} failed={summary["failed"]} (n={len(rows)})')
+    return jsonify({'success': True, 'checked': len(rows), **summary})
+
+
+@bp.route('/atm/zabbix-status')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def atm_zabbix_status():
+    """Existence map {atm_id: bool} so the UI can badge sync state."""
+    from zabbix_sync import host_exists_map
+    ids = [i.strip() for i in request.args.get('ids', '').split(',') if i.strip()][:200]
+    return jsonify(host_exists_map(ids))
 
 
 def _validate(data):

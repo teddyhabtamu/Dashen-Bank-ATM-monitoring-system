@@ -181,6 +181,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
       <a id="atmExportBtn" href="/admin/atm/csv" class="btn btn-outline"><i data-lucide="download" style="width:14px;height:14px"></i> Export CSV</a>
       {% if session.get('role') in ('admin', 'operator') %}
       <button class="btn btn-outline" onclick="openImportModal()"><i data-lucide="upload" style="width:14px;height:14px"></i> Import CSV</button>
+      <button class="btn btn-outline" id="zabbixSyncBtn" onclick="syncZabbix()"><i data-lucide="server" style="width:14px;height:14px"></i> Sync to Zabbix</button>
       <button class="btn btn-primary" onclick="openModal()"><i data-lucide="plus" style="width:14px;height:14px"></i> Add New ATM</button>
       {% endif %}
     </div>
@@ -458,7 +459,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
     <h3>Delete <span id="bulkDeleteCount">0</span> ATMs</h3>
     <p>Are you sure you want to delete the following <span id="bulkDeleteCount2">0</span> ATMs?</p>
     <div id="bulkDeleteList" style="max-height:160px;overflow-y:auto;margin:12px 0;font-size:12px;color:#475569;text-align:left;background:#F8FAFC;border-radius:6px;padding:8px 12px"></div>
-    <p class="modal-confirm-note">This will remove them from maps, reports, and dashboards permanently.</p>
+    <p class="modal-confirm-note">This will remove them from maps, reports, and dashboards permanently. Their Zabbix hosts are disabled (history kept).</p>
     <div class="modal-confirm-actions">
       <button class="btn btn-outline" onclick="closeBulkDeleteModal()">Cancel</button>
       <button class="btn btn-danger" id="confirmBulkDeleteBtn" onclick="confirmBulkDelete()">Delete <span id="bulkDeleteCount3">0</span> ATMs</button>
@@ -527,7 +528,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
     <div class="modal-confirm-icon"><i data-lucide="alert-triangle"></i></div>
     <h3>Delete ATM</h3>
     <p>Are you sure you want to delete <strong id="deleteAtmId">ATM-XXX</strong>?</p>
-    <p class="modal-confirm-note">This will remove it from maps, reports, and dashboards permanently.</p>
+    <p class="modal-confirm-note">This will remove it from maps, reports, and dashboards permanently. Its Zabbix host is disabled (history kept).</p>
     <div class="modal-confirm-actions">
       <button class="btn btn-outline" onclick="closeDeleteModal()">Cancel</button>
       <button class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmDelete()">Delete</button>
@@ -1337,14 +1338,48 @@ document.addEventListener('click', function(){
   });
 });
 
-function selectedIds(){
-  // Each ATM renders two .row-checkbox inputs (desktop table + mobile card);
+function selectedIds(){  // Each ATM renders two .row-checkbox inputs (desktop table + mobile card);
   // dedupe by value so hidden duplicates never double-count.
   var ids = [];
   document.querySelectorAll('.row-checkbox:checked').forEach(function(cb){
     if(ids.indexOf(cb.value) === -1) ids.push(cb.value);
   });
   return ids;
+}
+
+function syncZabbix(){
+  var btn = document.getElementById('zabbixSyncBtn');
+  var ids = selectedIds();
+  var label = ids.length ? 'Sync ' + ids.length + ' to Zabbix' : 'Sync all to Zabbix';
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader-2" style="width:14px;height:14px"></i> Syncing...';
+  lucide.createIcons();
+  var spn = btn.querySelector('svg');
+  if(spn) spn.style.animation = 'spin 1s linear infinite';
+  fetch('/admin/atm/zabbix-sync', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+    body: JSON.stringify({ids: ids})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="server" style="width:14px;height:14px"></i> Sync to Zabbix';
+    lucide.createIcons();
+    if(data.success){
+      showToast('Zabbix sync: ' + data.created + ' created, ' + data.skipped + ' already there'
+        + (data.no_ip ? ', ' + data.no_ip + ' without IP' : '')
+        + (data.failed ? ', ' + data.failed + ' failed' : '') + '.', data.failed ? 'error' : 'success');
+    } else {
+      showToast(data.message || 'Zabbix sync failed.', 'error');
+    }
+  })
+  .catch(function(){
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="server" style="width:14px;height:14px"></i> Sync to Zabbix';
+    lucide.createIcons();
+    showToast('Network error. Please try again.', 'error');
+  });
 }
 
 function toggleSelectAll(){
