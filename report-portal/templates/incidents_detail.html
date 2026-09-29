@@ -62,7 +62,15 @@
   {% for m in timeline %}
   {% if m.kind in ('solution', 'task') %}
   <div class="sys-note">{{ 'Solution' if m.kind == 'solution' else 'Task' }} by <b>{{ m.author }}</b> · {{ m.date }}</div>
-  <div class="tl-item" style="background:#F0FDF9;border:1px solid #A7F3D0;border-radius:12px;padding:12px 16px;font-size:13px;line-height:1.65">{{ m.html|safe }}</div>
+  <div class="tl-item" style="background:#F0FDF9;border:1px solid #A7F3D0;border-radius:12px;padding:12px 16px;font-size:13px;line-height:1.65">{{ m.html|safe }}
+    {% if m.files %}
+    <div class="files-row">
+      {% for f in m.files %}
+      <a class="file-chip" href="/incidents/{{ ticket.id }}/attachment/{{ f.id }}" target="_blank" rel="noopener">📎 {{ f.name }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
   {% else %}
   <div class="msg-row {% if m.mine %}mine{% endif %}">
     {% if not m.mine %}<div class="avatar">{{ m.author[:2]|upper }}</div>{% endif %}
