@@ -18,6 +18,13 @@
 .pill-degraded{background:#FEF9C3;color:#854D0E}
 .pill-critical{background:#FEE2E2;color:#991B1B}
 .pill-nodata{background:#F1F5F9;color:#64748B}
+#fleetLiveMap{width:100%;height:420px;border-radius:8px;z-index:0}
+.fleet-cluster div{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2.5px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.3)}
+.fleet-cluster span{color:#fff;font-size:12px;font-weight:700}
+.fleet-healthy div{background:rgba(16,185,129,.9)}
+.fleet-degraded div{background:rgba(245,158,11,.92)}
+.fleet-critical div{background:rgba(220,38,38,.92)}
+.fleet-nodata div{background:rgba(148,163,184,.92)}
 .st-approved{color:#16A34A;font-weight:700}
 .st-declined{color:#D97706;font-weight:700}
 .st-error{color:#DC2626;font-weight:700}
@@ -54,6 +61,11 @@
     <div class="card-header"><h2>Fleet Map — Live Health by Location</h2></div>
     <div style="padding:16px 18px">
       {% if map_svg and map_dots %}
+      <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+      <link rel="stylesheet" href="/static/vendor/markercluster/MarkerCluster.css">
+      <link rel="stylesheet" href="/static/vendor/markercluster/MarkerCluster.Default.css">
+      <div id="fleetLiveMap" style="display:none"></div>
+      <div id="fleetSvgWrap">
       <svg id="fleetMapSvg" viewBox="0 0 640 460" role="img" aria-label="ATM fleet map of Ethiopia"
            style="width:100%;height:auto;display:block;background:#F8FAFC;border-radius:8px">
         <path d="{{ map_svg }}" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.5" stroke-linejoin="round"/>
@@ -67,12 +79,13 @@
         </a>
         {% endfor %}
       </svg>
+      </div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:#475569">
         <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#10B981;margin-right:4px"></span>Healthy</span>
         <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#F59E0B;margin-right:4px"></span>Degraded</span>
         <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#DC2626;margin-right:4px"></span>Critical</span>
         <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#94A3B8;margin-right:4px"></span>No Data</span>
-        <span style="margin-left:auto">Numbered badges are overlapping ATMs — click to expand, click a dot for its detail page.</span>
+        <span style="margin-left:auto" id="mapHint">Numbered badges are overlapping ATMs — click to expand, click a dot for its detail page.</span>
       </div>
       {% if map_missing %}<p style="font-size:12px;color:#94A3B8;margin:8px 0 0">{{ map_missing }} ATM(s) without GPS coordinates — set them in ATM Registration to appear here.</p>{% endif %}
       {% elif map_missing %}
@@ -251,6 +264,68 @@
       tip.textContent = tipText(open);
     });
   });
+})();
+</script>
+{% endblock %}
+{% block extra_scripts %}
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+<script src="/static/vendor/markercluster/leaflet.markercluster.js"></script>
+<script>
+/* Hybrid live map: OSM tiles when reachable, silent fallback to the offline
+   SVG above when not (locked-down networks). All libraries vendored locally. */
+(function(){
+  var live = document.getElementById('fleetLiveMap');
+  var wrap = document.getElementById('fleetSvgWrap');
+  var dots = {{ map_dots|tojson }};
+  function fallback(){ if(live) live.style.display = 'none'; if(wrap) wrap.style.display = ''; }
+  if(!live || !wrap || typeof L === 'undefined' || !dots || !dots.length){ fallback(); return; }
+  var geo = dots.filter(function(d){ return d.lat != null && d.lng != null; });
+  if(!geo.length){ fallback(); return; }
+  var COLORS = {Healthy: '#10B981', Degraded: '#F59E0B', Critical: '#DC2626', 'No Data': '#94A3B8'};
+  var map = L.map('fleetLiveMap', {scrollWheelZoom: false});
+  var tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {maxZoom: 18, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'});
+  var loaded = false, errs = 0;
+  tiles.on('tileload', function(){
+    if(loaded) return;
+    loaded = true;
+    wrap.style.display = 'none';
+    live.style.display = '';
+    var hint = document.getElementById('mapHint');
+    if(hint) hint.textContent = 'Drag to pan, double-click to zoom. Clusters split as you zoom; click a dot for its detail page.';
+    setTimeout(function(){ map.invalidateSize(); }, 60);
+  });
+  tiles.on('tileerror', function(){
+    errs++;
+    if(!loaded && errs >= 4){ try{ map.remove(); }catch(e){} fallback(); }
+  });
+  tiles.addTo(map);
+  var group = L.markerClusterGroup({maxClusterRadius: 48, showCoverageOnHover: false,
+    spiderfyOnMaxZoom: true,
+    iconCreateFunction: function(cluster){
+      var rank = {Critical: 0, Degraded: 1, 'No Data': 2, Healthy: 3};
+      var worst = 'Healthy';
+      cluster.getAllChildMarkers().forEach(function(m){
+        var h = m.options.health;
+        if((rank[h] ?? 3) < (rank[worst] ?? 3)) worst = h;
+      });
+      return L.divIcon({html: '<div><span>' + cluster.getChildCount() + '</span></div>',
+        className: 'fleet-cluster fleet-' + worst.replace(' ', '').toLowerCase(),
+        iconSize: L.point(36, 36)});
+    }});
+  var bounds = [];
+  geo.forEach(function(d){
+    var m = L.circleMarker([d.lat, d.lng],
+      {radius: 9, color: '#fff', weight: 2.5,
+       fillColor: COLORS[d.health] || '#94A3B8', fillOpacity: 1, health: d.health});
+    m.bindTooltip(d.atm_id + ' · ' + d.branch + (d.city ? ' (' + d.city + ')' : '') +
+      ' — ' + d.state + ' · ' + d.health + ' (' + d.txns + ' txns/1h)', {sticky: true});
+    m.on('click', function(){ window.location = '/admin/atm/' + encodeURIComponent(d.atm_id); });
+    group.addLayer(m);
+    bounds.push([d.lat, d.lng]);
+  });
+  map.addLayer(group);
+  map.fitBounds(bounds, {padding: [30, 30], maxZoom: 12});
 })();
 </script>
 {% endblock %}

@@ -177,6 +177,7 @@ def dashboard():
                 'atm_id': r['atm_id'], 'branch': r.get('branch') or r['atm_id'],
                 'city': r.get('city') or '', 'health': r.get('health'),
                 'state': r.get('state'), 'txns': r.get('txns', 0),
+                'lat': lat, 'lng': lng,
                 'x': round(x, 1), 'y': round(y, 1),
             })
 
