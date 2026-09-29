@@ -54,12 +54,12 @@
     <div class="card-header"><h2>Fleet Map — Live Health by Location</h2></div>
     <div style="padding:16px 18px">
       {% if map_svg and map_dots %}
-      <svg viewBox="0 0 640 460" role="img" aria-label="ATM fleet map of Ethiopia"
+      <svg id="fleetMapSvg" viewBox="0 0 640 460" role="img" aria-label="ATM fleet map of Ethiopia"
            style="width:100%;height:auto;display:block;background:#F8FAFC;border-radius:8px">
         <path d="{{ map_svg }}" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.5" stroke-linejoin="round"/>
         {% for d in map_dots %}
-        <a href="/admin/atm/{{ d.atm_id }}">
-          <circle cx="{{ d.x }}" cy="{{ d.y }}" r="9"
+        <a href="/admin/atm/{{ d.atm_id }}" data-map-dot data-atm="{{ d.atm_id }}">
+          <circle cx="{{ d.x }}" cy="{{ d.y }}" r="9" data-health="{{ d.health }}"
                   fill="{% if d.health == 'Healthy' %}#10B981{% elif d.health == 'Degraded' %}#F59E0B{% elif d.health == 'Critical' %}#DC2626{% else %}#94A3B8{% endif %}"
                   stroke="#fff" stroke-width="2.5" style="cursor:pointer">
             <title>{{ d.atm_id }} · {{ d.branch }}{% if d.city %} ({{ d.city }}){% endif %} — {{ d.state }} · {{ d.health }} ({{ d.txns }} txns/1h). Click for details.</title>
@@ -72,7 +72,7 @@
         <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#F59E0B;margin-right:4px"></span>Degraded</span>
         <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#DC2626;margin-right:4px"></span>Critical</span>
         <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#94A3B8;margin-right:4px"></span>No Data</span>
-        <span style="margin-left:auto">Click a dot for the ATM detail page.</span>
+        <span style="margin-left:auto">Numbered badges are overlapping ATMs — click to expand, click a dot for its detail page.</span>
       </div>
       {% if map_missing %}<p style="font-size:12px;color:#94A3B8;margin:8px 0 0">{{ map_missing }} ATM(s) without GPS coordinates — set them in ATM Registration to appear here.</p>{% endif %}
       {% elif map_missing %}
@@ -161,6 +161,96 @@
     options:{responsive:true, maintainAspectRatio:false,
       plugins:{legend:{position:'bottom', labels:{boxWidth:12, font:{size:11}}}},
       scales:{x:{stacked:true, ticks:{font:{size:10}}}, y:{stacked:true, beginAtZero:true, ticks:{precision:0}}}}});
+})();
+</script>
+<script>
+/* Fleet-map clustering (offline, dependency-free): dots closer than one
+   diameter merge into a numbered badge colored by worst member health.
+   Click expands (spiderfy) so every ATM stays identifiable + clickable. */
+(function(){
+  var svg = document.getElementById('fleetMapSvg');
+  if(!svg) return;
+  var NS = 'http://www.w3.org/2000/svg';
+  var TH = 24;
+  var nodes = [];
+  svg.querySelectorAll('a[data-map-dot]').forEach(function(a){
+    var c = a.querySelector('circle');
+    if(!c) return;
+    nodes.push({a: a, c: c,
+      x: parseFloat(c.getAttribute('cx')), y: parseFloat(c.getAttribute('cy')),
+      atm: a.getAttribute('data-atm'), health: c.getAttribute('data-health')});
+  });
+  if(nodes.length < 2) return;
+  var parent = nodes.map(function(_, i){ return i; });
+  function find(i){ while(parent[i] !== i){ parent[i] = parent[parent[i]]; i = parent[i]; } return i; }
+  var i, j;
+  for(i = 0; i < nodes.length; i++) for(j = i + 1; j < nodes.length; j++){
+    var dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y;
+    if(Math.sqrt(dx * dx + dy * dy) < TH) parent[find(i)] = find(j);
+  }
+  var groups = {};
+  nodes.forEach(function(n, k){ var r = find(k); (groups[r] = groups[r] || []).push(n); });
+  var rank = {Critical: 0, Degraded: 1, 'No Data': 2, Healthy: 3};
+  var color = {Critical: '#DC2626', Degraded: '#F59E0B', 'No Data': '#94A3B8', Healthy: '#10B981'};
+  Object.keys(groups).forEach(function(k){
+    var g = groups[k];
+    if(g.length < 2) return;
+    var cx = 0, cy = 0, worst = 'Healthy';
+    g.forEach(function(n){
+      cx += n.x; cy += n.y;
+      if((rank[n.health] ?? 3) < (rank[worst] ?? 3)) worst = n.health;
+    });
+    cx /= g.length; cy /= g.length;
+    g.forEach(function(n){ n.a.style.display = 'none'; });
+    var b = document.createElementNS(NS, 'g');
+    b.style.cursor = 'pointer';
+    var bc = document.createElementNS(NS, 'circle');
+    bc.setAttribute('cx', cx); bc.setAttribute('cy', cy); bc.setAttribute('r', 13);
+    bc.setAttribute('fill', color[worst] || '#94A3B8');
+    bc.setAttribute('stroke', '#fff'); bc.setAttribute('stroke-width', '2.5');
+    var bt = document.createElementNS(NS, 'text');
+    bt.setAttribute('x', cx); bt.setAttribute('y', cy + 4.5);
+    bt.setAttribute('text-anchor', 'middle');
+    bt.setAttribute('fill', '#fff'); bt.setAttribute('font-size', '12'); bt.setAttribute('font-weight', '700');
+    bt.textContent = String(g.length);
+    var tip = document.createElementNS(NS, 'title');
+    function tipText(open){
+      return g.length + ' ATMs here: ' +
+        g.map(function(n){ return n.atm + ' (' + n.health + ')'; }).join(', ') +
+        (open ? '. Click to collapse.' : '. Click to expand.');
+    }
+    tip.textContent = tipText(false);
+    b.appendChild(bc); b.appendChild(bt); b.appendChild(tip);
+    svg.appendChild(b);
+    var sg = document.createElementNS(NS, 'g');
+    sg.style.display = 'none';
+    var rad = 30 + g.length * 4;
+    g.forEach(function(n, idx){
+      var ang = -Math.PI / 2 + idx * 2 * Math.PI / g.length;
+      var px = Math.max(14, Math.min(626, cx + rad * Math.cos(ang)));
+      var py = Math.max(14, Math.min(446, cy + rad * Math.sin(ang)));
+      var ln = document.createElementNS(NS, 'line');
+      ln.setAttribute('x1', cx); ln.setAttribute('y1', cy);
+      ln.setAttribute('x2', px); ln.setAttribute('y2', py);
+      ln.setAttribute('stroke', '#64748B'); ln.setAttribute('stroke-width', '1.5');
+      sg.appendChild(ln);
+      var cc = n.c.cloneNode(true);
+      cc.setAttribute('cx', px); cc.setAttribute('cy', py);
+      cc.style.cursor = 'pointer';
+      var na = document.createElementNS(NS, 'a');
+      na.setAttribute('href', n.a.getAttribute('href'));
+      na.appendChild(cc);
+      sg.appendChild(na);
+    });
+    svg.appendChild(sg);
+    var open = false;
+    b.addEventListener('click', function(){
+      open = !open;
+      sg.style.display = open ? '' : 'none';
+      bt.textContent = open ? '–' : String(g.length);
+      tip.textContent = tipText(open);
+    });
+  });
 })();
 </script>
 {% endblock %}
