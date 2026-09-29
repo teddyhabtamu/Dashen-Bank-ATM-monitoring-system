@@ -1,18 +1,20 @@
 """
 blueprints/incidents.py
-In-portal Incident Management — GLPI ticket list without leaving the
+In-portal Incident Management — GLPI tickets without leaving the
 portal (Phase 3 of single-login UX).
 
 Reads via the GLPI legacy REST API with the app token + service account
-(GLPI_APP_TOKEN / GLPI_USER / GLPI_API_PASSWORD). Read-only: acknowledge,
-assign and solve still happen in GLPI itself for now.
+(GLPI_APP_TOKEN / GLPI_USER / GLPI_API_PASSWORD). Writes (acknowledge,
+assign, note, solve) go through the same service account; every action is
+attributed to the portal user in the followup text + portal audit log.
 """
 import logging
 import requests
 import os
 from datetime import datetime, timezone, timedelta
-from flask import Blueprint, render_template, request
+from flask import Blueprint, render_template, request, jsonify, session
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
+from audit import log_action
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +114,76 @@ def _tickets(token):
     return None
 
 
+def _invalidate_cache():
+    _cache.update(ts=0.0, tickets=None)
+
+
+def _api(token, method, path, payload=None):
+    """One GLPI call; returns (ok, data_or_error). Never raises."""
+    try:
+        r = requests.request(
+            method, f'{GLPI_URL}/apirest.php/{path}',
+            json=payload,
+            headers={'App-Token': GLPI_APP_TOKEN, 'Session-Token': token},
+            timeout=12,
+        )
+        if r.status_code in (200, 201):
+            try:
+                return True, r.json()
+            except ValueError:
+                return True, {}
+        try:
+            err = r.json()
+            msg = err[1] if isinstance(err, list) and len(err) > 1 else err
+        except ValueError:
+            msg = r.text[:200]
+        logger.warning('GLPI %s %s → %s: %s', method, path, r.status_code, msg)
+        return False, f'GLPI refused ({r.status_code}): {msg}'
+    except Exception as e:
+        logger.warning('GLPI %s %s failed: %s', method, path, e)
+        return False, f'Cannot reach GLPI: {e}'
+
+
+def _add_followup(token, ticket_id, content):
+    """Version-tolerant followup add (ITILFollowup on 10+, TicketFollowup before)."""
+    for item in ('ITILFollowup', 'TicketFollowup'):
+        ok, data = _api(token, 'POST', f'{item}/', {'input': {
+            'itemtype': 'Ticket', 'items_id': int(ticket_id), 'content': content}})
+        if ok:
+            return True, data
+        if 'Invalid itemtype' in str(data) or '404' in str(data):
+            continue
+        # Real refusal (rights, validation) — don't mask it with the fallback.
+        if item == 'ITILFollowup':
+            ok2, data2 = _api(token, 'POST', 'TicketFollowup/', {'input': {
+                'itemtype': 'Ticket', 'items_id': int(ticket_id), 'content': content}})
+            return ok2, data2
+        return ok, data
+    return False, 'Followup endpoint not found'
+
+
+def _mutate(ticket_id, fn):
+    """Open session → run fn(token) → close. Returns JSON-ready result."""
+    token = _session()
+    if not token:
+        return {'success': False,
+                'message': 'Cannot reach the GLPI API — check credentials and API access.'}
+    try:
+        ok, message = fn(token)
+    finally:
+        _close(token)
+    if ok:
+        _invalidate_cache()
+    return {'success': ok, 'message': message}
+
+
+def _actor():
+    try:
+        return session.get('username', 'system')
+    except Exception:
+        return 'system'
+
+
 @bp.route('')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
@@ -152,6 +224,7 @@ def board():
                 'id': t.get('id'),
                 'title': t.get('name') or '(no title)',
                 'status': STATUS_NAMES.get(st, str(st)),
+                'status_n': st,
                 'priority': PRIORITY_NAMES.get(pr, str(pr) if pr else '—'),
                 'priority_n': pr,
                 'category': t.get('itilcategories_id') or '—',
@@ -162,3 +235,133 @@ def board():
 
     return render_template('incidents.html', tickets=tickets, counts=counts,
                            f_status=status, error=error)
+
+
+@bp.route('/<int:ticket_id>/acknowledge', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def acknowledge(ticket_id):
+    actor = _actor()
+
+    def _run(token):
+        ok, data = _api(token, 'PUT', f'Ticket/{ticket_id}', {'input': {'status': 2}})
+        if not ok:
+            return False, data
+        _add_followup(token, ticket_id, f'Acknowledged from Report Portal by {actor}.')
+        return True, f'Ticket {ticket_id} acknowledged.'
+
+    res = _mutate(ticket_id, _run)
+    if res['success']:
+        log_action('TICKET_ACK', f'Ticket {ticket_id} acknowledged by {actor}')
+    return jsonify(res)
+
+
+@bp.route('/<int:ticket_id>/followup', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def followup(ticket_id):
+    actor = _actor()
+    content = (request.get_json(silent=True) or {}).get('content', '').strip()
+    if not content:
+        return jsonify({'success': False, 'message': 'Note text is required.'})
+    if len(content) > 2000:
+        return jsonify({'success': False, 'message': 'Note is too long (max 2000 characters).'})
+
+    def _run(token):
+        ok, data = _add_followup(token, ticket_id, f'{content}\n— {actor} (Report Portal)')
+        return (True, f'Note added to ticket {ticket_id}.') if ok else (False, data)
+
+    res = _mutate(ticket_id, _run)
+    if res['success']:
+        log_action('TICKET_NOTE', f'Note on ticket {ticket_id} by {actor}')
+    return jsonify(res)
+
+
+@bp.route('/users')
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def technician_search():
+    """Autocomplete source for the assign dialog (GLPI users)."""
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    token = _session()
+    if not token:
+        return jsonify([])
+    try:
+        # searchText is a query param — call directly.
+        r = requests.get(f'{GLPI_URL}/apirest.php/User/',
+                         params={'searchText': q, 'range': '0-9'},
+                         headers={'App-Token': GLPI_APP_TOKEN, 'Session-Token': token},
+                         timeout=12)
+        out = []
+        if r.status_code == 200:
+            for u in r.json() or []:
+                name = (u.get('realname') or '').strip()
+                first = (u.get('firstname') or '').strip()
+                login = u.get('name') or ''
+                label = ' '.join(p for p in (name, first) if p) or login
+                if label:
+                    out.append({'id': u.get('id'), 'label': f'{label} ({login})'})
+    finally:
+        _close(token)
+    return jsonify(out)
+
+
+@bp.route('/<int:ticket_id>/assign', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def assign(ticket_id):
+    actor = _actor()
+    body = request.get_json(silent=True) or {}
+    try:
+        users_id = int(body.get('users_id', 0))
+    except (TypeError, ValueError):
+        users_id = 0
+    if not users_id:
+        return jsonify({'success': False, 'message': 'Select a technician to assign.'})
+
+    def _run(token):
+        ok, data = _api(token, 'POST', 'Ticket_User/', {'input': {
+            'tickets_id': ticket_id, 'users_id': users_id, 'type': 2}})
+        if not ok:
+            return False, data
+        _api(token, 'PUT', f'Ticket/{ticket_id}', {'input': {'status': 2}})
+        _add_followup(token, ticket_id,
+                      f'Assigned from Report Portal by {actor} (GLPI user id {users_id}).')
+        return True, f'Ticket {ticket_id} assigned.'
+
+    res = _mutate(ticket_id, _run)
+    if res['success']:
+        log_action('TICKET_ASSIGN', f'Ticket {ticket_id} assigned to GLPI user {users_id} by {actor}')
+    return jsonify(res)
+
+
+@bp.route('/<int:ticket_id>/solve', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def solve(ticket_id):
+    actor = _actor()
+    solution = (request.get_json(silent=True) or {}).get('solution', '').strip()
+    if not solution:
+        return jsonify({'success': False, 'message': 'A solution description is required.'})
+    if len(solution) > 2000:
+        return jsonify({'success': False, 'message': 'Solution is too long (max 2000 characters).'})
+
+    def _run(token):
+        # Canonical path: adding a solution flips the ticket to Solved.
+        ok, data = _api(token, 'POST', 'ITILSolution/', {'input': {
+            'itemtype': 'Ticket', 'items_id': ticket_id, 'content': f'{solution}\n— {actor} (Report Portal)'}})
+        if ok:
+            return True, f'Ticket {ticket_id} solved.'
+        # Fallback for older GLPI: direct status change.
+        ok2, data2 = _api(token, 'PUT', f'Ticket/{ticket_id}', {'input': {'status': 5}})
+        if ok2:
+            _add_followup(token, ticket_id, f'Marked solved from Report Portal by {actor}: {solution}')
+            return True, f'Ticket {ticket_id} solved.'
+        return False, data
+
+    res = _mutate(ticket_id, _run)
+    if res['success']:
+        log_action('TICKET_SOLVE', f'Ticket {ticket_id} solved by {actor}')
+    return jsonify(res)
