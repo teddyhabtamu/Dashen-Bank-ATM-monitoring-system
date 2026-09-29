@@ -581,14 +581,14 @@ def atm_detail(atm_id):
             active_faults = int(cur.fetchone()[0] or 0)
             cur.execute("""
                 SELECT
-                    TO_CHAR(recorded_at AT TIME ZONE 'Africa/Addis_Ababa', 'HH24:MI:SS'),
-                    txn_type, card_masked, amount, status, auth_code,
+                    TO_CHAR(t.recorded_at AT TIME ZONE 'Africa/Addis_Ababa', 'HH24:MI:SS'),
+                    t.txn_type, t.card_masked, t.amount, t.status, t.auth_code,
                     COALESCE(f.display_name, t.error_code) AS error_label
                 FROM atm_transactions t
                 LEFT JOIN atm_locations l ON t.atm_id = l.atm_id
                 LEFT JOIN fault_type_map f ON t.error_code = f.raw_fault_code AND f.vendor = l.vendor
                 WHERE t.atm_id = %s
-                ORDER BY recorded_at DESC
+                ORDER BY t.recorded_at DESC
                 LIMIT 20
             """, (atm_id,))
             txns = cur.fetchall()

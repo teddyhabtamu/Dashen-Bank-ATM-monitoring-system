@@ -59,8 +59,8 @@ def dashboard():
       FROM atm_transactions t
       LEFT JOIN atm_locations l ON t.atm_id = l.atm_id
       LEFT JOIN fault_type_map f ON t.error_code = f.raw_fault_code AND f.vendor = l.vendor
-      WHERE status = 'ERROR' AND error_code IS NOT NULL
-      AND recorded_at >= NOW() - INTERVAL '7 days'
+      WHERE t.status = 'ERROR' AND t.error_code IS NOT NULL
+      AND t.recorded_at >= NOW() - INTERVAL '7 days'
       GROUP BY COALESCE(f.display_name, t.error_code, 'Unknown')
       ORDER BY COUNT(*) DESC""")
 
