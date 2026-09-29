@@ -739,7 +739,7 @@ def acknowledge(ticket_id):
 @role_required(ROLE_OPERATOR, ROLE_ADMIN)
 def followup(ticket_id):
     actor = _actor()
-    if request.files:
+    if request.files or request.form:
         content = (request.form.get('content') or '').strip()
         uploads = request.files.getlist('files')[:_MAX_REPLY_FILES]
     else:
