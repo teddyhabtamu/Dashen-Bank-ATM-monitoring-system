@@ -842,7 +842,8 @@ document.getElementById('atmForm').addEventListener('submit', function(e){
       showAlert(data.message || 'Validation failed. Please check the form.', 'error');
     } else {
       showAlert('ATM saved successfully! Redirecting...', 'success');
-      setTimeout(function(){ window.location.href = '/admin/atm'; }, 600);
+      // Keep the user's filter/search context — a bare redirect wipes it.
+      setTimeout(function(){ window.location.href = '/admin/atm' + window.location.search; }, 600);
     }
   })
   .catch(function(){
