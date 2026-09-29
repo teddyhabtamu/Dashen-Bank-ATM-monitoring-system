@@ -57,7 +57,8 @@ def dashboard():
         COUNT(*) AS cnt,
         ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS pct
       FROM atm_transactions t
-      LEFT JOIN fault_type_map f ON t.error_code = f.raw_fault_code
+      LEFT JOIN atm_locations l ON t.atm_id = l.atm_id
+      LEFT JOIN fault_type_map f ON t.error_code = f.raw_fault_code AND f.vendor = l.vendor
       WHERE status = 'ERROR' AND error_code IS NOT NULL
       AND recorded_at >= NOW() - INTERVAL '7 days'
       GROUP BY COALESCE(f.display_name, t.error_code, 'Unknown')
@@ -80,7 +81,7 @@ def dashboard():
         COALESCE(f.display_name, t.error_code) AS fault, COUNT(*) AS cnt
       FROM atm_transactions t
       JOIN atm_locations l ON t.atm_id = l.atm_id
-      LEFT JOIN fault_type_map f ON t.error_code = f.raw_fault_code
+      LEFT JOIN fault_type_map f ON t.error_code = f.raw_fault_code AND f.vendor = l.vendor
       WHERE t.status = 'ERROR' AND t.recorded_at >= NOW() - INTERVAL '7 days'
       GROUP BY l.atm_name, l.branch, l.atm_id, COALESCE(f.display_name, t.error_code)
       ORDER BY COUNT(*) DESC LIMIT 100""")

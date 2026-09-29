@@ -1049,7 +1049,7 @@ function validateRow(row){
 function warnRow(row){
   var warns = {};
   if(row.vendor && KNOWN_VENDORS_UC.indexOf(row.vendor.toUpperCase()) === -1){
-    errs.vendor = 'Must be NCR or GRG (Dashen only deploys NCR and GRG ATMs)';
+    warns.vendor = 'Must be NCR or GRG (Dashen only deploys NCR and GRG ATMs)';
   }
   return warns;
 }

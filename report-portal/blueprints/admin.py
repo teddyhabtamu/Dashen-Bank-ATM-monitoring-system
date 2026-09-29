@@ -585,8 +585,9 @@ def atm_detail(atm_id):
                     txn_type, card_masked, amount, status, auth_code,
                     COALESCE(f.display_name, t.error_code) AS error_label
                 FROM atm_transactions t
-                LEFT JOIN fault_type_map f ON t.error_code = f.raw_fault_code
-                WHERE atm_id = %s
+                LEFT JOIN atm_locations l ON t.atm_id = l.atm_id
+                LEFT JOIN fault_type_map f ON t.error_code = f.raw_fault_code AND f.vendor = l.vendor
+                WHERE t.atm_id = %s
                 ORDER BY recorded_at DESC
                 LIMIT 20
             """, (atm_id,))
@@ -1106,6 +1107,24 @@ def atm_import():
                         _nn(row.get('ip_address')), _nn(row.get('snmp_community')),
                         _nn(row.get('snmp_version')), _nn(row.get('ej_log_format'))
                     ))
+                    # Seed state like single-save does (parity: imported ATMs
+                    # must appear in the in-service summary, not just UNKNOWN
+                    # via LEFT JOIN). Never clobbers a live state.
+                    _st = (_nn(row.get('status')) or 'active')
+                    if _st == 'inactive':
+                        cur.execute("""
+                            INSERT INTO atm_current_state (atm_id, state, last_seen, updated_at)
+                            VALUES (%s, 'INACTIVE', NOW(), NOW())
+                            ON CONFLICT (atm_id) DO UPDATE SET state = 'INACTIVE', updated_at = NOW()
+                        """, (_nn(row.get('atm_id')),))
+                    else:
+                        cur.execute("""
+                            INSERT INTO atm_current_state (atm_id, state, last_seen, updated_at)
+                            VALUES (%s, 'UNKNOWN', NOW(), NOW())
+                            ON CONFLICT (atm_id) DO UPDATE
+                                SET state = CASE WHEN atm_current_state.state = 'INACTIVE' THEN 'UNKNOWN' ELSE atm_current_state.state END,
+                                    updated_at = NOW()
+                        """, (_nn(row.get('atm_id')),))
                     cur.execute("RELEASE SAVEPOINT atm_import_row")
                     imported += 1
                 except Exception as e:
@@ -1232,7 +1251,10 @@ def _validate(data):
 @login_required
 @role_required(ROLE_ADMIN)
 def audit_log():
-    page = max(1, int(request.args.get('page', 1)))
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (ValueError, TypeError):
+        page = 1
     per_page = 50
     search = request.args.get('search', '').strip()
     action_filter = request.args.get('action', '').strip()

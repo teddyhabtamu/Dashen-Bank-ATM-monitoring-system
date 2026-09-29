@@ -51,7 +51,10 @@ TYPE_COLORS = {
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def anomaly_list():
-    page = max(1, int(request.args.get('page', 1)))
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (ValueError, TypeError):
+        page = 1
     per_page = 50
 
     severity = request.args.get('severity', '').strip()

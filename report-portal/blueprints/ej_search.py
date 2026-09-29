@@ -241,7 +241,10 @@ def ej_search():
         min_amount  = request.form.get('min_amount', '').strip()
         max_amount  = request.form.get('max_amount', '').strip()
         auth_code   = request.form.get('auth_code', '').strip()
-        page        = int(request.form.get('page', 1))
+        try:
+            page = max(1, int(request.form.get('page', 1)))
+        except (ValueError, TypeError):
+            page = 1
 
         must = _build_must(keyword, card, date_from, date_to, atm_id,
                            event_type, status, min_amount, max_amount, auth_code)
