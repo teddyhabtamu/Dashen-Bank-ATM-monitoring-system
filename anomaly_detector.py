@@ -40,10 +40,12 @@ FAILURE_THRESHOLD= float(os.environ.get('FAILURE_THRESHOLD','0.4'))# 40%
 OFFHOURS_MULT    = float(os.environ.get('OFFHOURS_MULT',   '3.0')) # 3x normal volume
 
 # Simulator guard (SYSTEM_REVIEW C4): when simulators are off (UAT/prod),
-# stray SIMULATOR rows must never feed anomaly rules. When enabled (lab),
-# sim data IS the demo feed, so include everything.
+# stray simulator rows must never feed anomaly rules — this covers both the
+# txn-engine feed (source='SIMULATOR') and the gateway simulation loop
+# (source='ISO8583_SIM'). When enabled (lab), sim data IS the demo feed,
+# so include everything.
 ENABLE_SIMULATORS = os.environ.get('ENABLE_SIMULATORS', 'false').lower() in ('1', 'true', 'yes', 'on')
-SIM_FILTER = "" if ENABLE_SIMULATORS else "AND (source IS NULL OR source <> 'SIMULATOR')"
+SIM_FILTER = "" if ENABLE_SIMULATORS else "AND (source IS NULL OR source NOT IN ('SIMULATOR', 'ISO8583_SIM'))"
 
 def get_db():
     return psycopg2.connect(
