@@ -389,6 +389,9 @@ init_req.addHeader('Authorization: Basic ' + btoa(glpi_user + ':' + glpi_passwor
 init_req.addHeader('App-Token: ' + app_token);
 
 var init_response = init_req.get(glpi_url + '/initSession');
+if (init_req.getStatus() &lt; 200 || init_req.getStatus() &gt;= 300) {
+    throw 'GLPI initSession failed with HTTP ' + init_req.getStatus() + ': ' + init_response;
+}
 var session_token;
 try {
     session_token = JSON.parse(init_response).session_token;
@@ -407,6 +410,11 @@ function glpi_post(endpoint, body) {
     r.addHeader('Session-Token: ' + session_token);
     r.addHeader('App-Token: ' + app_token);
     var res = r.post(glpi_url + endpoint, JSON.stringify(body));
+    // HTTP status check — a rejected create (bad category/SLA/group, rights)
+    // must fail loudly instead of surfacing later as a null ticket id.
+    if (r.getStatus() &lt; 200 || r.getStatus() &gt;= 300) {
+        throw 'GLPI POST ' + endpoint + ' failed with HTTP ' + r.getStatus() + ': ' + res;
+    }
     try { return JSON.parse(res); } catch(err) { return {raw: res}; }
 }
 
@@ -415,7 +423,11 @@ function glpi_put(endpoint, body) {
     r.addHeader('Content-Type: application/json');
     r.addHeader('Session-Token: ' + session_token);
     r.addHeader('App-Token: ' + app_token);
-    return JSON.parse(r.put(glpi_url + endpoint, JSON.stringify(body)));
+    var res = r.put(glpi_url + endpoint, JSON.stringify(body));
+    if (r.getStatus() &lt; 200 || r.getStatus() &gt;= 300) {
+        throw 'GLPI PUT ' + endpoint + ' failed with HTTP ' + r.getStatus() + ': ' + res;
+    }
+    return JSON.parse(res);
 }
 
 function kill() {
