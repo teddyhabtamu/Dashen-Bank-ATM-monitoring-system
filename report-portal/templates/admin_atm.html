@@ -1092,9 +1092,9 @@ function renderPreviewTable(fileName){
   THEAD.innerHTML = '';
   TBODY.innerHTML = '';
 
-  var COLS = ['atm_id','branch','district','city','region','latitude','longitude','terminal_id','vendor','model','install_date','status'];
-  var LABELS = ['ATM ID','Branch','District','City','Region','Lat','Lng','Terminal ID','Vendor','Model','Install Date','Status'];
-  var COL_WIDTHS = ['80px','90px','80px','80px','80px','60px','60px','85px','65px','75px','80px','60px'];
+  var COLS = ['atm_id','atm_name','branch','district','city','region','latitude','longitude','terminal_id','vendor','model','install_date','status','ip_address','snmp_community','snmp_version','ej_log_format'];
+  var LABELS = ['ATM ID','Name','Branch','District','City','Region','Lat','Lng','Terminal ID','Vendor','Model','Install Date','Status','IP Address','SNMP Community','SNMP Ver','EJ Format'];
+  var COL_WIDTHS = ['80px','90px','90px','80px','80px','80px','60px','60px','85px','65px','75px','80px','60px','90px','90px','60px','80px'];
 
   // ── COLGROUP (locks column widths) ──
   var tableEl = THEAD.parentNode;
@@ -1214,7 +1214,7 @@ function uploadImport(){
   var spn = btn.querySelector('svg');
   if(spn) spn.style.animation = 'spin 1s linear infinite';
 
-  var COLS = ['atm_id','branch','district','city','region','latitude','longitude','terminal_id','vendor','model','install_date','status'];
+  var COLS = ['atm_id','atm_name','branch','district','city','region','latitude','longitude','terminal_id','vendor','model','install_date','status','ip_address','snmp_community','snmp_version','ej_log_format'];
   var csvLines = [COLS.join(',')];
   for(var i = 0; i < _importValidRows.length; i++){
     csvLines.push(COLS.map(function(c){ return (_importValidRows[i][c] || ''); }).join(','));
