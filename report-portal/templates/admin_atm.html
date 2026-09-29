@@ -934,7 +934,7 @@ function parseCSV(text){
   if(rawRows.length < 2) return null;
   var headers = rawRows[0].trim().toLowerCase().split(',').map(function(h){ return h.trim(); });
   var COL_MAP = {
-    'atm_id': 'atm_id', 'branch': 'branch', 'district': 'district',
+    'atm_id': 'atm_id', 'atm_name': 'atm_name', 'branch': 'branch', 'district': 'district',
     'city': 'city', 'region': 'region', 'latitude': 'latitude',
     'longitude': 'longitude', 'terminal_id': 'terminal_id', 'vendor': 'vendor',
     'model': 'model', 'install_date': 'install_date', 'status': 'status',
