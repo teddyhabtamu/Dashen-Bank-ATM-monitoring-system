@@ -4,6 +4,7 @@ import csv
 import base64
 import logging
 import smtplib
+import threading
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
@@ -39,7 +40,9 @@ CREATE TABLE IF NOT EXISTS scheduled_reports (
     enabled     BOOLEAN DEFAULT TRUE,
     created_at  TIMESTAMP DEFAULT NOW(),
     last_run    TIMESTAMP,
-    next_run    TIMESTAMP
+    next_run    TIMESTAMP,
+    last_status VARCHAR(20) DEFAULT NULL,
+    last_error  TEXT DEFAULT NULL
 );
 """
 
@@ -48,6 +51,10 @@ SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
 SMTP_USER = os.environ.get('SMTP_USER', '')
 SMTP_PASS = os.environ.get('SMTP_PASS', '')
 SMTP_FROM = os.environ.get('SMTP_FROM', 'atm-monitor@dashenbank.com')
+# C9: bound every network wait so one hung relay can't stall the poller.
+SMTP_TIMEOUT = int(os.environ.get('SMTP_TIMEOUT', '15'))
+# Implicit TLS (port 465) for relays that mandate it; default stays STARTTLS.
+SMTP_USE_SSL = os.environ.get('SMTP_USE_SSL', 'false').lower() in ('1', 'true', 'yes', 'on')
 BASE_URL  = os.environ.get('BASE_URL', 'http://localhost:8888')
 # Internal generation URL: the scheduler runs INSIDE the portal container,
 # so it always reaches the app via loopback — never via the public BASE_URL
@@ -70,6 +77,9 @@ def init_scheduler_table():
         with get_db() as conn:
             cur = conn.cursor()
             cur.execute(SCHEDULER_TABLE_SQL)
+            # Backfill status columns on DBs created before C8.
+            cur.execute("ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS last_status VARCHAR(20) DEFAULT NULL")
+            cur.execute("ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS last_error TEXT DEFAULT NULL")
             conn.commit()
             cur.close()
         logger.info('scheduled_reports table ready')
@@ -133,11 +143,16 @@ def _send_email(recipients, subject, body, filename, filedata, mimetype):
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(filedata.read())
         encoders.encode_base64(part)
-        part.add_header('Content-Disposition', f'attachment; filename={filename}')
+        part.add_header('Content-Disposition', 'attachment', filename=filename)
         msg.attach(part)
 
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            server.starttls()
+        if SMTP_USE_SSL:
+            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT)
+        else:
+            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT)
+        with server:
+            if not SMTP_USE_SSL:
+                server.starttls()
             if SMTP_USER:
                 server.login(SMTP_USER, SMTP_PASS)
             server.send_message(msg)
@@ -290,16 +305,50 @@ def _email_body(report_type, fmt, days, atm):
 </html>'''
 
 
+def _record_run_status(report_id, ok, error, schedule):
+    """Persist a run outcome. last_run/next_run advance ONLY on success —
+    a failure keeps last_run stale (so the next due poll retries) and
+    records last_status/last_error for the portal banner. Never raises."""
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            if ok:
+                cur.execute(
+                    "UPDATE scheduled_reports SET last_run = NOW(), next_run = %s,"
+                    " last_status = 'ok', last_error = NULL WHERE id = %s",
+                    (_calc_next_run(schedule), report_id)
+                )
+            else:
+                cur.execute(
+                    "UPDATE scheduled_reports SET last_status = 'failed',"
+                    " last_error = %s WHERE id = %s",
+                    ((error or 'unknown error')[:500], report_id)
+                )
+            conn.commit()
+            cur.close()
+    except Exception as e:
+        logger.error('Failed to record schedule %s outcome: %s', report_id, e)
+
+
 def _run_scheduled_report(report_id, report_type, fmt, schedule, recipients, params):
     today = date.today()
     days = 7
     atm = 'all'
     if params:
-        for p in params.split(','):
-            if '=' in p:
-                k, v = p.split('=', 1)
-                if k == 'days': days = int(v)
-                if k == 'atm': atm = v
+        try:
+            for p in params.split(','):
+                if '=' in p:
+                    k, v = p.split('=', 1)
+                    if k.strip() == 'days':
+                        days = int(v.strip())
+                    if k.strip() == 'atm':
+                        atm = v.strip() or 'all'
+        except (ValueError, AttributeError) as e:
+            msg = f'malformed params {params!r}: {e}'
+            logger.error('Scheduled report %s bad params: %s', report_id, msg)
+            log_action('SCHEDULED_REPORT_FAILED', f'Report {report_id} ({report_type}/{fmt}) {msg}')
+            _record_run_status(report_id, False, msg, schedule)
+            return
 
     label = REPORT_TYPE_LABELS.get(report_type, report_type.upper())
     subject = f'[ATM Monitor] {label} - {today}'
@@ -307,29 +356,43 @@ def _run_scheduled_report(report_id, report_type, fmt, schedule, recipients, par
 
     filedata, filename, mimetype = _generate_report(report_type, fmt, days, atm)
     if filedata is None:
+        msg = 'report generation failed (portal endpoint unreachable or error)'
         logger.error('Scheduled report %s failed to generate', report_id)
         log_action('SCHEDULED_REPORT_FAILED', f'Report {report_id} ({report_type}/{fmt}) generation failed')
+        _record_run_status(report_id, False, msg, schedule)
         return
 
     recipient_list = [r.strip() for r in recipients.split(',') if r.strip()]
     ok = _send_email(recipient_list, subject, body, filename, filedata, mimetype)
 
-    log_action('SCHEDULED_REPORT', f'Report {report_id} ({report_type}/{fmt}) sent to {len(recipient_list)} recipients, status={"ok" if ok else "failed"}')
-
-    try:
-        with get_db() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                "UPDATE scheduled_reports SET last_run = NOW(), next_run = %s WHERE id = %s",
-                (_calc_next_run(schedule), report_id)
-            )
-            conn.commit()
-            cur.close()
-    except Exception as e:
-        logger.error('Failed to update schedule run time: %s', e)
+    if ok:
+        log_action('SCHEDULED_REPORT', f'Report {report_id} ({report_type}/{fmt}) sent to {len(recipient_list)} recipients')
+    else:
+        log_action('SCHEDULED_REPORT_FAILED', f'Report {report_id} ({report_type}/{fmt}) email failed to {len(recipient_list)} recipients')
+    _record_run_status(report_id, ok,
+                       None if ok else 'email delivery failed (SMTP unreachable, refused, or unconfigured)',
+                       schedule)
 
 
 # ── POLLING SCHEDULER ──
+
+# Report ids currently executing in a worker thread. The 30s poller only
+# dispatches; slow PDF fetches / SMTP waits must never block it (C9), and a
+# still-running report is not dispatched twice (dedupes the retry window
+# that C8 intentionally leaves open by keeping last_run stale on failure).
+_running = set()
+_running_lock = threading.Lock()
+
+
+def _dispatch(report_id, report_type, fmt, cron_expr, recipients, params):
+    try:
+        _run_scheduled_report(report_id, report_type, fmt, cron_expr, recipients, params)
+    except Exception as e:
+        logger.error('Scheduled report %s crashed: %s', report_id, e)
+        _record_run_status(report_id, False, f'worker crashed: {e}', cron_expr)
+    finally:
+        with _running_lock:
+            _running.discard(report_id)
 
 _cron_trigger_cache = {}
 
@@ -428,7 +491,14 @@ def _check_schedules():
                     continue
                 if last_run and (now - last_run.replace(tzinfo=timezone.utc)).total_seconds() < 60:
                     continue
-                _run_scheduled_report(rid, report_type, fmt, cron_expr, recipients, params)
+                with _running_lock:
+                    if rid in _running:
+                        continue
+                    _running.add(rid)
+                t = threading.Thread(target=_dispatch,
+                                     args=(rid, report_type, fmt, cron_expr, recipients, params),
+                                     daemon=True)
+                t.start()
             except Exception as e:
                 logger.error('Error checking schedule %s: %s', rid, e)
     except Exception as e:

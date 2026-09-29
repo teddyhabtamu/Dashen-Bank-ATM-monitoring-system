@@ -79,6 +79,13 @@
 </div>
 <div class="page-content">
 
+{% if failed %}
+<div style="background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px">
+  <strong>{{ failed|length }} schedule{{ 's' if failed|length != 1 }} failing:</strong>
+  {{ failed|map(attribute=1)|join(', ') }} — last run did not deliver.
+  Check SMTP / report endpoint, then re-enable or wait for the next run.
+</div>
+{% endif %}
 <div class="card">
   <div class="card-header">
     <h2>All Schedules</h2>
@@ -115,7 +122,7 @@
                 <span class="toggle-slider"></span>
               </label>
             </td>
-            <td style="font-size:11px;color:#64748B">{{ s[7]|string if s[7] else '—' }}</td>
+            <td style="font-size:11px;color:#64748B">{{ s[7]|string if s[7] else '—' }}{% if s|length > 8 and s[8] == 'failed' %} <span class="badge" style="background:#FECACA;color:#991B1B" title="{{ s[9] or 'delivery failed' }}">FAILED</span>{% endif %}</td>
             <td style="text-align:center" class="kebab-wrap">
               <button class="kebab-btn" onclick="toggleKebab(event,this)" title="Actions">&#8942;</button>
               <div class="kebab-menu">
@@ -154,7 +161,7 @@
         </div>
         <div>
           <div class="sched-card-label">Last Run</div>
-          <div class="sched-card-value">{{ s[7]|string if s[7] else '—' }}</div>
+          <div class="sched-card-value">{{ s[7]|string if s[7] else '—' }}{% if s|length > 8 and s[8] == 'failed' %} <span class="badge" style="background:#FECACA;color:#991B1B">FAILED</span>{% endif %}</div>
         </div>
       </div>
       <div class="sched-card-cron">{{ s[4] }}</div>

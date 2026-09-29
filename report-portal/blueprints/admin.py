@@ -1234,7 +1234,7 @@ def schedule_list():
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT id, name, report_type, format, schedule, recipients, enabled, last_run FROM scheduled_reports ORDER BY id")
+            cur.execute("SELECT id, name, report_type, format, schedule, recipients, enabled, last_run, last_status, last_error FROM scheduled_reports ORDER BY id")
             rows = cur.fetchall()
             cur.close()
         rows = [list(r) for r in rows]
@@ -1242,7 +1242,9 @@ def schedule_list():
             r[7] = to_eat(r[7], '%Y-%m-%d %H:%M')
     except Exception:
         rows = []
-    return render_template('admin_schedules.html', schedules=rows)
+        failed = []
+    failed = [r for r in rows if len(r) > 8 and r[8] == 'failed']
+    return render_template('admin_schedules.html', schedules=rows, failed=failed)
 
 
 @bp.route('/schedules/save', methods=['POST'])
