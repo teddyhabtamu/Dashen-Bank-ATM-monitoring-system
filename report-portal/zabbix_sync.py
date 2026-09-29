@@ -36,6 +36,7 @@ class _Client:
         self.url, self.user, self.pwd = _cfg()
         self.token = None
         self.session = requests.Session()
+        self.last_error = ""
 
     def call(self, method, params):
         if method != "user.login" and not self.token:
@@ -49,10 +50,13 @@ class _Client:
             }, timeout=TIMEOUT)
             data = r.json()
             if "error" in data:
-                logger.warning("Zabbix API [%s]: %s", method, data["error"].get("data"))
+                self.last_error = str(data["error"].get("data") or data["error"].get("message") or data["error"])
+                logger.warning("Zabbix API [%s]: %s", method, self.last_error)
                 return None
+            self.last_error = ""
             return data.get("result")
         except Exception as e:
+            self.last_error = str(e)
             logger.warning("Zabbix API [%s] failed: %s", method, e)
             return None
 
@@ -158,7 +162,7 @@ def sync_hosts(atm_dicts):
                 summary["created"] += 1
             else:
                 summary["failed"] += 1
-                summary["details"].append({"atm_id": host, "error": "host.create failed"})
+                summary["details"].append({"atm_id": host, "error": z.last_error or "host.create failed"})
     except Exception as e:
         logger.warning("sync_hosts aborted: %s", e)
         summary["failed"] += len(rows) - summary["created"] - summary["skipped"] - summary["no_ip"]
