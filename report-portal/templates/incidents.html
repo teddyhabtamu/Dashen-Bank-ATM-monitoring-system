@@ -18,6 +18,7 @@
 .st-open{color:#D97706}.st-pending{color:#2563EB}.st-solved{color:#16A34A}
 .pr-high{color:#DC2626;font-weight:700}
 .err-banner{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;padding:12px 16px;border-radius:10px;font-size:12px;margin-bottom:16px}
+.unread-tag{display:inline-block;background:#012169;color:#fff;font-size:10px;font-weight:700;border-radius:100px;padding:2px 9px;margin-left:8px;white-space:nowrap;vertical-align:middle}
 .inc-table tbody tr[data-href]{cursor:pointer}
 .inc-table tbody tr[data-href]:hover{background:#F8FAFC}
 .kebab-wrap{position:relative;text-align:center}
@@ -86,7 +87,7 @@
           {% for t in tickets %}
           <tr data-href="/incidents/{{ t.id }}" onclick="if(event.target.closest('.kebab-wrap'))return;window.location=this.dataset.href">
             <td style="font-family:monospace">{{ t.id }}</td>
-            <td>{{ t.title }}</td>
+            <td>{{ t.title }}{% if t.unread %}<span class="unread-tag">● New{% if t.last_by %} · {{ t.last_by }}{% endif %}</span>{% endif %}</td>
             <td class="st {% if t.status in ('New','Processing (assigned)','Processing (planned)') %}st-open{% elif t.status == 'Pending' %}st-pending{% else %}st-solved{% endif %}">{{ t.status }}</td>
             <td class="{% if t.priority_n >= 4 %}pr-high{% endif %}">{{ t.priority }}</td>
             <td>{{ t.category }}</td>

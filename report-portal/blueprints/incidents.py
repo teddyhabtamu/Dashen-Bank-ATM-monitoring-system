@@ -15,6 +15,7 @@ from datetime import datetime, timezone, timedelta
 from flask import Blueprint, render_template, request, jsonify, session, Response
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from audit import log_action
+from db import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,70 @@ EAT = timezone(timedelta(hours=3))
 # (session open, list, close). 60s TTL; filters apply per request.
 _cache = {'ts': 0.0, 'tickets': None}
 CACHE_TTL = 60.0
+
+
+def _ensure_seen_table():
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("""CREATE TABLE IF NOT EXISTS ticket_seen (
+                               ticket_id INT NOT NULL,
+                               username VARCHAR(100) NOT NULL,
+                               seen_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                               PRIMARY KEY (ticket_id, username))""")
+            conn.commit()
+            cur.close()
+    except Exception as e:
+        logger.warning('ticket_seen init failed (non-fatal): %s', e)
+
+
+def _seen_map(username, ticket_ids):
+    """{ticket_id: seen_at} for one user. Never raises."""
+    out = {}
+    if not ticket_ids:
+        return out
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT ticket_id, seen_at FROM ticket_seen WHERE username = %s",
+                        (username,))
+            for tid, ts in cur.fetchall():
+                out[int(tid)] = ts
+            cur.close()
+    except Exception as e:
+        logger.warning('ticket_seen read failed: %s', e)
+    return out
+
+
+def _mark_seen(username, ticket_id):
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("""INSERT INTO ticket_seen (ticket_id, username, seen_at)
+                           VALUES (%s, %s, NOW())
+                           ON CONFLICT (ticket_id, username)
+                           DO UPDATE SET seen_at = NOW()""",
+                        (int(ticket_id), username))
+            conn.commit()
+            cur.close()
+    except Exception as e:
+        logger.warning('ticket_seen write failed (non-fatal): %s', e)
+
+
+def _parse_utc(ts):
+    """GLPI 'YYYY-MM-DD HH:MM:SS' (UTC) → aware datetime or None."""
+    try:
+        return datetime.strptime(str(ts)[:19], '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return None
+
+
+def _as_utc(dt):
+    if dt is None:
+        return None
+    if getattr(dt, 'tzinfo', None) is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 def _cached_tickets():
@@ -174,6 +239,10 @@ def _mutate(ticket_id, fn):
         _close(token)
     if ok:
         _invalidate_cache()
+        try:
+            _mark_seen(session.get('username', ''), ticket_id)
+        except Exception:
+            pass
     return {'success': ok, 'message': message}
 
 
@@ -372,7 +441,48 @@ def board():
                 'requester': t.get('users_id_recipient') or '—',
                 'created': _fmt_ts(t.get('date_creation')),
                 'updated': _fmt_ts(t.get('date_mod')),
+                'unread': False,
+                'last_by': '',
+                '_mod': t.get('date_mod'),
+                '_updater': t.get('users_id_lastupdater'),
             })
+
+    # Unread = GLPI moved since this user last saw the ticket (detail open
+    # or own action marks it seen, so only *others'* activity lights up).
+    try:
+        me = session.get('username', '')
+        _ensure_seen_table()
+        seen = _seen_map(me, [x['id'] for x in tickets])
+        need_names = set()
+        for x in tickets:
+            mod = _parse_utc(x.pop('_mod'))
+            if mod and (x['id'] not in seen or
+                        (_as_utc(seen[x['id']]) is not None and mod > _as_utc(seen[x['id']]))):
+                x['unread'] = True
+                try:
+                    uid = int(x.pop('_updater') or 0)
+                except (TypeError, ValueError):
+                    uid = 0
+                if uid:
+                    need_names.add(uid)
+                    x['_uid'] = uid
+            else:
+                x.pop('_updater', None)
+        if need_names:
+            token = _session()
+            if token:
+                try:
+                    names = {}
+                    for uid in need_names:
+                        _user_label(token, uid, names)
+                    for x in tickets:
+                        uid = x.pop('_uid', None)
+                        if x.get('unread') and uid in names:
+                            x['last_by'] = names[uid]
+                finally:
+                    _close(token)
+    except Exception as e:
+        logger.warning('unread computation failed (non-fatal): %s', e)
 
     return render_template('incidents.html', tickets=tickets, counts=counts,
                            f_status=status, error=error)
@@ -485,6 +595,11 @@ def detail(ticket_id):
                 ticket_files = _linked_docs(token, 'Ticket', ticket_id)
         finally:
             _close(token)
+    if ticket is not None:
+        try:
+            _mark_seen(session.get('username', ''), ticket_id)
+        except Exception:
+            pass
     return render_template('incidents_detail.html', ticket=ticket,
                            timeline=timeline, ticket_files=ticket_files if ticket else [],
                            error=error)
