@@ -51,6 +51,39 @@
   </div>
 
   <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h2>Fleet Map — Live Health by Location</h2></div>
+    <div style="padding:16px 18px">
+      {% if map_svg and map_dots %}
+      <svg viewBox="0 0 640 460" role="img" aria-label="ATM fleet map of Ethiopia"
+           style="width:100%;height:auto;display:block;background:#F8FAFC;border-radius:8px">
+        <path d="{{ map_svg }}" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.5" stroke-linejoin="round"/>
+        {% for d in map_dots %}
+        <a href="/admin/atm/{{ d.atm_id }}">
+          <circle cx="{{ d.x }}" cy="{{ d.y }}" r="9"
+                  fill="{% if d.health == 'Healthy' %}#10B981{% elif d.health == 'Degraded' %}#F59E0B{% elif d.health == 'Critical' %}#DC2626{% else %}#94A3B8{% endif %}"
+                  stroke="#fff" stroke-width="2.5" style="cursor:pointer">
+            <title>{{ d.atm_id }} · {{ d.branch }}{% if d.city %} ({{ d.city }}){% endif %} — {{ d.state }} · {{ d.health }} ({{ d.txns }} txns/1h). Click for details.</title>
+          </circle>
+        </a>
+        {% endfor %}
+      </svg>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:#475569">
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#10B981;margin-right:4px"></span>Healthy</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#F59E0B;margin-right:4px"></span>Degraded</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#DC2626;margin-right:4px"></span>Critical</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#94A3B8;margin-right:4px"></span>No Data</span>
+        <span style="margin-left:auto">Click a dot for the ATM detail page.</span>
+      </div>
+      {% if map_missing %}<p style="font-size:12px;color:#94A3B8;margin:8px 0 0">{{ map_missing }} ATM(s) without GPS coordinates — set them in ATM Registration to appear here.</p>{% endif %}
+      {% elif map_missing %}
+      <p style="font-size:13px;color:#475569;margin:0">No ATM has GPS coordinates yet — set latitude/longitude in ATM Registration to light up this map.</p>
+      {% else %}
+      <p style="font-size:13px;color:#475569;margin:0">No ATMs registered.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
     <div class="card-header"><h2>Fleet Overview — Last 1 Hour</h2></div>
     <div class="op-table-wrap">
       <table class="op-table">

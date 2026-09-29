@@ -8,6 +8,8 @@ numbers match what admins see in Grafana. Every query is defensive:
 a missing table yields zeros, never a 500.
 """
 import logging
+import json
+import os
 from flask import Blueprint, render_template
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from db import get_db
@@ -15,6 +17,44 @@ from db import get_db
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('operations', __name__, url_prefix='/operations')
+
+# Offline Ethiopia outline (simplified GADM, vendored in static/) so the fleet
+# map works on the bank network with zero tile/CDN dependencies.
+_ETH_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         'static', 'ethiopia.json')
+_ETH_GEO = None
+try:
+    with open(_ETH_PATH) as _f:
+        _ETH_GEO = json.load(_f)
+except Exception as _e:
+    logger.warning('Ethiopia outline unavailable: %s', _e)
+
+
+def _project(lng, lat, w=640.0, h=460.0, pad=24.0):
+    """Equirectangular fit of the country bbox into a w×h viewBox."""
+    import math
+    xs = [p[0] for poly in _ETH_GEO['coordinates'] for ring in poly for p in ring]
+    ys = [p[1] for poly in _ETH_GEO['coordinates'] for ring in poly for p in ring]
+    minx, maxx, miny, maxy = min(xs), max(xs), min(ys), max(ys)
+    meany = math.radians((miny + maxy) / 2.0)
+    kx = math.cos(meany)
+    sx = (w - 2 * pad) / ((maxx - minx) * kx)
+    sy = (h - 2 * pad) / (maxy - miny)
+    s = min(sx, sy)
+    ox = (w - (maxx - minx) * kx * s) / 2.0
+    oy = (h - (maxy - miny) * s) / 2.0
+    return ox + (lng - minx) * kx * s, oy + (maxy - lat) * s
+
+
+def _ethiopia_svg_path(w=640.0, h=460.0, pad=24.0):
+    if not _ETH_GEO:
+        return ''
+    parts = []
+    for poly in _ETH_GEO['coordinates']:
+        for ring in poly:
+            pts = [_project(p[0], p[1], w, h, pad) for p in ring]
+            parts.append('M' + 'L'.join(f'{x:.1f},{y:.1f}' for x, y in pts) + 'Z')
+    return ' '.join(parts)
 
 
 def _one(sql, params=()):
@@ -66,6 +106,8 @@ def dashboard():
 
     # ── Fleet overview (health per ATM, last 1h) ──
     fleet = _all("""SELECT l.atm_id, l.branch, l.city, l.vendor,
+                           l.latitude, l.longitude,
+                           COALESCE(s.state, 'UNKNOWN') AS state,
                            COALESCE(t.total, 0) AS txns,
                            COALESCE(t.approved, 0) AS approved,
                            COALESCE(t.success_rate, 0) AS success_rate,
@@ -84,6 +126,7 @@ def dashboard():
                       FROM atm_transactions
                       WHERE recorded_at >= NOW() - INTERVAL '1 hour'
                       GROUP BY atm_id) t ON t.atm_id = l.atm_id
+                    LEFT JOIN atm_current_state s ON s.atm_id = l.atm_id
                     ORDER BY l.atm_id""")
 
     # ── Live feed + 24h summary ──
@@ -115,7 +158,31 @@ def dashboard():
         if r.get('recorded_at') is not None:
             r['recorded_at'] = str(r['recorded_at'])[:19]
 
+    # ── Fleet map dots (same health coloring as Grafana's geomap) ──
+    map_dots = []
+    map_missing = 0
+    if _ETH_GEO:
+        _order = {'Critical': 0, 'Degraded': 1, 'No Data': 2, 'Healthy': 3}
+        for r in sorted(fleet, key=lambda x: _order.get(x.get('health'), 4)):
+            try:
+                lat = float(r['latitude']) if r.get('latitude') is not None else None
+                lng = float(r['longitude']) if r.get('longitude') is not None else None
+            except (ValueError, TypeError):
+                lat, lng = None, None
+            if lat is None or lng is None:
+                map_missing += 1
+                continue
+            x, y = _project(lng, lat)
+            map_dots.append({
+                'atm_id': r['atm_id'], 'branch': r.get('branch') or r['atm_id'],
+                'city': r.get('city') or '', 'health': r.get('health'),
+                'state': r.get('state'), 'txns': r.get('txns', 0),
+                'x': round(x, 1), 'y': round(y, 1),
+            })
+
     return render_template('operations.html',
                            cash_today=cash_today, success_rate=success_rate,
                            unacked=unacked_count, fleet=fleet, feed=feed,
-                           summary=summary, chart=chart)
+                           summary=summary, chart=chart,
+                           map_svg=_ethiopia_svg_path(), map_dots=map_dots,
+                           map_missing=map_missing)
