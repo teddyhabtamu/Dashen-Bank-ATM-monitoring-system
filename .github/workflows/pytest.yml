@@ -1,0 +1,20 @@
+name: pytest (dependency-free suite)
+
+on:
+  push:
+    branches: [uat-prep, main]
+  pull_request:
+    branches: [uat-prep, main]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test runner only (suite is dependency-free by design)
+        run: pip install pytest
+      - name: Run suite (lab-dependent cases skip, never fail)
+        run: python -m pytest tests/ -v
