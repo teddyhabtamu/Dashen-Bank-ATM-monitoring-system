@@ -12,7 +12,7 @@ import logging
 import requests
 import os
 from datetime import datetime, timezone, timedelta
-from flask import Blueprint, render_template, request, jsonify, session
+from flask import Blueprint, render_template, request, jsonify, session, Response
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from audit import log_action
 
@@ -185,11 +185,32 @@ def _actor():
 
 
 _ALLOWED_TAGS = {'p', 'br', 'b', 'strong', 'i', 'em', 'u', 'ul', 'ol', 'li',
-                 'a', 'blockquote', 'div', 'span', 'pre', 'code', 'hr'}
+                 'a', 'blockquote', 'div', 'span', 'pre', 'code', 'hr', 'img'}
+
+# Attachments proxy through the portal (never expose GLPI internals / sessions).
+_MAX_ATTACH_BYTES = 15 * 1024 * 1024
 
 
-def _clean_html(html):
-    """Strip everything but simple formatting (GLPI stores rich text)."""
+def _docid_from_src(src):
+    """Extract a GLPI document id from an embedded image URL, else None."""
+    import re
+    from urllib.parse import urlparse, parse_qs
+    try:
+        q = parse_qs(urlparse(src or '').query)
+        for key in ('docid', 'id'):
+            if key in q and str(q[key][0]).isdigit():
+                return int(q[key][0])
+    except Exception:
+        pass
+    return None
+
+
+def _clean_html(html, ticket_id=None):
+    """Strip everything but simple formatting (GLPI stores rich text).
+
+    Embedded GLPI images are rewritten to the portal attachment proxy;
+    anything else external is dropped (no leaking, no tracking pixels).
+    """
     import re
     from html.parser import HTMLParser
 
@@ -199,18 +220,26 @@ def _clean_html(html):
             self.out = []
 
         def handle_starttag(self, tag, attrs):
-            if tag in _ALLOWED_TAGS:
-                if tag == 'a':
-                    href = next((v for k, v in attrs if k == 'href'), '#')
-                    href = href.replace('"', '')
-                    self.out.append(f'<a href="{href}" target="_blank" rel="noopener">')
-                elif tag == 'br':
-                    self.out.append('<br>')
-                else:
-                    self.out.append(f'<{tag}>')
+            if tag not in _ALLOWED_TAGS:
+                return
+            attrs = dict(attrs)
+            if tag == 'a':
+                href = (attrs.get('href') or '#').replace('"', '')
+                self.out.append(f'<a href="{href}" target="_blank" rel="noopener">')
+            elif tag == 'br':
+                self.out.append('<br>')
+            elif tag == 'img':
+                docid = _docid_from_src(attrs.get('src', ''))
+                if docid and ticket_id:
+                    self.out.append(
+                        f'<img src="/incidents/{ticket_id}/attachment/{docid}" '
+                        f'alt="attachment" loading="lazy" '
+                        f'style="max-width:100%;border-radius:8px;margin-top:6px">')
+            else:
+                self.out.append(f'<{tag}>')
 
         def handle_endtag(self, tag):
-            if tag in _ALLOWED_TAGS and tag != 'br':
+            if tag in _ALLOWED_TAGS and tag not in ('br', 'img'):
                 self.out.append(f'</{tag}>')
 
         def handle_data(self, data):
@@ -302,7 +331,7 @@ def board():
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def detail(ticket_id):
     error = None
-    ticket, timeline = None, []
+    ticket, timeline, ticket_files = None, [], []
     token = _session()
     if not token:
         error = ('Cannot reach the GLPI API — check GLPI_APP_TOKEN / GLPI_USER / '
@@ -335,37 +364,44 @@ def detail(ticket_id):
                     'requester': t.get('users_id_recipient') or '—',
                     'created': _fmt_ts(t.get('date_creation')),
                     'updated': _fmt_ts(t.get('date_mod')),
-                    'content': _clean_html(t.get('content') or ''),
+                    'content': _clean_html(t.get('content') or '', ticket_id),
                 }
                 for f in _subitems(token, ticket_id, 'ITILFollowup') + \
                          _subitems(token, ticket_id, 'TicketFollowup'):
-                    html = _clean_html(f.get('content') or '')
+                    html = _clean_html(f.get('content') or '', ticket_id)
                     timeline.append({
                         'kind': 'followup',
+                        'fid': f.get('id'),
                         'author': _user_label(token, f.get('users_id'), names),
                         'date': _fmt_ts(f.get('date_creation') or f.get('date')),
                         'private': bool(int(f.get('is_private') or 0)),
                         'html': html,
                         'mine': '(Report Portal)' in html,
+                        'files': [],
                     })
                 for s in _subitems(token, ticket_id, 'ITILSolution'):
                     timeline.append({
                         'kind': 'solution',
+                        'fid': None,
                         'author': _user_label(token, s.get('users_id'), names),
                         'date': _fmt_ts(s.get('date_creation') or s.get('date')),
                         'private': False,
-                        'html': _clean_html(s.get('content') or ''),
+                        'html': _clean_html(s.get('content') or '', ticket_id),
                         'mine': False,
+                        'files': [],
                     })
                 for k in _subitems(token, ticket_id, 'TicketTask'):
                     timeline.append({
                         'kind': 'task',
+                        'fid': None,
                         'author': _user_label(token, k.get('users_id'), names),
                         'date': _fmt_ts(k.get('date_creation') or k.get('date')),
                         'private': False,
                         'html': _clean_html(
-                            f"<b>{k.get('taskcategories_id') or 'Task'}</b><br>" + (k.get('content') or '')),
+                            f"<b>{k.get('taskcategories_id') or 'Task'}</b><br>" + (k.get('content') or ''),
+                            ticket_id),
                         'mine': False,
+                        'files': [],
                     })
                 # ITILFollowup + TicketFollowup endpoints serve the same rows
                 # on some GLPI versions — collapse exact duplicates.
@@ -377,10 +413,92 @@ def detail(ticket_id):
                         unique.append(m)
                 timeline = unique
                 timeline.sort(key=lambda m: m['date'])
+                # Attachments: link documents to their followup (or ticket).
+                docs_meta = {}
+                for link in _subitems(token, ticket_id, 'Document_Item'):
+                    try:
+                        doc_id = int(link.get('documents_id') or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    if not doc_id or doc_id in docs_meta:
+                        continue
+                    ok, meta = _api(token, 'GET', f'Document/{doc_id}', None)
+                    if ok and isinstance(meta, dict):
+                        fname = meta.get('filename') or meta.get('name') or f'file-{doc_id}'
+                        docs_meta[doc_id] = {
+                            'id': doc_id, 'name': fname,
+                            'mime': (meta.get('mime') or ''),
+                            'size': meta.get('filesize'),
+                        }
+                ticket_files = []
+                if docs_meta:
+                    followup_kinds = {'ITILFollowup', 'TicketFollowup'}
+                    placed_ids = set()
+                    for link in _subitems(token, ticket_id, 'Document_Item'):
+                        try:
+                            doc_id = int(link.get('documents_id') or 0)
+                            fid = int(link.get('items_id') or 0)
+                        except (TypeError, ValueError):
+                            continue
+                        if doc_id not in docs_meta or link.get('itemtype') not in followup_kinds:
+                            continue
+                        for m in timeline:
+                            if m.get('fid') == fid and m['kind'] == 'followup':
+                                if docs_meta[doc_id] not in m['files']:
+                                    m['files'].append(docs_meta[doc_id])
+                                placed_ids.add(doc_id)
+                    ticket_files = [d for i, d in docs_meta.items() if i not in placed_ids]
         finally:
             _close(token)
     return render_template('incidents_detail.html', ticket=ticket,
-                           timeline=timeline, error=error)
+                           timeline=timeline, ticket_files=ticket_files if ticket else [],
+                           error=error)
+
+
+@bp.route('/<int:ticket_id>/attachment/<int:doc_id>')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def attachment(ticket_id, doc_id):
+    """Proxy a GLPI document (verifies it belongs to this ticket first)."""
+    token = _session()
+    if not token:
+        return 'GLPI unreachable', 502
+    try:
+        linked = False
+        for link in _subitems(token, ticket_id, 'Document_Item'):
+            try:
+                if int(link.get('documents_id') or 0) == doc_id:
+                    linked = True
+                    break
+            except (TypeError, ValueError):
+                continue
+        if not linked:
+            return 'Not found', 404
+        ok, meta = _api(token, 'GET', f'Document/{doc_id}', None)
+        if not ok or not isinstance(meta, dict):
+            return 'Not found', 404
+        fname = meta.get('filename') or meta.get('name') or f'file-{doc_id}'
+        mime = meta.get('mime') or 'application/octet-stream'
+        try:
+            r = requests.get(f'{GLPI_URL}/apirest.php/Document/{doc_id}',
+                             headers={'App-Token': GLPI_APP_TOKEN,
+                                      'Session-Token': token,
+                                      'Accept': 'application/octet-stream'},
+                             timeout=30, stream=True)
+        except Exception as e:
+            logger.warning('GLPI attachment download failed: %s', e)
+            return 'GLPI unreachable', 502
+        if r.status_code != 200:
+            return 'Not found', 404
+        body = b''.join(chunk for chunk in r.iter_content(65536)
+                        if chunk)[:_MAX_ATTACH_BYTES + 1]
+        if len(body) > _MAX_ATTACH_BYTES:
+            return 'File too large to preview', 413
+        disp = 'inline' if (mime.startswith('image/') or mime == 'application/pdf') else 'attachment'
+        return Response(body, mimetype=mime,
+                        headers={'Content-Disposition': f'{disp}; filename="{fname}"'})
+    finally:
+        _close(token)
 
 
 @bp.route('/<int:ticket_id>/acknowledge', methods=['POST'])

@@ -27,6 +27,10 @@
 .bubble-kind.private{background:#FEE2E2;color:#991B1B}
 .bubble-text{font-size:13px;line-height:1.6;overflow-wrap:anywhere}
 .bubble-text p{margin:0 0 6px}
+.file-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#012169;background:#EEF2FF;border:1px solid #CBD5E1;border-radius:8px;padding:5px 10px;margin:6px 6px 0 0;text-decoration:none}
+.file-chip:hover{background:#DBEAFE}
+.msg-row.mine .file-chip{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);color:#fff}
+.files-row{margin-top:2px}
 .sys-note{align-self:center;font-size:11px;color:#64748B;background:#F1F5F9;border-radius:100px;padding:4px 14px;max-width:90%;text-align:center}
 .sys-note b{color:#0F172A}
 .reply-box{background:#fff;border-radius:12px;border:1px solid #EEF1F6;padding:16px 18px;margin-top:4px}
@@ -70,6 +74,13 @@
           {% if m.private %}<span class="bubble-kind private">private</span>{% endif %}
         </div>
         <div class="bubble-text">{{ m.html|safe }}</div>
+        {% if m.files %}
+        <div class="files-row">
+          {% for f in m.files %}
+          <a class="file-chip" href="/incidents/{{ ticket.id }}/attachment/{{ f.id }}" target="_blank" rel="noopener">📎 {{ f.name }}</a>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
     </div>
     {% if m.mine %}<div class="avatar">{{ m.author[:2]|upper }}</div>{% endif %}
@@ -79,6 +90,15 @@
   <div class="empty-row">No conversation yet — be the first to reply below.</div>
   {% endfor %}
   </div>
+
+  {% if ticket_files %}
+  <div class="tl-item" style="background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:12px;padding:12px 16px;font-size:13px">
+    <div style="font-weight:700;color:#012169;margin-bottom:4px">Ticket attachments</div>
+    {% for f in ticket_files %}
+    <a class="file-chip" href="/incidents/{{ ticket.id }}/attachment/{{ f.id }}" target="_blank" rel="noopener">📎 {{ f.name }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
 
   {% if session.get('role') in ('admin', 'operator') %}
   <div class="reply-box">
