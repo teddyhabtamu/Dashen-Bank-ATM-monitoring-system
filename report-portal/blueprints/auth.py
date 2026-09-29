@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import logging
 from functools import wraps
@@ -22,7 +23,11 @@ INTERNAL_API_KEY = os.environ.get('INTERNAL_API_KEY', '')
 # (bad directory credentials never fall through to local).
 AUTH_MODE = os.environ.get('AUTH_MODE', 'local').strip().lower()
 LDAP_HOST = os.environ.get('LDAP_HOST', '')
-LDAP_PORT = int(os.environ.get('LDAP_PORT', '389') or 389)
+try:
+    LDAP_PORT = int(os.environ.get('LDAP_PORT', '389') or 389)
+except (ValueError, TypeError):
+    logger.warning('Bad LDAP_PORT value, defaulting to 389')
+    LDAP_PORT = 389
 LDAP_BASE_DN = os.environ.get('LDAP_BASE_DN', '')
 LDAP_BIND_DN = os.environ.get('LDAP_BIND_DN', '')
 LDAP_BIND_PASSWORD = os.environ.get('LDAP_BIND_PASSWORD', '')
@@ -56,6 +61,15 @@ def _is_rate_limited(ip):
     now = time.time()
     # Clean up old entries
     _login_attempts[ip] = [t for t in _login_attempts.get(ip, []) if now - t < RATE_WINDOW]
+    # Sweep fully-stale IPs so the dict can't grow without bound
+    # (never the caller itself — it was just refreshed above).
+    if len(_login_attempts) > 1000:
+        for _ip in list(_login_attempts):
+            if _ip == ip:
+                continue
+            _login_attempts[_ip] = [t for t in _login_attempts[_ip] if now - t < RATE_WINDOW]
+            if not _login_attempts[_ip]:
+                del _login_attempts[_ip]
     if len(_login_attempts[ip]) >= RATE_LIMIT:
         return True
     _login_attempts[ip].append(now)
@@ -63,10 +77,20 @@ def _is_rate_limited(ip):
 
 
 def _is_internal():
-    """Check if the request is an internal scheduler call."""
+    """Internal scheduler calls skip login/RBAC — but ONLY on the report
+    generation endpoints the scheduler actually uses. A valid key on any
+    other path (admin, users, incidents, ...) authenticates nothing."""
     if not INTERNAL_API_KEY:
         return False
+    if not request.path.startswith('/report/'):
+        return False
     return request.headers.get('X-Internal-Key', '') == INTERNAL_API_KEY
+
+
+def _ldap_escape(value):
+    """Escape RFC 4515 special characters in LDAP search filter values."""
+    return (str(value).replace('\\', '\\5c').replace('*', '\\2a')
+            .replace('(', '\\28').replace(')', '\\29').replace('\x00', '\\00'))
 
 # Role constants
 ROLE_VIEWER = 'viewer'
@@ -93,13 +117,15 @@ def init_admin_user():
                 conn.commit()
                 logger.info('Default admin user seeded')
             elif row and row[1] != ROLE_ADMIN and ADMIN_PASS:
-                # Update existing admin user role to admin
+                # Re-enforce the admin role (prevents lockout), but NEVER
+                # overwrite an existing password hash — a password changed
+                # via User Management must survive container restarts.
                 cur.execute(
-                    "UPDATE app_users SET role = %s, password_hash = %s WHERE username = %s",
-                    (ROLE_ADMIN, generate_password_hash(ADMIN_PASS), ADMIN_USER)
+                    "UPDATE app_users SET role = %s WHERE username = %s",
+                    (ROLE_ADMIN, ADMIN_USER)
                 )
                 conn.commit()
-                logger.info('Updated admin user role to admin')
+                logger.info('Re-enforced admin role (password untouched)')
             cur.close()
     except Exception as e:
         logger.warning('Could not seed admin user (non-fatal): %s', e)
@@ -135,7 +161,11 @@ def _ldap_auth(username, password):
         if LDAP_BIND_DN:
             bind_kwargs.update(user=LDAP_BIND_DN, password=LDAP_BIND_PASSWORD)
         svc = Connection(server, **bind_kwargs)
-        svc.search(LDAP_BASE_DN, f'({LDAP_LOGIN_ATTR}={username})',
+        if not re.match(r'^[A-Za-z][A-Za-z0-9-]*$', LDAP_LOGIN_ATTR or ''):
+            logger.error('Refusing LDAP search: bad LDAP_LOGIN_ATTR %r', LDAP_LOGIN_ATTR)
+            svc.unbind()
+            return False, None, True
+        svc.search(LDAP_BASE_DN, f'({_ldap_escape(LDAP_LOGIN_ATTR)}={_ldap_escape(username)})',
                    attributes=['cn'])
         if not svc.entries:
             svc.unbind()
@@ -147,7 +177,7 @@ def _ldap_auth(username, password):
         # Group lookup on the service connection: least privilege issues,
         # works even when users cannot read the groups branch themselves.
         svc.search(LDAP_BASE_DN,
-                   f'(&(objectClass=groupOfNames)(member={user_dn}))',
+                   f'(&(objectClass=groupOfNames)(member={_ldap_escape(user_dn)}))',
                    attributes=['cn'])
         groups = {str(e.cn) for e in svc.entries}
         svc.unbind()
@@ -253,9 +283,10 @@ def login():
             return render_template('login.html', error=error, next=next_page)
 
         if AUTH_MODE != 'ldap' and not ADMIN_PASS:
-            logger.error('Login failed: ADMIN_PASS not set on server')
-            error = 'ADMIN_PASS environment variable is not set on the server.'
-            return render_template('login.html', error=error)
+            # No seed password configured: the break-glass seed is skipped,
+            # but existing DB users can still log in (fail open for auth,
+            # closed for privilege — nobody gains anything they lack).
+            logger.warning('ADMIN_PASS unset: break-glass seed disabled, DB users only')
 
         authed, role = False, None
         if AUTH_MODE == 'ldap':
@@ -270,6 +301,7 @@ def login():
 
         if authed:
             session['logged_in'] = True
+            session.permanent = True  # honor PERMANENT_SESSION_LIFETIME (4h), not browser-close
             session['username'] = username
             session['role'] = role
             try:

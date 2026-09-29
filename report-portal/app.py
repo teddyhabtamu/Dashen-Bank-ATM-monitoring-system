@@ -22,6 +22,9 @@ def create_app():
     app.config.update(
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
+        # Off on UAT (plain HTTP); set SESSION_COOKIE_SECURE=true wherever
+        # the portal is served over HTTPS, else browsers drop the session.
+        SESSION_COOKIE_SECURE=os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() in ('1', 'true', 'yes', 'on'),
         PERMANENT_SESSION_LIFETIME=timedelta(hours=4),
         TEMPLATES_AUTO_RELOAD=True,
         # Flask-WTF CSRF config (4 lines)
