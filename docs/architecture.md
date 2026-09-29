@@ -5,6 +5,14 @@
 > it explains what each container does, where its data comes from,
 > and where its data goes.
 
+> **Scope note (2026-09-29):** this page was written for the PoC (laptop,
+> ATM-001, host Zabbix Agent). On UAT (`docker-compose.yml`) the agent
+> runs containerized as `zabbix-agent2` (`Zabbix-Server-UAT01`), no
+> simulators run (`ENABLE_SIMULATORS=false`), and service ports are
+> Grafana **3000** / Zabbix 8080 / GLPI 8082 / portal 8888. The
+> container roles below still apply; hostnames/ports from the PoC era
+> are marked where known.
+
 ---
 
 ## The Big Picture
@@ -73,7 +81,7 @@ dashboards, alerts, and reports stay the same. See
 
 | Container | What it does | Reads from | Writes to | Polled/used by |
 |---|---|---|---|---|
-| `atm-sim-engine` | Simulates ATM hardware (cassettes, doors, printers, cameras, sensors) for **every** ATM in `atm_locations`, each on its own HTTP port. Serves NCR- or GRG-shaped OIDs based on the ATM's vendor (non-GRG → NCR schema). Ports are assigned per ATM from the `1161-1260` range | `atm_locations` (fleet + each ATM's `sim_port`, `vendor`) | Nothing persistent — in-memory state per ATM | Zabbix (HTTP agent items, every 30s), `state-manager` |
+| `atm-sim-engine` | Simulates ATM hardware (cassettes, doors, printers, cameras, sensors) for **every** ATM in `atm_locations`, each on its own HTTP port. Serves NCR- or GRG-shaped OIDs based on the ATM's vendor (non-GRG → NCR schema). Ports are assigned per ATM from the `1161-2500` range (code defaults `SIM_PORT_MIN`/`SIM_PORT_MAX` in `simulators/common.py`) | `atm_locations` (fleet + each ATM's `sim_port`, `vendor`) | Nothing persistent — in-memory state per ATM | Zabbix (HTTP agent items, every 30s), `state-manager` |
 | `state-manager` | Polls each simulated ATM every ~30s and keeps the `atm_current_state` table fresh so Grafana/the portal show live state (IN_SERVICE, faults, etc.) | `atm-sim-engine` HTTP + `atm_locations` | `atm_current_state` table | Grafana, Report Portal |
 | `zabbix-server` | Polls all monitoring items, evaluates triggers, fires alerts | HTTP from `atm-sim-engine`, Zabbix Agent on host (ATM-001) | `zabbix-db` (PostgreSQL) | Grafana (via Zabbix data source), GLPI (via webhook) |
 | `zabbix-web` | Web UI for Zabbix configuration | `zabbix-db` | — | Browser (port 8080) |
@@ -107,11 +115,11 @@ dashboards, alerts, and reports stay the same. See
 
 | Container | What it does | Reads from | Accessed via |
 |---|---|---|---|
-| `grafana` | Dashboards: ATM Operations Centre, geo-map, per-ATM drill-down | Zabbix data source, PostgreSQL data source, OpenSearch data source | Browser (port 3002) |
+| `grafana` | Dashboards: ATM Operations Centre, geo-map, per-ATM drill-down | Zabbix data source, PostgreSQL data source, OpenSearch data source | Browser (port 3000) |
 | `grafana-renderer` | Renders Grafana panels to PDF for export | Grafana | Internal only |
 | `glpi` + `glpi-db` | Ticketing, SLA tracking, mobile app access | Zabbix webhook (auto-creates tickets), manual entry | Browser (port 8082), GLPI mobile app |
 | `report-portal` | Reports (PDF/Excel/CSV) on demand **plus** ATM fleet management — add/edit/import ATMs (auto-assigns `sim_port`), user management, EJ search. Shows each ATM's live current state | PostgreSQL (`atm_transactions`, `atm_locations`, `atm_current_state`) | Browser (port 8888) |
-| `pgadmin` | Direct database browser/query tool | PostgreSQL | Browser (port 5050) |
+| ~~`pgadmin` | Direct database browser/query tool | PostgreSQL | Browser (port 5050)~~ — removed from `docker-compose.yml`; use `psql` via `docker exec zabbix-db` |
 
 ---
 

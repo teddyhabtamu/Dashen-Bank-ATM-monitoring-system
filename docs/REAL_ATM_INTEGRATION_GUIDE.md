@@ -76,7 +76,7 @@ Now you have **one real ATM** that you want to connect to the system. This guide
 | **Docker running** | `docker ps` should show containers |
 | **PostgreSQL accessible** | `docker exec zabbix-db psql -U zabbix -c "SELECT 1"` should return `1` |
 | **Zabbix Server accessible** | `curl http://localhost:8080/api_jsonrpc.php` should return JSON |
-| **Grafana accessible** | `curl http://localhost:3002` should return HTML |
+| **Grafana accessible** | `curl http://localhost:3000` should return HTML |
 | **Report Portal accessible** | `curl http://localhost:8888/health` should return `{"status":"ok"}` |
 
 ### 2.3 — Network Requirements
@@ -971,7 +971,7 @@ Expected: Some anomalies (if the simulation generates them).
 
 ### 12.8 — Test 8: Grafana Dashboard
 
-1. Open `http://localhost:3002`
+1. Open `http://localhost:3000`
 2. Log in as `admin` / `dashen2024`
 3. Open the **ATM Operations Centre** dashboard
 4. Check that your ATM appears in the dashboard
