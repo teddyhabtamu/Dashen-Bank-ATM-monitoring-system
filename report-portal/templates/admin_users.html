@@ -81,6 +81,7 @@
           <th>Role</th>
           <th>Created</th>
           <th>Last Login</th>
+          <th>Email</th>
           <th style="text-align:center">Actions</th>
         </tr>
       </thead>
@@ -92,10 +93,11 @@
             <td><span class="badge-role {{ u[1] }}">{{ u[1] }}</span></td>
             <td style="font-size:11px;color:#64748B">{{ u[2] if u[2] else '—' }}</td>
             <td style="font-size:11px;color:#64748B">{{ u[3] if u[3] else 'Never' }}</td>
+            <td style="font-size:11px;color:#64748B">{{ u[4] if u[4] else '—' }}</td>
             <td style="text-align:center" class="kebab-wrap">
               <button class="kebab-btn" onclick="toggleKebab(event,this)" title="Actions">&#8942;</button>
               <div class="kebab-menu">
-                <button class="kebab-item edit" onclick="openEditModal('{{ u[0] }}', '{{ u[1] }}')"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
+                <button class="kebab-item edit" onclick="openEditModal('{{ u[0] }}', '{{ u[1] }}', '{{ u[4] or '' }}')"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
                 {% if u[0] != 'admin' %}
                 <button class="kebab-item delete" onclick="openDeleteModal('{{ u[0] }}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
                 {% endif %}
@@ -128,9 +130,13 @@
             <div class="user-card-label">Last Login</div>
             <div class="user-card-value">{{ u[3] if u[3] else 'Never' }}</div>
           </div>
+          <div>
+            <div class="user-card-label">Email</div>
+            <div class="user-card-value">{{ u[4] if u[4] else '—' }}</div>
+          </div>
         </div>
         <div class="user-card-actions">
-          <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px" onclick="openEditModal('{{ u[0] }}', '{{ u[1] }}')"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
+          <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px" onclick="openEditModal('{{ u[0] }}', '{{ u[1] }}', '{{ u[4] or '' }}')"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
           {% if u[0] != 'admin' %}
           <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;color:#DC2626;border-color:#FECACA" onclick="openDeleteModal('{{ u[0] }}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
           {% endif %}
@@ -156,12 +162,12 @@
       <div class="form-grid">
         <div class="form-group full">
           <label>Username</label>
-          <input type="text" name="username" required placeholder="e.g. operator1" minlength="3" maxlength="100" pattern="[A-Za-z0-9_]+" title="Letters, numbers and underscore only">
+          <input type="text" name="username" required placeholder="e.g. operator1" minlength="3" maxlength="100" pattern="[A-Za-z0-9_]+" title="Letters, numbers and underscore only" autocomplete="off">
         </div>
         <div class="form-group full">
           <label>Password</label>
           <div class="pw-wrap">
-            <input type="password" name="password" required placeholder="Min 4 characters" minlength="4">
+            <input type="password" name="password" required placeholder="Min 4 characters" minlength="4" autocomplete="new-password">
             <button type="button" class="pw-toggle" onclick="togglePW(this)" tabindex="-1" aria-label="Toggle password visibility">
               <i data-lucide="eye" style="width:15px;height:15px"></i>
             </button>
@@ -174,6 +180,10 @@
             <option value="operator">Operator (can manage ATMs)</option>
             <option value="admin">Administrator (full access)</option>
           </select>
+        </div>
+        <div class="form-group full">
+          <label>Email <span style="color:#94A3B8;font-weight:400">(optional — for report recipients)</span></label>
+          <input type="email" name="email" placeholder="user@dashenbank.com" maxlength="255" autocomplete="off">
         </div>
       </div>
       <div class="form-actions">
@@ -201,6 +211,10 @@
             <option value="operator">Operator (can manage ATMs)</option>
             <option value="admin">Administrator (full access)</option>
           </select>
+        </div>
+        <div class="form-group full">
+          <label>Email <span style="color:#94A3B8;font-weight:400">(optional — for report recipients)</span></label>
+          <input type="email" id="editEmail" name="email" placeholder="user@dashenbank.com" maxlength="255" autocomplete="off">
         </div>
         <div class="form-group full">
           <label>New Password <span style="color:#94A3B8;font-weight:400">(leave blank to keep current)</span></label>
@@ -239,10 +253,11 @@
 
 <script>
 function openCreateModal(){ document.getElementById('createModal').classList.add('show'); lucide.createIcons(); }
-function openEditModal(username, role){
+function openEditModal(username, role, email){
   document.getElementById('editUsernameLabel').textContent = username;
   document.getElementById('editUsernameInput').value = username;
   document.getElementById('editPassword').value = '';
+  document.getElementById('editEmail').value = email || '';
   var sel = document.getElementById('editRoleSelect');
   sel.value = role;
   var wrap = sel.closest('.cust-select');

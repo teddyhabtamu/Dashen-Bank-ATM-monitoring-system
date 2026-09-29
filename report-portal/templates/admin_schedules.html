@@ -236,7 +236,9 @@
         </div>
         <div class="form-group full">
           <label>Recipients</label>
-          <input type="text" name="recipients" id="schedRecipients" required placeholder="manager@bank.com, ops@bank.com">
+          <input type="text" name="recipients" id="schedRecipients" required placeholder="manager@bank.com, ops@bank.com" autocomplete="off" oninput="suggestRecipients(this.value)">
+          <div id="recipientHints" style="font-size:11px;color:#64748B;margin-top:4px">Type any address, or pick a system user below.</div>
+          <div id="recipientMatches" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
         </div>
         <div class="form-group full">
           <label>Extra Parameters (optional)</label>
@@ -334,8 +336,38 @@ function syncCustomSelects(){
   });
 }
 
-function openScheduleModal(data){
-  data = data || {};
+var _recipTimer = null;
+function suggestRecipients(q){
+  clearTimeout(_recipTimer);
+  var box = document.getElementById('recipientMatches');
+  var tail = (q || '').split(',').pop().trim();
+  if(tail.length < 2){ box.innerHTML = ''; return; }
+  _recipTimer = setTimeout(function(){
+    fetch('/admin/users/emails?q=' + encodeURIComponent(tail))
+    .then(function(r){ return r.json(); })
+    .then(function(users){
+      box.innerHTML = '';
+      users.forEach(function(u){
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn btn-outline';
+        b.style.cssText = 'padding:4px 10px;font-size:11px';
+        b.textContent = u.username + ' <' + u.email + '>';
+        b.onclick = function(){
+          var input = document.getElementById('schedRecipients');
+          var parts = input.value.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+          parts[parts.length - 1] = u.email;
+          input.value = parts.join(', ') + ', ';
+          input.focus();
+          box.innerHTML = '';
+        };
+        box.appendChild(b);
+      });
+    });
+  }, 250);
+}
+
+function openScheduleModal(data) {  data = data || {};
   currentScheduleData = data;
   document.getElementById('scheduleModalTitle').textContent = data.id ? 'Edit Schedule' : 'New Schedule';
   document.getElementById('scheduleId').value = data.id || '';

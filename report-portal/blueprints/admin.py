@@ -1261,6 +1261,11 @@ def schedule_save():
         flash('Name, report type, schedule, and recipients are required.', 'error')
         return redirect('/admin/schedules')
 
+    bad = [r.strip() for r in recipients.split(',') if r.strip() and not _valid_email(r.strip())]
+    if bad:
+        flash(f'Invalid email address(es): {", ".join(bad)}', 'error')
+        return redirect('/admin/schedules')
+
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -1361,6 +1366,11 @@ def schedule_get():
         return jsonify({'error': True, 'message': str(e)}), 500
 
 
+def _valid_email(v):
+    import re
+    return bool(re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', v or ''))
+
+
 @bp.route('/users')
 @login_required
 @role_required(ROLE_ADMIN)
@@ -1370,9 +1380,9 @@ def user_list():
         with get_db() as conn:
             cur = conn.cursor()
             if search:
-                cur.execute("SELECT username, role, created_at, last_login FROM app_users WHERE username ILIKE %s ORDER BY created_at DESC", (f'%{search}%',))
+                cur.execute("SELECT username, role, created_at, last_login, email FROM app_users WHERE username ILIKE %s ORDER BY created_at DESC", (f'%{search}%',))
             else:
-                cur.execute("SELECT username, role, created_at, last_login FROM app_users ORDER BY created_at DESC")
+                cur.execute("SELECT username, role, created_at, last_login, email FROM app_users ORDER BY created_at DESC")
             users = cur.fetchall()
             cur.close()
         users = [list(u) for u in users]
@@ -1385,6 +1395,28 @@ def user_list():
         return render_template('admin_users.html', users=[], roles=ROLES, search=search)
 
 
+@bp.route('/users/emails')
+@login_required
+@role_required(ROLE_ADMIN)
+def user_emails():
+    """Directory autocomplete for report recipients (hybrid with free text)."""
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("""SELECT username, email FROM app_users
+                           WHERE email IS NOT NULL AND email <> ''
+                             AND (username ILIKE %s OR email ILIKE %s)
+                           ORDER BY username LIMIT 10""", (f'%{q}%', f'%{q}%'))
+            out = [{'username': r[0], 'email': r[1]} for r in cur.fetchall()]
+            cur.close()
+        return jsonify(out)
+    except Exception:
+        return jsonify([])
+
+
 @bp.route('/users/create', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
@@ -1392,11 +1424,19 @@ def user_create():
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '').strip()
     role = request.form.get('role', ROLE_VIEWER).strip()
+    email = request.form.get('email', '').strip()
     if not username or len(username) < 3:
         flash('Username must be at least 3 characters', 'error')
         return redirect('/admin/users')
+    import re as _re
+    if not _re.match(r'^[A-Za-z0-9_]+$', username):
+        flash('Username: letters, numbers and underscore only', 'error')
+        return redirect('/admin/users')
     if not password or len(password) < 4:
         flash('Password must be at least 4 characters', 'error')
+        return redirect('/admin/users')
+    if email and not _valid_email(email):
+        flash('Email address looks invalid', 'error')
         return redirect('/admin/users')
     if role not in ROLES:
         flash('Invalid role selected', 'error')
@@ -1410,8 +1450,8 @@ def user_create():
                 flash(f'User "{username}" already exists', 'error')
                 return redirect('/admin/users')
             cur.execute(
-                "INSERT INTO app_users (username, password_hash, role) VALUES (%s, %s, %s)",
-                (username, generate_password_hash(password), role)
+                "INSERT INTO app_users (username, password_hash, role, email) VALUES (%s, %s, %s, %s)",
+                (username, generate_password_hash(password), role, email or None)
             )
             conn.commit()
             cur.close()
@@ -1430,21 +1470,25 @@ def user_edit():
     username = request.form.get('username', '').strip()
     role = request.form.get('role', '').strip()
     password = request.form.get('password', '').strip()
+    email = request.form.get('email', '').strip()
     if not username:
         flash('No username provided', 'error')
         return redirect('/admin/users')
     if role not in ROLES:
         flash('Invalid role selected', 'error')
         return redirect('/admin/users')
+    if email and not _valid_email(email):
+        flash('Email address looks invalid', 'error')
+        return redirect('/admin/users')
     try:
         with get_db() as conn:
             cur = conn.cursor()
             if password:
-                cur.execute("UPDATE app_users SET role = %s, password_hash = %s WHERE username = %s",
-                            (role, generate_password_hash(password), username))
+                cur.execute("UPDATE app_users SET role = %s, password_hash = %s, email = %s WHERE username = %s",
+                            (role, generate_password_hash(password), email or None, username))
             else:
-                cur.execute("UPDATE app_users SET role = %s WHERE username = %s",
-                            (role, username))
+                cur.execute("UPDATE app_users SET role = %s, email = %s WHERE username = %s",
+                            (role, email or None, username))
             conn.commit()
             cur.close()
         log_action('USER_EDIT', f'Updated {username} (role={role})')
