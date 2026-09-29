@@ -95,15 +95,7 @@
             <td style="white-space:nowrap">{{ t.updated }}</td>
             {% if session.get('role') in ('admin', 'operator') %}
             <td><div class="kebab-wrap">
-              <button class="kebab-btn" onclick="toggleTicketMenu(this,event)" title="Actions">⋮</button>
-              <div class="kebab-menu">
-                {% if t.status_n == 1 %}<button class="kebab-item" onclick="ticketAck({{ t.id }}, this)">Acknowledge</button>{% endif %}
-                {% if t.status_n in (1, 2, 3, 4) %}
-                <button class="kebab-item" onclick="openAssignModal({{ t.id }})">Assign</button>
-                <button class="kebab-item solve" onclick="openSolveModal({{ t.id }})">Solve</button>
-                {% endif %}
-                <button class="kebab-item" onclick="openNoteModal({{ t.id }})">Note</button>
-              </div>
+              <button class="kebab-btn" onclick="toggleTicketMenu({{ t.id }}, {{ t.status_n }}, this, event)" title="Actions">⋮</button>
             </div></td>
             {% endif %}
           </tr>
@@ -117,6 +109,7 @@
 
 </div>
 {% if session.get('role') in ('admin', 'operator') %}
+<div class="kebab-menu" id="ticketKebab" style="position:fixed"></div>
 <div class="t-modal-overlay" id="ticketModal" onclick="if(event.target===this)closeTicketModal()">
   <div class="t-modal">
     <h3 id="ticketModalTitle">Ticket</h3>
@@ -131,26 +124,43 @@
 </div>
 <script>
 var _ticketMode = null, _ticketId = null, _assignUserId = null, _searchTimer = null;
-function toggleTicketMenu(btn, ev){
+function toggleTicketMenu(id, statusN, btn, ev){
   ev.stopPropagation();
-  var menu = btn.parentElement.querySelector('.kebab-menu');
-  var was = menu.classList.contains('show');
-  closeAllTicketMenus();
-  if(was) return;
-  // Float above the table wrapper (overflow:auto would clip an inline menu).
+  var menu = document.getElementById('ticketKebab');
+  if(menu.dataset.openFor === String(id) && menu.classList.contains('show')){
+    closeTicketMenu(); return;
+  }
+  var html = '';
+  if(statusN === 1) html += '<button class="kebab-item" data-act="ack">Acknowledge</button>';
+  if([1, 2, 3, 4].indexOf(statusN) !== -1){
+    html += '<button class="kebab-item" data-act="assign">Assign</button>';
+    html += '<button class="kebab-item solve" data-act="solve">Solve</button>';
+  }
+  html += '<button class="kebab-item" data-act="note">Note</button>';
+  menu.innerHTML = html;
+  menu.querySelectorAll('.kebab-item').forEach(function(it){
+    it.onclick = function(e){
+      e.stopPropagation();
+      var act = it.dataset.act;
+      closeTicketMenu();
+      if(act === 'ack') ticketAck(id, it);
+      else if(act === 'assign') openAssignModal(id);
+      else if(act === 'solve') openSolveModal(id);
+      else openNoteModal(id);
+    };
+  });
   var r = btn.getBoundingClientRect();
-  menu.classList.add('floating');
-  menu.style.top = Math.min(r.bottom + 4, window.innerHeight - 150) + 'px';
+  menu.style.top = Math.min(r.bottom + 4, window.innerHeight - 170) + 'px';
   menu.style.left = Math.max(8, Math.min(r.right - 158, window.innerWidth - 166)) + 'px';
   menu.classList.add('show');
+  menu.dataset.openFor = String(id);
 }
-function closeAllTicketMenus(){
-  document.querySelectorAll('.kebab-menu.show').forEach(function(m){
-    m.classList.remove('show', 'floating'); m.style.top = ''; m.style.left = '';
-  });
+function closeTicketMenu(){
+  var menu = document.getElementById('ticketKebab');
+  if(menu){ menu.classList.remove('show'); menu.dataset.openFor = ''; }
 }
-document.addEventListener('click', closeAllTicketMenus);
-document.addEventListener('scroll', closeAllTicketMenus, true);
+document.addEventListener('click', closeTicketMenu);
+document.addEventListener('scroll', closeTicketMenu, true);
 function ticketPost(url, body, btn){
   if(btn){ btn.disabled = true; btn.textContent = 'Working…'; }
   fetch(url, {method: 'POST',
