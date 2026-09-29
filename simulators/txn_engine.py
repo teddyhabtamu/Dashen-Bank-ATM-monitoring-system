@@ -7,6 +7,7 @@ Generates live ATM transactions into `atm_transactions` for EVERY ATM found in
 transactions (visible on the Report Portal detail page and Grafana).
 """
 import os
+import sys
 import time
 import random
 from datetime import datetime
@@ -147,6 +148,9 @@ def insert_one(conn, atm, state=None):
 
 
 def main():
+    if os.environ.get('ENABLE_SIMULATORS', 'false').lower() not in ('1', 'true', 'yes', 'on'):
+        print("ENABLE_SIMULATORS is not set — refusing to write simulator transactions. Exiting.")
+        sys.exit(0)
     conn = None
     for attempt in range(30):
         try:

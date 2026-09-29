@@ -210,6 +210,7 @@ services:
       RAPID_LIMIT: "5"
       FAILURE_WINDOW: "15"
       FAILURE_THRESHOLD: "0.4"
+      ENABLE_SIMULATORS: "${ENABLE_SIMULATORS:-false}"
     volumes:
       - ./anomaly_detector.py:/app/anomaly_detector.py:ro
     depends_on:

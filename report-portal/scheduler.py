@@ -391,14 +391,14 @@ def _run_retention():
             for table, col, days in (('atm_transactions', 'recorded_at', RETENTION_TXN_DAYS),
                                     ('audit_log', 'performed_at', RETENTION_AUDIT_DAYS)):
                 cur.execute(
-                    f"DELETE FROM {table} WHERE {col} < NOW() - INTERVAL '%s days'",
+                    f"DELETE FROM {table} WHERE {col} < NOW() - INTERVAL '1 day' * %s",
                     (days,))
                 total += cur.rowcount or 0
             # State history: only CLOSED segments fully outside the window.
             # Open segments are never deleted — they represent current state.
             cur.execute(
                 "DELETE FROM atm_state_history WHERE ended_at IS NOT NULL"
-                " AND ended_at < NOW() - INTERVAL '%s days'",
+                " AND ended_at < NOW() - INTERVAL '1 day' * %s",
                 (RETENTION_STATE_DAYS,))
             total += cur.rowcount or 0
             conn.commit()

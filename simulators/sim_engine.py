@@ -8,6 +8,7 @@ registers a new ATM in the Report Portal it automatically appears here on the
 next refresh cycle (every ~10s) and starts producing live data.
 """
 import os
+import sys
 import time
 import random
 import json
@@ -265,6 +266,9 @@ class ATMInstance:
 
 
 def main():
+    if os.environ.get('ENABLE_SIMULATORS', 'false').lower() not in ('1', 'true', 'yes', 'on'):
+        print("ENABLE_SIMULATORS is not set — refusing to serve simulator metrics. Exiting.")
+        sys.exit(0)
     registry = {}
 
     def sync():
