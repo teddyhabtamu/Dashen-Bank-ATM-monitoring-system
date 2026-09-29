@@ -165,7 +165,8 @@ class Zabbix:
         return None
 
     def create_host(self, host, visible_name, template_ids, group_ids, ip,
-                    proxy_id=None, community='dashen_sim', version=2, snmp_v3=None):
+                    proxy_id=None, community='dashen_sim', version=2, snmp_v3=None,
+                    vendor=''):
         details = {'version': version, 'bulk': 0}
         if version == 3 and snmp_v3:
             details.update({
@@ -194,6 +195,7 @@ class Zabbix:
             'templates': [{'templateid': tid} for tid in template_ids],
             'groups': [{'groupid': gid} for gid in group_ids],
             'interfaces': [interface],
+            'macros': [{'macro': '{$ATM_VENDOR}', 'value': vendor or 'Unknown'}],
             'status': 0,  # monitored
         }
         if proxy_id:
@@ -327,7 +329,7 @@ def do_apply(atms, import_templates=False):
 
         proxy_id = proxy_ids.get(d)
 
-        ok = z.create_host(host, name, template_ids, group_ids, ip, proxy_id, community, version, snmp_v3)
+        ok = z.create_host(host, name, template_ids, group_ids, ip, proxy_id, community, version, snmp_v3, vendor)
         if ok:
             created += 1
         else:

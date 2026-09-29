@@ -351,7 +351,10 @@ def _clean_html(html, ticket_id=None):
                 return
             attrs = dict(attrs)
             if tag == 'a':
-                href = (attrs.get('href') or '#').replace('"', '')
+                href = (attrs.get('href') or '').replace('"', '').strip()
+                # Scheme allowlist — javascript:/data:/vbscript: become plain text.
+                if not re.match(r'^(https?://|mailto:|#)', href, re.IGNORECASE):
+                    return
                 self.out.append(f'<a href="{href}" target="_blank" rel="noopener">')
             elif tag == 'br':
                 self.out.append('<br>')

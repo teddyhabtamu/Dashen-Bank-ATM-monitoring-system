@@ -96,7 +96,8 @@ def _group_id(z, name, cache):
 
 def sync_hosts(atm_dicts):
     """Create missing Zabbix hosts; re-enable ones disabled by portal delete. Never raises."""
-    summary = {"created": 0, "reenabled": 0, "skipped": 0, "no_ip": 0, "failed": 0, "details": []}
+    summary = {"created": 0, "reenabled": 0, "macros_fixed": 0,
+               "skipped": 0, "no_ip": 0, "failed": 0, "details": []}
     rows = (atm_dicts or [])[:MAX_BATCH]
     if not rows:
         return summary
@@ -128,6 +129,7 @@ def sync_hosts(atm_dicts):
                 continue
             existing = z.call("host.get", {"output": ["hostid", "status"],
                                               "selectInterfaces": ["interfaceid", "ip"],
+                                              "selectMacros": ["macro", "value"],
                                               "filter": {"host": [host]}})
             if existing:
                 # Re-registration after a portal delete leaves a disabled host
@@ -144,7 +146,23 @@ def sync_hosts(atm_dicts):
                         summary["failed"] += 1
                         summary["details"].append({"atm_id": host, "error": z.last_error or "host.update failed"})
                 else:
-                    summary["skipped"] += 1
+                    # Backfill {$ATM_VENDOR} on hosts created before macros
+                    # were provisioned — the webhook needs it for routing.
+                    have = {m.get("macro"): m.get("value")
+                            for m in (existing[0].get("macros") or [])}
+                    if have.get("{$ATM_VENDOR}") != vendor:
+                        res = z.call("host.update", {
+                            "hostid": existing[0]["hostid"],
+                            "macros": [{"macro": "{$ATM_VENDOR}", "value": vendor}]})
+                        if res:
+                            summary["macros_fixed"] += 1
+                        else:
+                            summary["failed"] += 1
+                            summary["details"].append({
+                                "atm_id": host,
+                                "error": z.last_error or "macro update failed"})
+                    else:
+                        summary["skipped"] += 1
                 continue
             if vendor == "NCR" and tids.get(TEMPLATE_NCR_NAME):
                 template_ids, vgroup = [tids[TEMPLATE_NCR_NAME]], grp_ncr
@@ -171,6 +189,7 @@ def sync_hosts(atm_dicts):
                     "dns": "", "port": "161",
                     "details": {"version": version, "bulk": 0, "community": community},
                 }],
+                "macros": [{"macro": "{$ATM_VENDOR}", "value": vendor}],
                 "status": 0,
             }
             res = z.call("host.create", params)

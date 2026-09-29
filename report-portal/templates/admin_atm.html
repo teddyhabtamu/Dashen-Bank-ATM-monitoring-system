@@ -237,7 +237,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
             <td style="padding:8px 6px;text-align:center"><input type="checkbox" class="row-checkbox" value="{{ d.atm_id }}" onchange="updateSelection()" style="cursor:pointer;width:15px;height:15px"></td>
             {% endif %}
             <td>
-              <button type="button" class="row-toggle" onclick="toggleRowDetail('{{ d.atm_id }}')" title="Show details" aria-label="Show details">&#9656;</button>{{ d.atm_id }}
+              <button type="button" class="row-toggle" onclick="toggleRowDetail(this)" title="Show details" aria-label="Show details">&#9656;</button>{{ d.atm_id }}
             </td>
             <td>{{ d.atm_name or '—' }}</td>
             <td>{{ d.branch or '—' }}</td>
@@ -268,8 +268,8 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
               <button class="kebab-btn" onclick="toggleKebab(event,this)" title="Actions">&#8942;</button>
               <div class="kebab-menu">
                 <a class="kebab-item view" href="/admin/atm/{{ d.atm_id }}"><i data-lucide="eye" style="width:14px;height:14px"></i> View Detail</a>
-                <button class="kebab-item edit" onclick="editATM('{{ d.atm_id }}')"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
-                <button class="kebab-item delete" onclick="deleteATM('{{ d.atm_id }}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
+                <button class="kebab-item edit" onclick="editATM(this)"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
+                <button class="kebab-item delete" onclick="deleteATM(this)"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
               </div>
             </td>
             {% endif %}
@@ -356,8 +356,8 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
         <div class="atm-card-actions">
           <a class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;text-decoration:none" href="/admin/atm/{{ d.atm_id }}"><i data-lucide="eye" style="width:14px;height:14px"></i> View</a>
           {% if session.get('role') in ('admin', 'operator') %}
-          <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px" onclick="editATM('{{ d.atm_id }}')"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
-          <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;color:#DC2626;border-color:#FECACA" onclick="deleteATM('{{ d.atm_id }}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
+          <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px" onclick="editATM(this)"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
+          <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;color:#DC2626;border-color:#FECACA" onclick="deleteATM(this)"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
           {% endif %}
         </div>
       </div>
@@ -550,9 +550,15 @@ function applyFilter(){
   window.location = '/admin/atm?' + params.toString();
 }
 
-    function toggleRowDetail(atmId){
-      var dataRow = document.querySelector('tr[data-atm-id="'+atmId+'"]:not(.atm-detail-row)');
-      var detailRow = document.querySelector('tr.atm-detail-row[data-atm-id="'+atmId+'"]');
+    function atmIdFromEl(el){
+      var holder = el && el.closest ? el.closest('[data-atm-id]') : null;
+      return holder ? holder.dataset.atmId : '';
+    }
+    function toggleRowDetail(btn){
+      var atmId = atmIdFromEl(btn);
+      var esc = String(atmId).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      var dataRow = document.querySelector('tr[data-atm-id="' + esc + '"]:not(.atm-detail-row)');
+      var detailRow = document.querySelector('tr.atm-detail-row[data-atm-id="' + esc + '"]');
       if(dataRow) dataRow.classList.toggle('expanded');
       if(detailRow) detailRow.classList.toggle('open');
     }
@@ -607,7 +613,9 @@ function syncCustomSelects(){
     }
   });
 }
-function editATM(id){
+function editATM(btn){
+  var id = atmIdFromEl(btn);
+  if(!id) return;
   fetch('/admin/atm/get?atm_id=' + encodeURIComponent(id), {
     headers: {'X-Requested-With': 'XMLHttpRequest'}
   })
@@ -618,7 +626,9 @@ function editATM(id){
   })
   .catch(function(){ showToast('Failed to load ATM data.', 'error'); });
 }
-function deleteATM(id){
+function deleteATM(btn){
+  var id = atmIdFromEl(btn);
+  if(!id) return;
   document.getElementById('deleteAtmId').textContent = id;
   document.getElementById('deleteOverlay').classList.add('show');
   document.getElementById('confirmDeleteBtn').dataset.atmId = id;
@@ -1370,6 +1380,7 @@ function syncZabbix(){
     if(data.success){
       var msg = 'Zabbix sync: ' + data.created + ' created'
         + (data.reenabled ? ', ' + data.reenabled + ' re-enabled' : '')
+        + (data.macros_fixed ? ', ' + data.macros_fixed + ' vendor macros set' : '')
         + ', ' + data.skipped + ' already there'
         + (data.no_ip ? ', ' + data.no_ip + ' without IP' : '')
         + (data.failed ? ', ' + data.failed + ' failed' : '') + '.';

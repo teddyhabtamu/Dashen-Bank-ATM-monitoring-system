@@ -19,7 +19,7 @@ def _bg_zabbix_sync(rows):
     try:
         from zabbix_sync import sync_hosts
         s = sync_hosts(rows)
-        log_action('ZABBIX_SYNC', f'auto: created={s["created"]} reenabled={s.get("reenabled", 0)} skipped={s["skipped"]} no_ip={s["no_ip"]} failed={s["failed"]}')
+        log_action('ZABBIX_SYNC', f'auto: created={s["created"]} reenabled={s.get("reenabled", 0)} macros={s.get("macros_fixed", 0)} skipped={s["skipped"]} no_ip={s["no_ip"]} failed={s["failed"]}')
     except Exception as e:
         logger.warning('background Zabbix sync failed: %s', e)
 
@@ -47,6 +47,22 @@ def to_eat(dt, fmt='%Y-%m-%d %H:%M'):
     return str(dt)
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+# Credential fields: operator+ only. Viewers keep inventory visibility
+# (branch, city, IP) but must never receive shared secrets. Deliberately
+# NOT masking ip_address — it's ops inventory, not a credential.
+_CRED_FIELDS = ('snmp_community',)
+
+
+def _strip_secrets(row):
+    """Remove credential fields for viewer sessions (in place)."""
+    try:
+        if session.get('role') == ROLE_VIEWER:
+            for f in _CRED_FIELDS:
+                row.pop(f, None)
+    except Exception:
+        pass
+    return row
 
 ROLES = [ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN]
 
@@ -523,7 +539,7 @@ def atm_detail(atm_id):
             cur.close()
         if not row:
             abort(404)
-        atm = dict(zip(cols, row))
+        atm = _strip_secrets(dict(zip(cols, row)))
         vendor = atm.get('vendor')
 
         metrics = fetch_metrics(atm_id, port=atm.get('sim_port')) if ENABLE_SIMULATORS \
@@ -604,7 +620,7 @@ def atm_get():
         cur.close()
     if not row:
         return jsonify({'error': True, 'message': f'ATM {atm_id} not found'}), 404
-    return jsonify(dict(zip(cols, row)))
+    return jsonify(_strip_secrets(dict(zip(cols, row))))
 
 
 @bp.route('/atm/save', methods=['POST'])
@@ -906,6 +922,11 @@ def atm_csv_export():
         rows = cur.fetchall()
         cur.close()
 
+    if session.get('role') == ROLE_VIEWER:
+        keep = [i for i, c in enumerate(cols) if c not in _CRED_FIELDS]
+        cols = [cols[i] for i in keep]
+        rows = [tuple(r[i] for i in keep) for r in rows]
+
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(cols)
@@ -1082,7 +1103,7 @@ def atm_zabbix_sync():
         rows = [dict(zip(cols, r)) for r in cur.fetchall()]
         cur.close()
     summary = sync_hosts(rows)
-    log_action('ZABBIX_SYNC', f'manual: created={summary["created"]} reenabled={summary.get("reenabled", 0)} '
+    log_action('ZABBIX_SYNC', f'manual: created={summary["created"]} reenabled={summary.get("reenabled", 0)} macros={summary.get("macros_fixed", 0)} '
                               f'skipped={summary["skipped"]} no_ip={summary["no_ip"]} failed={summary["failed"]} (n={len(rows)})')
     return jsonify({'success': True, 'checked': len(rows), **summary})
 
@@ -1106,6 +1127,8 @@ def _validate(data):
             errors[field] = 'This field is required'
     if data.get('atm_id') and len(data['atm_id']) < 3:
         errors['atm_id'] = 'ATM ID must be at least 3 characters'
+    if data.get('atm_id') and not re.match(r'^[A-Za-z0-9][A-Za-z0-9_-]*$', data['atm_id']):
+        errors['atm_id'] = 'Letters, digits, dash and underscore only'
     maxlens = {'atm_id': 20, 'branch': 100, 'district': 100, 'city': 100,
                'region': 100, 'terminal_id': 20, 'vendor': 50, 'model': 50,
                'ip_address': 45, 'snmp_community': 100, 'ej_log_format': 20}
