@@ -19,7 +19,7 @@ def _bg_zabbix_sync(rows):
     try:
         from zabbix_sync import sync_hosts
         s = sync_hosts(rows)
-        log_action('ZABBIX_SYNC', f'auto: created={s["created"]} skipped={s["skipped"]} no_ip={s["no_ip"]} failed={s["failed"]}')
+        log_action('ZABBIX_SYNC', f'auto: created={s["created"]} reenabled={s.get("reenabled", 0)} skipped={s["skipped"]} no_ip={s["no_ip"]} failed={s["failed"]}')
     except Exception as e:
         logger.warning('background Zabbix sync failed: %s', e)
 
@@ -1054,8 +1054,8 @@ def atm_zabbix_sync():
         rows = [dict(zip(cols, r)) for r in cur.fetchall()]
         cur.close()
     summary = sync_hosts(rows)
-    log_action('ZABBIX_SYNC', f'manual: created={summary["created"]} skipped={summary["skipped"]} '
-                              f'no_ip={summary["no_ip"]} failed={summary["failed"]} (n={len(rows)})')
+    log_action('ZABBIX_SYNC', f'manual: created={summary["created"]} reenabled={summary.get("reenabled", 0)} '
+                              f'skipped={summary["skipped"]} no_ip={summary["no_ip"]} failed={summary["failed"]} (n={len(rows)})')
     return jsonify({'success': True, 'checked': len(rows), **summary})
 
 

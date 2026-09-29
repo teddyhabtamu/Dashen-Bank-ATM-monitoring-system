@@ -1367,9 +1367,16 @@ function syncZabbix(){
     btn.innerHTML = '<i data-lucide="server" style="width:14px;height:14px"></i> Sync to Zabbix';
     lucide.createIcons();
     if(data.success){
-      showToast('Zabbix sync: ' + data.created + ' created, ' + data.skipped + ' already there'
+      var msg = 'Zabbix sync: ' + data.created + ' created'
+        + (data.reenabled ? ', ' + data.reenabled + ' re-enabled' : '')
+        + ', ' + data.skipped + ' already there'
         + (data.no_ip ? ', ' + data.no_ip + ' without IP' : '')
-        + (data.failed ? ', ' + data.failed + ' failed' : '') + '.', data.failed ? 'error' : 'success');
+        + (data.failed ? ', ' + data.failed + ' failed' : '') + '.';
+      if(data.details && data.details.length){
+        msg += ' ' + data.details.slice(0, 3).map(function(d){ return d.atm_id + ': ' + d.error; }).join('; ')
+          + (data.details.length > 3 ? ' (+' + (data.details.length - 3) + ' more)' : '');
+      }
+      showToast(msg, data.failed ? 'error' : 'success', data.failed ? 12000 : 6000);
     } else {
       showToast(data.message || 'Zabbix sync failed.', 'error');
     }

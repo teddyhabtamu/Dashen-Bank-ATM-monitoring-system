@@ -95,8 +95,8 @@ def _group_id(z, name, cache):
 
 
 def sync_hosts(atm_dicts):
-    """Create missing Zabbix hosts for the given ATM rows. Never raises."""
-    summary = {"created": 0, "skipped": 0, "no_ip": 0, "failed": 0, "details": []}
+    """Create missing Zabbix hosts; re-enable ones disabled by portal delete. Never raises."""
+    summary = {"created": 0, "reenabled": 0, "skipped": 0, "no_ip": 0, "failed": 0, "details": []}
     rows = (atm_dicts or [])[:MAX_BATCH]
     if not rows:
         return summary
@@ -126,9 +126,25 @@ def sync_hosts(atm_dicts):
                 summary["no_ip"] += 1
                 summary["details"].append({"atm_id": host, "error": "skipped: no IP address"})
                 continue
-            existing = z.call("host.get", {"output": ["hostid"], "filter": {"host": [host]}})
+            existing = z.call("host.get", {"output": ["hostid", "status"],
+                                              "selectInterfaces": ["interfaceid", "ip"],
+                                              "filter": {"host": [host]}})
             if existing:
-                summary["skipped"] += 1
+                # Re-registration after a portal delete leaves a disabled host
+                # behind (history preserved). Re-enable it and refresh its IP.
+                if str(existing[0].get("status")) == "1":
+                    upd = {"hostid": existing[0]["hostid"], "status": 0}
+                    ifaces = existing[0].get("interfaces") or []
+                    if ifaces and ifaces[0].get("ip") != ip:
+                        upd["interfaces"] = [{"interfaceid": ifaces[0]["interfaceid"], "ip": ip}]
+                    res = z.call("host.update", upd)
+                    if res:
+                        summary["reenabled"] += 1
+                    else:
+                        summary["failed"] += 1
+                        summary["details"].append({"atm_id": host, "error": z.last_error or "host.update failed"})
+                else:
+                    summary["skipped"] += 1
                 continue
             if vendor == "NCR" and tids.get(TEMPLATE_NCR_NAME):
                 template_ids, vgroup = [tids[TEMPLATE_NCR_NAME]], grp_ncr
