@@ -2,7 +2,7 @@
 blueprints/ej_search.py
 Electronic Journal search routes — search UI and CSV export.
 """
-import csv, io, os, logging
+import csv, io, os, re, logging
 import requests
 from flask import Blueprint, render_template, request, Response
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
@@ -16,6 +16,27 @@ bp = Blueprint('ej_search', __name__)
 
 ES_HOST  = os.environ.get('ES_HOST', 'opensearch:9200')
 ES_INDEX = os.environ.get('ES_INDEX', 'atm-ej-live-*,atm-electronic-journal')
+
+
+def _scrub_pan(text):
+    """Mask PAN-like digit runs in free text (first6/last4, C12).
+
+    EJ raw messages may carry a full PAN; card columns arriving from older
+    pipeline generations may too. A 12–19 digit run becomes
+    123456******1234 so bulk exports can't leak full card numbers."""
+    if not text:
+        return text
+    def _mask(m):
+        d = m.group(0)
+        if len(d) < 12:
+            return d
+        return d[:6] + '******' + d[-4:]
+    return re.sub(r'\d{12,19}', _mask, str(text))
+
+
+def _audit_filters(card, auth_code):
+    """Presence markers for the audit log — never the values (C12)."""
+    return ('set' if card else 'unset'), ('set' if auth_code else 'unset')
 
 
 def _parse_ej_log_line(src):
@@ -283,9 +304,10 @@ def ej_search():
 
         total_pages = max(1, (total + per_page - 1) // per_page) if total else 1
 
-        # Audit log for EJ search
+        # Audit log for EJ search (filter values never logged — C12)
         if searched and not error:
-            log_action('EJ_SEARCH', f'keyword={keyword}, card={card}, atm={atm_id}, event={event_type}, status={status}, amount={min_amount}-{max_amount}, auth={auth_code}, results={total}')
+            _card, _auth = _audit_filters(card, auth_code)
+            log_action('EJ_SEARCH', f'keyword={keyword}, card={_card}, atm={atm_id}, event={event_type}, status={status}, amount={min_amount}-{max_amount}, auth={_auth}, results={total}')
 
     # ATM dropdown from database
     db_atms = []
@@ -317,7 +339,7 @@ def ej_search():
 
 @bp.route('/ej-search/csv')
 @login_required
-@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
 def ej_search_csv():
     card        = request.args.get('card', '')
     date_from   = request.args.get('date_from', (date.today() - timedelta(days=30)).isoformat()) or (date.today() - timedelta(days=30)).isoformat()
@@ -359,10 +381,10 @@ def ej_search_csv():
                         _fmt_ts(src.get('@timestamp', '')),
                         src.get('atm_id', ''),
                         src.get('sub_type', src.get('event_type', '')),
-                        src.get('card_masked', ''),
+                        _scrub_pan(src.get('card_masked', '')),
                         src.get('status', ''),
                         src.get('amount', ''),
-                        src.get('message', ''),
+                        _scrub_pan(src.get('message', '')),
                     ])
         except Exception:
             pass
@@ -377,8 +399,9 @@ def ej_search_csv():
     w.writerows(rows)
     buf.seek(0)
 
-    # Audit log for EJ CSV export
-    log_action('EJ_EXPORT_CSV', f'keyword={keyword}, card={card}, atm={atm_id}, event={event_type}, status={status}, amount={min_amount}-{max_amount}, auth={auth_code}, rows={len(rows)}')
+    # Audit log for EJ CSV export (filter values never logged — C12)
+    _card, _auth = _audit_filters(card, auth_code)
+    log_action('EJ_EXPORT_CSV', f'keyword={keyword}, card={_card}, atm={atm_id}, event={event_type}, status={status}, amount={min_amount}-{max_amount}, auth={_auth}, rows={len(rows)}')
 
     return Response(
         buf.getvalue(),

@@ -723,9 +723,60 @@ def atm_save():
     return _guide_page(data)
 
 
+def _archive_atm(cur, atm_id, deleted_by):
+    """Snapshot one ATM into atm_delete_archive (same transaction — rolls
+    back if the delete fails). Captures the full location row, all cash
+    loads (financial evidence otherwise lost to ON DELETE CASCADE), and
+    volume counts. Never raises: archival must not block a delete, but a
+    failure is logged loudly."""
+    try:
+        cur.execute("CREATE TABLE IF NOT EXISTS atm_delete_archive ("
+                    "id SERIAL PRIMARY KEY, atm_id VARCHAR(20) NOT NULL,"
+                    " deleted_at TIMESTAMP DEFAULT NOW(), deleted_by VARCHAR(100) DEFAULT '',"
+                    " location JSONB, cash_loads JSONB,"
+                    " txn_count INT DEFAULT 0, anomaly_count INT DEFAULT 0,"
+                    " state_history_count INT DEFAULT 0)")
+        cur.execute("SELECT * FROM atm_locations WHERE atm_id = %s", (atm_id,))
+        cols = [d[0] for d in cur.description]
+        loc = cur.fetchone()
+        if not loc:
+            return False
+        location = dict(zip(cols, loc))
+        cur.execute("SELECT * FROM cash_replenishments WHERE atm_id = %s ORDER BY id", (atm_id,))
+        cash_cols = [d[0] for d in cur.description]
+        cash = [dict(zip(cash_cols, r)) for r in cur.fetchall()]
+        counts = {}
+        cur.execute("SAVEPOINT _arch")
+        for key, tbl in (('txn', 'atm_transactions'), ('anom', 'atm_anomalies'),
+                         ('hist', 'atm_state_history')):
+            try:
+                cur.execute(f"SELECT COUNT(*) FROM {tbl} WHERE atm_id = %s", (atm_id,))
+                counts[key] = int(cur.fetchone()[0] or 0)
+            except Exception:
+                counts[key] = -1  # table may not exist on older DBs
+                cur.execute("ROLLBACK TO SAVEPOINT _arch")
+                cur.execute("SAVEPOINT _arch")
+        cur.execute(
+            "INSERT INTO atm_delete_archive (atm_id, deleted_by, location, cash_loads,"
+            " txn_count, anomaly_count, state_history_count)"
+            " VALUES (%s, %s, %s::jsonb, %s::jsonb, %s, %s, %s)",
+            (atm_id, deleted_by, json.dumps(location, default=str),
+             json.dumps(cash, default=str),
+             counts.get('txn', -1), counts.get('anom', -1), counts.get('hist', -1)))
+        return True
+    except Exception as e:
+        import logging as _logging
+        _logging.getLogger(__name__).error('Archive of %s failed: %s', atm_id, e)
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT _arch")
+        except Exception:
+            pass
+        return False
+
+
 @bp.route('/atm/delete', methods=['POST'])
 @login_required
-@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+@role_required(ROLE_ADMIN)
 def atm_delete():
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     atm_id = request.form.get('atm_id', '').strip()
@@ -738,6 +789,7 @@ def atm_delete():
     with get_db() as conn:
         cur = conn.cursor()
         try:
+            _archive_atm(cur, atm_id, session.get('username', ''))
             cur.execute("DELETE FROM atm_current_state WHERE atm_id = %s", (atm_id,))
             cur.execute("DELETE FROM atm_transactions WHERE atm_id = %s", (atm_id,))
             cur.execute("DELETE FROM atm_anomalies WHERE atm_id = %s", (atm_id,))
@@ -785,6 +837,8 @@ def atm_bulk_delete():
         cur = conn.cursor()
         try:
             placeholders = ','.join(['%s'] * len(ids))
+            for _aid in ids:
+                _archive_atm(cur, _aid, session.get('username', ''))
             cur.execute(f"DELETE FROM atm_current_state WHERE atm_id IN ({placeholders})", ids)
             cur.execute(f"DELETE FROM atm_transactions WHERE atm_id IN ({placeholders})", ids)
             cur.execute(f"DELETE FROM atm_anomalies WHERE atm_id IN ({placeholders})", ids)

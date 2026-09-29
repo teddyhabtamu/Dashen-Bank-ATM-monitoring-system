@@ -211,7 +211,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
     {% endif %}
   </div>
     <div style="overflow:visible">
-      {% if session.get('role') in ('admin', 'operator') %}
+      {% if session.get('role') == 'admin' %}
       <div id="selectionBar" style="display:none;align-items:center;gap:10px;padding:10px 24px;background:#EEF2FF;border-bottom:1px solid #CBD5E1;font-size:13px">
         <i data-lucide="check-square" style="width:16px;height:16px;color:#012169"></i>
         <span style="font-weight:600;color:#012169"><span id="selectedCount">0</span> selected</span>
@@ -269,7 +269,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
               <div class="kebab-menu">
                 <a class="kebab-item view" href="/admin/atm/{{ d.atm_id }}"><i data-lucide="eye" style="width:14px;height:14px"></i> View Detail</a>
                 <button class="kebab-item edit" onclick="editATM(this)"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
-                <button class="kebab-item delete" onclick="deleteATM(this)"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
+                {% if session.get('role') == 'admin' %}<button class="kebab-item delete" onclick="deleteATM(this)"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>{% endif %}
               </div>
             </td>
             {% endif %}
@@ -357,7 +357,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
           <a class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;text-decoration:none" href="/admin/atm/{{ d.atm_id }}"><i data-lucide="eye" style="width:14px;height:14px"></i> View</a>
           {% if session.get('role') in ('admin', 'operator') %}
           <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px" onclick="editATM(this)"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
-          <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;color:#DC2626;border-color:#FECACA" onclick="deleteATM(this)"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
+          {% if session.get('role') == 'admin' %}<button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;color:#DC2626;border-color:#FECACA" onclick="deleteATM(this)"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>{% endif %}
           {% endif %}
         </div>
       </div>

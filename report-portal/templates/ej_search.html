@@ -266,11 +266,13 @@ td { font-variant-numeric: tabular-nums; }
     <div class="card">
       <div class="card-header">
         <h2>{{ '{:,}'.format(total) }} Results</h2>
+        {% if session.get('role') in ('operator', 'admin') %}
         <a id="ejExportBtn"
            href="/ej-search/csv?card={{ card }}&date_from={{ date_from }}&date_to={{ date_to }}&atm_id={{ atm_id }}&keyword={{ keyword }}&event_type={{ event_type }}&status={{ status }}&min_amount={{ min_amount }}&max_amount={{ max_amount }}&auth_code={{ auth_code }}"
            class="btn btn-primary">
           <i data-lucide="download" style="width:14px;height:14px"></i> Export CSV
         </a>
+        {% endif %}
       </div>
       <div class="ej-table-wrap" style="overflow-x:auto;overflow-y:clip">
         <table>
