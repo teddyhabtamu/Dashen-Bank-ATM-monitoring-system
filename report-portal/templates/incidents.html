@@ -25,6 +25,7 @@
 .kebab-btn:hover{background:#EEF2FF;color:#012169}
 .kebab-menu{display:none;position:absolute;right:0;top:100%;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:4px;z-index:100;min-width:150px;border:1px solid #EEF1F6}
 .kebab-menu.show{display:block}
+.kebab-menu.floating{position:fixed;top:auto;left:auto;z-index:3000}
 .kebab-item{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:none;width:100%;text-align:left;color:#334155}
 .kebab-item:hover{background:#F8FAFC}
 .kebab-item.solve{color:#065F46}
@@ -134,12 +135,22 @@ function toggleTicketMenu(btn, ev){
   ev.stopPropagation();
   var menu = btn.parentElement.querySelector('.kebab-menu');
   var was = menu.classList.contains('show');
-  document.querySelectorAll('.kebab-menu.show').forEach(function(m){ m.classList.remove('show'); });
-  if(!was) menu.classList.add('show');
+  closeAllTicketMenus();
+  if(was) return;
+  // Float above the table wrapper (overflow:auto would clip an inline menu).
+  var r = btn.getBoundingClientRect();
+  menu.classList.add('floating');
+  menu.style.top = Math.min(r.bottom + 4, window.innerHeight - 150) + 'px';
+  menu.style.left = Math.max(8, Math.min(r.right - 158, window.innerWidth - 166)) + 'px';
+  menu.classList.add('show');
 }
-document.addEventListener('click', function(){
-  document.querySelectorAll('.kebab-menu.show').forEach(function(m){ m.classList.remove('show'); });
-});
+function closeAllTicketMenus(){
+  document.querySelectorAll('.kebab-menu.show').forEach(function(m){
+    m.classList.remove('show', 'floating'); m.style.top = ''; m.style.left = '';
+  });
+}
+document.addEventListener('click', closeAllTicketMenus);
+document.addEventListener('scroll', closeAllTicketMenus, true);
 function ticketPost(url, body, btn){
   if(btn){ btn.disabled = true; btn.textContent = 'Working…'; }
   fetch(url, {method: 'POST',
