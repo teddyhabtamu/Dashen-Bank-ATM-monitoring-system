@@ -113,7 +113,11 @@
   <div class="reply-box">
     <div style="font-size:13px;font-weight:700;color:#012169;margin-bottom:8px">Reply as {{ session.get('username') }}</div>
     <textarea id="replyText" placeholder="Type an update for the technician…"></textarea>
-    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px">
+    <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+      <label for="replyFiles" class="act-btn" style="padding:8px 14px;cursor:pointer">📎 Attach (max 3, 10MB each)</label>
+      <input type="file" id="replyFiles" multiple style="display:none" onchange="showPickedFiles(this)">
+      <span id="pickedFiles" style="font-size:12px;color:#64748B"></span>
+      <span style="flex:1"></span>
       {% if ticket.status_n == 1 %}
       <button class="act-btn" id="ackBtn" onclick="replyAction('acknowledge', null)" style="padding:8px 18px">Acknowledge</button>
       {% endif %}
@@ -136,11 +140,29 @@
     }
     ticketPost(url, body, btn);
   }
+  function showPickedFiles(input){
+    var names = [];
+    for(var i = 0; i < input.files.length && i < 3; i++) names.push(input.files[i].name);
+    document.getElementById('pickedFiles').textContent = names.join(', ') +
+      (input.files.length > 3 ? ' (+' + (input.files.length - 3) + ' ignored, max 3)' : '');
+  }
   function sendReply(){
     var c = document.getElementById('replyText').value.trim();
-    if(!c){ showToast('Type a reply first.', 'error'); return; }
-    ticketPost('/incidents/{{ ticket.id }}/followup', {content: c},
-      document.getElementById('replyBtn'));
+    var files = document.getElementById('replyFiles').files;
+    if(!c && !files.length){ showToast('Type a reply or attach a file.', 'error'); return; }
+    var btn = document.getElementById('replyBtn');
+    btn.disabled = true; btn.dataset.label = btn.textContent; btn.textContent = 'Sending…';
+    var fd = new FormData();
+    fd.append('content', c);
+    for(var i = 0; i < files.length && i < 3; i++) fd.append('files', files[i]);
+    fetch('/incidents/{{ ticket.id }}/followup', {method: 'POST', body: fd,
+      headers: {'X-Requested-With': 'XMLHttpRequest'}})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.success){ showToast(data.message, 'success'); setTimeout(function(){ location.reload(); }, 900); }
+      else { showToast(data.message || 'Action failed.', 'error'); btn.disabled = false; btn.textContent = btn.dataset.label; }
+    })
+    .catch(function(){ showToast('Network error.', 'error'); btn.disabled = false; });
   }
   function ticketPost(url, body, btn){
     if(btn){ btn.disabled = true; btn.dataset.label = btn.textContent; btn.textContent = 'Working…'; }

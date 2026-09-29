@@ -211,20 +211,78 @@ def _api(token, method, path, payload=None):
 
 def _add_followup(token, ticket_id, content):
     """Version-tolerant followup add (ITILFollowup on 10+, TicketFollowup before)."""
+    ok, data, _used = _add_followup_ex(token, ticket_id, content)
+    return ok, data
+
+
+def _add_followup_ex(token, ticket_id, content):
+    """Same, but also returns the itemtype that accepted the followup."""
     for item in ('ITILFollowup', 'TicketFollowup'):
         ok, data = _api(token, 'POST', f'{item}/', {'input': {
             'itemtype': 'Ticket', 'items_id': int(ticket_id), 'content': content}})
         if ok:
-            return True, data
+            return True, data, item
         if 'Invalid itemtype' in str(data) or '404' in str(data):
             continue
         # Real refusal (rights, validation) — don't mask it with the fallback.
         if item == 'ITILFollowup':
             ok2, data2 = _api(token, 'POST', 'TicketFollowup/', {'input': {
                 'itemtype': 'Ticket', 'items_id': int(ticket_id), 'content': content}})
-            return ok2, data2
-        return ok, data
-    return False, 'Followup endpoint not found'
+            return ok2, data2, 'TicketFollowup' if ok2 else item
+        return ok, data, item
+    return False, 'Followup endpoint not found', 'ITILFollowup'
+
+
+# Reply attachments: executables never leave the portal.
+_BLOCKED_EXT = {'exe', 'bat', 'cmd', 'sh', 'js', 'jar', 'msi', 'com', 'scr',
+                'ps1', 'vbs', 'vbe', 'dll', 'sys', 'reg', 'lnk', 'apk'}
+_MAX_REPLY_FILE = 10 * 1024 * 1024
+_MAX_REPLY_FILES = 3
+
+
+def _upload_followup_file(token, followup_item, followup_id, storage):
+    """Upload one file to GLPI and link it to the followup. Returns (ok, msg)."""
+    import json as _json
+    fname = (storage.filename or '').split('/')[-1].split('\\')[-1].strip()
+    if not fname:
+        return False, 'empty filename'
+    ext = fname.rsplit('.', 1)[-1].lower() if '.' in fname else ''
+    if ext in _BLOCKED_EXT:
+        return False, f'{fname}: file type not allowed'
+    data = storage.read(_MAX_REPLY_FILE + 1)
+    if not data:
+        return False, f'{fname}: empty file'
+    if len(data) > _MAX_REPLY_FILE:
+        return False, f'{fname}: over 10MB limit'
+    try:
+        r = requests.post(
+            f'{GLPI_URL}/apirest.php/Document/',
+            headers={'App-Token': GLPI_APP_TOKEN, 'Session-Token': token},
+            files={'filename[0]': (fname, data, storage.mimetype or 'application/octet-stream')},
+            data={'uploadManifest': _json.dumps(
+                {'input': {'name': fname, '_filename': [fname]}})},
+            timeout=60)
+    except Exception as e:
+        logger.warning('GLPI document upload failed: %s', e)
+        return False, f'{fname}: upload failed'
+    try:
+        res = r.json()
+    except ValueError:
+        return False, f'{fname}: upload refused ({r.status_code})'
+    doc_id = None
+    if isinstance(res, list) and res and isinstance(res[0], dict):
+        doc_id = res[0].get('id')
+    elif isinstance(res, dict):
+        doc_id = res.get('id')
+    if not doc_id:
+        logger.warning('GLPI document upload refused: %s', res)
+        return False, f'{fname}: upload refused'
+    ok, _ = _api(token, 'POST', 'Document_Item/', {'input': {
+        'documents_id': int(doc_id), 'itemtype': followup_item,
+        'items_id': int(followup_id)}})
+    if not ok:
+        return False, f'{fname}: uploaded but not linked'
+    return True, fname
 
 
 def _mutate(ticket_id, fn):
@@ -678,15 +736,47 @@ def acknowledge(ticket_id):
 @role_required(ROLE_OPERATOR, ROLE_ADMIN)
 def followup(ticket_id):
     actor = _actor()
-    content = (request.get_json(silent=True) or {}).get('content', '').strip()
-    if not content:
-        return jsonify({'success': False, 'message': 'Note text is required.'})
+    if request.files:
+        content = (request.form.get('content') or '').strip()
+        uploads = request.files.getlist('files')[:_MAX_REPLY_FILES]
+    else:
+        content = (request.get_json(silent=True) or {}).get('content', '').strip()
+        uploads = []
+    if not content and not uploads:
+        return jsonify({'success': False, 'message': 'Type a reply or attach a file.'})
     if len(content) > 2000:
         return jsonify({'success': False, 'message': 'Note is too long (max 2000 characters).'})
 
     def _run(token):
-        ok, data = _add_followup(token, ticket_id, f'{content}\n— {actor} (Report Portal)')
-        return (True, f'Note added to ticket {ticket_id}.') if ok else (False, data)
+        ok, data, used = _add_followup_ex(
+            token, ticket_id, f'{content}\n— {actor} (Report Portal)' if content else
+            f'(attachment from {actor} via Report Portal)')
+        if not ok:
+            return False, data
+        fid = None
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            fid = data[0].get('id')
+        elif isinstance(data, dict):
+            fid = data.get('id')
+        failed = []
+        attached = 0
+        if fid and uploads:
+            for st in uploads:
+                if not (st and st.filename):
+                    continue
+                ok_f, msg_f = _upload_followup_file(token, used, fid, st)
+                if ok_f:
+                    attached += 1
+                else:
+                    failed.append(msg_f)
+        msg = f'Note added to ticket {ticket_id}.'
+        if attached:
+            msg = f'Note + {attached} file(s) added to ticket {ticket_id}.'
+        elif uploads and not fid:
+            failed.append('files: followup id unknown')
+        if failed:
+            msg += ' Issues: ' + '; '.join(failed)
+        return True, msg
 
     res = _mutate(ticket_id, _run)
     if res['success']:
