@@ -929,12 +929,21 @@ def atm_import():
 
     imported = 0
     db_errors = []
+
+    def _nn(v):
+        # CSV gives '' for empty cells — Postgres DATE/NUMERIC reject ''.
+        if v is None:
+            return None
+        v = str(v).strip()
+        return v or None
+
     if rows:
         with get_db() as conn:
             cur = conn.cursor()
             for row in rows:
+                cur.execute("SAVEPOINT atm_import_row")
                 try:
-                    name = row.get('atm_name') or row.get('branch') or row.get('atm_id')
+                    name = _nn(row.get('atm_name')) or _nn(row.get('branch')) or _nn(row.get('atm_id'))
                     cur.execute("""
                         INSERT INTO atm_locations
                             (atm_id, atm_name, branch, district, city, region, latitude, longitude,
@@ -959,17 +968,20 @@ def atm_import():
                             snmp_version = COALESCE(EXCLUDED.snmp_version, atm_locations.snmp_version),
                             ej_log_format = COALESCE(EXCLUDED.ej_log_format, atm_locations.ej_log_format)
                     """, (
-                        row['atm_id'], name, row.get('branch'), row.get('district'),
-                        row.get('city'), row.get('region'), row.get('latitude'),
-                        row.get('longitude'), row.get('terminal_id'),
-                        row.get('vendor'), row.get('model'),
-                        row.get('install_date'), row.get('status'),
-                        row.get('ip_address') or None, row.get('snmp_community') or None,
-                        row.get('snmp_version') or None, row.get('ej_log_format') or None
+                        _nn(row.get('atm_id')), name, _nn(row.get('branch')), _nn(row.get('district')),
+                        _nn(row.get('city')), _nn(row.get('region')), _nn(row.get('latitude')),
+                        _nn(row.get('longitude')), _nn(row.get('terminal_id')),
+                        _nn(row.get('vendor')), _nn(row.get('model')),
+                        _nn(row.get('install_date')), _nn(row.get('status')),
+                        _nn(row.get('ip_address')), _nn(row.get('snmp_community')),
+                        _nn(row.get('snmp_version')), _nn(row.get('ej_log_format'))
                     ))
+                    cur.execute("RELEASE SAVEPOINT atm_import_row")
                     imported += 1
                 except Exception as e:
-                    db_errors.append({'atm_id': row['atm_id'], 'error': str(e)})
+                    cur.execute("ROLLBACK TO SAVEPOINT atm_import_row")
+                    cur.execute("RELEASE SAVEPOINT atm_import_row")
+                    db_errors.append({'atm_id': row.get('atm_id'), 'error': str(e)})
             conn.commit()
             # Auto-allocate simulator ports so imported ATMs behave like the others
             for row in rows:
