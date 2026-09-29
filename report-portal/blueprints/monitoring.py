@@ -115,16 +115,12 @@ def center():
     summary['up'] = sum(1 for h in hosts if h['state'] == 'UP')
     summary['down'] = sum(1 for h in hosts if h['state'] == 'DOWN')
 
-    # ── Active problems (severity/ack filtered client-side on cached rows) ──
+    # ── Active problems (summary over ALL cached rows; severity/ack
+    # filters apply to the displayed list only) ──
+    all_problems = []
     for p in raw_problems:
-        if severity in SEVERITIES and str(p.get('severity')) != severity:
-            continue
-        if ack == 'no' and str(p.get('acknowledged')) == '1':
-            continue
-        if ack == 'yes' and str(p.get('acknowledged')) != '1':
-            continue
         host = (p.get('hosts') or [{}])[0]
-        problems.append({
+        all_problems.append({
             'eventid': p.get('eventid'),
             'clock': _fmt_clock(p.get('clock')),
             'name': p.get('name'),
@@ -134,9 +130,13 @@ def center():
             'host': host.get('name') or host.get('host') or '—',
             'objectid': p.get('objectid'),
         })
+    problems = [p for p in all_problems
+                if (severity not in SEVERITIES or p['severity'] == severity)
+                and (ack != 'no' or not p['acknowledged'])
+                and (ack != 'yes' or p['acknowledged'])]
     # Fallback: some builds drop selectHosts on problem.get — resolve the
     # missing host names through their triggers in one batch call.
-    missing = [p['objectid'] for p in problems
+    missing = [p['objectid'] for p in all_problems
                if p['host'] == '—' and p.get('objectid')]
     if missing:
         auth = _zbx_login()
@@ -149,13 +149,14 @@ def center():
         for t in triggers:
             th = (t.get('hosts') or [{}])[0]
             tmap[t.get('triggerid')] = th.get('name') or th.get('host') or '—'
-        for p in problems:
+        for p in all_problems:
             if p['host'] == '—' and p.get('objectid') in tmap:
                 p['host'] = tmap[p['objectid']]
-    summary['problems'] = len(problems)
-    summary['unacked'] = sum(1 for p in problems if not p['acknowledged'])
+    summary['problems'] = len(all_problems)
+    summary['unacked'] = sum(1 for p in all_problems if not p['acknowledged'])
 
     return render_template('monitoring_center.html',
                            problems=problems, hosts=hosts, summary=summary,
                            severities=SEVERITIES, sev_colors=SEV_COLORS,
-                           f_severity=severity, f_ack=ack, error=error)
+                           f_severity=severity, f_ack=ack, error=error,
+                           at_cap=len(raw_problems) >= 100)

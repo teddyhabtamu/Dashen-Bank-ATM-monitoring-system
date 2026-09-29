@@ -66,9 +66,9 @@
   {% endif %}
 
   <div class="stat-row">
-    <div class="stat-card open"><div class="num">{{ counts.open }}</div><div class="lbl">Open</div></div>
-    <div class="stat-card"><div class="num">{{ counts.pending }}</div><div class="lbl">Pending</div></div>
-    <div class="stat-card solved"><div class="num">{{ counts.solved }}</div><div class="lbl">Solved / Closed</div></div>
+    <div class="stat-card open"><div class="num">{{ counts.open }}</div><div class="lbl">Open{% if at_cap %} · latest 100{% endif %}</div></div>
+    <div class="stat-card"><div class="num">{{ counts.pending }}</div><div class="lbl">Pending{% if at_cap %} · latest 100{% endif %}</div></div>
+    <div class="stat-card solved"><div class="num">{{ counts.solved }}</div><div class="lbl">Solved / Closed{% if at_cap %} · latest 100{% endif %}</div></div>
   </div>
 
   <div class="tab-bar">

@@ -546,7 +546,7 @@ def board():
         logger.warning('unread computation failed (non-fatal): %s', e)
 
     return render_template('incidents.html', tickets=tickets, counts=counts,
-                           f_status=status, error=error)
+                           f_status=status, error=error, at_cap=len(raw) >= 100)
 
 
 @bp.route('/<int:ticket_id>')

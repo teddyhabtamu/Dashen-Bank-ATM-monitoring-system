@@ -50,7 +50,7 @@
 
   <div class="card" style="margin-bottom:16px">
     <div class="card-header">
-      <h2>Active Problems ({{ problems|length }})</h2>
+      <h2>Active Problems ({{ problems|length }}){% if at_cap %} — latest 100{% endif %}</h2>
       <form method="get" action="/monitoring" class="filter-row">
         <select name="severity" onchange="this.form.submit()">
           <option value="">All Severities</option>

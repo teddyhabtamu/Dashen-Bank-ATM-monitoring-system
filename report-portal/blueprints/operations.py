@@ -89,9 +89,12 @@ def _all(sql, params=()):
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def dashboard():
     # ── Stat row ──
+    # EAT day boundary: CURRENT_DATE is DB (UTC) midnight = 03:00 EAT, which
+    # misattributes the 00:00–03:00 window. EAT midnight as a UTC instant is
+    # what "today" means everywhere else in the UI.
     cash = _one("""SELECT COALESCE(SUM(amount), 0) FROM atm_transactions
                    WHERE status = 'APPROVED' AND txn_type = 'WITHDRAWAL'
-                   AND recorded_at >= CURRENT_DATE""")
+                   AND recorded_at >= date_trunc('day', NOW() AT TIME ZONE 'Africa/Addis_Ababa') AT TIME ZONE 'Africa/Addis_Ababa'""")
     cash_today = float(cash[0]) if cash and cash[0] is not None else 0.0
 
     rate = _one("""SELECT ROUND(100.0 * SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END)
