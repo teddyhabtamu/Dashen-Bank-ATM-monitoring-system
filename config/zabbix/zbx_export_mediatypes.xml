@@ -427,6 +427,23 @@ function kill() {
     } catch (e) {}
 }
 
+function glpi_search_id(entity, name) {
+    /* Resolve a GLPI object id by exact name. Returns 0 on any failure. */
+    try {
+        var r = new HttpRequest();
+        r.addHeader('Session-Token: ' + session_token);
+        r.addHeader('App-Token: ' + app_token);
+        var res = JSON.parse(r.get(glpi_url + '/' + entity +
+            '/?searchText=' + encodeURIComponent(name) + '&amp;range=0-5'));
+        if (res &amp;&amp; res.length &gt; 0) {
+            for (var i = 0; i &lt; res.length; i++) {
+                if (res[i] &amp;&amp; res[i].name === name) return parseInt(res[i].id, 10);
+            }
+        }
+    } catch (e) {}
+    return 0;
+}
+
 /* ==========================================================
    PROCESSING ENGINE
    ========================================================== */
@@ -524,6 +541,22 @@ if (mode === 'recovery') {
             grp_id = routes[i][2];
             sla_id = routes[i][3];
             break;
+        }
+    }
+
+    /* Vendor isolation: hardware alerts for a known vendor (NCR/GRG) route to
+       that vendor's own category + field group, so each vendor's technicians
+       see only their tickets. Only overrides the shared field-engineers
+       catch-all (group 1) — network/cash/ops-center routing is untouched.
+       Name-resolved (stable across environments); any failure keeps the
+       keyword routing above. */
+    var vendor_up = String(vendor || '').toUpperCase();
+    if ((vendor_up === 'NCR' || vendor_up === 'GRG') &amp;&amp; grp_id === 1) {
+        var vcat = glpi_search_id('ITILCategory', vendor_up + ' ATM Hardware');
+        var vgrp = glpi_search_id('Group', vendor_up + ' Field Engineers');
+        if (vcat &gt; 0 &amp;&amp; vgrp &gt; 0) {
+            cat_id = vcat;
+            grp_id = vgrp;
         }
     }
 

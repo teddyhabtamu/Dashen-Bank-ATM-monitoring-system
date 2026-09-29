@@ -108,6 +108,8 @@ def setup_glpi():
     print("\n[1] Creating/updating support groups...")
     groups_def = [
         {"name": "ATM Field Engineers",   "comment": "On-site ATM technicians"},
+        {"name": "NCR Field Engineers",   "comment": "NCR vendor technicians — NCR tickets only"},
+        {"name": "GRG Field Engineers",   "comment": "GRG vendor technicians — GRG tickets only"},
         {"name": "ATM Operations Center", "comment": "Central monitoring and operations"},
         {"name": "Cash Operations Team",  "comment": "Cash replenishment team"},
         {"name": "IT Network Team",       "comment": "Network infrastructure support"},
@@ -157,8 +159,8 @@ def setup_glpi():
     # Leaf categories (actual ticket routing) with parent, group & SLA
     # Mapping: category → (parent_name, group_name, sla_name)
     leaves_map = [
-        ("NCR ATM Hardware",      "ATM Hardware Fault", "ATM Field Engineers",   "ATM High SLA"),
-        ("GRG ATM Hardware",      "ATM Hardware Fault", "ATM Field Engineers",   "ATM High SLA"),
+        ("NCR ATM Hardware",      "ATM Hardware Fault", "NCR Field Engineers",   "ATM High SLA"),
+        ("GRG ATM Hardware",      "ATM Hardware Fault", "GRG Field Engineers",   "ATM High SLA"),
         ("Hardware Error",        "ATM Hardware Fault", "ATM Field Engineers",   "ATM High SLA"),
         ("Camera Failure",        "ATM Hardware Fault", "ATM Field Engineers",   "ATM Medium SLA"),
         ("Power / UPS Alert",     "ATM Hardware Fault", "ATM Field Engineers",   "ATM High SLA"),
