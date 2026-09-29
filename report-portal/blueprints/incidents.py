@@ -260,6 +260,58 @@ def _subitems(token, ticket_id, sub):
     return []
 
 
+def _subitems_of(token, itemtype, item_id, sub):
+    """Sub-items of any parent (followups/solutions link THEIR OWN documents)."""
+    ok, data = _api(token, 'GET', f'{itemtype}/{item_id}/{sub}/', None)
+    if ok and isinstance(data, list):
+        return data
+    return []
+
+
+def _linked_docs(token, itemtype, item_id, limit=10):
+    """Documents attached to one ticket/followup/solution/task. Never raises."""
+    docs = []
+    try:
+        for link in _subitems_of(token, itemtype, item_id, 'Document_Item')[:limit]:
+            try:
+                doc_id = int(link.get('documents_id') or 0)
+            except (TypeError, ValueError):
+                continue
+            if not doc_id or any(d['id'] == doc_id for d in docs):
+                continue
+            ok, meta = _api(token, 'GET', f'Document/{doc_id}', None)
+            if ok and isinstance(meta, dict):
+                fname = meta.get('filename') or meta.get('name') or f'file-{doc_id}'
+                docs.append({'id': doc_id, 'name': fname,
+                             'mime': (meta.get('mime') or ''),
+                             'size': meta.get('filesize')})
+    except Exception as e:
+        logger.warning('attachment listing failed for %s %s: %s', itemtype, item_id, e)
+    return docs
+
+
+def _ticket_item_ids(token, ticket_id):
+    """All GLPI item ids belonging to a ticket (for download authorization)."""
+    ids = {'Ticket': {int(ticket_id)}, 'ITILFollowup': set(),
+           'TicketFollowup': set(), 'ITILSolution': set(), 'TicketTask': set()}
+    try:
+        for src in ('ITILFollowup', 'TicketFollowup'):
+            for f in _subitems(token, ticket_id, src):
+                try:
+                    ids[src].add(int(f.get('id')))
+                except (TypeError, ValueError):
+                    pass
+        for sub, key in (('ITILSolution', 'ITILSolution'), ('TicketTask', 'TicketTask')):
+            for s in _subitems(token, ticket_id, sub):
+                try:
+                    ids[key].add(int(s.get('id')))
+                except (TypeError, ValueError):
+                    pass
+    except Exception as e:
+        logger.warning('item id listing failed for ticket %s: %s', ticket_id, e)
+    return ids
+
+
 def _user_label(token, users_id, cache):
     if not users_id or users_id in cache:
         return cache.get(users_id, '—')
@@ -366,23 +418,26 @@ def detail(ticket_id):
                     'updated': _fmt_ts(t.get('date_mod')),
                     'content': _clean_html(t.get('content') or '', ticket_id),
                 }
-                for f in _subitems(token, ticket_id, 'ITILFollowup') + \
-                         _subitems(token, ticket_id, 'TicketFollowup'):
-                    html = _clean_html(f.get('content') or '', ticket_id)
-                    timeline.append({
-                        'kind': 'followup',
-                        'fid': f.get('id'),
-                        'author': _user_label(token, f.get('users_id'), names),
-                        'date': _fmt_ts(f.get('date_creation') or f.get('date')),
-                        'private': bool(int(f.get('is_private') or 0)),
-                        'html': html,
-                        'mine': '(Report Portal)' in html,
-                        'files': [],
-                    })
+                followup_rows = []
+                for src in ('ITILFollowup', 'TicketFollowup'):
+                    for f in _subitems(token, ticket_id, src):
+                        html = _clean_html(f.get('content') or '', ticket_id)
+                        followup_rows.append({
+                            'kind': 'followup',
+                            'fid': f.get('id'),
+                            'fsrc': src,
+                            'author': _user_label(token, f.get('users_id'), names),
+                            'date': _fmt_ts(f.get('date_creation') or f.get('date')),
+                            'private': bool(int(f.get('is_private') or 0)),
+                            'html': html,
+                            'mine': '(Report Portal)' in html,
+                            'files': [],
+                        })
+                timeline.extend(followup_rows)
                 for s in _subitems(token, ticket_id, 'ITILSolution'):
                     timeline.append({
                         'kind': 'solution',
-                        'fid': None,
+                        'sid': s.get('id'),
                         'author': _user_label(token, s.get('users_id'), names),
                         'date': _fmt_ts(s.get('date_creation') or s.get('date')),
                         'private': False,
@@ -413,41 +468,21 @@ def detail(ticket_id):
                         unique.append(m)
                 timeline = unique
                 timeline.sort(key=lambda m: m['date'])
-                # Attachments: link documents to their followup (or ticket).
-                docs_meta = {}
-                for link in _subitems(token, ticket_id, 'Document_Item'):
+                # Attachments live on each message itself (followup/solution/task
+                # ids — NOT the ticket id), so walk every entry's own links.
+                for m in timeline:
                     try:
-                        doc_id = int(link.get('documents_id') or 0)
+                        if m['kind'] == 'followup' and m.get('fid') is not None:
+                            fid = int(m['fid'])
+                            m['files'] = _linked_docs(token, m.get('fsrc') or 'ITILFollowup', fid)
+                            if not m['files']:
+                                alt = 'TicketFollowup' if (m.get('fsrc') or '') == 'ITILFollowup' else 'ITILFollowup'
+                                m['files'] = _linked_docs(token, alt, fid)
+                        elif m['kind'] == 'solution' and m.get('sid') is not None:
+                            m['files'] = _linked_docs(token, 'ITILSolution', int(m['sid']))
                     except (TypeError, ValueError):
                         continue
-                    if not doc_id or doc_id in docs_meta:
-                        continue
-                    ok, meta = _api(token, 'GET', f'Document/{doc_id}', None)
-                    if ok and isinstance(meta, dict):
-                        fname = meta.get('filename') or meta.get('name') or f'file-{doc_id}'
-                        docs_meta[doc_id] = {
-                            'id': doc_id, 'name': fname,
-                            'mime': (meta.get('mime') or ''),
-                            'size': meta.get('filesize'),
-                        }
-                ticket_files = []
-                if docs_meta:
-                    followup_kinds = {'ITILFollowup', 'TicketFollowup'}
-                    placed_ids = set()
-                    for link in _subitems(token, ticket_id, 'Document_Item'):
-                        try:
-                            doc_id = int(link.get('documents_id') or 0)
-                            fid = int(link.get('items_id') or 0)
-                        except (TypeError, ValueError):
-                            continue
-                        if doc_id not in docs_meta or link.get('itemtype') not in followup_kinds:
-                            continue
-                        for m in timeline:
-                            if m.get('fid') == fid and m['kind'] == 'followup':
-                                if docs_meta[doc_id] not in m['files']:
-                                    m['files'].append(docs_meta[doc_id])
-                                placed_ids.add(doc_id)
-                    ticket_files = [d for i, d in docs_meta.items() if i not in placed_ids]
+                ticket_files = _linked_docs(token, 'Ticket', ticket_id)
         finally:
             _close(token)
     return render_template('incidents_detail.html', ticket=ticket,
@@ -464,15 +499,18 @@ def attachment(ticket_id, doc_id):
     if not token:
         return 'GLPI unreachable', 502
     try:
-        linked = False
-        for link in _subitems(token, ticket_id, 'Document_Item'):
-            try:
-                if int(link.get('documents_id') or 0) == doc_id:
-                    linked = True
-                    break
-            except (TypeError, ValueError):
-                continue
-        if not linked:
+        # Authorize against every item of this ticket (ticket itself +
+        # its followups, solutions, tasks) — never serve by bare doc id.
+        allowed = set()
+        for itemtype, ids in _ticket_item_ids(token, ticket_id).items():
+            for item_id in ids:
+                for link in _subitems_of(token, itemtype, item_id, 'Document_Item'):
+                    try:
+                        if int(link.get('documents_id') or 0) == doc_id:
+                            allowed.add(doc_id)
+                    except (TypeError, ValueError):
+                        continue
+        if doc_id not in allowed:
             return 'Not found', 404
         ok, meta = _api(token, 'GET', f'Document/{doc_id}', None)
         if not ok or not isinstance(meta, dict):
