@@ -184,6 +184,66 @@ def _actor():
         return 'system'
 
 
+_ALLOWED_TAGS = {'p', 'br', 'b', 'strong', 'i', 'em', 'u', 'ul', 'ol', 'li',
+                 'a', 'blockquote', 'div', 'span', 'pre', 'code', 'hr'}
+
+
+def _clean_html(html):
+    """Strip everything but simple formatting (GLPI stores rich text)."""
+    import re
+    from html.parser import HTMLParser
+
+    class _P(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.out = []
+
+        def handle_starttag(self, tag, attrs):
+            if tag in _ALLOWED_TAGS:
+                if tag == 'a':
+                    href = next((v for k, v in attrs if k == 'href'), '#')
+                    href = href.replace('"', '')
+                    self.out.append(f'<a href="{href}" target="_blank" rel="noopener">')
+                elif tag == 'br':
+                    self.out.append('<br>')
+                else:
+                    self.out.append(f'<{tag}>')
+
+        def handle_endtag(self, tag):
+            if tag in _ALLOWED_TAGS and tag != 'br':
+                self.out.append(f'</{tag}>')
+
+        def handle_data(self, data):
+            self.out.append(data.replace('<', '&lt;').replace('>', '&gt;'))
+
+    p = _P()
+    try:
+        p.feed(html or '')
+    except Exception:
+        return re.sub(r'<[^>]+>', '', html or '')
+    return ''.join(p.out).strip()
+
+
+def _subitems(token, ticket_id, sub):
+    ok, data = _api(token, 'GET', f'Ticket/{ticket_id}/{sub}/', None)
+    if ok and isinstance(data, list):
+        return data
+    return []
+
+
+def _user_label(token, users_id, cache):
+    if not users_id or users_id in cache:
+        return cache.get(users_id, '—')
+    ok, data = _api(token, 'GET', f'User/{users_id}', None)
+    if ok and isinstance(data, dict):
+        name = ' '.join(p for p in ((data.get('realname') or '').strip(),
+                                    (data.get('firstname') or '').strip()) if p)
+        cache[users_id] = name or (data.get('name') or f'#{users_id}')
+    else:
+        cache[users_id] = f'#{users_id}'
+    return cache[users_id]
+
+
 @bp.route('')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
@@ -235,6 +295,78 @@ def board():
 
     return render_template('incidents.html', tickets=tickets, counts=counts,
                            f_status=status, error=error)
+
+
+@bp.route('/<int:ticket_id>')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def detail(ticket_id):
+    error = None
+    ticket, timeline = None, []
+    token = _session()
+    if not token:
+        error = ('Cannot reach the GLPI API — check GLPI_APP_TOKEN / GLPI_USER / '
+                 'GLPI_API_PASSWORD and that the API client is enabled.')
+    else:
+        try:
+            r = requests.get(f'{GLPI_URL}/apirest.php/Ticket/{ticket_id}',
+                             params={'expand_dropdowns': 'true'},
+                             headers={'App-Token': GLPI_APP_TOKEN, 'Session-Token': token},
+                             timeout=12)
+            if r.status_code != 200:
+                error = f'Ticket {ticket_id} not found in GLPI.'
+            else:
+                t = r.json()
+                try:
+                    st = int(t.get('status', 0))
+                except (TypeError, ValueError):
+                    st = 0
+                try:
+                    pr = int(t.get('priority', 0))
+                except (TypeError, ValueError):
+                    pr = 0
+                names = {}
+                ticket = {
+                    'id': t.get('id'), 'title': t.get('name') or '(no title)',
+                    'status': STATUS_NAMES.get(st, str(st)), 'status_n': st,
+                    'priority': PRIORITY_NAMES.get(pr, str(pr) if pr else '—'),
+                    'priority_n': pr,
+                    'category': t.get('itilcategories_id') or '—',
+                    'requester': t.get('users_id_recipient') or '—',
+                    'created': _fmt_ts(t.get('date_creation')),
+                    'updated': _fmt_ts(t.get('date_mod')),
+                    'content': _clean_html(t.get('content') or ''),
+                }
+                for f in _subitems(token, ticket_id, 'ITILFollowup') + \
+                         _subitems(token, ticket_id, 'TicketFollowup'):
+                    timeline.append({
+                        'kind': 'followup',
+                        'author': _user_label(token, f.get('users_id'), names),
+                        'date': _fmt_ts(f.get('date_creation') or f.get('date')),
+                        'private': bool(int(f.get('is_private') or 0)),
+                        'html': _clean_html(f.get('content') or ''),
+                    })
+                for s in _subitems(token, ticket_id, 'ITILSolution'):
+                    timeline.append({
+                        'kind': 'solution',
+                        'author': _user_label(token, s.get('users_id'), names),
+                        'date': _fmt_ts(s.get('date_creation') or s.get('date')),
+                        'private': False,
+                        'html': _clean_html(s.get('content') or ''),
+                    })
+                for k in _subitems(token, ticket_id, 'TicketTask'):
+                    timeline.append({
+                        'kind': 'task',
+                        'author': _user_label(token, k.get('users_id'), names),
+                        'date': _fmt_ts(k.get('date_creation') or k.get('date')),
+                        'private': False,
+                        'html': _clean_html(
+                            f"<b>{k.get('taskcategories_id') or 'Task'}</b><br>" + (k.get('content') or '')),
+                    })
+        finally:
+            _close(token)
+    return render_template('incidents_detail.html', ticket=ticket,
+                           timeline=timeline, error=error)
 
 
 @bp.route('/<int:ticket_id>/acknowledge', methods=['POST'])

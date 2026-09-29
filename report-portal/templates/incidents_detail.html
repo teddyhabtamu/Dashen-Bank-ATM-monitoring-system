@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Ticket {% if ticket %}#{{ ticket.id }}{% endif %}{% endblock %}
+{% block extra_style %}
+.back-link{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#012169;text-decoration:none;margin-bottom:12px}
+.back-link:hover{text-decoration:underline}
+.t-head{background:#fff;border-radius:12px;border:1px solid #EEF1F6;padding:18px 20px;margin-bottom:14px}
+.t-head h2{font-size:16px;font-weight:700;color:#0F172A;margin:0 0 8px}
+.t-meta{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#64748B}
+.t-meta b{color:#0F172A}
+.t-desc{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:12px 16px;font-size:13px;color:#14532D;margin-top:12px;line-height:1.6}
+.t-desc:empty{display:none}
+.tl-item{background:#fff;border-radius:12px;border:1px solid #EEF1F6;padding:14px 16px;margin-bottom:10px}
+.tl-item.solution{border-color:#A7F3D0;background:#F0FDF9}
+.tl-item.task{border-color:#CBD5E1}
+.tl-head{display:flex;gap:8px;align-items:center;font-size:11px;color:#64748B;margin-bottom:8px;flex-wrap:wrap}
+.tl-who{font-weight:700;color:#0F172A;font-size:12px}
+.tl-kind{display:inline-block;font-size:10px;font-weight:700;padding:1px 8px;border-radius:100px;background:#F1F5F9;color:#475569}
+.tl-kind.solution{background:#A7F3D0;color:#065F46}
+.tl-kind.task{background:#DBEAFE;color:#1D4ED8}
+.tl-kind.private{background:#FEE2E2;color:#991B1B}
+.tl-body{font-size:13px;color:#1E293B;line-height:1.65}
+.tl-body p{margin:0 0 8px}
+.reply-box{background:#fff;border-radius:12px;border:1px solid #EEF1F6;padding:16px 18px;margin-top:4px}
+.reply-box textarea{width:100%;box-sizing:border-box;min-height:80px;padding:10px 12px;border:1px solid #E4E9F1;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical}
+.reply-box textarea:focus{border-color:#012169}
+.err-banner{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;padding:12px 16px;border-radius:10px;font-size:12px;margin-bottom:16px}
+.empty-row{text-align:center;color:#94A3B8;padding:22px;font-size:13px;background:#fff;border-radius:12px;border:1px solid #EEF1F6}
+{% endblock %}
+{% block body %}
+<div class="page-content">
+  <a class="back-link" href="/incidents">← Back to tickets</a>
+
+  {% if error %}
+  <div class="err-banner">{{ error }}</div>
+  {% elif ticket %}
+  <div class="t-head">
+    <h2>#{{ ticket.id }} — {{ ticket.title }}</h2>
+    <div class="t-meta">
+      <span>Status: <b>{{ ticket.status }}</b></span>
+      <span>Priority: <b>{{ ticket.priority }}</b></span>
+      <span>Category: <b>{{ ticket.category }}</b></span>
+      <span>Opened: <b>{{ ticket.created }}</b></span>
+      <span>Updated: <b>{{ ticket.updated }}</b></span>
+    </div>
+    {% if ticket.content %}<div class="t-desc">{{ ticket.content|safe }}</div>{% endif %}
+  </div>
+
+  {% for m in timeline %}
+  <div class="tl-item {% if m.kind == 'solution' %}solution{% elif m.kind == 'task' %}task{% endif %}">
+    <div class="tl-head">
+      <span class="tl-who">{{ m.author }}</span>
+      <span>{{ m.date }}</span>
+      <span class="tl-kind {% if m.kind == 'solution' %}solution{% elif m.kind == 'task' %}task{% endif %}">{{ m.kind }}</span>
+      {% if m.private %}<span class="tl-kind private">private</span>{% endif %}
+    </div>
+    <div class="tl-body">{{ m.html|safe }}</div>
+  </div>
+  {% else %}
+  <div class="empty-row">No conversation yet — be the first to reply below.</div>
+  {% endfor %}
+
+  {% if session.get('role') in ('admin', 'operator') %}
+  <div class="reply-box">
+    <div style="font-size:13px;font-weight:700;color:#012169;margin-bottom:8px">Reply as {{ session.get('username') }}</div>
+    <textarea id="replyText" placeholder="Type an update for the technician…"></textarea>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px">
+      {% if ticket.status_n == 1 %}
+      <button class="act-btn" id="ackBtn" onclick="replyAction('acknowledge', null)" style="padding:8px 18px">Acknowledge</button>
+      {% endif %}
+      {% if ticket.status_n in (1, 2, 3, 4) %}
+      <button class="act-btn solve" id="solveBtn" onclick="replyAction('solve', null)" style="padding:8px 18px">Solve</button>
+      {% endif %}
+      <button class="act-btn" id="replyBtn" onclick="sendReply()" style="padding:8px 18px;background:#012169;color:#fff;border-color:#012169">Send reply</button>
+    </div>
+  </div>
+  <script>
+  function replyAction(kind, btn){
+    var url = kind === 'acknowledge'
+      ? '/incidents/{{ ticket.id }}/acknowledge'
+      : '/incidents/{{ ticket.id }}/solve';
+    var body = null;
+    if(kind === 'solve'){
+      var s = document.getElementById('replyText').value.trim();
+      if(!s){ showToast('Describe the resolution first — it becomes the GLPI solution.', 'error'); return; }
+      body = {solution: s};
+    }
+    ticketPost(url, body, btn);
+  }
+  function sendReply(){
+    var c = document.getElementById('replyText').value.trim();
+    if(!c){ showToast('Type a reply first.', 'error'); return; }
+    ticketPost('/incidents/{{ ticket.id }}/followup', {content: c},
+      document.getElementById('replyBtn'));
+  }
+  function ticketPost(url, body, btn){
+    if(btn){ btn.disabled = true; btn.dataset.label = btn.textContent; btn.textContent = 'Working…'; }
+    fetch(url, {method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+      body: body ? JSON.stringify(body) : '{}'})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.success){ showToast(data.message, 'success'); setTimeout(function(){ location.reload(); }, 900); }
+      else { showToast(data.message || 'Action failed.', 'error'); if(btn){ btn.disabled = false; btn.textContent = btn.dataset.label; } }
+    })
+    .catch(function(){ showToast('Network error.', 'error'); if(btn){ btn.disabled = false; } });
+  }
+  </script>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}
