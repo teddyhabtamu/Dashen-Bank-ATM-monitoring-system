@@ -9,17 +9,26 @@
 .t-meta b{color:#0F172A}
 .t-desc{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:12px 16px;font-size:13px;color:#14532D;margin-top:12px;line-height:1.6}
 .t-desc:empty{display:none}
-.tl-item{background:#fff;border-radius:12px;border:1px solid #EEF1F6;padding:14px 16px;margin-bottom:10px}
-.tl-item.solution{border-color:#A7F3D0;background:#F0FDF9}
-.tl-item.task{border-color:#CBD5E1}
-.tl-head{display:flex;gap:8px;align-items:center;font-size:11px;color:#64748B;margin-bottom:8px;flex-wrap:wrap}
-.tl-who{font-weight:700;color:#0F172A;font-size:12px}
-.tl-kind{display:inline-block;font-size:10px;font-weight:700;padding:1px 8px;border-radius:100px;background:#F1F5F9;color:#475569}
-.tl-kind.solution{background:#A7F3D0;color:#065F46}
-.tl-kind.task{background:#DBEAFE;color:#1D4ED8}
-.tl-kind.private{background:#FEE2E2;color:#991B1B}
-.tl-body{font-size:13px;color:#1E293B;line-height:1.65}
-.tl-body p{margin:0 0 8px}
+.chat{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+.msg-row{display:flex;gap:8px;align-items:flex-end;max-width:78%}
+.msg-row.mine{align-self:flex-end;flex-direction:row-reverse}
+.msg-theirs{width:100%;display:flex}
+.avatar{width:30px;height:30px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;background:#64748B}
+.msg-row.mine .avatar{background:#012169}
+.bubble{background:#fff;border:1px solid #EEF1F6;border-radius:4px 14px 14px 14px;padding:10px 14px;box-shadow:0 1px 2px rgba(1,33,105,.05);min-width:0}
+.msg-row.mine .bubble{background:#012169;border-color:#012169;color:#fff;border-radius:14px 4px 14px 14px}
+.bubble-head{display:flex;gap:8px;align-items:baseline;margin-bottom:4px;flex-wrap:wrap}
+.bubble-who{font-weight:700;font-size:12px;color:#0F172A}
+.msg-row.mine .bubble-who{color:#fff}
+.bubble-time{font-size:10px;color:#94A3B8}
+.msg-row.mine .bubble-time{color:rgba(255,255,255,.65)}
+.bubble-kind{display:inline-block;font-size:9px;font-weight:700;padding:1px 7px;border-radius:100px;background:#F1F5F9;color:#475569}
+.msg-row.mine .bubble-kind{background:rgba(255,255,255,.18);color:#fff}
+.bubble-kind.private{background:#FEE2E2;color:#991B1B}
+.bubble-text{font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.bubble-text p{margin:0 0 6px}
+.sys-note{align-self:center;font-size:11px;color:#64748B;background:#F1F5F9;border-radius:100px;padding:4px 14px;max-width:90%;text-align:center}
+.sys-note b{color:#0F172A}
 .reply-box{background:#fff;border-radius:12px;border:1px solid #EEF1F6;padding:16px 18px;margin-top:4px}
 .reply-box textarea{width:100%;box-sizing:border-box;min-height:80px;padding:10px 12px;border:1px solid #E4E9F1;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical}
 .reply-box textarea:focus{border-color:#012169}
@@ -45,19 +54,31 @@
     {% if ticket.content %}<div class="t-desc">{{ ticket.content|safe }}</div>{% endif %}
   </div>
 
+  <div class="chat">
   {% for m in timeline %}
-  <div class="tl-item {% if m.kind == 'solution' %}solution{% elif m.kind == 'task' %}task{% endif %}">
-    <div class="tl-head">
-      <span class="tl-who">{{ m.author }}</span>
-      <span>{{ m.date }}</span>
-      <span class="tl-kind {% if m.kind == 'solution' %}solution{% elif m.kind == 'task' %}task{% endif %}">{{ m.kind }}</span>
-      {% if m.private %}<span class="tl-kind private">private</span>{% endif %}
+  {% if m.kind in ('solution', 'task') %}
+  <div class="sys-note">{{ 'Solution' if m.kind == 'solution' else 'Task' }} by <b>{{ m.author }}</b> · {{ m.date }}</div>
+  <div class="tl-item" style="background:#F0FDF9;border:1px solid #A7F3D0;border-radius:12px;padding:12px 16px;font-size:13px;line-height:1.65">{{ m.html|safe }}</div>
+  {% else %}
+  <div class="msg-row {% if m.mine %}mine{% endif %}">
+    {% if not m.mine %}<div class="avatar">{{ m.author[:2]|upper }}</div>{% endif %}
+    <div style="min-width:0;max-width:100%">
+      <div class="bubble">
+        <div class="bubble-head">
+          <span class="bubble-who">{{ m.author }}</span>
+          <span class="bubble-time">{{ m.date }}</span>
+          {% if m.private %}<span class="bubble-kind private">private</span>{% endif %}
+        </div>
+        <div class="bubble-text">{{ m.html|safe }}</div>
+      </div>
     </div>
-    <div class="tl-body">{{ m.html|safe }}</div>
+    {% if m.mine %}<div class="avatar">{{ m.author[:2]|upper }}</div>{% endif %}
   </div>
+  {% endif %}
   {% else %}
   <div class="empty-row">No conversation yet — be the first to reply below.</div>
   {% endfor %}
+  </div>
 
   {% if session.get('role') in ('admin', 'operator') %}
   <div class="reply-box">

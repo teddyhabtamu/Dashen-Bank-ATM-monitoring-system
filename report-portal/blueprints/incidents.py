@@ -339,12 +339,14 @@ def detail(ticket_id):
                 }
                 for f in _subitems(token, ticket_id, 'ITILFollowup') + \
                          _subitems(token, ticket_id, 'TicketFollowup'):
+                    html = _clean_html(f.get('content') or '')
                     timeline.append({
                         'kind': 'followup',
                         'author': _user_label(token, f.get('users_id'), names),
                         'date': _fmt_ts(f.get('date_creation') or f.get('date')),
                         'private': bool(int(f.get('is_private') or 0)),
-                        'html': _clean_html(f.get('content') or ''),
+                        'html': html,
+                        'mine': '(Report Portal)' in html,
                     })
                 for s in _subitems(token, ticket_id, 'ITILSolution'):
                     timeline.append({
@@ -353,6 +355,7 @@ def detail(ticket_id):
                         'date': _fmt_ts(s.get('date_creation') or s.get('date')),
                         'private': False,
                         'html': _clean_html(s.get('content') or ''),
+                        'mine': False,
                     })
                 for k in _subitems(token, ticket_id, 'TicketTask'):
                     timeline.append({
@@ -362,7 +365,18 @@ def detail(ticket_id):
                         'private': False,
                         'html': _clean_html(
                             f"<b>{k.get('taskcategories_id') or 'Task'}</b><br>" + (k.get('content') or '')),
+                        'mine': False,
                     })
+                # ITILFollowup + TicketFollowup endpoints serve the same rows
+                # on some GLPI versions — collapse exact duplicates.
+                seen, unique = set(), []
+                for m in timeline:
+                    key = (m['kind'], m['date'], m['author'], m['html'][:120])
+                    if key not in seen:
+                        seen.add(key)
+                        unique.append(m)
+                timeline = unique
+                timeline.sort(key=lambda m: m['date'])
         finally:
             _close(token)
     return render_template('incidents_detail.html', ticket=ticket,
