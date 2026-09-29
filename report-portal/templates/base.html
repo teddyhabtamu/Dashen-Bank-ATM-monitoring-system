@@ -517,7 +517,10 @@ document.querySelectorAll('[href*="localhost"]').forEach(function(el){
 // ── SIDEBAR COLLAPSE ──
 (function(){
   var saved = localStorage.getItem('sidebarCollapsed');
-  if(saved === 'true') {
+  var transient = false;
+  try { transient = sessionStorage.getItem('navTempExpand') === '1';
+        sessionStorage.removeItem('navTempExpand'); } catch(e) {}
+  if(saved === 'true' && !transient) {
     document.getElementById('sidebar').classList.add('collapsed');
     var icon = document.querySelector('.collapse-icon polyline');
     if(icon) icon.setAttribute('points', '10 9 15 12 10 15');
@@ -538,12 +541,11 @@ function toggleNavGroup(btn){
   var s = document.getElementById('sidebar');
   var g = btn.closest('.nav-group');
   if(s.classList.contains('collapsed')){
-    // Collapsed: first click expands the sidebar (children are hidden
-    // while collapsed), second click toggles the group.
+    // Collapsed: expand transiently for picking. The flag makes the NEXT
+    // page load collapse again (selection closes the drawer); a manual
+    // expand via toggleCollapse stays persistent instead.
     s.classList.remove('collapsed');
-    localStorage.setItem('sidebarCollapsed', 'false');
-    var icon = s.querySelector('.collapse-icon polyline');
-    if(icon) icon.setAttribute('points', '16 15 11 12 16 9');
+    try { sessionStorage.setItem('navTempExpand', '1'); } catch(e) {}
     g.classList.add('open');
     btn.setAttribute('aria-expanded', 'true');
     return;
