@@ -954,6 +954,8 @@ def cash_log():
         errors.append('Cassette must be 1–4.')
     if notes_added <= 0:
         errors.append('Notes added must be a positive number.')
+    if notes_added > 100000:
+        errors.append('Notes added cannot exceed 100,000 per load.')
     if errors:
         flash('Not saved: ' + ' '.join(errors), 'error')
         return redirect('/admin/cash')
