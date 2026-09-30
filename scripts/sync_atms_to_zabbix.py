@@ -352,6 +352,8 @@ def main():
                         help="Also import NCR/GRG templates from XML files")
     parser.add_argument("--csv", action="store_true",
                         help="Read ATM inventory from config/postgres/atm_locations.csv instead of the DB")
+    parser.add_argument("--pilot", type=int, default=0, metavar="N",
+                        help="Limit the run to the first N ATMs (pilot wave); 0 = all")
     args = parser.parse_args()
 
     if args.csv:
@@ -365,6 +367,9 @@ def main():
             atms = csv_atms()
             src = "CSV (DB unavailable)"
     print(f"Loaded {len(atms)} ATMs from {src}")
+    if args.pilot and args.pilot > 0:
+        atms = atms[:args.pilot]
+        print(f"Pilot mode: limited to first {len(atms)} ATM(s)")
 
     if not args.apply:
         dry_run(atms)

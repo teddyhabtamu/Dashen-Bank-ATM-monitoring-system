@@ -252,15 +252,16 @@ and `agent.ping` = 1.
 > **Incident Management → GLPI**. After deploy, open Report Portal and confirm each
 > link resolves to the correct UAT URL.
 
-**Critical UAT check — prove SNMP works** (this is the production-accurate path):
+**Critical UAT check — prove SNMP works** (production-accurate path — no
+simulators run on UAT, so there is nothing on `:1161`; poll the real test
+ATMs through the NAT addresses from §F):
 
 ```bash
-snmpwalk -v2c -c dashen_sim -On 127.0.0.1:1161 .1.3.6.1.4.1.99999.8
-snmpwalk -v2c -c dashen_sim -On 127.0.0.1:1162 .1.3.6.1.4.1.99999.9
-# Expect a row per OID, e.g. .1.3.6.1.4.1.99999.8.1.0 = INTEGER: 1
+snmpwalk -v2c -c <ATM_COMMUNITY> 10.41.30.114 .1.3.6.1.2.1.1
+snmpwalk -v2c -c <ATM_COMMUNITY> 10.41.30.115 .1.3.6.1.2.1.1
+# Expect system-MIB rows back. If empty: check the firewall exception
+# (UAT-01 172.22.10.45 → 10.41.30.114/.115 UDP 161) and the community string.
 ```
-
-If empty: `docker logs atm-sim-engine --tail 50` — look for `[SNMP] ... responder on UDP :1161`.
 
 ---
 

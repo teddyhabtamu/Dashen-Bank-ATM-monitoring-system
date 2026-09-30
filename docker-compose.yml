@@ -353,6 +353,8 @@ services:
     image: docker.elastic.co/beats/filebeat-oss:7.12.1
     container_name: filebeat
     user: root
+    environment:
+      ES_HOST: "${DATA_VM_IP:-172.22.10.60}:9200"
     ports:
       - "514:514/udp"
       - "514:514/tcp"

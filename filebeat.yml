@@ -31,7 +31,9 @@ filebeat.inputs:
     fields_under_root: true
 
 output.elasticsearch:
-  hosts: ["172.22.10.60:9200"]
+  # ES_HOST comes from the compose environment (DATA_VM_IP); the default
+  # preserves the UAT-02 target so existing deploys behave identically.
+  hosts: ["${ES_HOST:-172.22.10.60:9200}"]
   index: "atm-ej-live-%{+yyyy.MM.dd}"
   pipeline: "atm_ej_parser"
 
