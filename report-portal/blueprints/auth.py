@@ -390,7 +390,8 @@ def login():
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def profile():
     """Self-service account page (password change). All roles."""
-    return render_template('profile.html', username=session.get('username', ''))
+    return render_template('profile.html', username=session.get('username', ''),
+                           must_change=bool(session.get('must_change_pw')))
 
 
 @bp.route('/profile/password', methods=['POST'])
