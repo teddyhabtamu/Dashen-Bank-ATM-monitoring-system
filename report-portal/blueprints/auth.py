@@ -318,6 +318,10 @@ def login():
             return redirect(next_page)
 
         logger.warning('Login failed: user=%s from=%s', username, request.remote_addr)
+        try:
+            log_action('LOGIN_FAILED', f'user={username} from={request.remote_addr}')
+        except Exception:
+            pass
         error = 'Invalid username or password.'
         return render_template('login.html', error=error, next=next_page)
 

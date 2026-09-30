@@ -159,6 +159,15 @@ def _parse_amount(value):
         return None, f'Invalid amount {value!r}: enter a number.'
 
 
+def _valid_ej_date(value):
+    """YYYY-MM-DD or None if malformed (surfaces instead of an OS 400)."""
+    try:
+        date.fromisoformat((value or '').strip())
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
 def _build_must(keyword, card, date_from, date_to, atm_id,
                 event_type, status, min_amount, max_amount, auth_code):
     """
@@ -277,7 +286,9 @@ def ej_search():
         must, amount_error = _build_must(keyword, card, date_from, date_to, atm_id,
                                            event_type, status, min_amount, max_amount, auth_code)
 
-        if amount_error:
+        if not _valid_ej_date(date_from) or not _valid_ej_date(date_to):
+            error = 'Invalid date(s): use YYYY-MM-DD.'
+        elif amount_error:
             error = amount_error
         elif not must:
             error = "Please provide at least one search filter."
@@ -395,8 +406,11 @@ def ej_search_csv():
 
     must, amount_error = _build_must(keyword, card, date_from, date_to, atm_id,
                                        event_type, status, min_amount, max_amount, auth_code)
+    date_error = None
+    if not _valid_ej_date(date_from) or not _valid_ej_date(date_to):
+        date_error = 'Invalid date(s): use YYYY-MM-DD.'
     rows = []
-    if amount_error:
+    if amount_error or date_error:
         rows = []
     elif must:
         try:
@@ -428,6 +442,8 @@ def ej_search_csv():
     w   = csv.writer(buf)
     if amount_error:
         w.writerow([f'ERROR: {amount_error} Export cancelled — fix the amount and retry.'])
+    elif date_error:
+        w.writerow([f'ERROR: {date_error} Export cancelled.'])
     elif not rows and not must:
         w.writerow(['ERROR: No search filters provided. Export cancelled.'])
     elif not rows:
