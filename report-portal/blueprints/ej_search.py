@@ -137,6 +137,28 @@ def _is_junk_hit(src):
     return '|' not in (src.get('message') or '')
 
 
+def _clean_contains(value, limit=64):
+    """Strip ES wildcard specials from a contains-search input.
+
+    A bare `*` (or `***`) would otherwise compile to a leading-wildcard
+    full-index scan; stripping specials turns it into an empty filter
+    (clause skipped) instead of a cluster-wide DoS.
+    """
+    cleaned = re.sub(r'[*?%]', '', str(value or '')).strip()
+    return cleaned[:limit]
+
+
+def _parse_amount(value):
+    """Return (number|None, error|None) — invalid amounts must surface,
+    never silently unfilter a search the user believes is bounded."""
+    if not value:
+        return None, None
+    try:
+        return float(value), None
+    except (ValueError, TypeError):
+        return None, f'Invalid amount {value!r}: enter a number.'
+
+
 def _build_must(keyword, card, date_from, date_to, atm_id,
                 event_type, status, min_amount, max_amount, auth_code):
     """
@@ -144,10 +166,14 @@ def _build_must(keyword, card, date_from, date_to, atm_id,
     generations (nested v2 fields and flat v1 fields) plus a raw-message
     fallback, because atm-ej-live-* spans daily indices written before
     and after the structured-schema cutover.
+
+    Returns (must, amount_error).
     """
     must = []
+    amount_error = None
     if keyword:
         must.append({"match": {"message": {"query": keyword}}})
+    card = _clean_contains(card)
     if card:
         card_val = f"*{card}*"
         must.append({"bool": {"should": [
@@ -179,24 +205,26 @@ def _build_must(keyword, card, date_from, date_to, atm_id,
         ], "minimum_should_match": 1}})
     if min_amount or max_amount:
         amt_range = {}
-        if min_amount:
-            try:    amt_range["gte"] = float(min_amount)
-            except: pass
-        if max_amount:
-            try:    amt_range["lte"] = float(max_amount)
-            except: pass
+        lo, lo_err = _parse_amount(min_amount)
+        hi, hi_err = _parse_amount(max_amount)
+        amount_error = lo_err or hi_err
+        if lo is not None:
+            amt_range["gte"] = lo
+        if hi is not None:
+            amt_range["lte"] = hi
         if amt_range:
             must.append({"bool": {"should": [
                 {"range": {"transaction.amount": amt_range}},
                 {"range": {"amount":             amt_range}},
             ], "minimum_should_match": 1}})
+    auth_code = _clean_contains(auth_code)
     if auth_code:
         must.append({"bool": {"should": [
             {"term":      {"transaction.auth_code": auth_code}},
             {"term":      {"auth_code.keyword":     auth_code}},
             {"wildcard":  {"message":               {"value": f"*{auth_code}*"}}},
         ], "minimum_should_match": 1}})
-    return must
+    return must, amount_error
 
 
 EAT = timezone(timedelta(hours=3))
@@ -246,10 +274,12 @@ def ej_search():
         except (ValueError, TypeError):
             page = 1
 
-        must = _build_must(keyword, card, date_from, date_to, atm_id,
-                           event_type, status, min_amount, max_amount, auth_code)
+        must, amount_error = _build_must(keyword, card, date_from, date_to, atm_id,
+                                           event_type, status, min_amount, max_amount, auth_code)
 
-        if not must:
+        if amount_error:
+            error = amount_error
+        elif not must:
             error = "Please provide at least one search filter."
         else:
             skipped = 0
@@ -363,10 +393,12 @@ def ej_search_csv():
             if s.isdigit():
                 selected_set.add(int(s))
 
-    must = _build_must(keyword, card, date_from, date_to, atm_id,
-                       event_type, status, min_amount, max_amount, auth_code)
+    must, amount_error = _build_must(keyword, card, date_from, date_to, atm_id,
+                                       event_type, status, min_amount, max_amount, auth_code)
     rows = []
-    if must:
+    if amount_error:
+        rows = []
+    elif must:
         try:
             resp = requests.get(
                 f"http://{ES_HOST}/{ES_INDEX}/_search?ignore_unavailable=true",
@@ -394,7 +426,9 @@ def ej_search_csv():
 
     buf = io.StringIO()
     w   = csv.writer(buf)
-    if not rows and not must:
+    if amount_error:
+        w.writerow([f'ERROR: {amount_error} Export cancelled — fix the amount and retry.'])
+    elif not rows and not must:
         w.writerow(['ERROR: No search filters provided. Export cancelled.'])
     elif not rows:
         w.writerow(['ERROR: OpenSearch query failed or returned no data. Check that OpenSearch is running and try again.'])
