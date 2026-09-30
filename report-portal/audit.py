@@ -57,6 +57,7 @@ SCHEMA_MIGRATIONS = [
     "ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45)",
     "ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS sim_port INTEGER",
     "ALTER TABLE app_users ADD COLUMN IF NOT EXISTS email VARCHAR(255)",
+    "ALTER TABLE app_users ADD COLUMN IF NOT EXISTS must_change_pw BOOLEAN NOT NULL DEFAULT FALSE",
 ]
 
 # fault_type_map: raw vendor fault codes -> standard fault types.

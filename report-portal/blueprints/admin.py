@@ -1603,7 +1603,7 @@ def user_create():
                 flash(f'User "{username}" already exists', 'error')
                 return redirect('/admin/users')
             cur.execute(
-                "INSERT INTO app_users (username, password_hash, role, email) VALUES (%s, %s, %s, %s)",
+                "INSERT INTO app_users (username, password_hash, role, email, must_change_pw) VALUES (%s, %s, %s, %s, TRUE)",
                 (username, generate_password_hash(password), role, email or None)
             )
             conn.commit()
@@ -1660,7 +1660,7 @@ def user_edit():
                 flash('Cannot demote the last admin user.', 'error')
                 return redirect('/admin/users')
             if password:
-                cur.execute("UPDATE app_users SET role = %s, password_hash = %s, email = %s WHERE username = %s",
+                cur.execute("UPDATE app_users SET role = %s, password_hash = %s, email = %s, must_change_pw = TRUE WHERE username = %s",
                             (role, generate_password_hash(password), email or None, username))
             else:
                 cur.execute("UPDATE app_users SET role = %s, email = %s WHERE username = %s",

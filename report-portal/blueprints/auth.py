@@ -247,6 +247,32 @@ def _get_role(username):
     return ROLE_ADMIN if username == ADMIN_USER else ROLE_VIEWER
 
 
+def _must_change_pw(username):
+    """Whether the user still owes a first-login (or admin-reset) password
+    change. Missing column on ancient DBs (pre-migration) means False."""
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT must_change_pw FROM app_users WHERE username = %s",
+                        (username,))
+            row = cur.fetchone()
+            cur.close()
+            return bool(row and row[0])
+    except Exception:
+        return False
+
+
+def _force_change_redirect():
+    """Redirect users who owe a password change to /profile — from every
+    page except the profile/logout endpoints themselves. Returns a
+    redirect response or None."""
+    if not session.get('must_change_pw'):
+        return None
+    if request.path in ('/profile', '/profile/password', '/logout'):
+        return None
+    return redirect(url_for('auth.profile'))
+
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -254,6 +280,9 @@ def login_required(f):
             return f(*args, **kwargs)
         if not session.get('logged_in'):
             return redirect(url_for('auth.login', next=request.path))
+        forced = _force_change_redirect()
+        if forced:
+            return forced
         return f(*args, **kwargs)
     return decorated
 
@@ -267,6 +296,9 @@ def role_required(*roles):
                 return f(*args, **kwargs)
             if not session.get('logged_in'):
                 return redirect(url_for('auth.login', next=request.path))
+            forced = _force_change_redirect()
+            if forced:
+                return forced
             user_role = session.get('role', ROLE_VIEWER)
             user_level = ROLE_HIERARCHY.get(user_role, 0)
             required_level = min(ROLE_HIERARCHY.get(r, 0) for r in roles)
@@ -325,6 +357,7 @@ def login():
             session.permanent = True  # honor PERMANENT_SESSION_LIFETIME (4h), not browser-close
             session['username'] = username
             session['role'] = role
+            session['must_change_pw'] = _must_change_pw(username) if AUTH_MODE != 'ldap' else False
             try:
                 with get_db() as conn:
                     cur = conn.cursor()
@@ -336,6 +369,9 @@ def login():
             logger.info('Login successful: user=%s role=%s from=%s',
                         username, session['role'], request.remote_addr)
             log_action('LOGIN', f'User {username} (role={session["role"]}) logged in from {request.remote_addr}')
+            if session.get('must_change_pw'):
+                flash('You must change your password before continuing.', 'error')
+                return redirect(url_for('auth.profile'))
             return redirect(next_page)
 
         logger.warning('Login failed: user=%s from=%s', username, request.remote_addr)
@@ -381,10 +417,12 @@ def change_password():
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute("UPDATE app_users SET password_hash = %s WHERE username = %s",
+            cur.execute("UPDATE app_users SET password_hash = %s, must_change_pw = FALSE WHERE username = %s",
                         (generate_password_hash(new), username))
             conn.commit()
             cur.close()
+        session['must_change_pw'] = False
+        session.modified = True
         log_action('PASSWORD_CHANGE', f'User {username} changed their own password')
         flash('Password changed successfully.', 'success')
     except Exception as e:
