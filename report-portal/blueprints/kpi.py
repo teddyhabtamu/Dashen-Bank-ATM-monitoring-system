@@ -45,13 +45,14 @@ def dashboard():
         AND (s.ended_at IS NULL OR s.ended_at > d.day)
       GROUP BY d.day ORDER BY d.day""")
 
-    ranking = _all("""SELECT atm_id, branch, COUNT(*) AS total,
-        ROUND(100.0 * SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) / COUNT(*), 1) AS success,
-        COALESCE(SUM(CASE WHEN status = 'APPROVED' AND txn_type = 'WITHDRAWAL'
-          THEN amount ELSE 0 END), 0) AS cash
-      FROM atm_transactions
-      WHERE recorded_at >= NOW() - INTERVAL '7 days'
-      GROUP BY atm_id, branch ORDER BY total DESC""")
+    ranking = _all("""SELECT t.atm_id, t.branch, COUNT(*) AS total,
+        ROUND(100.0 * SUM(CASE WHEN t.status = 'APPROVED' THEN 1 ELSE 0 END) / COUNT(*), 1) AS success,
+        COALESCE(SUM(CASE WHEN t.status = 'APPROVED' AND t.txn_type = 'WITHDRAWAL'
+          THEN t.amount ELSE 0 END), 0) AS cash
+      FROM atm_transactions t
+      JOIN atm_locations l ON t.atm_id = l.atm_id
+      WHERE t.recorded_at >= NOW() - INTERVAL '7 days'
+      GROUP BY t.atm_id, t.branch ORDER BY total DESC""")
 
     errors = _all("""SELECT COALESCE(f.display_name, t.error_code, 'Unknown') AS label,
         COUNT(*) AS cnt,

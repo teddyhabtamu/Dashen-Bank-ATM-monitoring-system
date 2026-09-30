@@ -73,14 +73,20 @@ def _cached_zabbix():
                 'sortorder': 'DESC',
                 'limit': 100,
             }, auth)
-            hosts = fh.result(timeout=12) or []
+            hosts_raw = fh.result(timeout=12)
             problems = fp.result(timeout=12)
     except _FutureTimeout:
         logger.warning('Zabbix fetch exceeded 12s budget')
-        hosts, problems = [], None
-    if problems is None and _cache['hosts'] is not None:
-        # API hiccup: serve stale rather than an empty page.
-        return _cache['hosts'], _cache['problems']
+        hosts_raw, problems = None, None
+    if hosts_raw is None or problems is None:
+        # Either leg failed: prefer a consistent stale pair over mixing a
+        # fresh empty with live rows (which reads as "all clear").
+        if _cache['hosts'] is not None:
+            return _cache['hosts'], _cache['problems']
+        if hosts_raw is None and problems is None:
+            return None, None  # unreachable, nothing stale to show
+        return hosts_raw or [], problems or []
+    hosts = hosts_raw
     _cache.update(ts=now, hosts=hosts, problems=problems or [])
     return hosts, problems or []
 
