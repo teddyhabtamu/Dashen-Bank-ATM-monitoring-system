@@ -1352,6 +1352,36 @@ def schedule_list():
     return render_template('admin_schedules.html', schedules=rows, failed=failed)
 
 
+def _valid_cron(expr):
+    """Validate a 5-field cron (minute hour dom month dow). Returns an error
+    string or None. Mirrors scheduler._cron_field semantics so anything saved
+    here can actually fire there."""
+    bounds = [(0, 59), (0, 23), (1, 31), (1, 12), (0, 6)]
+    parts = (expr or '').split()
+    if len(parts) != 5:
+        return 'Cron must have 5 fields: minute hour day month weekday.'
+    for part, (lo, hi) in zip(parts, bounds):
+        if part == '*':
+            continue
+        for item in part.split(','):
+            step = None
+            if '/' in item:
+                item, step = item.split('/', 1)
+                if not step.isdigit() or int(step) < 1:
+                    return f'Bad cron step in {part!r}.'
+            if item in ('*', ''):
+                if not step and item == '':
+                    return f'Bad cron field {part!r}.'
+                continue
+            if '-' in item:
+                a, _, b = item.partition('-')
+                if not (a.isdigit() and b.isdigit() and lo <= int(a) <= int(b) <= hi):
+                    return f'Bad cron range {item!r} (allowed {lo}-{hi}).'
+            elif not item.isdigit() or not (lo <= int(item) <= hi):
+                return f'Bad cron value {item!r} (allowed {lo}-{hi}).'
+    return None
+
+
 @bp.route('/schedules/save', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
@@ -1371,6 +1401,11 @@ def schedule_save():
     bad = [r.strip() for r in recipients.split(',') if r.strip() and not _valid_email(r.strip())]
     if bad:
         flash(f'Invalid email address(es): {", ".join(bad)}', 'error')
+        return redirect('/admin/schedules')
+
+    cron_err = _valid_cron(schedule)
+    if cron_err:
+        flash(f'Invalid schedule: {cron_err}', 'error')
         return redirect('/admin/schedules')
 
     try:
@@ -1570,6 +1605,11 @@ def user_create():
         return redirect('/admin/users')
 
 
+def _admin_count(cur):
+    cur.execute("SELECT COUNT(*) FROM app_users WHERE role = 'admin'")
+    return int(cur.fetchone()[0] or 0)
+
+
 @bp.route('/users/edit', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
@@ -1590,6 +1630,16 @@ def user_edit():
     try:
         with get_db() as conn:
             cur = conn.cursor()
+            cur.execute("SELECT role FROM app_users WHERE username = %s", (username,))
+            row = cur.fetchone()
+            if not row:
+                cur.close()
+                flash(f'User "{username}" not found', 'error')
+                return redirect('/admin/users')
+            if row[0] == ROLE_ADMIN and role != ROLE_ADMIN and _admin_count(cur) <= 1:
+                cur.close()
+                flash('Cannot demote the last admin user.', 'error')
+                return redirect('/admin/users')
             if password:
                 cur.execute("UPDATE app_users SET role = %s, password_hash = %s, email = %s WHERE username = %s",
                             (role, generate_password_hash(password), email or None, username))
@@ -1620,6 +1670,16 @@ def user_delete():
     try:
         with get_db() as conn:
             cur = conn.cursor()
+            cur.execute("SELECT role FROM app_users WHERE username = %s", (username,))
+            row = cur.fetchone()
+            if not row:
+                cur.close()
+                flash(f'User "{username}" not found', 'error')
+                return redirect('/admin/users')
+            if row[0] == ROLE_ADMIN and _admin_count(cur) <= 1:
+                cur.close()
+                flash('Cannot delete the last admin user.', 'error')
+                return redirect('/admin/users')
             cur.execute("DELETE FROM app_users WHERE username = %s", (username,))
             conn.commit()
             cur.close()
