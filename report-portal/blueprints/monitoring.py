@@ -54,20 +54,30 @@ def _cached_zabbix():
         if _cache['hosts'] is None:
             return None, None  # unreachable, nothing stale to show
         return _cache['hosts'], _cache['problems']
-    hosts = _zbx_call('host.get', {
-        'output': ['hostid', 'host', 'name', 'status', 'available'],
-        'selectInterfaces': ['ip'],
-        'sortfield': 'host',
-    }, auth) or []
-    problems = _zbx_call('problem.get', {
-        'output': ['eventid', 'clock', 'name', 'severity', 'acknowledged', 'objectid'],
-        'selectHosts': ['hostid', 'host', 'name'],
-        # NB: problem.get allows sorting by eventid only (clock is
-        # rejected); eventids grow with time so DESC is newest-first.
-        'sortfield': 'eventid',
-        'sortorder': 'DESC',
-        'limit': 100,
-    }, auth)
+    # host.get + problem.get are independent — run them together so a slow
+    # Zabbix costs one timeout window, not two, before stale cache serves.
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutureTimeout
+    try:
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            fh = ex.submit(_zbx_call, 'host.get', {
+                'output': ['hostid', 'host', 'name', 'status', 'available'],
+                'selectInterfaces': ['ip'],
+                'sortfield': 'host',
+            }, auth)
+            fp = ex.submit(_zbx_call, 'problem.get', {
+                'output': ['eventid', 'clock', 'name', 'severity', 'acknowledged', 'objectid'],
+                'selectHosts': ['hostid', 'host', 'name'],
+                # NB: problem.get allows sorting by eventid only (clock is
+                # rejected); eventids grow with time so DESC is newest-first.
+                'sortfield': 'eventid',
+                'sortorder': 'DESC',
+                'limit': 100,
+            }, auth)
+            hosts = fh.result(timeout=12) or []
+            problems = fp.result(timeout=12)
+    except _FutureTimeout:
+        logger.warning('Zabbix fetch exceeded 12s budget')
+        hosts, problems = [], None
     if problems is None and _cache['hosts'] is not None:
         # API hiccup: serve stale rather than an empty page.
         return _cache['hosts'], _cache['problems']

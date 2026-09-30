@@ -193,7 +193,10 @@ def _zbx_post(payload):
         data=json.dumps(payload).encode(),
         headers={'Content-Type': 'application/json-rpc'},
     )
-    with urllib.request.urlopen(req, timeout=8) as r:
+    # 5s per call: LAN to zabbix-web answers in ms; a hung server must not
+    # pin a Flask worker (Monitoring Center fans out to 3+ sequential
+    # calls, so every second here multiplies on the page budget).
+    with urllib.request.urlopen(req, timeout=5) as r:
         return json.loads(r.read().decode())
 
 
