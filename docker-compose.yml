@@ -11,6 +11,11 @@ services:
       - ./config/postgres-uat/postgresql-custom.conf:/etc/postgresql/postgresql.conf.d/custom.conf:ro
     ports:
       - "5432:5432"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   zabbix-server:
@@ -25,6 +30,11 @@ services:
       - "10051:10051"
     depends_on:
       - postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   zabbix-web:
@@ -41,6 +51,11 @@ services:
       - "8080:8080"
     depends_on:
       - zabbix-server
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   zabbix-agent:
@@ -53,6 +68,11 @@ services:
       # Passive checks arrive from the Zabbix server container via the compose
       # bridge network — allow it alongside localhost (else "connection rejected").
       ZBX_SERVER_HOST: "127.0.0.1,172.18.0.0/16"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     depends_on:
       - zabbix-server
@@ -70,6 +90,11 @@ services:
       - --collation-server=utf8mb4_unicode_ci
     volumes:
       - mariadb-data:/var/lib/mysql
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   glpi:
@@ -91,6 +116,11 @@ services:
       - ./glpi-plugins/dashentheme:/var/www/html/glpi/public/plugins/dashentheme:ro
     depends_on:
       - mariadb
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   grafana:
@@ -127,6 +157,11 @@ services:
       - ./config/grafana/ldap.toml:/etc/grafana/ldap.toml:ro
       - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
     entrypoint: ["sh", "/entrypoint.sh"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   grafana-renderer:
@@ -136,6 +171,11 @@ services:
       ENABLE_METRICS: "true"
     ports:
       - "8081:8081"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   report-portal:
@@ -188,6 +228,11 @@ services:
       - "8888:8888"
     depends_on:
       - postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   anomaly-detector:
@@ -215,6 +260,11 @@ services:
       - ./anomaly_detector.py:/app/anomaly_detector.py:ro
     depends_on:
       - postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   network-correlator:
@@ -239,6 +289,11 @@ services:
       - ./network_correlator.py:/app/network_correlator.py:ro
     depends_on:
       - postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   state-manager:
@@ -259,6 +314,11 @@ services:
       STATE_POLL_INTERVAL: "30"
     depends_on:
       - postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   filebeat:
@@ -273,6 +333,11 @@ services:
       - ./ej-logs:/var/log/atm-ej:ro
     depends_on:
       - postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   # ── Mock LDAP lab (NOT part of UAT) ──────────────────────────────────────

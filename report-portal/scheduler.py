@@ -4,6 +4,7 @@ import csv
 import base64
 import logging
 import smtplib
+import ssl
 import threading
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -147,12 +148,13 @@ def _send_email(recipients, subject, body, filename, filedata, mimetype):
         msg.attach(part)
 
         if SMTP_USE_SSL:
-            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT)
+            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT,
+                                      context=ssl.create_default_context())
         else:
             server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT)
         with server:
             if not SMTP_USE_SSL:
-                server.starttls()
+                server.starttls(context=ssl.create_default_context())
             if SMTP_USER:
                 server.login(SMTP_USER, SMTP_PASS)
             server.send_message(msg)
