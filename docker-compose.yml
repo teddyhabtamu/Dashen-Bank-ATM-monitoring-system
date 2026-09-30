@@ -359,6 +359,10 @@ services:
       - "514:514/udp"
       - "514:514/tcp"
     volumes:
+      # NB: filebeat refuses to start unless filebeat.yml is owned by
+      # root:root (mode 644). git pull resets ownership -> after any pull
+      # touching filebeat.yml run:
+      #   sudo chown root:root filebeat.yml && sudo chmod 644 filebeat.yml
       - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - ./ej-logs:/var/log/atm-ej:ro
     depends_on:
