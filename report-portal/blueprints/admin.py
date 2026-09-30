@@ -7,7 +7,7 @@ import requests
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response, current_app, abort, session
 from werkzeug.security import generate_password_hash
-from blueprints.auth import login_required, role_required, ROLE_ADMIN, ROLE_OPERATOR, ROLE_VIEWER
+from blueprints.auth import login_required, role_required, ROLE_ADMIN, ROLE_OPERATOR, ROLE_VIEWER, password_error as _password_error
 from db import get_db
 from audit import log_action
 
@@ -1560,23 +1560,9 @@ def user_emails():
 
 
 def _password_error(password, username=None):
-    """Bank password policy: min 10 chars with ALL of UPPER/lowercase,
-    digits and symbols. (Interim until AD cutover, when the domain policy
-    governs.) Returns an error string or None."""
-    if not password or len(password) < 10:
-        return 'Password must be at least 10 characters.'
-    missing = []
-    if not re.search(r'[A-Z]', password):
-        missing.append('UPPERCASE')
-    if not re.search(r'[a-z]', password):
-        missing.append('lowercase')
-    if not re.search(r'[0-9]', password):
-        missing.append('digits')
-    if not re.search(r'[^A-Za-z0-9]', password):
-        missing.append('symbols')
-    if missing:
-        return 'Password must include: ' + ', '.join(missing) + '.'
-    return None
+    # Single source of truth lives in blueprints.auth (shared with
+    # self-service change); kept as a thin wrapper for existing callers.
+    return password_error(password, username)
 
 
 @bp.route('/users/create', methods=['POST'])

@@ -460,6 +460,10 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
           <div style="font-size:12px;font-weight:600;color:rgba(255,255,255,.7)">{{ session.get('username', 'User') }}</div>
           <div style="font-size:10px;color:rgba(255,255,255,.35);text-transform:capitalize">{{ session.get('role', 'user') }}</div>
         </div>
+        <a href="/profile" class="profile-item">
+          <i data-lucide="key-round"></i>
+          <span>Change Password</span>
+        </a>
         <a href="https://dashenbanksc.com/frequently-asked-questions/#:~:text=Our%20Customer%20Service%20Team%20is,via%206333%20for%20any%20support." target="_blank" class="profile-item">
           <i data-lucide="help-circle"></i>
           <span>Support</span>

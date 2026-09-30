@@ -3,7 +3,7 @@ import re
 import time
 import logging
 from functools import wraps
-from flask import Blueprint, render_template, request, redirect, session, url_for, current_app
+from flask import Blueprint, render_template, request, redirect, session, url_for, current_app, flash
 from urllib.parse import urlparse
 from audit import log_action
 from db import get_db
@@ -101,6 +101,27 @@ ROLE_HIERARCHY = {
     ROLE_OPERATOR: 2,
     ROLE_ADMIN: 3,
 }
+
+
+def password_error(password, username=None):
+    """Bank password policy: min 10 chars with ALL of UPPER/lowercase,
+    digits and symbols. (Interim until AD cutover, when the domain policy
+    governs.) Returns an error string or None. Shared by admin user
+    management and self-service change (single source of truth)."""
+    if not password or len(password) < 10:
+        return 'Password must be at least 10 characters.'
+    missing = []
+    if not re.search(r'[A-Z]', password):
+        missing.append('UPPERCASE')
+    if not re.search(r'[a-z]', password):
+        missing.append('lowercase')
+    if not re.search(r'[0-9]', password):
+        missing.append('digits')
+    if not re.search(r'[^A-Za-z0-9]', password):
+        missing.append('symbols')
+    if missing:
+        return 'Password must include: ' + ', '.join(missing) + '.'
+    return None
 
 
 def init_admin_user():
@@ -326,6 +347,49 @@ def login():
         return render_template('login.html', error=error, next=next_page)
 
     return render_template('login.html', next=next_page)
+
+
+@bp.route('/profile')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def profile():
+    """Self-service account page (password change). All roles."""
+    return render_template('profile.html', username=session.get('username', ''))
+
+
+@bp.route('/profile/password', methods=['POST'])
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def change_password():
+    username = session.get('username', '')
+    current = request.form.get('current_password', '')
+    new = request.form.get('new_password', '')
+    confirm = request.form.get('confirm_password', '')
+    if not username:
+        flash('Session expired — please log in again.', 'error')
+        return redirect(url_for('auth.login'))
+    if not _check_password(username, current):
+        flash('Current password is incorrect.', 'error')
+        return redirect(url_for('auth.profile'))
+    if new != confirm:
+        flash('New passwords do not match.', 'error')
+        return redirect(url_for('auth.profile'))
+    pw_err = password_error(new, username)
+    if pw_err:
+        flash(pw_err, 'error')
+        return redirect(url_for('auth.profile'))
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE app_users SET password_hash = %s WHERE username = %s",
+                        (generate_password_hash(new), username))
+            conn.commit()
+            cur.close()
+        log_action('PASSWORD_CHANGE', f'User {username} changed their own password')
+        flash('Password changed successfully.', 'success')
+    except Exception as e:
+        flash(f'Could not change password: {e}', 'error')
+    return redirect(url_for('auth.profile'))
 
 
 @bp.route('/logout')
