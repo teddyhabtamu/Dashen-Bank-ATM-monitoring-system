@@ -93,6 +93,12 @@ Findings:
 - Decision: create the Zabbix host with OS metrics first; hardware/cassette
   items only after the NCR MIB lands (blocks `generate_zabbix_templates.py`
   guard and the vendor-isolation end-to-end test).
+- **Verdict 2026-09-30 (ATM team): cassette data flows via the NetXMS agent,
+  NOT SNMP.** The Windows SNMP view will never carry cassette counters.
+  Path: ask which command/script NetXMS runs for the counts → ship the same
+  as Zabbix-agent `UserParameter`s on the ATMs (agent already installed).
+  Fallback: read levels from the NetXMS server DB/API into our pipeline.
+  SNMP stays for OS/network metrics only.
 
 ## 4. Fill `config/snmp/oid_mapping.csv`
 Start from the tracked header-only template, then add one row per monitored OID:
