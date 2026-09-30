@@ -82,6 +82,12 @@ Findings:
   test with `nc -zv -w 5 10.41.30.114 10050`.
 - Box is SYN-flooding `192.168.21.218:10051` (unanswered) — stale pointer to a
   previous Zabbix server; ask ATM team to repoint at UAT-01 when ready.
+- **Path finding 2026-09-30:** UAT-01 reaches the ATMs **only via NAT**
+  (no route to `172.23.248.0/24`). NAT forwards UDP 161 but **not** TCP
+  10050 (`nc` times out both ways) — so Zabbix agent items are unreachable
+  until the network team forwards 10050 or a route is added. Standard:
+  real IPs stay the identity in `atm_locations`, NAT IPs on Zabbix
+  interfaces. SNMP OS metrics work today; agent items pending.
 - Hygiene: sysName still `TESTMACHINE`, empty contact/location; community is
   `public` read-only (zero SetVars observed — rotate before go-live).
 - Decision: create the Zabbix host with OS metrics first; hardware/cassette
