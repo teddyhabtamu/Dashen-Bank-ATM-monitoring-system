@@ -56,6 +56,12 @@
 .pw-wrap input{padding-right:36px}
 .pw-toggle{position:absolute;right:8px;background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:#94A3B8;display:flex;align-items:center;transition:.15s;line-height:1;z-index:1}
 .pw-toggle:hover{color:#475569;background:#F1F5F9}
+.field-err{display:none;font-size:11px;color:#DC2626;margin-top:4px}
+.field-err.show{display:block}
+input.field-bad{border-color:#FCA5A5 !important}
+.pw-meter{height:5px;background:#F1F5F9;border-radius:3px;margin-top:8px;overflow:hidden}
+.pw-meter-fill{height:100%;width:0;border-radius:3px;transition:width .2s,background .2s}
+.pw-meter-label{font-size:11px;margin-top:4px;min-height:14px;color:#64748B}
 {% endblock %}
 {% block body %}
 <div class="page-header">
@@ -157,21 +163,25 @@
       <h2>New User</h2>
       <button class="modal-close" onclick="closeModal('createModal')"><i data-lucide="x"></i></button>
     </div>
-    <form method="post" action="/admin/users/create">
+    <form method="post" action="/admin/users/create" onsubmit="return validateUserForm(this, true)">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="form-grid">
         <div class="form-group full">
           <label>Username</label>
-          <input type="text" name="username" required placeholder="e.g. operator1" minlength="3" maxlength="100" pattern="[A-Za-z0-9_]+" title="Letters, numbers and underscore only" autocomplete="off">
+          <input type="text" id="createUsername" name="username" required placeholder="e.g. operator1" minlength="3" maxlength="100" pattern="[A-Za-z0-9_]+" title="Letters, numbers and underscore only" autocomplete="off" oninput="clearFieldErr(this)">
+          <div class="field-err" data-err-for="username"></div>
         </div>
         <div class="form-group full">
           <label>Password</label>
           <div class="pw-wrap">
-            <input type="password" name="password" required placeholder="Min 10 chars, mix 3 of: UPPER/lower/digit/symbol" minlength="10" autocomplete="new-password" title="At least 10 characters with 3 of: uppercase, lowercase, digits, symbols">
+            <input type="password" id="createPassword" name="password" required placeholder="Min 10 chars: UPPER + lower + digit + symbol" minlength="10" autocomplete="new-password" title="At least 10 characters with uppercase, lowercase, digits and symbols" oninput="pwMeter(this);clearFieldErr(this)">
             <button type="button" class="pw-toggle" onclick="togglePW(this)" tabindex="-1" aria-label="Toggle password visibility">
               <i data-lucide="eye" style="width:15px;height:15px"></i>
             </button>
           </div>
+          <div class="pw-meter"><div class="pw-meter-fill" id="createPwFill"></div></div>
+          <div class="pw-meter-label" id="createPwLabel"></div>
+          <div class="field-err" data-err-for="password"></div>
         </div>
         <div class="form-group full">
           <label>Role</label>
@@ -183,7 +193,8 @@
         </div>
         <div class="form-group full">
           <label>Email <span style="color:#94A3B8;font-weight:400">(optional — for report recipients)</span></label>
-          <input type="email" name="email" placeholder="user@dashenbank.com" maxlength="255" autocomplete="off">
+          <input type="email" id="createEmail" name="email" placeholder="user@dashenbank.com" maxlength="255" autocomplete="off" oninput="clearFieldErr(this)">
+          <div class="field-err" data-err-for="email"></div>
         </div>
       </div>
       <div class="form-actions">
@@ -200,7 +211,7 @@
       <h2>Edit User: <span id="editUsernameLabel"></span></h2>
       <button class="modal-close" onclick="closeModal('editModal')"><i data-lucide="x"></i></button>
     </div>
-    <form method="post" action="/admin/users/edit">
+    <form method="post" action="/admin/users/edit" onsubmit="return validateUserForm(this, false)">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="username" id="editUsernameInput" value="">
       <div class="form-grid">
@@ -214,16 +225,20 @@
         </div>
         <div class="form-group full">
           <label>Email <span style="color:#94A3B8;font-weight:400">(optional — for report recipients)</span></label>
-          <input type="email" id="editEmail" name="email" placeholder="user@dashenbank.com" maxlength="255" autocomplete="off">
+          <input type="email" id="editEmail" name="email" placeholder="user@dashenbank.com" maxlength="255" autocomplete="off" oninput="clearFieldErr(this)">
+          <div class="field-err" data-err-for="email"></div>
         </div>
         <div class="form-group full">
           <label>New Password <span style="color:#94A3B8;font-weight:400">(leave blank to keep current)</span></label>
           <div class="pw-wrap">
-            <input type="password" id="editPassword" name="password" placeholder="Min 10 chars, mix 3 of: UPPER/lower/digit/symbol" minlength="10" autocomplete="new-password" title="At least 10 characters with 3 of: uppercase, lowercase, digits, symbols">
+            <input type="password" id="editPassword" name="password" placeholder="Min 10 chars: UPPER + lower + digit + symbol" minlength="10" autocomplete="new-password" title="At least 10 characters with uppercase, lowercase, digits and symbols" oninput="pwMeter(this);clearFieldErr(this)">
             <button type="button" class="pw-toggle" onclick="togglePW(this)" tabindex="-1" aria-label="Toggle password visibility">
               <i data-lucide="eye" style="width:15px;height:15px"></i>
             </button>
           </div>
+          <div class="pw-meter"><div class="pw-meter-fill" id="editPwFill"></div></div>
+          <div class="pw-meter-label" id="editPwLabel"></div>
+          <div class="field-err" data-err-for="password"></div>
         </div>
       </div>
       <div class="form-actions">
@@ -252,12 +267,24 @@
 </div>
 
 <script>
-function openCreateModal(){ document.getElementById('createModal').classList.add('show'); lucide.createIcons(); }
+function openCreateModal(){
+  var m = document.getElementById('createModal');
+  m.querySelectorAll('.field-err.show').forEach(function(b){ b.textContent = ''; b.classList.remove('show'); });
+  m.querySelectorAll('.field-bad').forEach(function(i){ i.classList.remove('field-bad'); });
+  var f = document.getElementById('createPwFill'); if(f) f.style.width = '0';
+  var l = document.getElementById('createPwLabel'); if(l) l.textContent = '';
+  m.classList.add('show'); lucide.createIcons();
+}
 function openEditModal(username, role, email){
   document.getElementById('editUsernameLabel').textContent = username;
   document.getElementById('editUsernameInput').value = username;
   document.getElementById('editPassword').value = '';
   document.getElementById('editEmail').value = email || '';
+  var ef = document.getElementById('editPwFill'); if(ef) ef.style.width = '0';
+  var el = document.getElementById('editPwLabel'); if(el) el.textContent = '';
+  var em = document.getElementById('editModal');
+  em.querySelectorAll('.field-err.show').forEach(function(b){ b.textContent = ''; b.classList.remove('show'); });
+  em.querySelectorAll('.field-bad').forEach(function(i){ i.classList.remove('field-bad'); });
   var sel = document.getElementById('editRoleSelect');
   sel.value = role;
   var wrap = sel.closest('.cust-select');
@@ -275,6 +302,87 @@ function openDeleteModal(username){
   lucide.createIcons();
 }
 function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+function clearFieldErr(input){
+  input.classList.remove('field-bad');
+  var form = input.closest('form');
+  var box = form && form.querySelector('[data-err-for="' + input.name + '"]');
+  if(box){ box.textContent = ''; box.classList.remove('show'); }
+}
+function setFieldErr(form, name, msg){
+  var input = form.querySelector('[name="' + name + '"]');
+  var box = form.querySelector('[data-err-for="' + name + '"]');
+  if(input) input.classList.add('field-bad');
+  if(box){ box.textContent = msg; box.classList.add('show'); }
+}
+/* Mirrors server _password_error exactly: min 10, all 4 classes,
+   no username, small common-password blocklist. */
+var PW_BLOCKED = ['password', 'dashen', 'atm123', '123456', 'qwerty', 'letmein'];
+function passwordIssues(pw, username){
+  pw = pw || '';
+  if(pw.length < 10) return ['at least 10 characters'];
+  var missing = [];
+  if(!/[A-Z]/.test(pw)) missing.push('UPPERCASE');
+  if(!/[a-z]/.test(pw)) missing.push('lowercase');
+  if(!/[0-9]/.test(pw)) missing.push('digits');
+  if(!/[^A-Za-z0-9]/.test(pw)) missing.push('symbols');
+  if(missing.length) return ['must include: ' + missing.join(', ')];
+  var low = pw.toLowerCase();
+  if(username && low.indexOf(username.toLowerCase()) !== -1) return ['must not contain the username'];
+  for(var i = 0; i < PW_BLOCKED.length; i++){
+    if(low.indexOf(PW_BLOCKED[i]) !== -1) return ['too common — choose something less guessable'];
+  }
+  return [];
+}
+function pwMeter(input){
+  var form = input.closest('form');
+  var isCreate = form && form.action.indexOf('/create') !== -1;
+  var prefix = isCreate ? 'create' : 'edit';
+  var fill = document.getElementById(prefix + 'PwFill');
+  var label = document.getElementById(prefix + 'PwLabel');
+  if(!fill || !label) return;
+  var pw = input.value || '';
+  var unameEl = form.querySelector('[name="username"]');
+  var issues = passwordIssues(pw, unameEl ? unameEl.value : '');
+  var levels = [
+    {w: '100%', c: '#16A34A', t: 'Strong'},
+    {w: '66%', c: '#84CC16', t: 'Good'},
+    {w: '40%', c: '#F59E0B', t: 'Fair'},
+    {w: '20%', c: '#DC2626', t: 'Weak'}
+  ];
+  var lvl;
+  if(!pw && !isCreate){ fill.style.width = '0'; label.textContent = ''; return; }
+  if(!issues.length) lvl = levels[0];
+  else if(pw.length >= 10 && issues[0].indexOf('must include') === 0) lvl = levels[1];
+  else if(pw.length >= 10) lvl = levels[2];
+  else lvl = levels[3];
+  fill.style.width = lvl.w;
+  fill.style.background = lvl.c;
+  label.textContent = issues.length ? lvl.t + ' — ' + issues[0] : lvl.t;
+  label.style.color = lvl.c;
+}
+function validateUserForm(form, isCreate){
+  var uname = form.querySelector('[name="username"]');
+  var pw = form.querySelector('[name="password"]');
+  var email = form.querySelector('[name="email"]');
+  var ok = true;
+  form.querySelectorAll('.field-err.show').forEach(function(b){ b.textContent = ''; b.classList.remove('show'); });
+  form.querySelectorAll('.field-bad').forEach(function(i){ i.classList.remove('field-bad'); });
+  if(isCreate && uname){
+    if(!uname.value.trim() || uname.value.trim().length < 3){
+      setFieldErr(form, 'username', 'Username must be at least 3 characters.'); ok = false;
+    } else if(!/^[A-Za-z0-9_]+$/.test(uname.value.trim())){
+      setFieldErr(form, 'username', 'Letters, numbers and underscore only.'); ok = false;
+    }
+  }
+  if(pw && (isCreate || pw.value)){
+    var issues = passwordIssues(pw.value, uname ? uname.value : '');
+    if(issues.length){ setFieldErr(form, 'password', 'Password ' + issues[0] + '.'); ok = false; }
+  }
+  if(email && email.value.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.value.trim())){
+    setFieldErr(form, 'email', 'Email address looks invalid.'); ok = false;
+  }
+  return ok;
+}
 function togglePW(btn){
   var wrap = btn.closest('.pw-wrap');
   var inp = wrap.querySelector('input');

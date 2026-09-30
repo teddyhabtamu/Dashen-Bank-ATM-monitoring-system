@@ -1560,15 +1560,23 @@ def user_emails():
 
 
 def _password_error(password, username):
-    """Bank-grade local password policy (interim until AD cutover, when the
-    domain policy governs). Returns an error string or None."""
+    """Bank password policy: min 10 chars with ALL of UPPER/lowercase,
+    digits and symbols, plus username and common-password screening.
+    (Interim until AD cutover, when the domain policy governs.)
+    Returns an error string or None."""
     if not password or len(password) < 10:
         return 'Password must be at least 10 characters.'
-    classes = sum(bool(re.search(p, password)) for p in
-                  (r'[A-Z]', r'[a-z]', r'[0-9]', r'[^A-Za-z0-9]'))
-    if classes < 3:
-        return ('Password must mix at least 3 of: UPPER/lowercase letters, '
-                'digits, symbols.')
+    missing = []
+    if not re.search(r'[A-Z]', password):
+        missing.append('UPPERCASE')
+    if not re.search(r'[a-z]', password):
+        missing.append('lowercase')
+    if not re.search(r'[0-9]', password):
+        missing.append('digits')
+    if not re.search(r'[^A-Za-z0-9]', password):
+        missing.append('symbols')
+    if missing:
+        return 'Password must include: ' + ', '.join(missing) + '.'
     lowered = password.lower()
     if username and username.lower() in lowered:
         return 'Password must not contain the username.'
