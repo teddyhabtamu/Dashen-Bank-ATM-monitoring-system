@@ -167,7 +167,7 @@
         <div class="form-group full">
           <label>Password</label>
           <div class="pw-wrap">
-            <input type="password" name="password" required placeholder="Min 4 characters" minlength="4" autocomplete="new-password">
+            <input type="password" name="password" required placeholder="Min 10 chars, mix 3 of: UPPER/lower/digit/symbol" minlength="10" autocomplete="new-password" title="At least 10 characters with 3 of: uppercase, lowercase, digits, symbols">
             <button type="button" class="pw-toggle" onclick="togglePW(this)" tabindex="-1" aria-label="Toggle password visibility">
               <i data-lucide="eye" style="width:15px;height:15px"></i>
             </button>
@@ -219,7 +219,7 @@
         <div class="form-group full">
           <label>New Password <span style="color:#94A3B8;font-weight:400">(leave blank to keep current)</span></label>
           <div class="pw-wrap">
-            <input type="password" id="editPassword" name="password" placeholder="Min 4 characters" minlength="4" autocomplete="new-password">
+            <input type="password" id="editPassword" name="password" placeholder="Min 10 chars, mix 3 of: UPPER/lower/digit/symbol" minlength="10" autocomplete="new-password" title="At least 10 characters with 3 of: uppercase, lowercase, digits, symbols">
             <button type="button" class="pw-toggle" onclick="togglePW(this)" tabindex="-1" aria-label="Toggle password visibility">
               <i data-lucide="eye" style="width:15px;height:15px"></i>
             </button>

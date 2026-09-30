@@ -1559,6 +1559,25 @@ def user_emails():
         return jsonify([])
 
 
+def _password_error(password, username):
+    """Bank-grade local password policy (interim until AD cutover, when the
+    domain policy governs). Returns an error string or None."""
+    if not password or len(password) < 10:
+        return 'Password must be at least 10 characters.'
+    classes = sum(bool(re.search(p, password)) for p in
+                  (r'[A-Z]', r'[a-z]', r'[0-9]', r'[^A-Za-z0-9]'))
+    if classes < 3:
+        return ('Password must mix at least 3 of: UPPER/lowercase letters, '
+                'digits, symbols.')
+    lowered = password.lower()
+    if username and username.lower() in lowered:
+        return 'Password must not contain the username.'
+    if any(b in lowered for b in
+           ('password', 'dashen', 'atm123', '123456', 'qwerty', 'letmein')):
+        return 'Password is too common — choose something less guessable.'
+    return None
+
+
 @bp.route('/users/create', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
@@ -1574,8 +1593,9 @@ def user_create():
     if not _re.match(r'^[A-Za-z0-9_]+$', username):
         flash('Username: letters, numbers and underscore only', 'error')
         return redirect('/admin/users')
-    if not password or len(password) < 4:
-        flash('Password must be at least 4 characters', 'error')
+    pw_err = _password_error(password, username)
+    if pw_err:
+        flash(pw_err, 'error')
         return redirect('/admin/users')
     if email and not _valid_email(email):
         flash('Email address looks invalid', 'error')
@@ -1627,6 +1647,11 @@ def user_edit():
     if email and not _valid_email(email):
         flash('Email address looks invalid', 'error')
         return redirect('/admin/users')
+    if password:
+        pw_err = _password_error(password, username)
+        if pw_err:
+            flash(pw_err, 'error')
+            return redirect('/admin/users')
     try:
         with get_db() as conn:
             cur = conn.cursor()
