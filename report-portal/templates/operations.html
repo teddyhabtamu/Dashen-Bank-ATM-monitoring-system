@@ -116,6 +116,13 @@
         </tbody>
       </table>
     </div>
+    {% if fleet_pages > 1 %}
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:12px;font-size:12px;color:#64748B">
+      {% if fleet_pg > 1 %}<a class="btn btn-outline" style="padding:6px 12px" href="/operations?page={{ fleet_pg - 1 }}&spage={{ sum_pg }}">← Prev</a>{% endif %}
+      <span>Page {{ fleet_pg }} of {{ fleet_pages }} ({{ fleet_total }} ATMs)</span>
+      {% if fleet_pg < fleet_pages %}<a class="btn btn-outline" style="padding:6px 12px" href="/operations?page={{ fleet_pg + 1 }}&spage={{ sum_pg }}">Next →</a>{% endif %}
+    </div>
+    {% endif %}
   </div>
 
   <div class="card" style="margin-bottom:16px">
@@ -158,6 +165,13 @@
         </tbody>
       </table>
     </div>
+    {% if sum_pages > 1 %}
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:12px;font-size:12px;color:#64748B">
+      {% if sum_pg > 1 %}<a class="btn btn-outline" style="padding:6px 12px" href="/operations?page={{ fleet_pg }}&spage={{ sum_pg - 1 }}">← Prev</a>{% endif %}
+      <span>Page {{ sum_pg }} of {{ sum_pages }}</span>
+      {% if sum_pg < sum_pages %}<a class="btn btn-outline" style="padding:6px 12px" href="/operations?page={{ fleet_pg }}&spage={{ sum_pg + 1 }}">Next →</a>{% endif %}
+    </div>
+    {% endif %}
   </div>
 
 </div>

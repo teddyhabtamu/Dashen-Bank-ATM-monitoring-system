@@ -10,13 +10,32 @@ a missing table yields zeros, never a 500.
 import logging
 import json
 import os
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, request
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from db import get_db
 
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('operations', __name__, url_prefix='/operations')
+
+# Fleet tables render 50 rows per page. The map and stat cards always use
+# the FULL fleet — only the HTML tables are sliced, so scaling to 1200
+# ATMs shrinks the page without changing any number on it.
+FLEET_PER_PAGE = 50
+
+
+def _page_param(name):
+    try:
+        return max(1, int(request.args.get(name, 1)))
+    except (ValueError, TypeError):
+        return 1
+
+
+def _paginate(rows, page, per_page=FLEET_PER_PAGE):
+    total_pages = max(1, (len(rows) + per_page - 1) // per_page)
+    page = min(page, total_pages)
+    start = (page - 1) * per_page
+    return rows[start:start + per_page], page, total_pages
 
 # Offline Ethiopia outline (simplified GADM, vendored in static/) so the fleet
 # map works on the bank network with zero tile/CDN dependencies.
@@ -161,6 +180,11 @@ def dashboard():
         if r.get('recorded_at') is not None:
             r['recorded_at'] = str(r['recorded_at'])[:19]
 
+    # Paginate the per-ATM tables only — map_dots below still uses the full
+    # fleet, and all stat cards/summary counts are computed above.
+    fleet_page, fleet_pg, fleet_pages = _paginate(fleet, _page_param('page'))
+    summary_page, sum_pg, sum_pages = _paginate(summary, _page_param('spage'))
+
     # ── Fleet map dots (same health coloring as Grafana's geomap) ──
     map_dots = []
     map_missing = 0
@@ -186,7 +210,9 @@ def dashboard():
 
     return render_template('operations.html',
                            cash_today=cash_today, success_rate=success_rate,
-                           unacked=unacked_count, fleet=fleet, feed=feed,
-                           summary=summary, chart=chart,
+                           unacked=unacked_count, fleet=fleet_page, feed=feed,
+                           summary=summary_page, chart=chart,
+                           fleet_pg=fleet_pg, fleet_pages=fleet_pages, fleet_total=len(fleet),
+                           sum_pg=sum_pg, sum_pages=sum_pages,
                            map_svg=_ethiopia_svg_path(), map_dots=map_dots,
                            map_missing=map_missing)
