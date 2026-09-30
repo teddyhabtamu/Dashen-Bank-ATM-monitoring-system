@@ -184,6 +184,11 @@ input.field-bad{border-color:#FCA5A5 !important}
           <div class="field-err" data-err-for="password"></div>
         </div>
         <div class="form-group full">
+          <label>Confirm Password</label>
+          <input type="password" id="createPassword2" name="password_confirm" required placeholder="Repeat the password" minlength="10" autocomplete="new-password" oninput="clearFieldErr(this)">
+          <div class="field-err" data-err-for="password_confirm"></div>
+        </div>
+        <div class="form-group full">
           <label>Role</label>
           <select name="role">
             <option value="viewer">Viewer (read-only)</option>
@@ -240,6 +245,11 @@ input.field-bad{border-color:#FCA5A5 !important}
           <div class="pw-meter-label" id="editPwLabel"></div>
           <div class="field-err" data-err-for="password"></div>
         </div>
+        <div class="form-group full">
+          <label>Confirm New Password</label>
+          <input type="password" id="editPassword2" name="password_confirm" placeholder="Repeat the new password" minlength="10" autocomplete="new-password" oninput="clearFieldErr(this)">
+          <div class="field-err" data-err-for="password_confirm"></div>
+        </div>
       </div>
       <div class="form-actions">
         <button type="button" class="btn btn-outline" onclick="closeModal('editModal')">Cancel</button>
@@ -273,12 +283,14 @@ function openCreateModal(){
   m.querySelectorAll('.field-bad').forEach(function(i){ i.classList.remove('field-bad'); });
   var f = document.getElementById('createPwFill'); if(f) f.style.width = '0';
   var l = document.getElementById('createPwLabel'); if(l) l.textContent = '';
+  var c2 = document.getElementById('createPassword2'); if(c2) c2.value = '';
   m.classList.add('show'); lucide.createIcons();
 }
 function openEditModal(username, role, email){
   document.getElementById('editUsernameLabel').textContent = username;
   document.getElementById('editUsernameInput').value = username;
   document.getElementById('editPassword').value = '';
+  var e2 = document.getElementById('editPassword2'); if(e2) e2.value = '';
   document.getElementById('editEmail').value = email || '';
   var ef = document.getElementById('editPwFill'); if(ef) ef.style.width = '0';
   var el = document.getElementById('editPwLabel'); if(el) el.textContent = '';
@@ -314,10 +326,8 @@ function setFieldErr(form, name, msg){
   if(input) input.classList.add('field-bad');
   if(box){ box.textContent = msg; box.classList.add('show'); }
 }
-/* Mirrors server _password_error exactly: min 10, all 4 classes,
-   no username, small common-password blocklist. */
-var PW_BLOCKED = ['password', 'dashen', 'atm123', '123456', 'qwerty', 'letmein'];
-function passwordIssues(pw, username){
+/* Mirrors server _password_error exactly: min 10 + all 4 classes. */
+function passwordIssues(pw){
   pw = pw || '';
   if(pw.length < 10) return ['at least 10 characters'];
   var missing = [];
@@ -326,11 +336,6 @@ function passwordIssues(pw, username){
   if(!/[0-9]/.test(pw)) missing.push('digits');
   if(!/[^A-Za-z0-9]/.test(pw)) missing.push('symbols');
   if(missing.length) return ['must include: ' + missing.join(', ')];
-  var low = pw.toLowerCase();
-  if(username && low.indexOf(username.toLowerCase()) !== -1) return ['must not contain the username'];
-  for(var i = 0; i < PW_BLOCKED.length; i++){
-    if(low.indexOf(PW_BLOCKED[i]) !== -1) return ['too common — choose something less guessable'];
-  }
   return [];
 }
 function pwMeter(input){
@@ -341,8 +346,7 @@ function pwMeter(input){
   var label = document.getElementById(prefix + 'PwLabel');
   if(!fill || !label) return;
   var pw = input.value || '';
-  var unameEl = form.querySelector('[name="username"]');
-  var issues = passwordIssues(pw, unameEl ? unameEl.value : '');
+  var issues = passwordIssues(pw);
   var levels = [
     {w: '100%', c: '#16A34A', t: 'Strong'},
     {w: '66%', c: '#84CC16', t: 'Good'},
@@ -363,6 +367,7 @@ function pwMeter(input){
 function validateUserForm(form, isCreate){
   var uname = form.querySelector('[name="username"]');
   var pw = form.querySelector('[name="password"]');
+  var pw2 = form.querySelector('[name="password_confirm"]');
   var email = form.querySelector('[name="email"]');
   var ok = true;
   form.querySelectorAll('.field-err.show').forEach(function(b){ b.textContent = ''; b.classList.remove('show'); });
@@ -375,8 +380,9 @@ function validateUserForm(form, isCreate){
     }
   }
   if(pw && (isCreate || pw.value)){
-    var issues = passwordIssues(pw.value, uname ? uname.value : '');
+    var issues = passwordIssues(pw.value);
     if(issues.length){ setFieldErr(form, 'password', 'Password ' + issues[0] + '.'); ok = false; }
+    if(pw2 && pw.value !== pw2.value){ setFieldErr(form, 'password_confirm', 'Passwords do not match.'); ok = false; }
   }
   if(email && email.value.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.value.trim())){
     setFieldErr(form, 'email', 'Email address looks invalid.'); ok = false;

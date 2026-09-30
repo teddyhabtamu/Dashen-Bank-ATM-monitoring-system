@@ -1559,11 +1559,10 @@ def user_emails():
         return jsonify([])
 
 
-def _password_error(password, username):
+def _password_error(password, username=None):
     """Bank password policy: min 10 chars with ALL of UPPER/lowercase,
-    digits and symbols, plus username and common-password screening.
-    (Interim until AD cutover, when the domain policy governs.)
-    Returns an error string or None."""
+    digits and symbols. (Interim until AD cutover, when the domain policy
+    governs.) Returns an error string or None."""
     if not password or len(password) < 10:
         return 'Password must be at least 10 characters.'
     missing = []
@@ -1577,12 +1576,6 @@ def _password_error(password, username):
         missing.append('symbols')
     if missing:
         return 'Password must include: ' + ', '.join(missing) + '.'
-    lowered = password.lower()
-    if username and username.lower() in lowered:
-        return 'Password must not contain the username.'
-    if any(b in lowered for b in
-           ('password', 'dashen', 'atm123', '123456', 'qwerty', 'letmein')):
-        return 'Password is too common — choose something less guessable.'
     return None
 
 
@@ -1592,6 +1585,7 @@ def _password_error(password, username):
 def user_create():
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '').strip()
+    password_confirm = request.form.get('password_confirm', '').strip()
     role = request.form.get('role', ROLE_VIEWER).strip()
     email = request.form.get('email', '').strip()
     if not username or len(username) < 3:
@@ -1604,6 +1598,9 @@ def user_create():
     pw_err = _password_error(password, username)
     if pw_err:
         flash(pw_err, 'error')
+        return redirect('/admin/users')
+    if password != password_confirm:
+        flash('Passwords do not match.', 'error')
         return redirect('/admin/users')
     if email and not _valid_email(email):
         flash('Email address looks invalid', 'error')
@@ -1656,6 +1653,9 @@ def user_edit():
         flash('Email address looks invalid', 'error')
         return redirect('/admin/users')
     if password:
+        if password != request.form.get('password_confirm', '').strip():
+            flash('Passwords do not match.', 'error')
+            return redirect('/admin/users')
         pw_err = _password_error(password, username)
         if pw_err:
             flash(pw_err, 'error')
