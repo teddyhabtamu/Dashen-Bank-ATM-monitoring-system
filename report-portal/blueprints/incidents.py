@@ -11,6 +11,7 @@ attributed to the portal user in the followup text + portal audit log.
 import logging
 import requests
 import os
+import re
 import time
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, render_template, request, jsonify, session, Response
@@ -709,6 +710,13 @@ def detail(ticket_id):
                            error=error)
 
 
+def _safe_filename(raw, doc_id):
+    """Strip path tricks, quotes and header newlines from a GLPI filename."""
+    name = str(raw or '').split('/')[-1].split('\\')[-1].strip()
+    name = re.sub(r'[\r\n";]', '', name)[:100].strip()
+    return name or f'file-{doc_id}'
+
+
 @bp.route('/<int:ticket_id>/attachment/<int:doc_id>')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
@@ -747,12 +755,32 @@ def attachment(ticket_id, doc_id):
             return 'GLPI unreachable', 502
         if r.status_code != 200:
             return 'Not found', 404
-        body = b''.join(chunk for chunk in r.iter_content(65536)
-                        if chunk)[:_MAX_ATTACH_BYTES + 1]
-        if len(body) > _MAX_ATTACH_BYTES:
+        try:
+            declared = int(r.headers.get('Content-Length') or 0)
+        except (TypeError, ValueError):
+            declared = 0
+        if declared > _MAX_ATTACH_BYTES:
+            r.close()
             return 'File too large to preview', 413
         disp = 'inline' if (mime.startswith('image/') or mime == 'application/pdf') else 'attachment'
-        return Response(body, mimetype=mime,
+        fname = _safe_filename(fname, doc_id)
+
+        def _stream():
+            # Streamed, never buffered: the running cap only trips when the
+            # server lied about Content-Length (truncates instead of OOMing).
+            try:
+                downloaded = 0
+                for chunk in r.iter_content(65536):
+                    if not chunk:
+                        continue
+                    downloaded += len(chunk)
+                    if downloaded > _MAX_ATTACH_BYTES:
+                        break
+                    yield chunk
+            finally:
+                r.close()
+
+        return Response(_stream(), mimetype=mime, direct_passthrough=True,
                         headers={'Content-Disposition': f'{disp}; filename="{fname}"'})
     finally:
         _close(token)
