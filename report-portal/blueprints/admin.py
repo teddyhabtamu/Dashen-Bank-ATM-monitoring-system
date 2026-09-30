@@ -1565,6 +1565,17 @@ def _password_error(password, username=None):
     return password_error(password, username)
 
 
+def _email_taken(cur, email, exclude_username=None):
+    """Case-insensitive duplicate check (NULL/blank grandfathered)."""
+    if exclude_username:
+        cur.execute("SELECT 1 FROM app_users WHERE email IS NOT NULL AND LOWER(email) = LOWER(%s) AND username <> %s",
+                    (email, exclude_username))
+    else:
+        cur.execute("SELECT 1 FROM app_users WHERE email IS NOT NULL AND LOWER(email) = LOWER(%s)",
+                    (email,))
+    return cur.fetchone() is not None
+
+
 @bp.route('/users/create', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
@@ -1591,6 +1602,9 @@ def user_create():
     if email and not _valid_email(email):
         flash('Email address looks invalid', 'error')
         return redirect('/admin/users')
+    if not email:
+        flash('Email is required (report delivery and account recovery).', 'error')
+        return redirect('/admin/users')
     if role not in ROLES:
         flash('Invalid role selected', 'error')
         return redirect('/admin/users')
@@ -1601,6 +1615,10 @@ def user_create():
             if cur.fetchone():
                 cur.close()
                 flash(f'User "{username}" already exists', 'error')
+                return redirect('/admin/users')
+            if _email_taken(cur, email):
+                cur.close()
+                flash(f'Email "{email}" is already used by another account.', 'error')
                 return redirect('/admin/users')
             cur.execute(
                 "INSERT INTO app_users (username, password_hash, role, email, must_change_pw) VALUES (%s, %s, %s, %s, TRUE)",
@@ -1635,7 +1653,10 @@ def user_edit():
     if role not in ROLES:
         flash('Invalid role selected', 'error')
         return redirect('/admin/users')
-    if email and not _valid_email(email):
+    if not email:
+        flash('Email is required (report delivery and account recovery).', 'error')
+        return redirect('/admin/users')
+    if not _valid_email(email):
         flash('Email address looks invalid', 'error')
         return redirect('/admin/users')
     if password:
@@ -1658,6 +1679,10 @@ def user_edit():
             if row[0] == ROLE_ADMIN and role != ROLE_ADMIN and _admin_count(cur) <= 1:
                 cur.close()
                 flash('Cannot demote the last admin user.', 'error')
+                return redirect('/admin/users')
+            if _email_taken(cur, email, exclude_username=username):
+                cur.close()
+                flash(f'Email "{email}" is already used by another account.', 'error')
                 return redirect('/admin/users')
             if password:
                 cur.execute("UPDATE app_users SET role = %s, password_hash = %s, email = %s, must_change_pw = TRUE WHERE username = %s",
