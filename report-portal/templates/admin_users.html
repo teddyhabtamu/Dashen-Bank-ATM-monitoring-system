@@ -185,7 +185,12 @@ input.field-bad{border-color:#FCA5A5 !important}
         </div>
         <div class="form-group full">
           <label>Confirm Password</label>
-          <input type="password" id="createPassword2" name="password_confirm" required placeholder="Repeat the password" minlength="10" autocomplete="new-password" oninput="clearFieldErr(this)">
+          <div class="pw-wrap">
+            <input type="password" id="createPassword2" name="password_confirm" required placeholder="Repeat the password" minlength="10" autocomplete="new-password" oninput="clearFieldErr(this)">
+            <button type="button" class="pw-toggle" onclick="togglePW(this)" tabindex="-1" aria-label="Toggle password visibility">
+              <i data-lucide="eye" style="width:15px;height:15px"></i>
+            </button>
+          </div>
           <div class="field-err" data-err-for="password_confirm"></div>
         </div>
         <div class="form-group full">
@@ -247,7 +252,12 @@ input.field-bad{border-color:#FCA5A5 !important}
         </div>
         <div class="form-group full">
           <label>Confirm New Password</label>
-          <input type="password" id="editPassword2" name="password_confirm" placeholder="Repeat the new password" minlength="10" autocomplete="new-password" oninput="clearFieldErr(this)">
+          <div class="pw-wrap">
+            <input type="password" id="editPassword2" name="password_confirm" placeholder="Repeat the new password" minlength="10" autocomplete="new-password" oninput="clearFieldErr(this)">
+            <button type="button" class="pw-toggle" onclick="togglePW(this)" tabindex="-1" aria-label="Toggle password visibility">
+              <i data-lucide="eye" style="width:15px;height:15px"></i>
+            </button>
+          </div>
           <div class="field-err" data-err-for="password_confirm"></div>
         </div>
       </div>
