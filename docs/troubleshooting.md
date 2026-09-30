@@ -3,6 +3,11 @@
 > Quick answers for the most common failures in the Dashen Bank ATM
 > Monitoring System. If you are new to this system, read
 > `docs/architecture.md` first so the fixes below make sense.
+>
+> **Scope note (2026-09-30):** most sections below were written for the
+> PoC (WSL laptop, ATM-001..005, sim engines). The **UAT appendix at the
+> bottom** covers the UAT-01/UAT-02 failure modes seen during rollout —
+> start there on UAT.
 
 ---
 
@@ -324,6 +329,41 @@ docker ps --format "table {{.Names}}\t{{.Status}}" | grep -v "Exited"
 If containers are still failing after this, check `docker compose
 logs <name>` for each one that isn't `Up`, and work through the
 relevant section above.
+
+---
+
+## Appendix: UAT failures seen during rollout (UAT-01 172.22.10.45 / UAT-02)
+
+### "filebeat in Restarting status: must be owned by uid=0 or root"
+
+Every `git pull` that touches `filebeat.yml` resets its ownership to your
+ssh user; filebeat 7.x then refuses to start. Fix (also noted in
+`docker-compose.yml` above the mount):
+
+```bash
+sudo chown root:root filebeat.yml && sudo chmod 644 filebeat.yml
+docker compose up -d --force-recreate filebeat
+docker logs filebeat --tail 5   # should show startup, not the ownership error
+```
+
+### "Volume-mounted code change didn't take effect after --build"
+
+`report-portal`, `anomaly_detector.py`, `cash_watcher.py` and friends are
+mounted `:ro` into their containers — rebuilding the image changes
+nothing. Use `docker compose up -d --force-recreate <service>` for
+script-only changes (`--build` only matters for Dockerfile/dependency
+changes).
+
+### "Cash watcher logs `fetch <ATM> failed: 0`"
+
+Fixed in `b75eeb0` (JSON-RPC envelope unwrap). If you see it again, the
+Zabbix API response shape changed — check `cash_watcher.fetch_levels`.
+
+### "Monitoring Center shows stale/empty data"
+
+The portal caches Zabbix for 60s and serves stale on hiccups by design.
+Check `docker logs report-portal --tail 20` for `Zabbix fetch exceeded`
+warnings; verify `zabbix-web` answers: `curl http://localhost:8080/api_jsonrpc.php`.
 
 ---
 

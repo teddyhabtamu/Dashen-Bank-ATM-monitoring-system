@@ -891,11 +891,16 @@ sudo chmod 644 filebeat.yml
 
 ### Step 5.2.5 — Start all services
 
+> **Scope note (2026-09-30):** the sim engines (`atm-sim-engine`,
+> `atm-txn-engine`, `atm-ej-engine`) and `pgadmin` below are PoC-era —
+> they do not exist in `docker-compose.yml` on `uat-prep`, and no
+> simulators run on UAT (`ENABLE_SIMULATORS=false`). The gateway lives
+> in `docker-compose.gateway.yml`, not here.
+
 ```bash
 # Build custom images
 docker compose -f docker-compose.yml build --no-cache \
-  atm-sim-engine atm-txn-engine atm-ej-engine state-manager \
-  report-portal iso8583-gateway
+  state-manager report-portal
 
 # Start PostgreSQL first (everything depends on it)
 docker compose -f docker-compose.yml up -d postgres
@@ -924,7 +929,7 @@ sleep 60
 docker ps --format "table {{.Names}}\t{{.Status}}" | grep -v "Exited"
 ```
 
-You should see containers all showing "Up": postgres, zabbix-server, zabbix-web, zabbix-agent, mariadb, glpi, grafana, grafana-renderer, report-portal, iso8583-gateway, anomaly-detector, network-correlator, atm-sim-engine, atm-txn-engine, atm-ej-engine, state-manager, pgadmin.
+You should see containers all showing "Up": postgres, zabbix-server, zabbix-web, zabbix-agent, mariadb, glpi, grafana, grafana-renderer, report-portal, anomaly-detector, network-correlator, state-manager, cash-watcher, filebeat. (On the data VM, `docker-compose.gateway.yml` adds opensearch, opensearch-dashboards and iso8583-gateway.)
 
 ### Step 5.2.7 — Verify PostgreSQL has data
 
