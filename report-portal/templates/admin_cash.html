@@ -21,8 +21,9 @@
     <span class="card-title">Log a missed load</span>
   </div>
   <p style="padding:0 24px;color:#64748B;font-size:12px">Levels detected automatically once SNMP flows — use this form only for loads the system missed (e.g. during monitoring outages).</p>
-  <form method="post" action="/admin/cash/log">
+  <form method="post" action="/admin/cash/log" onsubmit="var b=this.querySelector('button[type=submit]');if(b){b.disabled=true;b.textContent='Logging…';}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="cash_token" value="{{ cash_token }}">
     <div class="form-grid">
       <div class="form-group">
         <label>ATM</label>

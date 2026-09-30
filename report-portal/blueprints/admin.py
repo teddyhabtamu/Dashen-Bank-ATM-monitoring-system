@@ -2,7 +2,7 @@
 blueprints/admin.py
 ATM Admin registration routes.
 """
-import csv, io, re, os, json, logging, threading, concurrent.futures, urllib.request
+import csv, io, re, os, json, logging, secrets, threading, concurrent.futures, urllib.request
 import requests
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response, current_app, abort, session
@@ -908,7 +908,28 @@ def cash_list():
         loads = [dict(zip(cols, r)) for r in cur.fetchall()]
         cur.close()
     return render_template('admin_cash.html', atms=atms, loads=loads,
-                           atm_filter=atm_filter)
+                           atm_filter=atm_filter,
+                           cash_token=_mint_cash_token())
+
+
+def _mint_cash_token():
+    """One-time submit token against double-click/retry duplicate loads."""
+    toks = session.get('cash_tokens') or []
+    toks = [t for t in toks if isinstance(t, str)][-19:]
+    tok = secrets.token_urlsafe(16)
+    session['cash_tokens'] = toks + [tok]
+    session.modified = True
+    return tok
+
+
+def _take_cash_token(tok):
+    """Consume a submit token; False means already used (duplicate POST)."""
+    toks = session.get('cash_tokens') or []
+    if tok and tok in toks:
+        session['cash_tokens'] = [t for t in toks if t != tok]
+        session.modified = True
+        return True
+    return False
 
 
 @bp.route('/cash/log', methods=['POST'])
@@ -936,6 +957,11 @@ def cash_log():
     if errors:
         flash('Not saved: ' + ' '.join(errors), 'error')
         return redirect('/admin/cash')
+    if not _take_cash_token(request.form.get('cash_token', '')):
+        # Double-click, back-button resubmit, or retried POST: the first one
+        # already committed. Never insert twice; say so plainly.
+        flash('Already logged — duplicate submission ignored.', 'success')
+        return redirect(f'/admin/cash?atm_id={atm_id}' if atm_id else '/admin/cash')
     with get_db() as conn:
         cur = conn.cursor()
         try:
