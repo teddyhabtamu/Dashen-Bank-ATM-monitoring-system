@@ -65,6 +65,29 @@ Sanity-check reachability first (v2c shown; use `-v3 …` flags for v3):
 snmpwalk -v2c -c <REAL_COMMUNITY> -On 10.41.30.114 .1.3.6.1.2.1.1
 ```
 
+### 3.1 Walk evidence — NCR test ATM, 2026-09-30 (UAT-01 → NAT .114, community `public`)
+
+Full walk saved on UAT-01 as `snmpwalk_output.txt` (repo-ignored; kept off-git).
+Findings:
+
+- **Target confirmed genuine NCR ATM** (not just a Windows box): APTRA stack
+  present — Advance NDC, XFS CDM/CIM/PIN/TTU/BRM/cash-dispenser providers
+  (`USBCurrencyDispenser`, `PcGBRU`, `USBMediaDispenser`), `aptraResourceManager`.
+- **Only standard MIBs exposed** (system/interfaces/IP/TCP/UDP/host-resources).
+  **No NCR enterprise OIDs** — cassette counters are NOT visible through this
+  agent view. → **Ask ATM team:** which agent/port/community exposes the
+  NCR/APTRA MIB, then walk that subtree and feed §4.
+- **`zabbix_agentd.exe` already installed and listening on 10050** (plus the
+  legacy NetXMS agent). OS-level metrics via agent items are unblocked today;
+  test with `nc -zv -w 5 10.41.30.114 10050`.
+- Box is SYN-flooding `192.168.21.218:10051` (unanswered) — stale pointer to a
+  previous Zabbix server; ask ATM team to repoint at UAT-01 when ready.
+- Hygiene: sysName still `TESTMACHINE`, empty contact/location; community is
+  `public` read-only (zero SetVars observed — rotate before go-live).
+- Decision: create the Zabbix host with OS metrics first; hardware/cassette
+  items only after the NCR MIB lands (blocks `generate_zabbix_templates.py`
+  guard and the vendor-isolation end-to-end test).
+
 ## 4. Fill `config/snmp/oid_mapping.csv`
 Start from the tracked header-only template, then add one row per monitored OID:
 ```bash

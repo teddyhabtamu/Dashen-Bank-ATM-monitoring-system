@@ -26,3 +26,7 @@ config/postgres/atm_custom_tables.sql
 
 # Zabbix template backups created by scripts/generate_zabbix_templates.py
 config/zabbix/*.simulator.bak
+
+# Raw SNMP walks (contain internal IPs/MACs; evidence stays on the UAT host)
+snmpwalk_output.txt
+snmpwalk_*.txt
