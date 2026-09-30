@@ -76,21 +76,23 @@ def zbx_login():
 def fetch_levels(auth, host, keys):
     """Return {cassette_n: int_level} for keys with numeric lastvalues."""
     try:
-        hosts = zbx_post({'jsonrpc': '2.0', 'method': 'host.get', 'auth': auth,
-                          'params': {'output': ['hostid'],
-                                     'filter': {'host': [host]}}, 'id': 1})
+        res = zbx_post({'jsonrpc': '2.0', 'method': 'host.get', 'auth': auth,
+                        'params': {'output': ['hostid'],
+                                   'filter': {'host': [host]}}, 'id': 1})
+        hosts = res.get('result') or []
         if not hosts:
             return {}
         hostid = hosts[0]['hostid']
-        items = zbx_post({'jsonrpc': '2.0', 'method': 'item.get', 'auth': auth,
-                          'params': {'output': ['key_', 'lastvalue'],
-                                     'hostids': [hostid],
-                                     'filter': {'key_': keys}}, 'id': 1})
+        res = zbx_post({'jsonrpc': '2.0', 'method': 'item.get', 'auth': auth,
+                        'params': {'output': ['key_', 'lastvalue'],
+                                   'hostids': [hostid],
+                                   'filter': {'key_': keys}}, 'id': 1})
+        items = res.get('result') or []
     except Exception as e:
         log.warning('fetch %s failed: %s', host, e)
         return {}
     out = {}
-    for it in items or []:
+    for it in items:
         try:
             n = int(it['key_'].rsplit('cassette', 1)[1])
             out[n] = int(float(it.get('lastvalue')))
