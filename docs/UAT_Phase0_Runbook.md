@@ -198,6 +198,15 @@ and switching the UserParameters to `-ExecutionPolicy RemoteSigned`.
 Template items (master + JSONPath dependents per part) are built against
 the live JSON shape in the next step.
 
+**Proven 2026-10-01 (agent-side, TESTMACHINE):** local
+`zabbix_get -s 127.0.0.1 -k "atm.parts"` returns all 33 parts
+(cassettes report `part_status 4 / replenishment_status 1`, Transport
+reports `part_status 2`). Gotchas hit along the way: `atm.parts[*]`
+collides with `atm.parts` (use singular `atm.part[*]`), and the agent's
+`Server=` ACL must include `127.0.0.1` for local tests
+(`connection ... rejected, allowed hosts` in the agent log names the fix).
+UAT-01 polling still waits on the TCP 10050 NAT forward.
+
 ## 9c. Import + link the WMI template
 
 ```bash
