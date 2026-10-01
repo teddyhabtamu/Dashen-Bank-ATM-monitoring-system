@@ -44,8 +44,14 @@ if [ "$DRY_RUN" = 1 ]; then
   log "  files/ (.env, compose files, filebeat.yml, config/, glpi-plugins/)"
   [ -n "$BACKUP_DEST" ] && log "  then scp bundle to $BACKUP_DEST" || log "  BACKUP_DEST unset: bundle would stay local (fix this)"
   log "Connectivity checks:"
-  curl -sf -m 10 -o /dev/null "$ZBX_URL" \
-    && log "  zabbix-web API reachable" || warn "  zabbix-web API NOT reachable"
+  # api_jsonrpc.php only speaks POST (GET returns 412) — probe with apiinfo.version.
+  if curl -sf -m 10 -H 'Content-Type: application/json-rpc' \
+      -d '{"jsonrpc":"2.0","method":"apiinfo.version","id":1,"params":{}}' \
+      -o /dev/null "$ZBX_URL"; then
+    log "  zabbix-web API reachable"
+  else
+    warn "  zabbix-web API NOT reachable"
+  fi
   if [ -n "$GRAFANA_ADMIN_PASSWORD" ]; then
     curl -sf -m 10 -o /dev/null -u "admin:$GRAFANA_ADMIN_PASSWORD" "$GRAFANA_URL/api/org" \
       && log "  grafana API reachable" || warn "  grafana API NOT reachable (check password/URL)"
