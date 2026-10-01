@@ -166,6 +166,38 @@ ISO8583_MODE=tcp docker compose -f docker-compose.gateway.yml up -d iso8583-gate
 ```
 The bank must route the 2 test ATMs' ISO 8583 traffic to UAT-02:9876.
 
+## 9b. WMI part-state collection (NCR Windows cores)
+
+SNMP cannot serve NCR data on this fleet (agent view ends before `.191`,
+proven 2026-09-30) — collect device state through the Zabbix agent instead.
+No new service, port, or software: one script + config snippet on the ATM.
+
+On the test ATM (read-only rehearsal first — run the script by hand, it
+only queries):
+
+```powershell
+mkdir C:\monitor
+# copy scripts/atm-wmi-collector.ps1 -> C:\monitor\
+powershell -NoProfile -NonInteractive -File C:\monitor\atm-wmi-collector.ps1
+# expect one JSON line: {"ts":"...","parts":{"First Cassette":{...},...}}
+```
+
+Then append `config/zabbix/atm-agent-userparams.conf` to
+`C:\Program Files\Zabbix Agent\zabbix_agentd.conf`, restart the agent
+service, and prove it from UAT-01 (needs TCP 10050 through the NAT):
+
+```bash
+zabbix_get -s 10.41.30.114 -k "atm.parts"
+zabbix_get -s 10.41.30.114 -k "atm.parts[First Cassette]"
+```
+
+If the agent log shows PowerShell denials, the McAfee/Solidcore whitelist
+must allow `C:\monitor\atm-wmi-collector.ps1` (bank change control) —
+preferred over `-ExecutionPolicy Bypass` long-term is signing the script
+and switching the UserParameters to `-ExecutionPolicy RemoteSigned`.
+Template items (master + JSONPath dependents per part) are built against
+the live JSON shape in the next step.
+
 ## 10. Smoke test
 - Grafana dashboards show live state + transactions for the 2 ATMs.
 - Trigger a fault → Zabbix problem → GLPI ticket.
