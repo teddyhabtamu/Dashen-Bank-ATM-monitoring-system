@@ -1,0 +1,814 @@
+<?xml version="1.0" ?>
+<zabbix_export>
+  <version>6.4</version>
+  <date>2026-10-01T00:00:00Z</date>
+  <groups>
+    <group>
+      <uuid>f31d97d4-a282-5eb4-9a1e-7c50cbc6956e</uuid>
+      <name>Templates/ATMs</name>
+    </group>
+  </groups>
+  <templates>
+    <template>
+      <uuid>1c552005-581a-54ea-9444-580807f33ef9</uuid>
+      <template>Dashen Bank ATM WMI Parts</template>
+      <name>Dashen Bank ATM WMI Parts</name>
+      <groups>
+        <group>
+          <name>Templates/ATMs</name>
+        </group>
+      </groups>
+      <items>
+        <item>
+          <uuid>6cd40a79-b366-5690-a327-e98e89689f51</uuid>
+          <name>ATM Parts — full WMI tree</name>
+          <type>ZABBIX_AGENT</type>
+          <key>atm.parts</key>
+          <delay>5m</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>TEXT</value_type>
+        </item>
+        <item>
+          <uuid>4e228392-9ed7-58d1-b3ae-4f4238b24064</uuid>
+          <name>ATM Part — Capture Bin Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Capture Bin]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Capture Bin"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>eadf9f1d-b20b-5c62-b304-1f26595d9cad</uuid>
+          <name>ATM Part — Card Capture Bin Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Card Capture Bin]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Card Capture Bin"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>49271695-7956-535c-ad0f-ab87e90c1e9f</uuid>
+          <name>ATM Part — Card Reader Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Card Reader]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Card Reader"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>e33b82e6-5c8e-5e21-be68-bc2e5453d277</uuid>
+          <name>ATM Part — Carriage Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Carriage]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Carriage"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>7ab048ab-f6a4-506c-a716-7f604344a7d0</uuid>
+          <name>ATM Part — Control Board Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Control Board]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Control Board"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>fb5f7d87-7718-5f18-a41d-3554cde33b46</uuid>
+          <name>ATM Part — Divert Area Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Divert Area]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Divert Area"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>1f9c5328-a9f3-599a-83c9-aa3b40feadfc</uuid>
+          <name>ATM Part — Electronics Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Electronics]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Electronics"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>02c2799a-296b-5f54-9ea8-d9a57456b865</uuid>
+          <name>ATM Part — Exit Shutter Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Exit Shutter]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Exit Shutter"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>4e90bc6c-a08c-5f4d-9667-62c374995004</uuid>
+          <name>ATM Part — FDKs Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[FDKs]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["FDKs"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>ea746348-6ca8-58f2-b626-e7d0123a54c0</uuid>
+          <name>ATM Part — First Cassette Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[First Cassette]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["First Cassette"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>98760955-d0b1-5c72-92e7-cf1e3c4f8827</uuid>
+          <name>ATM Part — First Cassette Replenishment</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.replenishment_status[First Cassette]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["First Cassette"].replenishment_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>b2bbce7a-9b38-5241-8f0a-ccd757c64d83</uuid>
+          <name>ATM Part — First Pick Module Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[First Pick Module]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["First Pick Module"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>0e33c35d-50a6-5af1-8e18-a78eaa53d10b</uuid>
+          <name>ATM Part — Fourth Cassette Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Fourth Cassette]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Fourth Cassette"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>de30e650-df9f-5a57-b694-7a9dda20bab0</uuid>
+          <name>ATM Part — Fourth Cassette Replenishment</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.replenishment_status[Fourth Cassette]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Fourth Cassette"].replenishment_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>ef39f7ed-a8da-5f37-95b7-bb071136270c</uuid>
+          <name>ATM Part — Fourth Pick Module Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Fourth Pick Module]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Fourth Pick Module"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>27ece261-42eb-5a8f-9ca5-ad48890bddf7</uuid>
+          <name>ATM Part — Knife Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Knife]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Knife"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>dadb6ec5-a6d6-539c-a7d2-95ef39dddce5</uuid>
+          <name>ATM Part — Mechanism Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Mechanism]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Mechanism"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>16a75746-c020-591c-ab79-0eb8360cf246</uuid>
+          <name>ATM Part — Media Aligner Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Media Aligner]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Media Aligner"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>3bdd4fbe-f656-51cf-8f3e-d950cd97c6cc</uuid>
+          <name>ATM Part — Paper Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Paper]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Paper"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>6eaf27ef-11b8-5332-b2a1-1dd83dda2667</uuid>
+          <name>ATM Part — Paper Replenishment</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.replenishment_status[Paper]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Paper"].replenishment_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>2b04f80b-0bea-5efe-a4d4-9416ffa43f76</uuid>
+          <name>ATM Part — PinPad Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[PinPad]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["PinPad"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>dd3142b6-555b-57ea-97b5-fe658bd7db17</uuid>
+          <name>ATM Part — Presenter Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Presenter]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Presenter"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>731cba24-2e44-5614-ae25-f99593d950f6</uuid>
+          <name>ATM Part — Print Head Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Print Head]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Print Head"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>a9971b09-3297-511d-93a4-7d1e5b1e84f0</uuid>
+          <name>ATM Part — Purge Bin Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Purge Bin]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Purge Bin"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>a4479a2f-10af-5bb1-b10e-a301e825d8a8</uuid>
+          <name>ATM Part — Purge Bin Replenishment</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.replenishment_status[Purge Bin]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Purge Bin"].replenishment_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>8b61f03a-b4c4-5d14-a529-0e06fbe0362f</uuid>
+          <name>ATM Part — Read/Write Magnetic Head Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Read/Write Magnetic Head]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Read/Write Magnetic Head"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>2cfba3e1-d488-57a3-9ad2-147f1872c513</uuid>
+          <name>ATM Part — Reject Area Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Reject Area]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Reject Area"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>30de5b53-b427-572e-9077-e6721903e42e</uuid>
+          <name>ATM Part — Reject Area Replenishment</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.replenishment_status[Reject Area]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Reject Area"].replenishment_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>c65e5239-0553-56ef-9c3c-f5621c62b642</uuid>
+          <name>ATM Part — Retract Area Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Retract Area]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Retract Area"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>83760342-a1a7-574c-afad-a6ba3ecef55a</uuid>
+          <name>ATM Part — Retract Area Replenishment</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.replenishment_status[Retract Area]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Retract Area"].replenishment_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>378f1f18-38be-5c85-91c3-feb728d8b1c3</uuid>
+          <name>ATM Part — Second Cassette Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Second Cassette]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Second Cassette"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>6e6540d6-e84c-5c88-a254-ff3eacc3458a</uuid>
+          <name>ATM Part — Second Cassette Replenishment</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.replenishment_status[Second Cassette]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Second Cassette"].replenishment_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>b056356d-acae-502b-994d-e11134627ef7</uuid>
+          <name>ATM Part — Second Pick Module Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Second Pick Module]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Second Pick Module"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>58a10a03-fdc5-5a35-90c0-658dfb7cc62f</uuid>
+          <name>ATM Part — Single Note Transport Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Single Note Transport]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Single Note Transport"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>57be672d-ee3d-5fa6-96db-4f36b23b5ded</uuid>
+          <name>ATM Part — Smart Card Reader Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Smart Card Reader]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Smart Card Reader"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>447a180d-49dd-546f-99b9-8e57449a10de</uuid>
+          <name>ATM Part — Suction Cups Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Suction Cups]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Suction Cups"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>4967b6ab-41ca-5c0a-b540-9d8ed7aad05f</uuid>
+          <name>ATM Part — Third Cassette Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Third Cassette]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Third Cassette"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>db15eea1-ca8e-571e-b428-ad6a9ea38a7c</uuid>
+          <name>ATM Part — Third Cassette Replenishment</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.replenishment_status[Third Cassette]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Third Cassette"].replenishment_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>f8f42bb1-828e-5eb6-a78e-fd68e03dc1cb</uuid>
+          <name>ATM Part — Third Pick Module Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Third Pick Module]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Third Pick Module"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>c3329935-4047-5604-b664-4a8331be26b8</uuid>
+          <name>ATM Part — Transport Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Transport]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Transport"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>604cee30-e102-5b77-b19f-83476dd70a1a</uuid>
+          <name>ATM Part — Vacuum System Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Vacuum System]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$.parts["Vacuum System"].part_status</params>
+            </step>
+          </preprocessing>
+        </item>
+      </items>
+    </template>
+  </templates>
+</zabbix_export>

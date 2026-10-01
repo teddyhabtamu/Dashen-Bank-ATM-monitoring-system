@@ -17,6 +17,7 @@ ZBX_PASS = os.environ.get("ZBX_PASS", "zabbix")
 CSV_PATH = "config/postgres/atm_locations.csv"
 TEMPLATE_NCR_PATH = "config/zabbix/template_ncr_snmp.xml"
 TEMPLATE_GRG_PATH = "config/zabbix/template_grg_snmp.xml"
+TEMPLATE_WMI_PATH = "config/zabbix/template_atm_wmi.xml"
 
 TEMPLATE_NCR_NAME = "Dashen Bank ATM Hardware"
 TEMPLATE_GRG_NAME = "Dashen Bank ATM Hardware - GRG"
@@ -230,6 +231,7 @@ def do_apply(atms, import_templates=False):
     if import_templates:
         z.import_template(TEMPLATE_NCR_PATH)
         z.import_template(TEMPLATE_GRG_PATH)
+        z.import_template(TEMPLATE_WMI_PATH)
         print("  Templates imported, waiting 3s for indexing...")
         time.sleep(3)
 

@@ -198,6 +198,20 @@ and switching the UserParameters to `-ExecutionPolicy RemoteSigned`.
 Template items (master + JSONPath dependents per part) are built against
 the live JSON shape in the next step.
 
+## 9c. Import + link the WMI template
+
+```bash
+python3 scripts/generate_wmi_template.py   # regenerates config/zabbix/template_atm_wmi.xml
+python3 scripts/sync_atms_to_zabbix.py --apply --import-templates
+```
+
+Then link **Dashen Bank ATM WMI Parts** to the test host in Zabbix
+(Configuration → Hosts → Templates) and watch Latest Data fill within
+~5 min. Deliberately **no triggers yet**: `PartStatus`/`ReplenishmentStatus`
+code meanings are uncalibrated — observe one full cycle (including a
+cassette state you can explain, e.g. post-CIT) before writing alert
+thresholds, or the first page will fire on healthy ATMs.
+
 ## 10. Smoke test
 - Grafana dashboards show live state + transactions for the 2 ATMs.
 - Trigger a fault → Zabbix problem → GLPI ticket.
