@@ -188,7 +188,7 @@ service, and prove it from UAT-01 (needs TCP 10050 through the NAT):
 
 ```bash
 zabbix_get -s 10.41.30.114 -k "atm.parts"
-zabbix_get -s 10.41.30.114 -k "atm.parts[First Cassette]"
+zabbix_get -s 10.41.30.114 -k "atm.part[First Cassette]"
 ```
 
 If the agent log shows PowerShell denials, the McAfee/Solidcore whitelist
