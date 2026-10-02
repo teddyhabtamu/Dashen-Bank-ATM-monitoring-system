@@ -643,7 +643,7 @@ def detail(ticket_id):
                             'date': _fmt_ts(f.get('date_creation') or f.get('date')),
                             'private': bool(int(f.get('is_private') or 0)),
                             'html': html,
-                            'mine': '(Report Portal)' in html,
+                            'mine': '(ATM Monitoring System)' in html,
                             'files': [],
                         })
                 timeline.extend(followup_rows)
@@ -796,7 +796,7 @@ def acknowledge(ticket_id):
         ok, data = _api(token, 'PUT', f'Ticket/{ticket_id}', {'input': {'status': 2}})
         if not ok:
             return False, data
-        _add_followup(token, ticket_id, f'Acknowledged from Report Portal by {actor}.')
+        _add_followup(token, ticket_id, f'Acknowledged from ATM Monitoring System by {actor}.')
         return True, f'Ticket {ticket_id} acknowledged.'
 
     res = _mutate(ticket_id, _run)
@@ -823,8 +823,8 @@ def followup(ticket_id):
 
     def _run(token):
         ok, data, used = _add_followup_ex(
-            token, ticket_id, f'{content}\n— {actor} (Report Portal)' if content else
-            f'(attachment from {actor} via Report Portal)')
+            token, ticket_id, f'{content}\n— {actor} (ATM Monitoring System)' if content else
+            f'(attachment from {actor} via ATM Monitoring System)')
         if not ok:
             return False, data
         fid = None
@@ -909,7 +909,7 @@ def assign(ticket_id):
             return False, data
         _api(token, 'PUT', f'Ticket/{ticket_id}', {'input': {'status': 2}})
         _add_followup(token, ticket_id,
-                      f'Assigned from Report Portal by {actor} (GLPI user id {users_id}).')
+                      f'Assigned from ATM Monitoring System by {actor} (GLPI user id {users_id}).')
         return True, f'Ticket {ticket_id} assigned.'
 
     res = _mutate(ticket_id, _run)
@@ -932,13 +932,13 @@ def solve(ticket_id):
     def _run(token):
         # Canonical path: adding a solution flips the ticket to Solved.
         ok, data = _api(token, 'POST', 'ITILSolution/', {'input': {
-            'itemtype': 'Ticket', 'items_id': ticket_id, 'content': f'{solution}\n— {actor} (Report Portal)'}})
+            'itemtype': 'Ticket', 'items_id': ticket_id, 'content': f'{solution}\n— {actor} (ATM Monitoring System)'}})
         if ok:
             return True, f'Ticket {ticket_id} solved.'
         # Fallback for older GLPI: direct status change.
         ok2, data2 = _api(token, 'PUT', f'Ticket/{ticket_id}', {'input': {'status': 5}})
         if ok2:
-            _add_followup(token, ticket_id, f'Marked solved from Report Portal by {actor}: {solution}')
+            _add_followup(token, ticket_id, f'Marked solved from ATM Monitoring System by {actor}: {solution}')
             return True, f'Ticket {ticket_id} solved.'
         return False, data
 

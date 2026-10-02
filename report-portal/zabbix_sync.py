@@ -1,5 +1,5 @@
 """
-zabbix_sync.py — shared Zabbix host-sync logic for the Report Portal.
+zabbix_sync.py — shared Zabbix host-sync logic for the ATM Monitoring System.
 
 Extracted from scripts/sync_atms_to_zabbix.py so the portal can create /
 disable hosts server-side (no SSH, no CSV refresh). All entry points are

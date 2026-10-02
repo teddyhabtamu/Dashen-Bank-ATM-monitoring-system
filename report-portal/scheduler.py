@@ -268,7 +268,7 @@ def _email_body(report_type, fmt, days, atm):
             <table role="presentation" cellpadding="0" cellspacing="0">
               <tr>
                 <td style="background:#012169;border-radius:8px;padding:0">
-                  <a href="{BASE_URL}" style="display:inline-block;padding:12px 28px;font-size:13px;font-weight:600;color:#fff;text-decoration:none;border-radius:8px">&#8594; Open Report Portal</a>
+                  <a href="{BASE_URL}" style="display:inline-block;padding:12px 28px;font-size:13px;font-weight:600;color:#fff;text-decoration:none;border-radius:8px">&#8594; Open ATM Monitoring System</a>
                 </td>
               </tr>
             </table>

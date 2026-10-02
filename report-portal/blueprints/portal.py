@@ -1,6 +1,6 @@
 """
 blueprints/portal.py
-Main Report Portal dashboard routes.
+Main ATM Monitoring System dashboard routes.
 """
 from flask import Blueprint, render_template
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN

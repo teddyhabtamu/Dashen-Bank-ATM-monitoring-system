@@ -1754,7 +1754,7 @@ def _guide_page(data):
 </style></head><body>
 <div class="card">
   <h1>&#10003; {atm_id_val} Registered Successfully</h1>
-  <p>The ATM has been saved to the database and will appear in the Grafana map, Report Portal dropdowns, and EJ Search filter immediately.</p>
+  <p>The ATM has been saved to the database and will appear in the Grafana map, portal dropdowns, and EJ Search filter immediately.</p>
 
   <h2>What happens automatically <span class="badge-ok">&#10003; No action needed</span></h2>
   <ul>
