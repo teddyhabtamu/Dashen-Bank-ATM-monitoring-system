@@ -240,14 +240,14 @@ def report_transaction(fmt):
         cur = conn.cursor()
         sql = """
             SELECT
-                t.atm_id                                                      AS "ATM",
-                l.branch                                                      AS "Branch",
+                t.atm_id                                                      AS "ATM_ID",
+                l.branch                                                      AS "Owner Branch",
                 COUNT(*)                                                      AS "Total Txns",
                 SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)         AS "Approved",
                 SUM(CASE WHEN t.status='DECLINED' THEN 1 ELSE 0 END)         AS "Declined",
                 SUM(CASE WHEN t.status='ERROR'    THEN 1 ELSE 0 END)         AS "Errors",
                 ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)
-                    /NULLIF(COUNT(*),0),2)                                    AS "Success Rate",
+                    /NULLIF(COUNT(*),0),2)                                    AS "Success Rate (%)",
                 COALESCE(SUM(CASE WHEN t.status='APPROVED' AND txn_type='WITHDRAWAL'
                     THEN amount ELSE 0 END),0)                               AS "Cash Dispensed ETB"
             FROM atm_transactions t
@@ -265,18 +265,23 @@ def report_transaction(fmt):
         rows = cur.fetchall(); headers = [d[0] for d in cur.description]
         cur.close()
 
+    headers = ['S.N'] + headers
+    rows = [[i + 1] + list(r) for i, r in enumerate(rows)]
+
     title = 'Transaction Summary Report'
+    subtitle = 'How many transactions each ATM handled, and how many succeeded.'
     if fmt == 'excel':
         wb = openpyxl.Workbook(); wb.remove(wb.active)
-        xl_build_sheet(wb, 'Transactions', title, days, atm, headers, rows)
+        xl_build_sheet(wb, 'Transactions', title, days, atm, headers, rows,
+                       subtitle=subtitle)
         log_action('EXPORT', f'Transaction report (excel) - days={days}, atm={atm}')
         return xl_send(wb, 'Transactions')
     elif fmt == 'pdf':
-        total = sum(r[2] for r in rows)
-        approved = sum(r[3] for r in rows)
-        declined = sum(r[4] for r in rows)
-        errors_cnt = sum(r[5] for r in rows)
-        cash = sum(r[7] for r in rows)
+        total = sum(r[3] for r in rows)
+        approved = sum(r[4] for r in rows)
+        declined = sum(r[5] for r in rows)
+        errors_cnt = sum(r[6] for r in rows)
+        cash = sum(r[8] for r in rows)
         rate = round(approved / total * 100, 1) if total else 0
         kpis = [
             ('Total Transactions', f'{total:,}'),
@@ -285,10 +290,12 @@ def report_transaction(fmt):
             ('Cash Dispensed', f'ETB {cash:,.0f}'),
         ]
         log_action('EXPORT', f'Transaction report (pdf) - days={days}, atm={atm}')
-        return pdf_send(title, headers, rows, days, atm, 'Transactions', kpis=kpis)
+        return pdf_send(title, headers, rows, days, atm, 'Transactions',
+                        kpis=kpis, subtitle=subtitle)
     else:
         log_action('EXPORT', f'Transaction report (csv) - days={days}, atm={atm}')
-        return csv_send(headers, rows, 'Transactions', title=title, days=days, atm=atm)
+        return csv_send(headers, rows, 'Transactions', title=title, days=days,
+                        atm=atm, subtitle=subtitle)
 
 
 # ─── CASH LEVEL ─────────────────────────────────────────────────────────────────
@@ -304,8 +311,8 @@ def report_cash(fmt):
         cur = conn.cursor()
         sql = """
             SELECT
-                t.atm_id                             AS "ATM",
-                l.branch                             AS "Branch",
+                t.atm_id                             AS "ATM_ID",
+                l.branch                             AS "Owner Branch",
                 COALESCE(SUM(amount),0)              AS "Total Dispensed ETB",
                 COALESCE(ROUND(AVG(amount),2),0)     AS "Avg Withdrawal ETB",
                 COUNT(*)                             AS "Withdrawal Count",
@@ -326,17 +333,22 @@ def report_cash(fmt):
         rows = cur.fetchall(); headers = [d[0] for d in cur.description]
         cur.close()
 
+    headers = ['S.N'] + headers
+    rows = [[i + 1] + list(r) for i, r in enumerate(rows)]
+
     title = 'Cash Level & Dispensing Report'
+    subtitle = 'Cash dispensed per ATM from approved withdrawals.'
     if fmt == 'excel':
         wb = openpyxl.Workbook(); wb.remove(wb.active)
-        xl_build_sheet(wb, 'Cash', title, days, atm, headers, rows)
+        xl_build_sheet(wb, 'Cash', title, days, atm, headers, rows,
+                       subtitle=subtitle)
         log_action('EXPORT', f'Cash report (excel) - days={days}, atm={atm}')
         return xl_send(wb, 'Cash')
     elif fmt == 'pdf':
-        total_dispensed = sum(r[2] for r in rows)
-        total_withdrawals = sum(r[4] for r in rows)
+        total_dispensed = sum(r[3] for r in rows)
+        total_withdrawals = sum(r[5] for r in rows)
         avg_withdrawal = round(total_dispensed / total_withdrawals, 0) if total_withdrawals else 0
-        largest = max((r[5] for r in rows), default=0)
+        largest = max((r[6] for r in rows), default=0)
         kpis = [
             ('Total Dispensed', f'ETB {total_dispensed:,.0f}'),
             ('Total Withdrawals', f'{total_withdrawals:,}'),
@@ -344,10 +356,12 @@ def report_cash(fmt):
             ('Largest Withdrawal', f'ETB {largest:,.0f}'),
         ]
         log_action('EXPORT', f'Cash report (pdf) - days={days}, atm={atm}')
-        return pdf_send(title, headers, rows, days, atm, 'Cash', kpis=kpis)
+        return pdf_send(title, headers, rows, days, atm, 'Cash', kpis=kpis,
+                        subtitle=subtitle)
     else:
         log_action('EXPORT', f'Cash report (csv) - days={days}, atm={atm}')
-        return csv_send(headers, rows, 'Cash', title=title, days=days, atm=atm)
+        return csv_send(headers, rows, 'Cash', title=title, days=days, atm=atm,
+                        subtitle=subtitle)
 
 
 # In-memory cache of error_code -> human label, seeded from the DB
@@ -396,8 +410,8 @@ def report_error(fmt):
         cur = conn.cursor()
         sql = """
             SELECT
-                t.atm_id      AS "ATM",
-                l.branch      AS "Branch",
+                t.atm_id      AS "ATM_ID",
+                l.branch      AS "Owner Branch",
                 t.error_code  AS "Error Code",
                 COUNT(*)      AS "Occurrences",
                 TO_CHAR(MIN(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') AS "First Seen",
@@ -418,6 +432,9 @@ def report_error(fmt):
         rows = cur.fetchall(); headers = [d[0] for d in cur.description]
         cur.close()
 
+    headers = ['S.N'] + headers
+    rows = [[i + 1] + list(r) for i, r in enumerate(rows)]
+
     # Augment rows with error-code description
     desc_ndx = headers.index('Error Code') + 1
     headers.insert(desc_ndx, 'Description')
@@ -426,16 +443,18 @@ def report_error(fmt):
         r.insert(desc_ndx, _describe_error(r[desc_ndx - 1] if desc_ndx - 1 < len(r) else ''))
 
     title = 'Error & Incident Report'
+    subtitle = 'Which faults occurred, how often, and where.'
     if fmt == 'excel':
         wb = openpyxl.Workbook(); wb.remove(wb.active)
-        xl_build_sheet(wb, 'Errors', title, days, atm, headers, rows)
+        xl_build_sheet(wb, 'Errors', title, days, atm, headers, rows,
+                       subtitle=subtitle)
         log_action('EXPORT', f'Error report (excel) - days={days}, atm={atm}')
         return xl_send(wb, 'Errors')
     elif fmt == 'pdf':
-        total_occ = sum(r[4] for r in rows)
-        unique_codes = len({r[2] for r in rows})
-        unique_atms = len({r[0] for r in rows})
-        code_counts = Counter(r[2] for r in rows)
+        total_occ = sum(r[5] for r in rows)
+        unique_codes = len({r[3] for r in rows})
+        unique_atms = len({r[1] for r in rows})
+        code_counts = Counter(r[3] for r in rows)
         most_common = code_counts.most_common(1)[0][0] if code_counts else 'N/A'
         kpis = [
             ('Total Errors', f'{total_occ:,}'),
@@ -444,10 +463,12 @@ def report_error(fmt):
             ('Most Common', most_common),
         ]
         log_action('EXPORT', f'Error report (pdf) - days={days}, atm={atm}')
-        return pdf_send(title, headers, rows, days, atm, 'Errors', kpis=kpis)
+        return pdf_send(title, headers, rows, days, atm, 'Errors', kpis=kpis,
+                        subtitle=subtitle)
     else:
         log_action('EXPORT', f'Error report (csv) - days={days}, atm={atm}')
-        return csv_send(headers, rows, 'Errors', title=title, days=days, atm=atm)
+        return csv_send(headers, rows, 'Errors', title=title, days=days, atm=atm,
+                        subtitle=subtitle)
 
 
 # ─── ATM PERFORMANCE ────────────────────────────────────────────────────────────
@@ -483,9 +504,9 @@ def report_performance(fmt):
                 GROUP BY t.atm_id, EXTRACT(HOUR FROM t.recorded_at)
                 ORDER BY t.atm_id, cnt DESC
             )
-            SELECT s.atm_id AS "ATM", s.branch AS "Branch",
+            SELECT s.atm_id AS "ATM_ID", s.branch AS "Owner Branch",
                 s.total AS "Total Transactions",
-                s.rate  AS "Success Rate",
+                s.rate  AS "Success Rate (%)",
                 s.daily AS "Avg Daily Txns",
                 CONCAT(p.hr::int,':00-',(p.hr::int+1),':00') AS "Peak Hour",
                 RANK() OVER (ORDER BY s.total DESC) AS "Rank"
@@ -497,16 +518,21 @@ def report_performance(fmt):
         rows = cur.fetchall(); headers = [d[0] for d in cur.description]
         cur.close()
 
+    headers = ['S.N'] + headers
+    rows = [[i + 1] + list(r) for i, r in enumerate(rows)]
+
     title = 'ATM Performance Report'
+    subtitle = 'ATMs ranked by volume, with peak hours.'
     if fmt == 'excel':
         wb = openpyxl.Workbook(); wb.remove(wb.active)
-        xl_build_sheet(wb, 'Performance', title, days, 'all', headers, rows)
+        xl_build_sheet(wb, 'Performance', title, days, 'all', headers, rows,
+                       subtitle=subtitle)
         log_action('EXPORT', f'Performance report (excel) - days={days}')
         return xl_send(wb, 'Performance')
     elif fmt == 'pdf':
-        total_txns = sum(r[2] for r in rows)
-        avg_rate = round(sum(r[3] for r in rows) / len(rows), 1) if rows else 0
-        top_atm = rows[0][0] if rows else 'N/A'
+        total_txns = sum(r[3] for r in rows)
+        avg_rate = round(sum(r[4] for r in rows) / len(rows), 1) if rows else 0
+        top_atm = rows[0][1] if rows else 'N/A'
         atm_count = len(rows)
         kpis = [
             ('Total Transactions', f'{total_txns:,}'),
@@ -515,10 +541,12 @@ def report_performance(fmt):
             ('Top Performer', str(top_atm)),
         ]
         log_action('EXPORT', f'Performance report (pdf) - days={days}')
-        return pdf_send(title, headers, rows, days, 'all', 'Performance', kpis=kpis)
+        return pdf_send(title, headers, rows, days, 'all', 'Performance',
+                        kpis=kpis, subtitle=subtitle)
     else:
         log_action('EXPORT', f'Performance report (csv) - days={days}')
-        return csv_send(headers, rows, 'Performance', title=title, days=days, atm='all')
+        return csv_send(headers, rows, 'Performance', title=title, days=days,
+                        atm='all', subtitle=subtitle)
 
 
 # ─── VENDOR PERFORMANCE ───────────────────────────────────────────────────────────
@@ -540,7 +568,7 @@ def report_vendor(fmt):
                 SUM(CASE WHEN t.status='DECLINED' THEN 1 ELSE 0 END)          AS "Declined",
                 SUM(CASE WHEN t.status='ERROR'    THEN 1 ELSE 0 END)          AS "Errors",
                 ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)
-                    /NULLIF(COUNT(*),0),2)                                     AS "Success Rate",
+                    /NULLIF(COUNT(*),0),2)                                     AS "Success Rate (%)",
                 ROUND(COUNT(*)/NULLIF(COUNT(DISTINCT t.atm_id),0)/%s::numeric,1)
                                                                               AS "Avg Daily Txns/ATM",
                 COALESCE(SUM(CASE WHEN t.status='APPROVED' AND t.txn_type='WITHDRAWAL'
@@ -555,18 +583,23 @@ def report_vendor(fmt):
         rows = cur.fetchall(); headers = [d[0] for d in cur.description]
         cur.close()
 
+    headers = ['S.N'] + headers
+    rows = [[i + 1] + list(r) for i, r in enumerate(rows)]
+
     title = 'Vendor Performance Report'
+    subtitle = 'NCR vs GRG head-to-head on volume and success rate.'
     if fmt == 'excel':
         wb = openpyxl.Workbook(); wb.remove(wb.active)
-        xl_build_sheet(wb, 'Vendor', title, days, 'all', headers, rows)
+        xl_build_sheet(wb, 'Vendor', title, days, 'all', headers, rows,
+                       subtitle=subtitle)
         log_action('EXPORT', f'Vendor report (excel) - days={days}')
         return xl_send(wb, 'Vendor')
     elif fmt == 'pdf':
-        total_txns = sum(r[2] for r in rows)
-        approved = sum(r[3] for r in rows)
+        total_txns = sum(r[3] for r in rows)
+        approved = sum(r[4] for r in rows)
         rate = round(approved / total_txns * 100, 1) if total_txns else 0
-        cash = sum(r[8] for r in rows)
-        best = max(rows, key=lambda r: (r[6] or 0))[0] if rows else 'N/A'
+        cash = sum(r[9] for r in rows)
+        best = max(rows, key=lambda r: (r[7] or 0))[1] if rows else 'N/A'
         kpis = [
             ('Vendors', str(len(rows))),
             ('Total Transactions', f'{total_txns:,}'),
@@ -574,10 +607,12 @@ def report_vendor(fmt):
             ('Top Vendor (by success)', str(best)),
         ]
         log_action('EXPORT', f'Vendor report (pdf) - days={days}')
-        return pdf_send(title, headers, rows, days, 'all', 'Vendor', kpis=kpis)
+        return pdf_send(title, headers, rows, days, 'all', 'Vendor', kpis=kpis,
+                        subtitle=subtitle)
     else:
         log_action('EXPORT', f'Vendor report (csv) - days={days}')
-        return csv_send(headers, rows, 'Vendor', title=title, days=days, atm='all')
+        return csv_send(headers, rows, 'Vendor', title=title, days=days, atm='all',
+                        subtitle=subtitle)
 
 
 # ─── ATM AVAILABILITY ───────────────────────────────────────────────────────────
@@ -645,12 +680,12 @@ def report_availability(fmt):
                 LEFT JOIN reasons r USING (atm_id)
             )
             SELECT
-                atm_id as "ATM ID",
-                branch as "Branch",
-                active_hours as "Active Hours",
-                expected_hours as "Expected Hours",
-                ROUND(expected_hours - active_hours, 1) as "Downtime Hours",
-                uptime_pct as "Uptime",
+                atm_id as "ATM_ID",
+                branch as "Owner Branch",
+                active_hours as "Active (hrs)",
+                expected_hours as "Expected (hrs)",
+                ROUND(expected_hours - active_hours, 1) as "Downtime (hrs)",
+                uptime_pct as "Uptime (%)",
                 CASE
                     WHEN uptime_pct >= 99.9 THEN 'Excellent'
                     WHEN uptime_pct >= 99.0 THEN 'Good'
@@ -659,7 +694,7 @@ def report_availability(fmt):
                 END as "SLA Status",
                 top_reason as "Top Downtime Reason"
             FROM calc
-            ORDER BY 6 DESC
+            ORDER BY 6 ASC
         """
         params = [f"{days} days", days]
         if atm != 'all':
@@ -669,11 +704,15 @@ def report_availability(fmt):
         rows = cur.fetchall(); headers = [d[0] for d in cur.description]
         cur.close()
 
+    headers = ['S.N'] + headers
+    rows = [[i + 1] + list(r) for i, r in enumerate(rows)]
+
     title = 'ATM Availability Report'
+    subtitle = 'Which ATMs were down and for how long — worst first.'
     if fmt == 'excel':
         wb = openpyxl.Workbook(); wb.remove(wb.active)
         ws = wb.create_sheet('Availability')
-        xl_header(ws, title, days, atm)
+        xl_header(ws, title, days, atm, ncols=len(headers), subtitle=subtitle)
         ws.append(headers)
         xl_style_row(ws, ws.max_row, len(headers))
         data_start = ws.max_row + 1
@@ -687,17 +726,18 @@ def report_availability(fmt):
             'Below Target': 'FFC7CE'
         }
         for idx, row in enumerate(rows):
-            sla_val = str(row[6] or '') if row else ''
+            sla_val = str(row[7] or '') if row else ''
             fill_color = colors_map.get(sla_val, 'FFFFFF')
             cell = ws.cell(row=data_start + idx, column=len(headers))
             cell.fill = openpyxl.styles.PatternFill('solid', fgColor=fill_color)
         xl_autosize(ws)
+        xl_finalize(ws, data_start - 1, len(headers))
         log_action('EXPORT', f'Availability report (excel) - days={days}, atm={atm}')
         return xl_send(wb, 'Availability')
     elif fmt == 'pdf':
-        avg_uptime = round(sum(r[5] for r in rows) / len(rows), 2) if rows else 0
-        excellent = sum(1 for r in rows if r[6] == 'Excellent')
-        below_target = sum(1 for r in rows if r[6] == 'Below Target')
+        avg_uptime = round(sum(r[6] for r in rows) / len(rows), 2) if rows else 0
+        excellent = sum(1 for r in rows if r[7] == 'Excellent')
+        below_target = sum(1 for r in rows if r[7] == 'Below Target')
         kpis = [
             ('Avg Uptime', f'{avg_uptime}%'),
             ('Excellent SLA', str(excellent)),
@@ -705,10 +745,12 @@ def report_availability(fmt):
             ('ATMs Monitored', str(len(rows))),
         ]
         log_action('EXPORT', f'Availability report (pdf) - days={days}, atm={atm}')
-        return pdf_send(title, headers, rows, days, atm, 'Availability', kpis=kpis)
+        return pdf_send(title, headers, rows, days, atm, 'Availability',
+                        kpis=kpis, subtitle=subtitle)
     else:
         log_action('EXPORT', f'Availability report (csv) - days={days}, atm={atm}')
-        return csv_send(headers, rows, 'Availability', title=title, days=days, atm=atm)
+        return csv_send(headers, rows, 'Availability', title=title, days=days,
+                        atm=atm, subtitle=subtitle)
 
 
 # ─── DAILY ATM OUTAGE REPORT ─────────────────────────────────────────────────
@@ -747,10 +789,11 @@ def report_outage(fmt):
             for i, r in enumerate(db_rows)]
 
     title = 'Daily ATM Outage Report'
+    subtitle = 'Down ATMs right now — location and outage days filled, causes left for the team.'
     if fmt == 'excel':
         wb = openpyxl.Workbook(); wb.remove(wb.active)
         ws = wb.create_sheet('Daily Outage')
-        xl_header(ws, title, 1, atm, ncols=len(headers))
+        xl_header(ws, title, 1, atm, ncols=len(headers), subtitle=subtitle)
         ws.append(headers)
         xl_style_row(ws, ws.max_row, len(headers))
         # Match the team's template: periwinkle header, dark text.
@@ -763,6 +806,7 @@ def report_outage(fmt):
             ws.append(list(row))
         xl_style_data_rows(ws, data_start, len(headers))
         xl_autosize(ws)
+        xl_finalize(ws, data_start - 1, len(headers))
         log_action('EXPORT', f'Outage report (excel) - atm={atm}')
         return xl_send(wb, 'Daily_Outage')
     elif fmt == 'pdf':
@@ -775,10 +819,12 @@ def report_outage(fmt):
             ('Generated', datetime.now().strftime('%Y-%m-%d')),
         ]
         log_action('EXPORT', f'Outage report (pdf) - atm={atm}')
-        return pdf_send(title, headers, rows, 1, atm, 'Daily_Outage', kpis=kpis)
+        return pdf_send(title, headers, rows, 1, atm, 'Daily_Outage', kpis=kpis,
+                        subtitle=subtitle)
     else:
         log_action('EXPORT', f'Outage report (csv) - atm={atm}')
-        return csv_send(headers, rows, 'Daily_Outage', title=title, days=1, atm=atm)
+        return csv_send(headers, rows, 'Daily_Outage', title=title, days=1,
+                        atm=atm, subtitle=subtitle)
 
 
 # ─── COMPLETE MANAGEMENT REPORT ─────────────────────────────────────────────────
@@ -795,7 +841,8 @@ def report_full(fmt):
         if fmt == 'excel':
             wb = openpyxl.Workbook(); ws = wb.active
             ws.title = 'Complete Report'
-            xl_header(ws, 'Complete Management Report', days, atm)
+            xl_header(ws, 'Complete Management Report', days, atm,
+                      subtitle='All six reports in one file — the numbers behind the morning meeting.')
 
             # 1. Transactions
             cur = conn.cursor()
@@ -815,7 +862,7 @@ def report_full(fmt):
             if atm != 'all': sql1 += " AND t.atm_id = %s"; p1.append(atm)
             sql1 += " GROUP BY t.atm_id, l.branch ORDER BY t.atm_id"
             cur.execute(sql1, p1)
-            h1 = ['ATM', 'Branch', 'Total Txns', 'Approved', 'Declined', 'Errors', 'Success Rate %', 'Cash Dispensed ETB']
+            h1 = ['ATM_ID', 'Owner Branch', 'Total Txns', 'Approved', 'Declined', 'Errors', 'Success Rate %', 'Cash Dispensed ETB']
             xl_append_section(ws, '1. Transaction Summary', h1, cur.fetchall())
             cur.close()
 
@@ -834,7 +881,7 @@ def report_full(fmt):
             if atm != 'all': sql2 += " AND t.atm_id = %s"; p2.append(atm)
             sql2 += " GROUP BY t.atm_id, l.branch ORDER BY 3 DESC"
             cur.execute(sql2, p2)
-            h2 = ['ATM', 'Branch', 'Total Dispensed ETB', 'Avg Withdrawal ETB', 'Withdrawal Count', 'Largest Withdrawal ETB']
+            h2 = ['ATM_ID', 'Owner Branch', 'Total Dispensed ETB', 'Avg Withdrawal ETB', 'Withdrawal Count', 'Largest Withdrawal ETB']
             xl_append_section(ws, '2. Cash Level & Dispensing', h2, cur.fetchall())
             cur.close()
 
@@ -855,7 +902,7 @@ def report_full(fmt):
             sql3 += " GROUP BY t.atm_id, l.branch, t.error_code ORDER BY 4 DESC"
             cur.execute(sql3, p3)
             rows3 = cur.fetchall()
-            h3 = ['ATM', 'Branch', 'Error Code', 'Description', 'Occurrences', 'First Seen', 'Last Seen']
+            h3 = ['ATM_ID', 'Owner Branch', 'Error Code', 'Description', 'Occurrences', 'First Seen', 'Last Seen']
             rows3_desc = [list(r) for r in rows3]
             for r in rows3_desc:
                 r.insert(3, _describe_error(r[2]))
@@ -891,7 +938,7 @@ def report_full(fmt):
                 FROM stats s JOIN peaks p ON s.atm_id=p.atm_id ORDER BY s.total DESC
             """
             cur.execute(sql4, (days, interval_str, interval_str))
-            h4 = ['ATM', 'Branch', 'Total Transactions', 'Success Rate %', 'Avg Daily Txns', 'Peak Hour', 'Rank']
+            h4 = ['ATM_ID', 'Owner Branch', 'Total Transactions', 'Success Rate %', 'Avg Daily Txns', 'Peak Hour', 'Rank']
             xl_append_section(ws, '4. ATM Performance Metrics', h4, cur.fetchall())
             cur.close()
 
@@ -905,10 +952,11 @@ def report_full(fmt):
             # 6. Availability
             cur = conn.cursor()
             cur.execute(_AVAIL_SQL, (interval_str, days))
-            h6 = ['ATM', 'Branch', 'Active Hours', 'Expected Hours', 'Downtime Hours', 'Uptime %', 'SLA Status', 'Top Downtime Reason']
+            h6 = ['ATM_ID', 'Owner Branch', 'Active Hours', 'Expected Hours', 'Downtime Hours', 'Uptime %', 'SLA Status', 'Top Downtime Reason']
             xl_append_section(ws, '6. Availability', h6, cur.fetchall())
             cur.close()
 
+            ws.freeze_panes = 'A6'
             xl_autosize(ws)
 
             log_action('EXPORT', f'Complete report (excel) - days={days}, atm={atm}')

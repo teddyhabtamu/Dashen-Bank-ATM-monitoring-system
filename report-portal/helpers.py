@@ -23,8 +23,8 @@ BORDER_COLOR = 'E2E8F0'
 
 # ─── EXCEL HELPERS ─────────────────────────────────────────────────────────────
 
-def xl_header(ws, title, days, atm, ncols=8):
-    """Write the 3-row branded header block."""
+def xl_header(ws, title, days, atm, ncols=8, subtitle=None):
+    """Write the branded header block (rows 1-3) plus a subtitle or spacer row 4."""
     last = get_column_letter(ncols)
     ws.merge_cells(f'A1:{last}1')
     c = ws['A1']
@@ -53,7 +53,14 @@ def xl_header(ws, title, days, atm, ncols=8):
     c.fill = PatternFill('solid', fgColor='FFFDE7')
     c.alignment = Alignment(horizontal='center', vertical='center')
     ws.row_dimensions[3].height = 14
-    ws.append([])  # blank spacer row
+
+    ws.merge_cells(f'A4:{last}4')
+    c = ws['A4']
+    if subtitle:
+        c.value = subtitle
+        c.font = Font(size=9, color='475569', italic=True)
+    c.alignment = Alignment(horizontal='center', vertical='center')
+    ws.row_dimensions[4].height = 14 if subtitle else 6
 
 
 def xl_style_row(ws, row, ncols):
@@ -99,10 +106,18 @@ def xl_send(wb, name):
     )
 
 
-def xl_build_sheet(wb, sheet_name, title, days, atm, headers, rows):
+def xl_finalize(ws, header_row, ncols):
+    """Filter dropdowns on the column-header row + freeze panes below it,
+    so the team can sort/filter without setup clicks."""
+    last = get_column_letter(ncols)
+    ws.auto_filter.ref = f'A{header_row}:{last}{header_row}'
+    ws.freeze_panes = f'A{header_row + 1}'
+
+
+def xl_build_sheet(wb, sheet_name, title, days, atm, headers, rows, subtitle=None):
     """Utility: create a fully styled sheet inside an existing workbook."""
     ws = wb.create_sheet(sheet_name)
-    xl_header(ws, title, days, atm)
+    xl_header(ws, title, days, atm, ncols=len(headers), subtitle=subtitle)
     ws.append(headers)
     xl_style_row(ws, ws.max_row, len(headers))
     data_start = ws.max_row + 1
@@ -110,6 +125,7 @@ def xl_build_sheet(wb, sheet_name, title, days, atm, headers, rows):
         ws.append([str(v) if v is not None else '—' for v in r])
     xl_style_data_rows(ws, data_start, len(headers))
     xl_autosize(ws)
+    xl_finalize(ws, data_start - 1, len(headers))
     return ws
 
 
@@ -124,10 +140,12 @@ def xl_append_section(ws, section_title, headers, rows):
     c = ws.cell(row=title_row, column=1)
     c.font = Font(bold=True, size=11, color=DASHEN_BLUE)
 
+    headers = ['S.N'] + list(headers)
+    rows = [[i + 1] + list(r) for i, r in enumerate(rows)]
     ws.append(headers)
     hdr_row = ws.max_row
     xl_style_row(ws, hdr_row, len(headers))
-    
+
     data_start = ws.max_row + 1
     for r in rows:
         ws.append([str(v) if v is not None else '—' for v in r])
@@ -137,7 +155,7 @@ def xl_append_section(ws, section_title, headers, rows):
 
 # ─── CSV HELPERS ───────────────────────────────────────────────────────────────
 
-def csv_send(headers, rows, name, title='', days=0, atm='all'):
+def csv_send(headers, rows, name, title='', days=0, atm='all', subtitle=''):
     """Write a CSV with a branded metadata block at the top."""
     buf = io.StringIO()
     w = csv.writer(buf)
@@ -145,6 +163,8 @@ def csv_send(headers, rows, name, title='', days=0, atm='all'):
     w.writerow(['DASHEN BANK S.C. — ATM MONITORING SYSTEM'])
     if title:
         w.writerow([title])
+    if subtitle:
+        w.writerow([subtitle])
     w.writerow([
         f'Period: Last {days} days'
         if days else '',
@@ -241,7 +261,7 @@ def _pdf_header_block(story, title, days, atm):
     ]
 
 
-def pdf_send(title, headers, rows, days, atm, name, kpis=None):
+def pdf_send(title, headers, rows, days, atm, name, kpis=None, subtitle=''):
     """Generate a single-section branded PDF report with optional KPI summary page."""
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
@@ -251,6 +271,10 @@ def pdf_send(title, headers, rows, days, atm, name, kpis=None):
 
     story = []
     _pdf_header_block(story, title, days, atm)
+    if subtitle:
+        story.append(P(f'<font color="#475569"><i>{subtitle}</i></font>',
+                       alignment=TA_CENTER))
+        story.append(Spacer(1, 0.3 * cm))
 
     if kpis:
         _pdf_kpi_block(story, kpis)
