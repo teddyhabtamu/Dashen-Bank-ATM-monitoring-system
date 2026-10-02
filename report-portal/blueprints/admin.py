@@ -1265,7 +1265,6 @@ def _validate(data):
         except (ValueError, TypeError):
             errors['longitude'] = 'Must be a valid number'
     if data.get('install_date'):
-        import re
         if not re.match(r'^\d{4}-\d{2}-\d{2}$', data['install_date']):
             errors['install_date'] = 'Use YYYY-MM-DD format'
     if data.get('status') and data['status'] not in ('active', 'inactive'):
