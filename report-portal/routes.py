@@ -6,7 +6,8 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from db import get_db
 from helpers import (xl_header, xl_style_row, xl_style_data_rows, xl_autosize,
-                     xl_send, xl_build_sheet, xl_append_section, csv_send, pdf_send, mktable,
+                     xl_finalize,
+                     xl_build_sheet, xl_append_section, csv_send, pdf_send, mktable,
                      _pdf_header_block, LOGO_PATH)
 from datetime import datetime
 from reportlab.lib.pagesizes import A4, landscape
