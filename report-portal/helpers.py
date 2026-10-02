@@ -23,9 +23,10 @@ BORDER_COLOR = 'E2E8F0'
 
 # ─── EXCEL HELPERS ─────────────────────────────────────────────────────────────
 
-def xl_header(ws, title, days, atm):
+def xl_header(ws, title, days, atm, ncols=8):
     """Write the 3-row branded header block."""
-    ws.merge_cells('A1:H1')
+    last = get_column_letter(ncols)
+    ws.merge_cells(f'A1:{last}1')
     c = ws['A1']
     c.value = 'DASHEN BANK S.C. — ATM MONITORING SYSTEM'
     c.font = Font(bold=True, size=13, color=DASHEN_BLUE)
@@ -33,7 +34,7 @@ def xl_header(ws, title, days, atm):
     c.alignment = Alignment(horizontal='center', vertical='center')
     ws.row_dimensions[1].height = 22
 
-    ws.merge_cells('A2:H2')
+    ws.merge_cells(f'A2:{last}2')
     c = ws['A2']
     c.value = title
     c.font = Font(bold=True, size=11, color=DASHEN_BLUE)
@@ -41,7 +42,7 @@ def xl_header(ws, title, days, atm):
     c.alignment = Alignment(horizontal='center', vertical='center')
     ws.row_dimensions[2].height = 18
 
-    ws.merge_cells('A3:H3')
+    ws.merge_cells(f'A3:{last}3')
     c = ws['A3']
     c.value = (
         f'Period: Last {days} days  |  '

@@ -416,6 +416,29 @@
       </div>
     </div>
 
+    <!-- Daily ATM Outage (matches the ATM team's manual template) -->
+    <div class="report-card">
+      <div class="card-accent"></div>
+      <div class="card-content">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <div class="card-icon"><i data-lucide="alert-triangle" style="width:22px;height:22px;"></i></div>
+          <h3>Daily ATM Outage</h3>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
+        </div>
+        <div class="card-body-inner">
+          <p style="font-size:12px;color:#64748B;margin-bottom:12px">One row per down ATM — location and outage days filled automatically; Causes, Action Taken and Call ID left blank for the team to complete.</p>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="gen('outage','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('outage','pdf')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-ghost" onclick="gen('outage','csv')"><i data-lucide="file"></i> CSV</button>
+            <div class="loading-wrapper" id="lw-outage">
+              <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </main>
 {% endblock %}
@@ -467,13 +490,14 @@ async function loadATMs() {
 }
 
 function gen(type, fmt, daysId, atmId) {
-  const days = document.getElementById(daysId).value;
+  const daysEl = daysId ? document.getElementById(daysId) : null;
+  const days = daysEl ? daysEl.value : 1;
   const atm  = atmId ? document.getElementById(atmId).value : 'all';
   const lw   = document.getElementById('lw-'+type);
   const url  = `/report/${type}/${fmt}?days=${days}&atm=${atm}`;
   const names = { transaction:'Transaction', cash:'Cash Level', error:'Error & Incident',
                   performance:'Performance', vendor:'Vendor Performance',
-                  availability:'Availability', full:'Complete Report' };
+                  availability:'Availability', outage:'Daily Outage', full:'Complete Report' };
   lw.classList.add('active');
 
   fetch(url)

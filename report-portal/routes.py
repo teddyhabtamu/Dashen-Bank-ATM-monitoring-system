@@ -711,6 +711,76 @@ def report_availability(fmt):
         return csv_send(headers, rows, 'Availability', title=title, days=days, atm=atm)
 
 
+# ─── DAILY ATM OUTAGE REPORT ─────────────────────────────────────────────────
+# Mirrors the ATM team's manual template (Daily ATM Report .xlsx): one row per
+# down ATM, same column order. Location + outage days are automatic;
+# Causes / Action Taken / Call ID stay blank for the team to type, exactly as
+# they do today (only GLPI-linked tickets could prefill those — follow-up).
+@bp.route('/report/outage/<fmt>')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def report_outage(fmt):
+    atm = request.args.get('atm', 'all')
+
+    with get_db() as conn:
+        cur = conn.cursor()
+        sql = """
+            SELECT l.atm_id, l.atm_name, l.district,
+                ROUND(EXTRACT(EPOCH FROM (NOW() - s.state_changed_at)) / 86400.0, 1),
+                l.branch,
+                TRIM(COALESCE(l.vendor, '') || ' ' || COALESCE(l.model, '')),
+                l.ip_address
+            FROM atm_current_state s
+            JOIN atm_locations l ON l.atm_id = s.atm_id
+            WHERE l.status = 'active' AND s.state <> 'IN_SERVICE'
+        """ + (" AND s.atm_id = %s" if atm != 'all' else "") + """
+            ORDER BY 4 DESC
+        """
+        cur.execute(sql, (atm,) if atm != 'all' else ())
+        db_rows = cur.fetchall()
+        cur.close()
+
+    headers = ['S.N', 'ATM_ID', 'ATM_Name', 'District', 'Causes for failure',
+               'Action Taken', 'Outage in days', 'Owner branch', 'Type of ATM',
+               'IP Address', 'Call ID']
+    rows = [[i + 1, r[0], r[1], r[2], '', '', r[3], r[4], r[5], r[6], '']
+            for i, r in enumerate(db_rows)]
+
+    title = 'Daily ATM Outage Report'
+    if fmt == 'excel':
+        wb = openpyxl.Workbook(); wb.remove(wb.active)
+        ws = wb.create_sheet('Daily Outage')
+        xl_header(ws, title, 1, atm, ncols=len(headers))
+        ws.append(headers)
+        xl_style_row(ws, ws.max_row, len(headers))
+        # Match the team's template: periwinkle header, dark text.
+        for col in range(1, len(headers) + 1):
+            cell = ws.cell(row=ws.max_row, column=col)
+            cell.fill = openpyxl.styles.PatternFill('solid', fgColor='95B3D7')
+            cell.font = openpyxl.styles.Font(bold=True, color='0F172A', size=10)
+        data_start = ws.max_row + 1
+        for row in rows:
+            ws.append(list(row))
+        xl_style_data_rows(ws, data_start, len(headers))
+        xl_autosize(ws)
+        log_action('EXPORT', f'Outage report (excel) - atm={atm}')
+        return xl_send(wb, 'Daily_Outage')
+    elif fmt == 'pdf':
+        longest = max((r[6] for r in rows), default=0)
+        avg = round(sum(r[6] for r in rows) / len(rows), 1) if rows else 0
+        kpis = [
+            ('Down ATMs', str(len(rows))),
+            ('Longest Outage', f'{longest}d'),
+            ('Avg Outage', f'{avg}d'),
+            ('Generated', datetime.now().strftime('%Y-%m-%d')),
+        ]
+        log_action('EXPORT', f'Outage report (pdf) - atm={atm}')
+        return pdf_send(title, headers, rows, 1, atm, 'Daily_Outage', kpis=kpis)
+    else:
+        log_action('EXPORT', f'Outage report (csv) - atm={atm}')
+        return csv_send(headers, rows, 'Daily_Outage', title=title, days=1, atm=atm)
+
+
 # ─── COMPLETE MANAGEMENT REPORT ─────────────────────────────────────────────────
 
 @bp.route('/report/full/<fmt>')

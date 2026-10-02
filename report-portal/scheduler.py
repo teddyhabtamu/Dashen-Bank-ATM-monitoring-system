@@ -97,7 +97,20 @@ def _generate_report(report_type, fmt, days=7, atm='all'):
     label = REPORT_TYPE_LABELS.get(report_type, report_type.title())
     atm_part = f'_{atm}' if atm and atm != 'all' else ''
     filename = f'Dashen_Bank_{label.replace(" ", "_")}{atm_part}_{today}.{fmt}'
-    if fmt == 'csv':
+    if fmt == 'excel':
+        import requests
+        url = f'{_INTERNAL_BASE}/report/{report_type}/excel?days={days}&atm={atm}'
+        try:
+            resp = requests.get(url, timeout=60, headers=_headers)
+            if resp.status_code == 200:
+                buf.write(resp.content)
+                buf.seek(0)
+                return buf, filename, ('application/vnd.openxmlformats-'
+                                       'officedocument.spreadsheetml.sheet')
+        except Exception as e:
+            logger.error('Report generation failed: %s', e)
+            return None, None, None
+    elif fmt == 'csv':
         import requests
         url = f'{_INTERNAL_BASE}/report/{report_type}/csv?days={days}&atm={atm}'
         try:
@@ -172,6 +185,7 @@ REPORT_TYPE_LABELS = {
     'performance': 'ATM Performance',
     'vendor': 'Vendor Performance',
     'availability': 'ATM Availability',
+    'outage': 'Daily ATM Outage',
     'full': 'Complete Management Report',
 }
 
