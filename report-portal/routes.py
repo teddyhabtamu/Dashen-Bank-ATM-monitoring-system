@@ -776,14 +776,36 @@ def report_outage(fmt):
 
     with get_db() as conn:
         cur = conn.cursor()
+        # Down ATMs + cause evidence in one pass:
+        #  e = latest ERROR txn (7d) mapped through fault_type_map,
+        #  w = latest approved withdrawal (cash-out inference needs its age).
         sql = """
             SELECT l.atm_id, l.atm_name, l.district,
                 ROUND(EXTRACT(EPOCH FROM (NOW() - s.state_changed_at)) / 86400.0, 1),
                 l.branch,
                 TRIM(COALESCE(l.vendor, '') || ' ' || COALESCE(l.model, '')),
-                l.ip_address
+                l.ip_address,
+                s.state, s.last_seen,
+                e.error_code, f.display_name,
+                EXTRACT(EPOCH FROM (NOW() - e.recorded_at)) / 3600.0,
+                EXTRACT(EPOCH FROM (NOW() - w.recorded_at)) / 3600.0
             FROM atm_current_state s
             JOIN atm_locations l ON l.atm_id = s.atm_id
+            LEFT JOIN LATERAL (
+                SELECT t.error_code, t.recorded_at FROM atm_transactions t
+                WHERE t.atm_id = s.atm_id AND t.status = 'ERROR'
+                  AND t.error_code IS NOT NULL
+                  AND t.recorded_at >= NOW() - INTERVAL '7 days'
+                ORDER BY t.recorded_at DESC LIMIT 1
+            ) e ON true
+            LEFT JOIN fault_type_map f
+                ON f.raw_fault_code = e.error_code AND f.vendor = l.vendor
+            LEFT JOIN LATERAL (
+                SELECT t.recorded_at FROM atm_transactions t
+                WHERE t.atm_id = s.atm_id AND t.status = 'APPROVED'
+                  AND t.txn_type = 'WITHDRAWAL'
+                ORDER BY t.recorded_at DESC LIMIT 1
+            ) w ON true
             WHERE l.status = 'active' AND s.state <> 'IN_SERVICE'
         """ + (" AND s.atm_id = %s" if atm != 'all' else "") + """
             ORDER BY 4 DESC
@@ -792,10 +814,27 @@ def report_outage(fmt):
         db_rows = cur.fetchall()
         cur.close()
 
+    def _suspect(r):
+        # r: (..., state, last_seen, err_code, display, err_age_h, wd_age_h)
+        state, seen, code, display, err_age, wd_age = r[7], r[8], r[9], r[10], r[11], r[12]
+        if state == 'UNREACHABLE':
+            return 'Suspected Network/Power outage (host unreachable)'
+        if code and display:
+            return f'Suspected {display} (last fault {code})'
+        if code:
+            return f'Suspected fault {code} (unmapped code)'
+        if state == 'OUT_OF_SERVICE':
+            seen_age = (datetime.now(seen.tzinfo) - seen).total_seconds() / 3600.0 \
+                if seen else None
+            if seen_age is not None and seen_age < 2 \
+                    and (wd_age is None or wd_age > 48):
+                return 'Suspected Cash Out (silent, reachable, no faults)'
+        return ''
+
     headers = ['S.N', 'ATM_ID', 'ATM_Name', 'District', 'Causes for failure',
                'Action Taken', 'Outage in days', 'Owner branch', 'Type of ATM',
                'IP Address', 'Call ID']
-    rows = [[i + 1, r[0], r[1], r[2], '', '', r[3], r[4], r[5], r[6], '']
+    rows = [[i + 1, r[0], r[1], r[2], _suspect(r), '', r[3], r[4], r[5], r[6], '']
             for i, r in enumerate(db_rows)]
 
     title = 'Daily ATM Outage Report'
