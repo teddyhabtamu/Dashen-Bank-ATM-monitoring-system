@@ -768,6 +768,60 @@ def report_availability(fmt):
 # down ATM, same column order. Location + outage days are automatic;
 # Causes / Action Taken / Call ID stay blank for the team to type, exactly as
 # they do today (only GLPI-linked tickets could prefill those — follow-up).
+def _glpi_outage_links(atm_ids):
+    """Map atm_id -> (ticket_id, cause, action) from the latest open GLPI
+    tickets mentioning the ATM. One session, followups fetched only for
+    matches. Never raises — any failure means the report falls back to
+    suspected causes and blank action/Call ID."""
+    import re
+    out = {}
+    wanted = {a for a in atm_ids if a}
+    if not wanted:
+        return out
+    try:
+        from blueprints.incidents import _session, _close, _tickets, _subitems
+        token = _session()
+        if not token:
+            return out
+        try:
+            tickets = _tickets(token) or []
+
+            def _text(html):
+                t = re.sub(r'<[^>]+>', ' ', html or '')
+                return re.sub(r'\s+', ' ', t).strip()
+
+            for t in tickets:
+                try:
+                    if int(t.get('status', 0)) == 6:
+                        continue  # Closed
+                except (TypeError, ValueError):
+                    continue
+                tid = t.get('id')
+                blob = f"{t.get('name', '')} {t.get('content', '')}"
+                hit = next((a for a in wanted if a in blob), None)
+                if not hit:
+                    continue
+                title = _text(t.get('name')) or f'Ticket #{tid}'
+                action = ''
+                for f in _subitems(token, tid, 'ITILFollowup'):
+                    c = _text(f.get('content'))
+                    if c:
+                        action = c
+                for s in _subitems(token, tid, 'ITILSolution'):
+                    c = _text(s.get('content'))
+                    if c:
+                        action = c
+                if len(action) > 300:
+                    action = action[:297] + '...'
+                out[hit] = (tid, title, action)
+                wanted.discard(hit)
+                if not wanted:
+                    break
+        finally:
+            _close(token)
+    except Exception:
+        pass
+    return out
 @bp.route('/report/outage/<fmt>')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
@@ -834,8 +888,19 @@ def report_outage(fmt):
     headers = ['S.N', 'ATM_ID', 'ATM_Name', 'District', 'Causes for failure',
                'Action Taken', 'Outage in days', 'Owner branch', 'Type of ATM',
                'IP Address', 'Call ID']
-    rows = [[i + 1, r[0], r[1], r[2], _suspect(r), '', r[3], r[4], r[5], r[6], '']
+    rows = [[i + 1, r[0], r[1], r[2], _suspect(r), '', r[3], r[4], r[5], r[6], '-']
             for i, r in enumerate(db_rows)]
+
+    # Where an open GLPI ticket names the ATM, its title/followups replace the
+    # guess: confirmed cause + real action + ticket id as Call ID.
+    links = _glpi_outage_links([r[0] for r in db_rows])
+    for row in rows:
+        link = links.get(row[1])
+        if link:
+            tid, cause, action = link
+            row[4] = cause
+            row[5] = action
+            row[10] = tid
 
     title = 'Daily ATM Outage Report'
     subtitle = 'Down ATMs right now — location and outage days filled, causes left for the team.'
