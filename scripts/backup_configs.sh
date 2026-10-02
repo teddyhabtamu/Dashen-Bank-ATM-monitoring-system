@@ -38,7 +38,7 @@ warn() { echo "[backup-configs] WARNING: $*" >&2; }
 
 if [ "$DRY_RUN" = 1 ]; then
   log "DRY RUN — would collect into $BACKUP_ROOT/$DATE/:"
-  log "  zabbix/hosts.json, templates.json, mediatypes.json (API export)"
+  log "  zabbix/hosts.json, mediatypes.json, templates/*.json (API export)"
   log "  zabbix/actions.json (raw; recreated by setup_zabbix_actions.py)"
   log "  grafana/datasources.json + dashboards/*.json (API export)"
   log "  files/ (.env, compose files, filebeat.yml, config/, glpi-plugins/)"
@@ -62,7 +62,7 @@ if [ "$DRY_RUN" = 1 ]; then
 fi
 
 DEST="$BACKUP_ROOT/$DATE"
-mkdir -p "$DEST/zabbix" "$DEST/grafana/dashboards" "$DEST/files"
+mkdir -p "$DEST/zabbix/templates" "$DEST/grafana/dashboards" "$DEST/files"
 
 # --- 1. Zabbix ---------------------------------------------------------------
 # One python block: login, export hosts/templates/media, dump raw actions.
@@ -96,9 +96,32 @@ try:
     specs = [('hosts', 'host.get', {'output': ['hostid']}, 'hostid', 'hosts'),
              ('templates', 'template.get', {'output': ['templateid']}, 'templateid', 'templates'),
              ('mediatypes', 'mediatype.get', {'output': ['mediatypeid']}, 'mediatypeid', 'mediaTypes')]
+    # Bulk template export 500s on ~300 stock templates (PHP limits) even
+    # though each exports fine alone — so save templates one file each.
     for name, method, params, idkey, optkey in specs:
         try:
-            ids = [x[idkey] for x in (call(method, params, auth) or [])]
+            objs = call(method, params, auth) or []
+            if name == 'templates':
+                import re
+                names = {o['templateid']: o.get('name', o['templateid'])
+                         for o in (call('template.get',
+                                        {'output': ['templateid', 'name']}, auth) or [])}
+                ok, fail = 0, 0
+                for o in objs:
+                    tid = o[idkey]
+                    try:
+                        exp = call('configuration.export',
+                                   {'format': 'json', 'options': {optkey: [tid]}}, auth)
+                        safe = re.sub(r'[^A-Za-z0-9_.-]+', '_', names.get(tid, tid))[:80]
+                        with open(f"{DEST}/zabbix/templates/{tid}_{safe}.json", 'w') as f:
+                            f.write(exp if isinstance(exp, str) else json.dumps(exp))
+                        ok += 1
+                    except Exception as e:
+                        print(f'  FAILED template {names.get(tid, tid)}: {e}')
+                        fail += 1
+                print(f'  exported templates ({ok} ok, {fail} failed)')
+                continue
+            ids = [o[idkey] for o in objs]
             exp = call('configuration.export',
                        {'format': 'json', 'options': {optkey: ids}}, auth)
             with open(f'{DEST}/zabbix/{name}.json', 'w') as f:
@@ -184,7 +207,8 @@ Restore order after a total loss (fresh RHEL9 + Docker):
   2. docker compose up -d postgres  (+ mariadb/glpi on their hosts)
   3. scripts/restore_db.sh --confirm   (Postgres custom tables)
      + GLPI: zcat <bundle>/files/.../glpi_*.sql.gz | docker exec -i glpi-db mysql glpi
-  4. Zabbix: Configuration -> Import the zabbix/*.json exports
+  4. Zabbix: Configuration -> Import hosts.json, then each zabbix/templates/*.json
+     (bulk template import may also 500 — import in small batches if so)
      + python3 scripts/setup_zabbix_actions.py   (recreates trigger actions)
   5. Grafana: POST grafana/datasources.json + dashboards/*.json to the API
   6. Copy back filebeat.yml (chown root:root!), compose files, glpi-plugins/
