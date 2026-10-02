@@ -19,6 +19,13 @@ from reportlab.lib.enums import TA_CENTER
 
 bp = Blueprint('report', __name__)
 
+# Display units for headers. Applied in Python AFTER fetch — '%' must never
+# appear inside a SQL string (psycopg2 mistakes it for a placeholder).
+_DISPLAY_UNITS = {
+    'Success Rate': 'Success Rate (%)',
+    'Uptime': 'Uptime (%)',
+}
+
 _VENDOR_SQL = """
     SELECT COALESCE(l.vendor,'Unknown'), COUNT(DISTINCT t.atm_id), COUNT(*),
         SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END),
@@ -247,7 +254,7 @@ def report_transaction(fmt):
                 SUM(CASE WHEN t.status='DECLINED' THEN 1 ELSE 0 END)         AS "Declined",
                 SUM(CASE WHEN t.status='ERROR'    THEN 1 ELSE 0 END)         AS "Errors",
                 ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)
-                    /NULLIF(COUNT(*),0),2)                                    AS "Success Rate (%)",
+                    /NULLIF(COUNT(*),0),2)                                    AS "Success Rate",
                 COALESCE(SUM(CASE WHEN t.status='APPROVED' AND txn_type='WITHDRAWAL'
                     THEN amount ELSE 0 END),0)                               AS "Cash Dispensed ETB"
             FROM atm_transactions t
@@ -265,7 +272,9 @@ def report_transaction(fmt):
         rows = cur.fetchall(); headers = [d[0] for d in cur.description]
         cur.close()
 
-    headers = ['S.N'] + headers
+    # NOTE: '%' must never appear inside the SQL above (psycopg2 parses it
+    # as a placeholder) — pretty display units are applied here instead.
+    headers = ['S.N'] + [_DISPLAY_UNITS.get(h, h) for h in headers]
     rows = [[i + 1] + list(r) for i, r in enumerate(rows)]
 
     title = 'Transaction Summary Report'
@@ -506,7 +515,7 @@ def report_performance(fmt):
             )
             SELECT s.atm_id AS "ATM_ID", s.branch AS "Owner Branch",
                 s.total AS "Total Transactions",
-                s.rate  AS "Success Rate (%)",
+                s.rate  AS "Success Rate",
                 s.daily AS "Avg Daily Txns",
                 CONCAT(p.hr::int,':00-',(p.hr::int+1),':00') AS "Peak Hour",
                 RANK() OVER (ORDER BY s.total DESC) AS "Rank"
@@ -518,7 +527,7 @@ def report_performance(fmt):
         rows = cur.fetchall(); headers = [d[0] for d in cur.description]
         cur.close()
 
-    headers = ['S.N'] + headers
+    headers = ['S.N'] + [_DISPLAY_UNITS.get(h, h) for h in headers]
     rows = [[i + 1] + list(r) for i, r in enumerate(rows)]
 
     title = 'ATM Performance Report'
@@ -568,7 +577,7 @@ def report_vendor(fmt):
                 SUM(CASE WHEN t.status='DECLINED' THEN 1 ELSE 0 END)          AS "Declined",
                 SUM(CASE WHEN t.status='ERROR'    THEN 1 ELSE 0 END)          AS "Errors",
                 ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)
-                    /NULLIF(COUNT(*),0),2)                                     AS "Success Rate (%)",
+                    /NULLIF(COUNT(*),0),2)                                     AS "Success Rate",
                 ROUND(COUNT(*)/NULLIF(COUNT(DISTINCT t.atm_id),0)/%s::numeric,1)
                                                                               AS "Avg Daily Txns/ATM",
                 COALESCE(SUM(CASE WHEN t.status='APPROVED' AND t.txn_type='WITHDRAWAL'
@@ -583,7 +592,7 @@ def report_vendor(fmt):
         rows = cur.fetchall(); headers = [d[0] for d in cur.description]
         cur.close()
 
-    headers = ['S.N'] + headers
+    headers = ['S.N'] + [_DISPLAY_UNITS.get(h, h) for h in headers]
     rows = [[i + 1] + list(r) for i, r in enumerate(rows)]
 
     title = 'Vendor Performance Report'
@@ -685,7 +694,7 @@ def report_availability(fmt):
                 active_hours as "Active (hrs)",
                 expected_hours as "Expected (hrs)",
                 ROUND(expected_hours - active_hours, 1) as "Downtime (hrs)",
-                uptime_pct as "Uptime (%)",
+                uptime_pct as "Uptime",
                 CASE
                     WHEN uptime_pct >= 99.9 THEN 'Excellent'
                     WHEN uptime_pct >= 99.0 THEN 'Good'
@@ -704,7 +713,7 @@ def report_availability(fmt):
         rows = cur.fetchall(); headers = [d[0] for d in cur.description]
         cur.close()
 
-    headers = ['S.N'] + headers
+    headers = ['S.N'] + [_DISPLAY_UNITS.get(h, h) for h in headers]
     rows = [[i + 1] + list(r) for i, r in enumerate(rows)]
 
     title = 'ATM Availability Report'
