@@ -74,13 +74,18 @@ BASE = os.environ['ZBX_URL']
 DEST = os.environ['DEST']
 
 def call(method, params, auth=None):
+    import urllib.error
     body = {'jsonrpc': '2.0', 'method': method, 'params': params, 'id': 1}
     if auth:
         body['auth'] = auth
     req = urllib.request.Request(BASE, data=json.dumps(body).encode(),
                                  headers={'Content-Type': 'application/json-rpc'})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        res = json.load(r)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            res = json.load(r)
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode(errors='replace')[:500]
+        raise RuntimeError(f"{method}: HTTP {e.code} {detail}")
     if 'error' in res:
         raise RuntimeError(f"{method}: {res['error']}")
     return res.get('result')
@@ -92,17 +97,23 @@ try:
              ('templates', 'template.get', {'output': ['templateid']}, 'templateid', 'templates'),
              ('mediatypes', 'mediatype.get', {'output': ['mediatypeid']}, 'mediatypeid', 'mediaTypes')]
     for name, method, params, idkey, optkey in specs:
-        ids = [x[idkey] for x in (call(method, params, auth) or [])]
-        exp = call('configuration.export',
-                   {'format': 'json', 'options': {optkey: ids}}, auth)
-        with open(f'{DEST}/zabbix/{name}.json', 'w') as f:
-            f.write(exp if isinstance(exp, str) else json.dumps(exp))
-        print(f'  exported {name} ({len(ids)} objects)')
-    acts = call('action.get', {'output': 'extend', 'selectOperations': 'extend',
-                               'selectRecoveryOperations': 'extend'}, auth)
-    with open(f'{DEST}/zabbix/actions.json', 'w') as f:
-        json.dump(acts, f, indent=1)
-    print(f'  exported actions ({len(acts or [])})')
+        try:
+            ids = [x[idkey] for x in (call(method, params, auth) or [])]
+            exp = call('configuration.export',
+                       {'format': 'json', 'options': {optkey: ids}}, auth)
+            with open(f'{DEST}/zabbix/{name}.json', 'w') as f:
+                f.write(exp if isinstance(exp, str) else json.dumps(exp))
+            print(f'  exported {name} ({len(ids)} objects)')
+        except Exception as e:
+            print(f'  FAILED {name}: {e}')
+    try:
+        acts = call('action.get', {'output': 'extend', 'selectOperations': 'extend',
+                                   'selectRecoveryOperations': 'extend'}, auth)
+        with open(f'{DEST}/zabbix/actions.json', 'w') as f:
+            json.dump(acts, f, indent=1)
+        print(f'  exported actions ({len(acts or [])})')
+    except Exception as e:
+        print(f'  FAILED actions: {e}')
 finally:
     try:
         call('user.logout', [], auth)
