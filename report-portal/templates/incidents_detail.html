@@ -141,10 +141,53 @@
     ticketPost(url, body, btn);
   }
   function showPickedFiles(input){
-    var names = [];
-    for(var i = 0; i < input.files.length && i < 3; i++) names.push(input.files[i].name);
-    document.getElementById('pickedFiles').textContent = names.join(', ') +
-      (input.files.length > 3 ? ' (+' + (input.files.length - 3) + ' ignored, max 3)' : '');
+    // Accumulate into a managed list so files can be removed before send.
+    if(!window._pickedDT) window._pickedDT = new DataTransfer();
+    var dt = window._pickedDT;
+    for(var i = 0; i < input.files.length; i++){
+      var f = input.files[i];
+      if(dt.files.length >= 3){ showToast('Only the first 3 files are kept.', 'warning'); break; }
+      if(f.size > 10 * 1024 * 1024){ showToast(f.name + ' exceeds 10MB — skipped.', 'error'); continue; }
+      var dup = false;
+      for(var j = 0; j < dt.files.length; j++){
+        if(dt.files[j].name === f.name && dt.files[j].size === f.size){ dup = true; break; }
+      }
+      if(!dup) dt.items.add(f);
+    }
+    input.files = dt.files;
+    renderPicked();
+  }
+  function removePicked(idx){
+    var dt = window._pickedDT;
+    if(!dt) return;
+    dt.items.remove(idx);
+    document.getElementById('replyFiles').files = dt.files;
+    renderPicked();
+  }
+  function renderPicked(){
+    var dt = window._pickedDT;
+    var box = document.getElementById('pickedFiles');
+    box.innerHTML = '';
+    if(!dt) return;
+    for(var i = 0; i < dt.files.length; i++){
+      (function(f, idx){
+        var chip = document.createElement('span');
+        chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF;border-radius:16px;padding:3px 6px 3px 10px;margin:2px 4px 2px 0;font-size:12px;max-width:260px';
+        var sz = f.size > 1048576 ? (f.size / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(f.size / 1024)) + 'KB';
+        var label = document.createElement('span');
+        label.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+        label.textContent = f.name + ' (' + sz + ')';
+        var x = document.createElement('button');
+        x.type = 'button';
+        x.textContent = '×';
+        x.title = 'Remove this file';
+        x.style.cssText = 'border:none;background:#DBEAFE;color:#1E40AF;border-radius:50%;width:18px;height:18px;line-height:1;cursor:pointer;font-size:13px;font-weight:700;padding:0';
+        x.onclick = function(){ removePicked(idx); };
+        chip.appendChild(label);
+        chip.appendChild(x);
+        box.appendChild(chip);
+      })(dt.files[i], i);
+    }
   }
   function sendReply(){
     var c = document.getElementById('replyText').value.trim();
