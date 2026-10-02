@@ -193,6 +193,29 @@
 
   <div class="reports-grid">
 
+    <!-- Daily ATM Outage (the team's everyday report — first) -->
+    <div class="report-card">
+      <div class="card-accent"></div>
+      <div class="card-content">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <div class="card-icon"><i data-lucide="alert-triangle" style="width:22px;height:22px;"></i></div>
+          <h3>Daily ATM Outage</h3>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
+        </div>
+        <div class="card-body-inner">
+          <p style="font-size:12px;color:#64748B;margin-bottom:12px">One row per down ATM — location and outage days filled automatically; Causes, Action Taken and Call ID left blank for the team to complete.</p>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="gen('outage','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('outage','pdf')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-outline" onclick="gen('outage','csv')"><i data-lucide="file"></i> CSV</button>
+            <div class="loading-wrapper" id="lw-outage">
+              <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Transaction Summary -->
     <div class="report-card">
       <div class="card-accent"></div>
@@ -205,7 +228,7 @@
         <div class="card-body-inner">
           <div class="form-grid">
             <div class="form-group">
-              <label>Period</label>
+              <label>Reporting Period</label>
               <div class="custom-select">
                 <select id="txn-days">
                   <option value="1">Today</option>
@@ -227,7 +250,7 @@
           <div class="card-actions">
             <button class="btn btn-primary" onclick="gen('transaction','excel','txn-days','txn-atm')"><i data-lucide="file-spreadsheet"></i> Excel</button>
             <button class="btn btn-outline" onclick="gen('transaction','pdf','txn-days','txn-atm')"><i data-lucide="file-text"></i> PDF</button>
-            <button class="btn btn-ghost" onclick="gen('transaction','csv','txn-days','txn-atm')"><i data-lucide="file"></i> CSV</button>
+            <button class="btn btn-outline" onclick="gen('transaction','csv','txn-days','txn-atm')"><i data-lucide="file"></i> CSV</button>
             <div class="loading-wrapper" id="lw-transaction">
               <div class="loading-bar"></div><div class="loading-text">Generating...</div>
             </div>
@@ -262,7 +285,7 @@
           <div class="card-actions">
             <button class="btn btn-primary" onclick="gen('cash','excel','cash-days')"><i data-lucide="file-spreadsheet"></i> Excel</button>
             <button class="btn btn-outline" onclick="gen('cash','pdf','cash-days')"><i data-lucide="file-text"></i> PDF</button>
-            <button class="btn btn-ghost" onclick="gen('cash','csv','cash-days')"><i data-lucide="file"></i> CSV</button>
+            <button class="btn btn-outline" onclick="gen('cash','csv','cash-days')"><i data-lucide="file"></i> CSV</button>
             <div class="loading-wrapper" id="lw-cash">
               <div class="loading-bar"></div><div class="loading-text">Generating...</div>
             </div>
@@ -296,7 +319,7 @@
           <div class="card-actions">
             <button class="btn btn-primary" onclick="gen('error','excel','error-days')"><i data-lucide="file-spreadsheet"></i> Excel</button>
             <button class="btn btn-outline" onclick="gen('error','pdf','error-days')"><i data-lucide="file-text"></i> PDF</button>
-            <button class="btn btn-ghost" onclick="gen('error','csv','error-days')"><i data-lucide="file"></i> CSV</button>
+            <button class="btn btn-outline" onclick="gen('error','csv','error-days')"><i data-lucide="file"></i> CSV</button>
             <div class="loading-wrapper" id="lw-error">
               <div class="loading-bar"></div><div class="loading-text">Generating...</div>
             </div>
@@ -330,7 +353,7 @@
           <div class="card-actions">
             <button class="btn btn-primary" onclick="gen('performance','excel','perf-days')"><i data-lucide="file-spreadsheet"></i> Excel</button>
             <button class="btn btn-outline" onclick="gen('performance','pdf','perf-days')"><i data-lucide="file-text"></i> PDF</button>
-            <button class="btn btn-ghost" onclick="gen('performance','csv','perf-days')"><i data-lucide="file"></i> CSV</button>
+            <button class="btn btn-outline" onclick="gen('performance','csv','perf-days')"><i data-lucide="file"></i> CSV</button>
             <div class="loading-wrapper" id="lw-performance">
               <div class="loading-bar"></div><div class="loading-text">Generating...</div>
             </div>
@@ -364,7 +387,7 @@
           <div class="card-actions">
             <button class="btn btn-primary" onclick="gen('vendor','excel','vendor-days')"><i data-lucide="file-spreadsheet"></i> Excel</button>
             <button class="btn btn-outline" onclick="gen('vendor','pdf','vendor-days')"><i data-lucide="file-text"></i> PDF</button>
-            <button class="btn btn-ghost" onclick="gen('vendor','csv','vendor-days')"><i data-lucide="file"></i> CSV</button>
+            <button class="btn btn-outline" onclick="gen('vendor','csv','vendor-days')"><i data-lucide="file"></i> CSV</button>
             <div class="loading-wrapper" id="lw-vendor">
               <div class="loading-bar"></div><div class="loading-text">Generating...</div>
             </div>
@@ -385,7 +408,7 @@
         <div class="card-body-inner">
           <div class="form-grid">
             <div class="form-group">
-              <label>Period</label>
+              <label>Reporting Period</label>
               <div class="custom-select">
                 <select id="avail-days">
                   <option value="1">Today</option>
@@ -407,31 +430,8 @@
           <div class="card-actions">
             <button class="btn btn-primary" onclick="gen('availability','excel','avail-days','avail-atm')"><i data-lucide="file-spreadsheet"></i> Excel</button>
             <button class="btn btn-outline" onclick="gen('availability','pdf','avail-days','avail-atm')"><i data-lucide="file-text"></i> PDF</button>
-            <button class="btn btn-ghost" onclick="gen('availability','csv','avail-days','avail-atm')"><i data-lucide="file"></i> CSV</button>
+            <button class="btn btn-outline" onclick="gen('availability','csv','avail-days','avail-atm')"><i data-lucide="file"></i> CSV</button>
             <div class="loading-wrapper" id="lw-availability">
-              <div class="loading-bar"></div><div class="loading-text">Generating...</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Daily ATM Outage (matches the ATM team's manual template) -->
-    <div class="report-card">
-      <div class="card-accent"></div>
-      <div class="card-content">
-        <div class="card-header" onclick="toggleAccordion(this)">
-          <div class="card-icon"><i data-lucide="alert-triangle" style="width:22px;height:22px;"></i></div>
-          <h3>Daily ATM Outage</h3>
-          <i data-lucide="chevron-down" class="accordion-chevron"></i>
-        </div>
-        <div class="card-body-inner">
-          <p style="font-size:12px;color:#64748B;margin-bottom:12px">One row per down ATM — location and outage days filled automatically; Causes, Action Taken and Call ID left blank for the team to complete.</p>
-          <div class="card-actions">
-            <button class="btn btn-primary" onclick="gen('outage','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
-            <button class="btn btn-outline" onclick="gen('outage','pdf')"><i data-lucide="file-text"></i> PDF</button>
-            <button class="btn btn-ghost" onclick="gen('outage','csv')"><i data-lucide="file"></i> CSV</button>
-            <div class="loading-wrapper" id="lw-outage">
               <div class="loading-bar"></div><div class="loading-text">Generating...</div>
             </div>
           </div>
