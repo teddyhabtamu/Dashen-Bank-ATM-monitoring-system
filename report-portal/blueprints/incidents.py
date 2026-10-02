@@ -582,6 +582,36 @@ def board():
     except Exception as e:
         logger.warning('unread computation failed (non-fatal): %s', e)
 
+    # Assignee = Ticket_User type 2 (technician). One Ticket_User call per
+    # ticket + one User call per distinct technician; anything failing
+    # degrades to '—' rather than breaking the list.
+    try:
+        token = _session()
+        if token:
+            try:
+                names = {}
+                for x in tickets:
+                    tech = '—'
+                    ok, actors = _api(token, 'GET', f"Ticket/{x['id']}/Ticket_User/", None)
+                    if ok and isinstance(actors, list):
+                        for a in actors:
+                            try:
+                                if int(a.get('type', 0)) == 2 and a.get('users_id'):
+                                    tech = _user_label(token, a.get('users_id'), names)
+                                    break
+                            except (TypeError, ValueError):
+                                continue
+                    x['assignee'] = tech
+            finally:
+                _close(token)
+        else:
+            for x in tickets:
+                x['assignee'] = '—'
+    except Exception as e:
+        logger.warning('assignee computation failed (non-fatal): %s', e)
+        for x in tickets:
+            x.setdefault('assignee', '—')
+
     return render_template('incidents.html', tickets=tickets, counts=counts,
                            f_status=status, error=error, at_cap=len(raw) >= 100)
 
@@ -796,8 +826,28 @@ def acknowledge(ticket_id):
         ok, data = _api(token, 'PUT', f'Ticket/{ticket_id}', {'input': {'status': 2}})
         if not ok:
             return False, data
-        _add_followup(token, ticket_id, f'Acknowledged from ATM Monitoring System by {actor}.')
-        return True, f'Ticket {ticket_id} acknowledged.'
+        # Make "(assigned)" true: whoever acknowledges takes the ticket, if
+        # they exist as a GLPI user. Unresolvable actors keep status-only ack.
+        assigned_note = ''
+        try:
+            import urllib.parse
+            ok_u, users = _api(token, 'GET',
+                               'User/?searchText=' + urllib.parse.quote(actor), None)
+            match = None
+            if ok_u and isinstance(users, list):
+                exact = [u for u in users if (u.get('name') or '') == actor]
+                match = exact[0] if exact else None
+            if match and match.get('id'):
+                ok_a, _ = _api(token, 'POST', 'Ticket_User/', {'input': {
+                    'tickets_id': int(ticket_id),
+                    'users_id': int(match['id']), 'type': 2}})
+                if ok_a:
+                    assigned_note = ' (self-assigned)'
+        except Exception:
+            pass
+        _add_followup(token, ticket_id,
+                      f'Acknowledged from ATM Monitoring System by {actor}{assigned_note}.')
+        return True, f'Ticket {ticket_id} acknowledged{assigned_note}.'
 
     res = _mutate(ticket_id, _run)
     if res['success']:

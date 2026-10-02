@@ -82,7 +82,7 @@
     <div class="card-header"><h2>Tickets ({{ tickets|length }})</h2></div>
     <div class="inc-table-wrap">
       <table class="inc-table">
-        <thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Priority</th><th>Category</th><th>Requester</th><th>Created</th><th>Updated</th>{% if session.get('role') in ('admin', 'operator') %}<th>Actions</th>{% endif %}</tr></thead>
+        <thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Priority</th><th>Category</th><th>Requester</th><th>Assignee</th><th>Created</th><th>Updated</th>{% if session.get('role') in ('admin', 'operator') %}<th>Actions</th>{% endif %}</tr></thead>
         <tbody>
           {% for t in tickets %}
           <tr data-href="/incidents/{{ t.id }}" onclick="if(event.target.closest('.kebab-wrap'))return;window.location=this.dataset.href">
@@ -92,6 +92,7 @@
             <td class="{% if t.priority_n >= 4 %}pr-high{% endif %}">{{ t.priority }}</td>
             <td>{{ t.category }}</td>
             <td>{{ t.requester }}</td>
+            <td>{{ t.assignee or '—' }}</td>
             <td style="white-space:nowrap">{{ t.created }}</td>
             <td style="white-space:nowrap">{{ t.updated }}</td>
             {% if session.get('role') in ('admin', 'operator') %}
@@ -101,7 +102,7 @@
             {% endif %}
           </tr>
           {% else %}
-          <tr class="empty-row"><td colspan="{% if session.get('role') in ('admin', 'operator') %}9{% else %}8{% endif %}">No tickets found.{% if error %} GLPI may be unreachable.{% endif %}</td></tr>
+          <tr class="empty-row"><td colspan="{% if session.get('role') in ('admin', 'operator') %}10{% else %}9{% endif %}">No tickets found.{% if error %} GLPI may be unreachable.{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
