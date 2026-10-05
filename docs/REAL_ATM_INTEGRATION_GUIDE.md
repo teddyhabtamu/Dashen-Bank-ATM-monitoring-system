@@ -972,7 +972,7 @@ Expected: Some anomalies (if the simulation generates them).
 ### 12.8 — Test 8: Grafana Dashboard
 
 1. Open `http://localhost:3000`
-2. Log in as `admin` / `dashen2024`
+2. Log in as `admin` with your `GRAFANA_ADMIN_PASSWORD` from `.env` (never commit the real value)
 3. Open the **ATM Operations Centre** dashboard
 4. Check that your ATM appears in the dashboard
 
