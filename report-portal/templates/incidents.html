@@ -97,7 +97,7 @@
             <td style="white-space:nowrap">{{ t.updated }}</td>
             {% if session.get('role') in ('admin', 'operator') %}
             <td><div class="kebab-wrap">
-              <button class="kebab-btn" onclick="toggleTicketMenu({{ t.id }}, {{ t.status_n }}, this, event)" title="Actions">⋮</button>
+              <button class="kebab-btn" onclick="toggleTicketMenu({{ t.id }}, {{ t.status_n }}, {{ 'true' if t.assignee and t.assignee != '—' else 'false' }}, this, event)" title="Actions">⋮</button>
             </div></td>
             {% endif %}
           </tr>
@@ -126,7 +126,7 @@
 </div>
 <script>
 var _ticketMode = null, _ticketId = null, _assignUserId = null, _searchTimer = null;
-function toggleTicketMenu(id, statusN, btn, ev){
+function toggleTicketMenu(id, statusN, hasTech, btn, ev){
   ev.stopPropagation();
   var menu = document.getElementById('ticketKebab');
   if(menu.dataset.openFor === String(id) && menu.classList.contains('show')){
@@ -135,7 +135,7 @@ function toggleTicketMenu(id, statusN, btn, ev){
   var html = '';
   if(statusN === 1) html += '<button class="kebab-item" data-act="ack">Acknowledge</button>';
   if([1, 2, 3, 4].indexOf(statusN) !== -1){
-    html += '<button class="kebab-item" data-act="assign">Assign</button>';
+    html += '<button class="kebab-item" data-act="assign">' + (hasTech ? 'Reassign' : 'Assign') + '</button>';
     html += '<button class="kebab-item solve" data-act="solve">Solve</button>';
   }
   html += '<button class="kebab-item" data-act="note">Note</button>';
