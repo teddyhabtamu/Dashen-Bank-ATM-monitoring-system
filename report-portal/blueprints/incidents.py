@@ -953,14 +953,27 @@ def assign(ticket_id):
         return jsonify({'success': False, 'message': 'Select a technician to assign.'})
 
     def _run(token):
+        # True reassignment: release existing technicians first so the ticket
+        # never carries a stale assignee (e.g. someone gone unavailable).
+        # History is untouched — GLPI keeps the full timeline regardless.
+        ok, actors = _api(token, 'GET', f'Ticket/{ticket_id}/Ticket_User/', None)
+        if ok and isinstance(actors, list):
+            for a in actors:
+                try:
+                    if int(a.get('type', 0)) == 2 and a.get('id'):
+                        if int(a.get('users_id', 0)) == users_id:
+                            return True, f'Ticket {ticket_id} is already assigned to this technician.'
+                        _api(token, 'DELETE', f"Ticket_User/{a['id']}", None)
+                except (TypeError, ValueError):
+                    continue
         ok, data = _api(token, 'POST', 'Ticket_User/', {'input': {
             'tickets_id': ticket_id, 'users_id': users_id, 'type': 2}})
         if not ok:
             return False, data
         _api(token, 'PUT', f'Ticket/{ticket_id}', {'input': {'status': 2}})
         _add_followup(token, ticket_id,
-                      f'Assigned from ATM Monitoring System by {actor} (GLPI user id {users_id}).')
-        return True, f'Ticket {ticket_id} assigned.'
+                      f'Reassigned from ATM Monitoring System by {actor} (GLPI user id {users_id}).')
+        return True, f'Ticket {ticket_id} reassigned.'
 
     res = _mutate(ticket_id, _run)
     if res['success']:
