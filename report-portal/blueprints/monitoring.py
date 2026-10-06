@@ -36,10 +36,12 @@ SEV_COLORS = {
 
 EAT = timezone(timedelta(hours=3))
 
-# Short-lived cache: Zabbix data changes slowly relative to page views,
-# and each load costs up to 3 sequential API round-trips. 60s TTL.
+# Short-lived cache aligned UNDER the 20s frontend poll: every visible tick
+# can carry fresh numbers (a TTL above the poll interval would make updates
+# land on alternating ticks — burst-y, not rhythmic). Each load costs up to
+# 3 sequential API round-trips; at 20s cadence Zabbix won't feel it.
 _cache = {'ts': 0.0, 'hosts': None, 'problems': None}
-CACHE_TTL = 60.0
+CACHE_TTL = 20.0
 
 
 def _cached_zabbix():

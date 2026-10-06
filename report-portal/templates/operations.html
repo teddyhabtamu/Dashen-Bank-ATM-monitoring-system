@@ -287,7 +287,8 @@
    viewports are never touched — only dot colors/titles refresh, so no
    flicker or lost zoom. (Cluster badges recompute on full reload.) */
 (function(){
-  var fails = 0, busy = false;
+  var fails = 0, busy = false, t0 = 0;
+  var INTERVAL = 30000, BACKOFF_MAX = 180000;
   var HEALTH_COLORS = {Healthy:'#10B981', Degraded:'#F59E0B', Critical:'#DC2626', 'No Data':'#94A3B8'};
   function esc(s){ return String(s == null ? '—' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function fmtCash(n){ return Number(n || 0).toLocaleString('en-US', {maximumFractionDigits: 0}); }
@@ -299,6 +300,7 @@
   }
   function pill(h){ return '<span class="pill pill-' + String(h || 'No Data').toLowerCase().replace(' ','') + '">' + esc(h || 'No Data') + '</span>'; }
   async function tick(){
+    t0 = Date.now();
     if(busy || document.hidden){ schedule(); return; }
     busy = true;
     try{
@@ -377,7 +379,12 @@
     busy = false;
     schedule();
   }
-  function schedule(){ setTimeout(tick, Math.min(60000 * Math.pow(2, fails), 300000)); }
+  // Wall-clock anchored: next tick lands exactly INTERVAL after this one
+  // started — fetch duration no longer stretches the cadence.
+  function schedule(){
+    var wait = Math.min(INTERVAL * Math.pow(2, fails), BACKOFF_MAX) - (Date.now() - t0);
+    setTimeout(tick, Math.max(0, wait));
+  }
   tick();
 })();
 </script>

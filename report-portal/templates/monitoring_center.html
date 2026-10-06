@@ -123,7 +123,8 @@
 /* 30s autosync: stat cards + both tables re-render from /monitoring/api/live.
    Skips while the tab is hidden; failures back off silently (stamp shows it). */
 (function(){
-  var fails = 0, busy = false;
+  var fails = 0, busy = false, t0 = 0;
+  var INTERVAL = 20000, BACKOFF_MAX = 120000;
   function esc(s){ return String(s == null ? '—' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function stamp(ok){
     var el = document.getElementById('liveStamp');
@@ -132,6 +133,7 @@
     else { el.textContent = 'Update failed — retrying…'; el.style.color = '#DC2626'; }
   }
   async function tick(){
+    t0 = Date.now();
     if(busy || document.hidden){ schedule(); return; }
     busy = true;
     try{
@@ -171,7 +173,12 @@
     schedule();
   }
   function setNum(id, v){ var el = document.getElementById(id); if(el && v != null) el.textContent = v; }
-  function schedule(){ setTimeout(tick, Math.min(30000 * Math.pow(2, fails), 300000)); }
+  // Wall-clock anchored: next tick lands exactly INTERVAL after this one
+  // started — fetch duration no longer stretches the cadence.
+  function schedule(){
+    var wait = Math.min(INTERVAL * Math.pow(2, fails), BACKOFF_MAX) - (Date.now() - t0);
+    setTimeout(tick, Math.max(0, wait));
+  }
   tick();
 })();
 </script>

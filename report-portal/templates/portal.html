@@ -431,7 +431,8 @@ function refreshChart(chart, payload){
   });
   chart.update();
 }
-var _liveFails = 0, _liveBusy = false;
+var _liveFails = 0, _liveBusy = false, _liveT0 = 0, _liveCount = 0;
+var LIVE_INTERVAL = 15000, LIVE_BACKOFF_MAX = 120000;
 function liveStamp(ok){
   var el = document.getElementById('liveStamp');
   if(!el) return;
@@ -439,25 +440,34 @@ function liveStamp(ok){
   else { el.textContent = 'Update failed — retrying…'; el.style.color = '#DC2626'; }
 }
 async function liveTick(){
+  _liveT0 = Date.now();
   if(_liveBusy || document.hidden){ liveSchedule(); return; }
   _liveBusy = true;
   try{
     await loadKPIs(true);
-    const r = await fetch('/api/charts');
-    if(!r.ok) throw new Error('Server returned ' + r.status);
-    const d = await r.json();
-    if(d.error) throw new Error(d.error);
-    refreshChart(txnVolumeChart, d.txn_volume);
-    refreshChart(successRateChart, d.success_rate);
-    refreshChart(atmStatusChart, d.atm_status);
-    refreshChart(vendorComparisonChart, d.vendor_comparison);
-    refreshChart(cashTrendChart, d.cash_trend);
+    // Charts carry 7-day aggregates — refresh every 2nd tick (30s cadence).
+    _liveCount++;
+    if(_liveCount % 2 === 0){
+      const r = await fetch('/api/charts');
+      if(!r.ok) throw new Error('Server returned ' + r.status);
+      const d = await r.json();
+      if(d.error) throw new Error(d.error);
+      refreshChart(txnVolumeChart, d.txn_volume);
+      refreshChart(successRateChart, d.success_rate);
+      refreshChart(atmStatusChart, d.atm_status);
+      refreshChart(vendorComparisonChart, d.vendor_comparison);
+      refreshChart(cashTrendChart, d.cash_trend);
+    }
     _liveFails = 0; liveStamp(true);
   }catch(e){ _liveFails++; liveStamp(false); }
   _liveBusy = false;
   liveSchedule();
 }
-function liveSchedule(){ setTimeout(liveTick, Math.min(30000 * Math.pow(2, _liveFails), 300000)); }
+// Wall-clock anchored: ticks land exactly on cadence regardless of fetch time.
+function liveSchedule(){
+  var wait = Math.min(LIVE_INTERVAL * Math.pow(2, _liveFails), LIVE_BACKOFF_MAX) - (Date.now() - _liveT0);
+  setTimeout(liveTick, Math.max(0, wait));
+}
 
 
 // Accordion: toggle one card at a time on mobile
