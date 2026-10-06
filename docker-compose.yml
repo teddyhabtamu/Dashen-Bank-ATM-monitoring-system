@@ -139,7 +139,10 @@ services:
       LDAP_ADMIN_PASSWORD: "${LDAP_ADMIN_PASSWORD:-}"
       # Postgres datasource password (== DB_PASS); expanded inside datasources-uat.yml
       GF_PG_PASSWORD: "${DB_PASS}"
-      # Zabbix datasource password (== ZBX_PASS); expanded inside datasources-uat.yml
+      # Zabbix datasource credentials; expanded inside datasources-uat.yml.
+      # Dedicated svc-grafana account post-cutover (docs/zabbix-api-users.md);
+      # default Admin preserves current behavior until then.
+      GF_ZBX_USER: "${GF_ZBX_USER:-Admin}"
       GF_ZBX_PASSWORD: "${ZBX_PASS}"
       GF_INSTALL_PLUGINS: "alexanderzobnin-zabbix-app 4.4.5"
       GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: "alexanderzobnin-zabbix-datasource,alexanderzobnin-zabbix-app"

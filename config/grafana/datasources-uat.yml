@@ -7,7 +7,7 @@ datasources:
     access: proxy
     url: http://172.22.10.45:8080/api_jsonrpc.php
     jsonData:
-      username: Admin
+      username: $GF_ZBX_USER
     secureJsonData:
       # Injected from GF_ZBX_PASSWORD (== ZBX_PASS); never commit the real one.
       password: $GF_ZBX_PASSWORD
