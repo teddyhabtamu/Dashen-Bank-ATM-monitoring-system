@@ -1764,8 +1764,12 @@ def user_edit():
                 flash(f'Email "{email}" is already used by another account.', 'error')
                 return redirect('/admin/users')
             if password:
-                cur.execute("UPDATE app_users SET role = %s, password_hash = %s, email = %s, must_change_pw = TRUE WHERE username = %s",
-                            (role, generate_password_hash(password), email or None, username))
+                # Forced change is for passwords GIVEN to someone else. Setting
+                # your OWN password this way already proves knowledge of it —
+                # forcing another change next login is a pointless loop.
+                force_change = username != session.get('username', '')
+                cur.execute("UPDATE app_users SET role = %s, password_hash = %s, email = %s, must_change_pw = %s WHERE username = %s",
+                            (role, generate_password_hash(password), email or None, force_change, username))
             else:
                 cur.execute("UPDATE app_users SET role = %s, email = %s WHERE username = %s",
                             (role, email or None, username))
