@@ -258,7 +258,7 @@ services:
       DB_USER: "zabbix"
       DB_PASS: "${DB_PASS}"
       ZBX_URL: "http://zabbix-web:8080/api_jsonrpc.php"
-      ZBX_USER: "Admin"
+      ZBX_USER: "${ZBX_USER:-Admin}"
       ZBX_PASS: "${ZBX_PASS}"
       CASH_WATCH_INTERVAL: "300"
       MIN_AUTO_LOAD: "200"
@@ -318,7 +318,9 @@ services:
       DB_USER: "zabbix"
       DB_PASS: "${DB_PASS}"
       ZABBIX_URL: "http://zabbix-web:8080/api_jsonrpc.php"
-      ZABBIX_USER: "Admin"
+      # Service identity comes from ZBX_USER (svc-scripts) — this service
+      # reads the legacy ZABBIX_* names, so they are mapped, not hardcoded.
+      ZABBIX_USER: "${ZBX_USER:-Admin}"
       ZABBIX_PASS: "${ZBX_PASS}"
       CHECK_INTERVAL: "120"
       LATENCY_THRESHOLD: "200"
@@ -347,7 +349,7 @@ services:
       DB_USER: "zabbix"
       DB_PASS: "${DB_PASS}"
       ZBX_URL: "http://zabbix-web:8080/api_jsonrpc.php"
-      ZBX_USER: "Admin"
+      ZBX_USER: "${ZBX_USER:-Admin}"
       ZBX_PASS: "${ZBX_PASS}"
       STATE_POLL_INTERVAL: "30"
     depends_on:
