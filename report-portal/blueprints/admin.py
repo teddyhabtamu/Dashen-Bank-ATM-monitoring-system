@@ -627,6 +627,31 @@ def atm_get():
     return jsonify(_strip_secrets(dict(zip(cols, row))))
 
 
+def _audit_val(v):
+    if v is None or v == '':
+        return '(empty)'
+    return str(v)
+
+
+def _row_diff(old, new, skip=()):
+    """Changed fields as ['field: old => new']. Secrets never leak:
+    snmp_community shows only that it changed."""
+    diffs = []
+    for k in new:
+        if k in skip or k not in old:
+            continue
+        o, n = _audit_val(old.get(k)), _audit_val(new.get(k))
+        if o != n:
+            if k == 'snmp_community':
+                diffs.append('snmp_community: **** => **** (rotated)')
+            else:
+                diffs.append(f'{k}: {o} => {n}')
+    for k in new:
+        if k not in old and k not in skip and _audit_val(new.get(k)) != '(empty)':
+            diffs.append(f'{k}: (new) {_audit_val(new.get(k))}')
+    return diffs
+
+
 @bp.route('/atm/save', methods=['POST'])
 @login_required
 @role_required(ROLE_OPERATOR, ROLE_ADMIN)
@@ -652,6 +677,11 @@ def atm_save():
     with get_db() as conn:
         cur = conn.cursor()
         try:
+            # Before-image for the audit trail (None = create, not update).
+            cur.execute("SELECT * FROM atm_locations WHERE atm_id = %s", (data['atm_id'],))
+            _cols = [d[0] for d in cur.description]
+            _fetched = cur.fetchone()
+            old_row = dict(zip(_cols, _fetched)) if _fetched else None
             cur.execute("""
                 INSERT INTO atm_locations
                     (atm_id, atm_name, branch, district, city, region, latitude, longitude,
@@ -701,6 +731,22 @@ def atm_save():
                             updated_at = NOW()
                 """, (data['atm_id'],))
             conn.commit()
+            # After-image: re-read the effective row (COALESCE logic means the
+            # stored row can differ from the submitted form) and diff it.
+            cur.execute("SELECT * FROM atm_locations WHERE atm_id = %s", (data['atm_id'],))
+            _ncols = [d[0] for d in cur.description]
+            _nrow = cur.fetchone()
+            new_row = dict(zip(_ncols, _nrow)) if _nrow else {}
+            if old_row is None:
+                audit_detail = (f'ATM {data["atm_id"]} created: ' +
+                                ', '.join(f'{k}={_audit_val(new_row.get(k, v))}'
+                                          for k, v in data.items()
+                                          if k != 'snmp_community' and v) +
+                                ('; snmp_community set' if data.get('snmp_community') else ''))
+            else:
+                diffs = _row_diff(old_row, new_row, skip=('sim_port',))
+                audit_detail = (f'ATM {data["atm_id"]} updated: ' + '; '.join(diffs)
+                                if diffs else f'ATM {data["atm_id"]} saved (no changes)')
             # Auto-allocate a simulator port so the new ATM behaves like the others
             assign_sim_port(data['atm_id'], data['vendor'])
         except Exception as e:
@@ -718,11 +764,11 @@ def atm_save():
             cur.close()
 
     if is_ajax:
-        log_action('ATM_SAVE', f'ATM {data["atm_id"]} saved/updated')
+        log_action('ATM_SAVE', audit_detail)
         threading.Thread(target=_bg_zabbix_sync, args=([dict(data)],), daemon=True).start()
         return jsonify({'success': True, 'atm_id': data['atm_id']})
 
-    log_action('ATM_SAVE', f'ATM {data["atm_id"]} saved/updated')
+    log_action('ATM_SAVE', audit_detail)
     threading.Thread(target=_bg_zabbix_sync, args=([dict(data)],), daemon=True).start()
     return _guide_page(data)
 
@@ -732,7 +778,7 @@ def _archive_atm(cur, atm_id, deleted_by):
     back if the delete fails). Captures the full location row, all cash
     loads (financial evidence otherwise lost to ON DELETE CASCADE), and
     volume counts. Never raises: archival must not block a delete, but a
-    failure is logged loudly."""
+    failure is logged loudly. Returns (archived_bool, location_dict)."""
     try:
         cur.execute("CREATE TABLE IF NOT EXISTS atm_delete_archive ("
                     "id SERIAL PRIMARY KEY, atm_id VARCHAR(20) NOT NULL,"
@@ -744,7 +790,7 @@ def _archive_atm(cur, atm_id, deleted_by):
         cols = [d[0] for d in cur.description]
         loc = cur.fetchone()
         if not loc:
-            return False
+            return False, None
         location = dict(zip(cols, loc))
         cur.execute("SELECT * FROM cash_replenishments WHERE atm_id = %s ORDER BY id", (atm_id,))
         cash_cols = [d[0] for d in cur.description]
@@ -767,7 +813,10 @@ def _archive_atm(cur, atm_id, deleted_by):
             (atm_id, deleted_by, json.dumps(location, default=str),
              json.dumps(cash, default=str),
              counts.get('txn', -1), counts.get('anom', -1), counts.get('hist', -1)))
-        return True
+        # Strip the credential before handing the row to the audit log —
+        # the archive keeps it (recovery), the log must not (backups).
+        location = {k: v for k, v in location.items() if k != 'snmp_community'}
+        return True, location
     except Exception as e:
         import logging as _logging
         _logging.getLogger(__name__).error('Archive of %s failed: %s', atm_id, e)
@@ -775,7 +824,7 @@ def _archive_atm(cur, atm_id, deleted_by):
             cur.execute("ROLLBACK TO SAVEPOINT _arch")
         except Exception:
             pass
-        return False
+        return False, None
 
 
 @bp.route('/atm/delete', methods=['POST'])
@@ -793,7 +842,7 @@ def atm_delete():
     with get_db() as conn:
         cur = conn.cursor()
         try:
-            _archive_atm(cur, atm_id, session.get('username', ''))
+            archived, old_loc = _archive_atm(cur, atm_id, session.get('username', ''))
             cur.execute("DELETE FROM atm_current_state WHERE atm_id = %s", (atm_id,))
             cur.execute("DELETE FROM atm_transactions WHERE atm_id = %s", (atm_id,))
             cur.execute("DELETE FROM atm_anomalies WHERE atm_id = %s", (atm_id,))
@@ -816,11 +865,19 @@ def atm_delete():
         finally:
             cur.close()
 
+    if old_loc:
+        del_detail = (f'ATM {atm_id} deleted (was: ' +
+                      ', '.join(f'{k}={_audit_val(v)}' for k, v in old_loc.items()
+                                if k in ('atm_name', 'branch', 'district', 'city',
+                                         'vendor', 'model', 'ip_address', 'status')) +
+                      '; full snapshot in atm_delete_archive)')
+    else:
+        del_detail = f'ATM {atm_id} deleted (no pre-delete row found)'
     if is_ajax:
-        log_action('ATM_DELETE', f'ATM {atm_id} deleted')
+        log_action('ATM_DELETE', del_detail)
         threading.Thread(target=_bg_zabbix_disable, args=([atm_id],), daemon=True).start()
         return jsonify({'success': True, 'atm_id': atm_id})
-    log_action('ATM_DELETE', f'ATM {atm_id} deleted')
+    log_action('ATM_DELETE', del_detail)
     threading.Thread(target=_bg_zabbix_disable, args=([atm_id],), daemon=True).start()
     return redirect('/admin/atm')
 
