@@ -97,43 +97,33 @@ def _generate_report(report_type, fmt, days=7, atm='all'):
     label = REPORT_TYPE_LABELS.get(report_type, report_type.title())
     atm_part = f'_{atm}' if atm and atm != 'all' else ''
     filename = f'Dashen_Bank_{label.replace(" ", "_")}{atm_part}_{today}.{fmt}'
-    if fmt == 'excel':
-        import requests
-        url = f'{_INTERNAL_BASE}/report/{report_type}/excel?days={days}&atm={atm}'
-        try:
-            resp = requests.get(url, timeout=60, headers=_headers)
-            if resp.status_code == 200:
-                buf.write(resp.content)
-                buf.seek(0)
-                return buf, filename, ('application/vnd.openxmlformats-'
-                                       'officedocument.spreadsheetml.sheet')
-        except Exception as e:
-            logger.error('Report generation failed: %s', e)
+    # Expected bytes per format: never attach a login page (or any HTML)
+    # as a report — a 302→login slipping through used to get emailed out
+    # as a fake PDF. Fail loudly instead.
+    want_ct = {'csv': 'text/csv', 'pdf': 'application/pdf',
+               'excel': 'officedocument.spreadsheetml'}.get(fmt, '')
+    timeout = 60 if fmt in ('pdf', 'excel') else 30
+    import requests
+    url = f'{_INTERNAL_BASE}/report/{report_type}/{fmt}?days={days}&atm={atm}'
+    try:
+        resp = requests.get(url, timeout=timeout, headers=_headers)
+        if resp.status_code != 200:
+            logger.error('Report generation failed: HTTP %s for %s', resp.status_code, url)
             return None, None, None
-    elif fmt == 'csv':
-        import requests
-        url = f'{_INTERNAL_BASE}/report/{report_type}/csv?days={days}&atm={atm}'
-        try:
-            resp = requests.get(url, timeout=30, headers=_headers)
-            if resp.status_code == 200:
-                buf.write(resp.content)
-                buf.seek(0)
-                return buf, filename, 'text/csv'
-        except Exception as e:
-            logger.error('Report generation failed: %s', e)
+        got_ct = resp.headers.get('Content-Type', '')
+        if want_ct and want_ct not in got_ct:
+            logger.error('Report generation refused: expected %s, got %s for %s',
+                         want_ct, got_ct, url)
             return None, None, None
-    else:
-        import requests
-        url = f'{_INTERNAL_BASE}/report/{report_type}/pdf?days={days}&atm={atm}'
-        try:
-            resp = requests.get(url, timeout=60, headers=_headers)
-            if resp.status_code == 200:
-                buf.write(resp.content)
-                buf.seek(0)
-                return buf, filename, 'application/pdf'
-        except Exception as e:
-            logger.error('Report generation failed: %s', e)
-            return None, None, None
+        buf.write(resp.content)
+        buf.seek(0)
+        send_ct = {'csv': 'text/csv', 'pdf': 'application/pdf',
+                   'excel': 'application/vnd.openxmlformats-'
+                            'officedocument.spreadsheetml.sheet'}.get(fmt, 'application/octet-stream')
+        return buf, filename, send_ct
+    except Exception as e:
+        logger.error('Report generation failed: %s', e)
+        return None, None, None
     return None, None, None
 
 

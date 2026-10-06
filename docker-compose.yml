@@ -213,6 +213,10 @@ services:
       LDAP_LOGIN_ATTR: "${LDAP_LOGIN_ATTR:-uid}"
       LDAP_ADMINS_GROUP: "${LDAP_ADMINS_GROUP:-ATM-Admins}"
       LDAP_OPERATORS_GROUP: "${LDAP_OPERATORS_GROUP:-ATM-Operators}"
+      # Shared scheduler→app auth key: every gunicorn worker must see the
+      # SAME value or internal report fetches bounce to the login page
+      # (and get emailed as fake PDFs). Set once in .env.
+      INTERNAL_API_KEY: "${INTERNAL_API_KEY:-}"
       ZABBIX_URL: "http://zabbix-web:8080/api_jsonrpc.php"
       ZABBIX_USER: "${ZABBIX_USER:-Admin}"
       ZABBIX_PASS: "${ZBX_PASS}"
