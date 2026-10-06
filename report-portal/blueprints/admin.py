@@ -643,7 +643,7 @@ def _norm_branch(v):
     if not v:
         return None
     if v.upper().endswith('BRANCH'):
-        v = v[:-len('BRANCH')].rstrip() + 'BRANCH'
+        v = v[:-len('BRANCH')].rstrip() + ' BRANCH'
     else:
         v = v + ' BRANCH'
     return v
