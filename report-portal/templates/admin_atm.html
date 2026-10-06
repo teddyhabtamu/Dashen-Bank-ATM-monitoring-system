@@ -552,7 +552,11 @@ function applyFilter(){
 
     function atmIdFromEl(el){
       var holder = el && el.closest ? el.closest('[data-atm-id]') : null;
-      return holder ? holder.dataset.atmId : '';
+      if(holder) return holder.dataset.atmId;
+      // Desktop kebab menus are teleported to document.body for positioning
+      // (see toggleKebab) — the id was stamped on the menu at open time.
+      var menu = el && el.closest ? el.closest('.kebab-menu') : null;
+      return (menu && menu.dataset.atmId) ? menu.dataset.atmId : '';
     }
     function toggleRowDetail(btn){
       var atmId = atmIdFromEl(btn);
@@ -1325,6 +1329,7 @@ function toggleKebab(event, btn){
     return;
   }
   menu._origParent = menu.parentElement;
+  menu.dataset.atmId = atmIdFromEl(btn) || '';
   var rect = btn.getBoundingClientRect();
   var spaceBelow = window.innerHeight - rect.bottom;
   document.body.appendChild(menu);
