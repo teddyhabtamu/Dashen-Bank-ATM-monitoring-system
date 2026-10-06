@@ -9,6 +9,7 @@ import logging
 import decimal
 import datetime as _dt
 from flask import Blueprint, render_template, jsonify
+import livecache
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from db import get_db
 
@@ -50,7 +51,9 @@ def _all(sql, params=()):
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def dashboard():
-    d = _collect()
+    # Shared across viewers (150s TTL under the 3min frontend poll — 7-day
+    # aggregates move slowly, so one computation serves everyone for minutes).
+    d = livecache.get_or_compute('kpi', 150, _collect)
     return render_template('kpi.html', availability=d['availability'], ranking=d['ranking'],
                            errors=d['errors'], heat=d['heat'], days=d['days'], peak_max=d['peak_max'],
                            faults=d['faults'], chart=d['chart'])
@@ -60,8 +63,8 @@ def dashboard():
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def api_live():
-    """Pollable twin of dashboard() for the 5-minute autosync."""
-    d = _collect()
+    """Pollable twin of dashboard() for the 3-minute autosync."""
+    d = livecache.get_or_compute('kpi', 150, _collect)
     return jsonify({
         'ranking': _jclean(d['ranking']),
         'faults': _jclean(d['faults']),

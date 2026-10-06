@@ -13,6 +13,7 @@ import os
 import decimal
 import datetime as _dt
 from flask import Blueprint, render_template, request, jsonify
+import livecache
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from db import get_db
 
@@ -109,7 +110,7 @@ def _all(sql, params=()):
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def dashboard():
-    d = _collect()
+    d = _collect_cached()
     return render_template('operations.html',
                            cash_today=d['cash_today'], success_rate=d['success_rate'],
                            unacked=d['unacked'], fleet=d['fleet_page'], feed=d['feed'],
@@ -125,8 +126,8 @@ def dashboard():
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def api_live():
-    """Pollable twin of dashboard() for the 60s autosync (same shaping)."""
-    d = _collect()
+    """Pollable twin of dashboard() for the 30s autosync (same shaping)."""
+    d = _collect_cached()
     return jsonify({
         'cash_today': d['cash_today'], 'success_rate': d['success_rate'],
         'unacked': d['unacked'],
@@ -137,6 +138,13 @@ def api_live():
         'sum_pg': d['sum_pg'], 'sum_pages': d['sum_pages'],
         'chart': d['chart'], 'map_dots': d['map_dots'],
     })
+
+
+def _collect_cached():
+    # Shared across viewers (25s TTL under the 30s frontend poll). Keyed by
+    # page: different viewers on different pages must not share slices.
+    return livecache.get_or_compute(
+        f'ops:{_page_param("page")}:{_page_param("spage")}', 25, _collect)
 
 
 def _jclean(rows):

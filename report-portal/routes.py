@@ -9,6 +9,7 @@ from helpers import (xl_header, xl_style_row, xl_style_data_rows, xl_autosize,
                      xl_send, xl_finalize,
                      xl_build_sheet, xl_append_section, csv_send, pdf_send, mktable,
                      _pdf_header_block, LOGO_PATH)
+import livecache
 from datetime import datetime
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
@@ -123,21 +124,24 @@ def api_atms():
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def api_stats():
     try:
-        with get_db() as conn:
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT COUNT(*),
-                    ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),1),
-                    COALESCE(SUM(CASE WHEN t.status='APPROVED' AND t.txn_type='WITHDRAWAL'
-                        AND t.recorded_at>=CURRENT_DATE THEN t.amount ELSE 0 END),0),
-                    (SELECT COUNT(*) FROM atm_locations WHERE status = 'active')
-                FROM atm_transactions t
-                JOIN atm_locations l ON t.atm_id = l.atm_id
-                WHERE t.recorded_at >= NOW() - INTERVAL '7 days'
-                  AND l.status = 'active'
-            """)
-            r = cur.fetchone(); cur.close()
-        return jsonify({'total_txns': int(r[0] or 0), 'success_rate': float(r[1]) if r[1] is not None else 0.0, 'cash_today': float(r[2] or 0), 'atm_count': int(r[3] or 0)})
+        def _run():
+            with get_db() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT COUNT(*),
+                        ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),1),
+                        COALESCE(SUM(CASE WHEN t.status='APPROVED' AND t.txn_type='WITHDRAWAL'
+                            AND t.recorded_at>=CURRENT_DATE THEN t.amount ELSE 0 END),0),
+                        (SELECT COUNT(*) FROM atm_locations WHERE status = 'active')
+                    FROM atm_transactions t
+                    JOIN atm_locations l ON t.atm_id = l.atm_id
+                    WHERE t.recorded_at >= NOW() - INTERVAL '7 days'
+                      AND l.status = 'active'
+                """)
+                r = cur.fetchone(); cur.close()
+            return {'total_txns': int(r[0] or 0), 'success_rate': float(r[1]) if r[1] is not None else 0.0, 'cash_today': float(r[2] or 0), 'atm_count': int(r[3] or 0)}
+        # Shared across viewers (12s TTL under the 15s frontend poll).
+        return jsonify(livecache.get_or_compute('api_stats', 12, _run))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -209,7 +213,8 @@ def api_charts():
         vendor_rows = f_vendor.result()
         cash_rows = f_cash.result()
 
-        return jsonify({
+        # Shared across viewers (25s TTL under the 30s chart poll).
+        return jsonify(livecache.get_or_compute('api_charts', 25, lambda: {
             'txn_volume': {
                 'labels': [str(r[0]) for r in txn_rows],
                 'data': [int(r[1]) for r in txn_rows],
@@ -230,7 +235,7 @@ def api_charts():
                 'labels': [str(r[0]) for r in cash_rows],
                 'data': [float(r[1]) for r in cash_rows],
             },
-        })
+        }))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
