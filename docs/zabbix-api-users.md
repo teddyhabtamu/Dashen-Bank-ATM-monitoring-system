@@ -9,14 +9,10 @@ a single-component warning, never a platform outage.
 
 | Account | Consumers | Credential source |
 |---|---|---|
-| `svc-portal` | report-portal (sync, monitoring pages, reconcile) | `.env` → `ZABBIX_USER` / `ZABBIX_PASS` |
-| `svc-grafana` | Grafana Zabbix datasource | `.env` → `GF_ZBX_USER` / `ZBX_PASS`* |
+| `svc-portal` | report-portal (sync, monitoring pages, reconcile) | `.env` → `ZABBIX_USER` / `ZABBIX_PASS` (explicit values — never `${...}` cross-references: compose expands them, bash-sourced scripts do not) |
+| `svc-grafana` | Grafana Zabbix datasource | `.env` → `GF_ZBX_USER` / `GF_ZBX_PASSWORD` (own slot; falls back to `ZBX_PASS` only if unset) |
 | `svc-scripts` | operator scripts, nightly config backups | shell env → `ZBX_USER` / `ZBX_PASS` |
 | `Admin` | humans only (break-glass). No machine uses it. | sealed backup, offline |
-
-\* Grafana shares the `ZBX_PASS` slot today (one fewer `.env` key to
-rotate); give it its own `GF_ZBX_PASSWORD`-style split only if Grafana
-ever needs an independent rotation cadence.
 
 All three are members of `Zabbix administrators` with the `Admin role`
 — same effective rights as before, so cutover cannot break anything by

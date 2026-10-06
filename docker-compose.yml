@@ -141,9 +141,12 @@ services:
       GF_PG_PASSWORD: "${DB_PASS}"
       # Zabbix datasource credentials; expanded inside datasources-uat.yml.
       # Dedicated svc-grafana account post-cutover (docs/zabbix-api-users.md);
-      # default Admin preserves current behavior until then.
+      # GF_ZBX_USER defaults to Admin (pre-cutover behavior), GF_ZBX_PASSWORD
+      # falls back to ZBX_PASS only if its own slot is unset. Prefer explicit
+      # per-account values — never ${}-reference another slot (compose expands
+      # them, bash-sourced scripts do NOT).
       GF_ZBX_USER: "${GF_ZBX_USER:-Admin}"
-      GF_ZBX_PASSWORD: "${ZBX_PASS}"
+      GF_ZBX_PASSWORD: "${GF_ZBX_PASSWORD:-${ZBX_PASS}}"
       GF_INSTALL_PLUGINS: "alexanderzobnin-zabbix-app 4.4.5"
       GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: "alexanderzobnin-zabbix-datasource,alexanderzobnin-zabbix-app"
       GF_PANELS_DISABLE_SANITIZE_HTML: "true"
