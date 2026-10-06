@@ -33,3 +33,4 @@ config/backups/
 # Raw SNMP walks (contain internal IPs/MACs; evidence stays on the UAT host)
 snmpwalk_output.txt
 snmpwalk_*.txt
+*:Zone.Identifier
