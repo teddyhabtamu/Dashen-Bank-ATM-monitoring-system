@@ -154,7 +154,13 @@ def _send_email(recipients, subject, body, filename, filedata, mimetype):
             logo.add_header('Content-Disposition', 'inline', filename='dashen-logo.png')
             msg.attach(logo)
 
-        part = MIMEBase('application', 'octet-stream')
+        # Real MIME type per format — generic application/octet-stream gets
+        # flagged by Gmail (552 security block) and confuses other relays.
+        try:
+            _main, _sub = (mimetype or 'application/octet-stream').split('/', 1)
+        except ValueError:
+            _main, _sub = 'application', 'octet-stream'
+        part = MIMEBase(_main, _sub)
         part.set_payload(filedata.read())
         encoders.encode_base64(part)
         part.add_header('Content-Disposition', 'attachment', filename=filename)
