@@ -370,7 +370,7 @@ def login():
                         username, session['role'], request.remote_addr)
             log_action('LOGIN', f'User {username} (role={session["role"]}) logged in from {request.remote_addr}')
             if session.get('must_change_pw'):
-                flash('You must change your password before continuing.', 'error')
+                flash('You must change your password before continuing.', 'warning')
                 return redirect(url_for('auth.profile'))
             return redirect(next_page)
 
