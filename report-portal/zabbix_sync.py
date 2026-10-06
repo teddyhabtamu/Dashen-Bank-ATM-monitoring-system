@@ -96,7 +96,7 @@ def _group_id(z, name, cache):
 
 def sync_hosts(atm_dicts):
     """Create missing Zabbix hosts; re-enable ones disabled by portal delete. Never raises."""
-    summary = {"created": 0, "reenabled": 0, "macros_fixed": 0,
+    summary = {"created": 0, "reenabled": 0, "macros_fixed": 0, "updated": 0,
                "skipped": 0, "no_ip": 0, "failed": 0, "details": []}
     rows = (atm_dicts or [])[:MAX_BATCH]
     if not rows:
@@ -127,42 +127,81 @@ def sync_hosts(atm_dicts):
                 summary["no_ip"] += 1
                 summary["details"].append({"atm_id": host, "error": "skipped: no IP address"})
                 continue
-            existing = z.call("host.get", {"output": ["hostid", "status"],
-                                              "selectInterfaces": ["interfaceid", "ip"],
+            existing = z.call("host.get", {"output": ["hostid", "status", "name"],
+                                              "selectInterfaces": ["interfaceid", "ip", "details"],
                                               "selectMacros": ["macro", "value"],
+                                              "selectParentTemplates": ["templateid"],
+                                              "selectGroups": ["groupid"],
                                               "filter": {"host": [host]}})
             if existing:
-                # Re-registration after a portal delete leaves a disabled host
-                # behind (history preserved). Re-enable it and refresh its IP.
-                if str(existing[0].get("status")) == "1":
-                    upd = {"hostid": existing[0]["hostid"], "status": 0}
-                    ifaces = existing[0].get("interfaces") or []
-                    if ifaces and ifaces[0].get("ip") != ip:
-                        upd["interfaces"] = [{"interfaceid": ifaces[0]["interfaceid"], "ip": ip}]
+                # Full reconciliation: an edit in the portal must reach the
+                # host (name, IP/community, vendor macro, template, groups).
+                # Additive only — we link/add what the portal owns and never
+                # unlink templates or drop groups a human may have added.
+                cur = existing[0]
+                upd = {"hostid": cur["hostid"]}
+                changed = []
+                if str(cur.get("status")) == "1":
+                    upd["status"] = 0
+                    changed.append("re-enabled")
+                want_name = (a.get("atm_name") or "").strip() or host
+                if (cur.get("name") or "") != want_name:
+                    upd["name"] = want_name
+                    changed.append("visible name")
+                want_community = (a.get("snmp_community") or "").strip() or "dashen_sim"
+                try:
+                    want_version = int(a.get("snmp_version") or "2")
+                except (ValueError, TypeError):
+                    want_version = 2
+                ifaces = cur.get("interfaces") or []
+                if ifaces:
+                    det = ifaces[0].get("details") or {}
+                    if (ifaces[0].get("ip") != ip
+                            or det.get("community") != want_community
+                            or str(det.get("version")) != str(want_version)):
+                        upd["interfaces"] = [{
+                            "interfaceid": ifaces[0]["interfaceid"], "ip": ip,
+                            "details": {"version": want_version, "bulk": 0,
+                                        "community": want_community}}]
+                        changed.append("interface/community")
+                have_macros = {m.get("macro"): m.get("value")
+                               for m in (cur.get("macros") or [])}
+                if have_macros.get("{$ATM_VENDOR}") != vendor:
+                    upd["macros"] = [{"macro": "{$ATM_VENDOR}", "value": vendor}]
+                    changed.append("vendor macro")
+                want_tid = (tids.get(TEMPLATE_NCR_NAME) if vendor == "NCR"
+                            else tids.get(TEMPLATE_GRG_NAME) if vendor == "GRG"
+                            else None)
+                have_tids = {t.get("templateid")
+                             for t in (cur.get("parentTemplates") or []) if t.get("templateid")}
+                if want_tid and want_tid not in have_tids:
+                    upd["templates"] = [{"templateid": want_tid}]
+                    changed.append("vendor template")
+                want_vgroup = (grp_ncr if vendor == "NCR"
+                               else grp_grg if vendor == "GRG" else None)
+                district = (a.get("district") or "").strip() or "UNKNOWN"
+                dgroup = _group_id(z, f"ATM-{district}", groups)
+                want_groups = {g for g in [grp_all, want_vgroup, dgroup] if g}
+                have_groups = {g.get("groupid")
+                               for g in (cur.get("groups") or []) if g.get("groupid")}
+                if not want_groups <= have_groups:
+                    upd["groups"] = [{"groupid": g} for g in (have_groups | want_groups)]
+                    changed.append("groups")
+                if not changed:
+                    summary["skipped"] += 1
+                else:
                     res = z.call("host.update", upd)
                     if res:
-                        summary["reenabled"] += 1
+                        if "re-enabled" in changed:
+                            summary["reenabled"] += 1
+                        else:
+                            summary["updated"] += 1
                     else:
                         summary["failed"] += 1
-                        summary["details"].append({"atm_id": host, "error": z.last_error or "host.update failed"})
-                else:
-                    # Backfill {$ATM_VENDOR} on hosts created before macros
-                    # were provisioned — the webhook needs it for routing.
-                    have = {m.get("macro"): m.get("value")
-                            for m in (existing[0].get("macros") or [])}
-                    if have.get("{$ATM_VENDOR}") != vendor:
-                        res = z.call("host.update", {
-                            "hostid": existing[0]["hostid"],
-                            "macros": [{"macro": "{$ATM_VENDOR}", "value": vendor}]})
-                        if res:
-                            summary["macros_fixed"] += 1
-                        else:
-                            summary["failed"] += 1
-                            summary["details"].append({
-                                "atm_id": host,
-                                "error": z.last_error or "macro update failed"})
-                    else:
-                        summary["skipped"] += 1
+                        summary["details"].append({
+                            "atm_id": host,
+                            "error": (z.last_error or "host.update failed")
+                                     + f" (wanted: {', '.join(changed)})"})
                 continue
             if vendor == "NCR" and tids.get(TEMPLATE_NCR_NAME):
                 template_ids, vgroup = [tids[TEMPLATE_NCR_NAME]], grp_ncr
@@ -200,7 +239,9 @@ def sync_hosts(atm_dicts):
                 summary["details"].append({"atm_id": host, "error": z.last_error or "host.create failed"})
     except Exception as e:
         logger.warning("sync_hosts aborted: %s", e)
-        summary["failed"] += len(rows) - summary["created"] - summary["skipped"] - summary["no_ip"]
+        summary["failed"] += (len(rows) - summary["created"] - summary["reenabled"]
+                              - summary["macros_fixed"] - summary["updated"]
+                              - summary["skipped"] - summary["no_ip"])
     return summary
 
 

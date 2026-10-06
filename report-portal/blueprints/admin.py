@@ -19,7 +19,7 @@ def _bg_zabbix_sync(rows):
     try:
         from zabbix_sync import sync_hosts
         s = sync_hosts(rows)
-        log_action('ZABBIX_SYNC', f'auto: created={s["created"]} reenabled={s.get("reenabled", 0)} macros={s.get("macros_fixed", 0)} skipped={s["skipped"]} no_ip={s["no_ip"]} failed={s["failed"]}')
+        log_action('ZABBIX_SYNC', f'auto: created={s["created"]} reenabled={s.get("reenabled", 0)} macros={s.get("macros_fixed", 0)} updated={s.get("updated", 0)} skipped={s["skipped"]} no_ip={s["no_ip"]} failed={s["failed"]}')
     except Exception as e:
         logger.warning('background Zabbix sync failed: %s', e)
 
@@ -633,6 +633,22 @@ def _audit_val(v):
     return str(v)
 
 
+def _norm_branch(v):
+    """Owner-branch convention: single spaces, one trailing ' BRANCH'.
+    Matches the ATM team's own template ('MAKIRA BRANCH', 'WOLDIA BRANCH').
+    Idempotent — already-clean names pass through byte-identical."""
+    if v is None:
+        return None
+    v = re.sub(r'\s+', ' ', str(v)).strip()
+    if not v:
+        return None
+    if v.upper().endswith('BRANCH'):
+        v = v[:-len('BRANCH')].rstrip() + 'BRANCH'
+    else:
+        v = v + ' BRANCH'
+    return v
+
+
 def _row_diff(old, new, skip=()):
     """Changed fields as ['field: old => new']. Secrets never leak:
     snmp_community shows only that it changed."""
@@ -666,6 +682,9 @@ def atm_save():
     # Name is optional in the form; default it so the Name column is never blank.
     if not data.get('atm_name'):
         data['atm_name'] = data.get('branch') or data.get('atm_id')
+
+    # Owner-branch convention (validated + stored in canonical form).
+    data['branch'] = _norm_branch(data.get('branch'))
 
     errors = _validate(data)
     if errors:
@@ -1136,6 +1155,8 @@ def atm_import():
     line = 1
     for row in reader:
         line += 1
+        if 'branch' in row:
+            row['branch'] = _norm_branch(row.get('branch'))
         errs = _validate(row)
         if errs:
             errors.append({'line': line, 'atm_id': row.get('atm_id', '?'), 'errors': errs})
@@ -1264,8 +1285,8 @@ def atm_zabbix_sync():
         rows = [dict(zip(cols, r)) for r in cur.fetchall()]
         cur.close()
     summary = sync_hosts(rows)
-    log_action('ZABBIX_SYNC', f'manual: created={summary["created"]} reenabled={summary.get("reenabled", 0)} macros={summary.get("macros_fixed", 0)} '
-                              f'skipped={summary["skipped"]} no_ip={summary["no_ip"]} failed={summary["failed"]} (n={len(rows)})')
+    log_action('ZABBIX_SYNC', f'manual: created={summary["created"]} reenabled={summary.get("reenabled", 0)} macros={summary.get("macros_fixed", 0)} updated={summary.get("updated", 0)} '
+                           f'skipped={summary["skipped"]} no_ip={summary["no_ip"]} failed={summary["failed"]} (n={len(rows)})')
     return jsonify({'success': True, 'checked': len(rows), **summary})
 
 
