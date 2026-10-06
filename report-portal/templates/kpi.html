@@ -67,9 +67,10 @@
 
   <div class="card" style="margin-bottom:16px">
     <div class="card-header"><h2>Peak Transaction Hours — Last 7 Days (EAT)</h2></div>
+    <div style="padding:12px 18px 0;font-size:11px;color:#64748B">Columns are hours of the day (24-hour EAT): <strong>0</strong> = midnight–1 AM … <strong>23</strong> = 11 PM–midnight. Rows are weekdays. Darker blue = busier.</div>
     <div style="padding:16px 18px;overflow-x:auto">
       <table class="heat">
-        <thead><tr><th></th>{% for h in range(24) %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+        <thead><tr><th title="Weekday">Day</th>{% for h in range(24) %}<th title="{{ h }}:00–{{ (h + 1) % 24 }}:00 EAT">{{ h }}</th>{% endfor %}</tr></thead>
         <tbody>
           {% for d in days %}
           <tr><th>{{ d }}</th>
