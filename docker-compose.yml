@@ -225,7 +225,7 @@ services:
       INTERNAL_API_KEY: "${INTERNAL_API_KEY:-}"
       ZABBIX_URL: "http://zabbix-web:8080/api_jsonrpc.php"
       ZABBIX_USER: "${ZABBIX_USER:-Admin}"
-      ZABBIX_PASS: "${ZBX_PASS}"
+      ZABBIX_PASS: "${ZABBIX_PASS}"
       GLPI_APP_TOKEN: "${GLPI_APP_TOKEN:-}"
       GLPI_USER: "${GLPI_USER:-glpi}"
       GLPI_API_PASSWORD: "${GLPI_API_PASSWORD:-}"
