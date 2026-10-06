@@ -38,7 +38,13 @@ ZBX_USER = os.environ.get('ZBX_USER') or os.environ.get('ZABBIX_USER', 'Admin')
 ZBX_PASS = os.environ.get('ZBX_PASS') or os.environ.get('ZABBIX_PASS', '')
 
 ACCOUNTS = ('svc-portal', 'svc-grafana', 'svc-scripts')
-ADMIN_ROLE_NAME = 'Admin role'
+# Super admin ROLE (not just the Admin role): the previous shared login was
+# the default Admin user, which carries Super admin rights — including
+# bypassing host-group permission checks. The lesser Admin role gets
+# permission-filtered to EMPTY host/problem lists (no error, just silence),
+# which is exactly how a cutover can look healthy while showing zero data.
+# Least-privilege tightening is a separate phase-2 job, not smuggled in.
+ROLE_NAME = 'Super admin role'
 ADMIN_GROUP_NAME = 'Zabbix administrators'
 
 _id = 0
@@ -62,10 +68,10 @@ def main():
     auth = call('user.login', {'username': ZBX_USER, 'password': ZBX_PASS})
     print('Authenticated to Zabbix API')
 
-    roles = call('role.get', {'filter': {'name': ADMIN_ROLE_NAME},
+    roles = call('role.get', {'filter': {'name': ROLE_NAME},
                               'output': ['roleid', 'name']}, auth)
     if not roles:
-        print(f'ERROR: user role "{ADMIN_ROLE_NAME}" not found — aborting.')
+        print(f'ERROR: user role "{ROLE_NAME}" not found — aborting.')
         return 1
     roleid = roles[0]['roleid']
 
@@ -79,9 +85,14 @@ def main():
     created = {}
     for username in ACCOUNTS:
         existing = call('user.get', {'filter': {'username': username},
-                                     'output': ['userid', 'username']}, auth)
+                                     'output': ['userid', 'username', 'roleid']}, auth)
         if existing:
-            print(f'{username}: already exists (id {existing[0]["userid"]}) — untouched')
+            uid = existing[0]['userid']
+            if str(existing[0].get('roleid', '')) != str(roleid):
+                call('user.update', {'userid': uid, 'roleid': roleid}, auth)
+                print(f'{username}: role corrected to "{ROLE_NAME}"')
+            else:
+                print(f'{username}: already exists (id {uid}) — untouched')
             continue
         password = secrets.token_urlsafe(24)
         res = call('user.create', {

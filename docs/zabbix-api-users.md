@@ -14,9 +14,11 @@ a single-component warning, never a platform outage.
 | `svc-scripts` | operator scripts, nightly config backups | shell env → `ZBX_USER` / `ZBX_PASS` |
 | `Admin` | humans only (break-glass). No machine uses it. | sealed backup, offline |
 
-All three are members of `Zabbix administrators` with the `Admin role`
-— same effective rights as before, so cutover cannot break anything by
-permission. Least-privilege tightening is a separate phase-2 job.
+All three are members of `Zabbix administrators` with the `Super admin
+role` — identical effective rights to the previous shared `Admin` login,
+so cutover cannot break anything by permission (the lesser Admin role
+gets permission-filtered to empty host lists with no error — found the
+hard way). Least-privilege tightening is a separate phase-2 job.
 
 ## Cutover (staged, rollback at every step)
 
