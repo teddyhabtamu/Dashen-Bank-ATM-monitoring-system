@@ -526,7 +526,22 @@ def load_schedules(scheduler):
     pass
 
 
+# Held open for process lifetime by whichever worker won the scheduler lock.
+_sched_lock_fh = None
+
+
 def create_scheduler(app):
+    # Singleton across gunicorn workers: only the worker holding the lock
+    # runs the poller, so scheduled emails never duplicate. Single container
+    # = single host, so a local file lock is sufficient (no Redis needed).
+    import fcntl
+    global _sched_lock_fh
+    try:
+        _sched_lock_fh = open('/tmp/portal-scheduler.lock', 'w')
+        fcntl.flock(_sched_lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (OSError, IOError):
+        logger.info('Scheduler already running in a sibling worker — skipping')
+        return None
     sched = BackgroundScheduler(daemon=True)
     sched.add_job(_check_schedules, trigger='interval', seconds=30, id='schedule_poller')
     sched.start()

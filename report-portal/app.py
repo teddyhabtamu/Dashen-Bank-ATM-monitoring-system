@@ -10,8 +10,11 @@ FLASK_DEBUG = os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
 
 csrf = CSRFProtect()
 
-# Generate ephemeral key for scheduler → app internal requests
-INTERNAL_API_KEY = secrets.token_urlsafe(32)
+# Ephemeral key for scheduler → app internal requests. A fixed value may be
+# supplied via .env (REQUIRED under gunicorn: every worker must share the
+# key, since a scheduler fetch landing on a sibling worker is authenticated
+# against that worker's key). Falls back to per-process random for dev.
+INTERNAL_API_KEY = os.environ.get('INTERNAL_API_KEY') or secrets.token_urlsafe(32)
 
 
 def create_app():
