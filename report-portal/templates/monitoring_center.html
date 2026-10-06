@@ -31,26 +31,29 @@
   <div>
     <h1 class="page-title">Monitoring Center</h1>
     <p class="page-subtitle">Live host states and active problems from Zabbix — no second login.</p>
+    <span id="liveStamp" style="font-size:11px;color:#64748B;font-weight:600"></span>
   </div>
   <a href="{{ zabbix_ui_url }}" target="_blank" rel="noopener" class="btn-live btn-outline"><i data-lucide="external-link"></i> Open in Zabbix</a>
 </div>
 <div class="page-content">
 
   {% if error %}
-  <div class="err-banner">{{ error }}</div>
+  <div class="err-banner" id="mcErr">{{ error }}</div>
+  {% else %}
+  <div class="err-banner" id="mcErr" style="display:none"></div>
   {% endif %}
 
   <div class="stat-row">
-    <div class="stat-card"><div class="num">{{ summary.hosts }}</div><div class="lbl">Monitored Hosts</div></div>
-    <div class="stat-card up"><div class="num">{{ summary.up }}</div><div class="lbl">Up</div></div>
-    <div class="stat-card down"><div class="num">{{ summary.down }}</div><div class="lbl">Down</div></div>
-    <div class="stat-card prob"><div class="num">{{ summary.problems }}</div><div class="lbl">Active Problems</div></div>
-    <div class="stat-card"><div class="num">{{ summary.unacked }}</div><div class="lbl">Unacknowledged</div></div>
+    <div class="stat-card"><div class="num" id="mcHosts">{{ summary.hosts }}</div><div class="lbl">Monitored Hosts</div></div>
+    <div class="stat-card up"><div class="num" id="mcUp">{{ summary.up }}</div><div class="lbl">Up</div></div>
+    <div class="stat-card down"><div class="num" id="mcDown">{{ summary.down }}</div><div class="lbl">Down</div></div>
+    <div class="stat-card prob"><div class="num" id="mcProbs">{{ summary.problems }}</div><div class="lbl">Active Problems</div></div>
+    <div class="stat-card"><div class="num" id="mcUnacked">{{ summary.unacked }}</div><div class="lbl">Unacknowledged</div></div>
   </div>
 
   <div class="card" style="margin-bottom:16px">
     <div class="card-header">
-      <h2>Active Problems ({{ problems|length }}){% if at_cap %} — latest 100{% endif %}</h2>
+      <h2>Active Problems (<span id="mcProbCount">{{ problems|length }}</span>){% if at_cap %} — latest 100{% endif %}</h2>
       <form method="get" action="/monitoring" class="filter-row">
         <select name="severity" onchange="this.form.submit()">
           <option value="">All Severities</option>
@@ -71,7 +74,7 @@
     <div class="mc-table-wrap">
       <table class="mc-table">
         <thead><tr><th>Time</th><th>Severity</th><th>Host</th><th>Problem</th><th>Ack</th></tr></thead>
-        <tbody>
+        <tbody id="probBody">
           {% for p in problems %}
           <tr>
             <td style="white-space:nowrap">{{ p.clock }}</td>
@@ -93,7 +96,7 @@
     <div class="mc-table-wrap">
       <table class="mc-table">
         <thead><tr><th>Host</th><th>Name</th><th>IP</th><th>State</th></tr></thead>
-        <tbody>
+        <tbody id="hostBody">
           {% for h in hosts %}
           <tr>
             <td style="font-family:monospace">{{ h.host }}</td>
@@ -114,4 +117,62 @@
   </div>
 
 </div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+/* 30s autosync: stat cards + both tables re-render from /monitoring/api/live.
+   Skips while the tab is hidden; failures back off silently (stamp shows it). */
+(function(){
+  var fails = 0, busy = false;
+  function esc(s){ return String(s == null ? '—' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function stamp(ok){
+    var el = document.getElementById('liveStamp');
+    if(!el) return;
+    if(ok){ el.textContent = 'Live · updated ' + new Date().toLocaleTimeString('en-ET',{hour12:false}); el.style.color = ''; }
+    else { el.textContent = 'Update failed — retrying…'; el.style.color = '#DC2626'; }
+  }
+  async function tick(){
+    if(busy || document.hidden){ schedule(); return; }
+    busy = true;
+    try{
+      var q = new URLSearchParams(window.location.search);
+      var url = '/monitoring/api/live?' + q.toString();
+      var r = await fetch(url);
+      if(!r.ok) throw new Error('Server returned ' + r.status);
+      var d = await r.json();
+      if(d.error) throw new Error(d.error);
+      var s = d.summary || {};
+      setNum('mcHosts', s.hosts); setNum('mcUp', s.up); setNum('mcDown', s.down);
+      setNum('mcProbs', s.problems); setNum('mcUnacked', s.unacked);
+      setNum('mcProbCount', (d.problems || []).length);
+      var pb = document.getElementById('probBody');
+      if(pb){
+        pb.innerHTML = (d.problems || []).map(function(p){
+          return '<tr><td style="white-space:nowrap">' + esc(p.clock) + '</td>' +
+            '<td><span class="sev" style="background:' + esc(p.sev_color || '#97AAB3') + '">' + esc(p.severity_name) + '</span></td>' +
+            '<td>' + esc(p.host) + '</td><td>' + esc(p.name) + '</td>' +
+            '<td>' + (p.acknowledged ? '<span class="ack-y">Yes</span>' : '<span class="ack-n">No</span>') + '</td></tr>';
+        }).join('') || '<tr class="empty-row"><td colspan="5">No active problems.</td></tr>';
+      }
+      var hb = document.getElementById('hostBody');
+      if(hb){
+        hb.innerHTML = (d.hosts || []).map(function(h){
+          var st = h.state === 'UP' ? '<span class="host-up">● UP</span>'
+                 : h.state === 'DOWN' ? '<span class="host-down">● DOWN</span>' : '<span class="host-unk">● UNKNOWN</span>';
+          return '<tr><td style="font-family:monospace">' + esc(h.host) + '</td><td>' + esc(h.name) +
+            '</td><td style="font-family:monospace">' + esc(h.ip) + '</td><td>' + st + '</td></tr>';
+        }).join('') || '<tr class="empty-row"><td colspan="4">No monitored hosts found.</td></tr>';
+      }
+      var eb = document.getElementById('mcErr');
+      if(eb) eb.style.display = 'none';
+      fails = 0; stamp(true);
+    }catch(e){ fails++; stamp(false); }
+    busy = false;
+    schedule();
+  }
+  function setNum(id, v){ var el = document.getElementById(id); if(el && v != null) el.textContent = v; }
+  function schedule(){ setTimeout(tick, Math.min(30000 * Math.pow(2, fails), 300000)); }
+  tick();
+})();
+</script>
 {% endblock %}

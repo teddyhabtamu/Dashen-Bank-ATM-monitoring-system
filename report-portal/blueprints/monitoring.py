@@ -8,7 +8,7 @@ Read-only: acknowledge/escalate still happen in Zabbix itself for now.
 """
 import logging
 from datetime import datetime, timezone, timedelta
-from flask import Blueprint, render_template, request
+from flask import Blueprint, render_template, request, jsonify
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from blueprints.admin import _zbx_login, _zbx_call
 
@@ -105,6 +105,29 @@ def _fmt_clock(clock):
 def center():
     severity = request.args.get('severity', '').strip()
     ack = request.args.get('ack', '').strip()  # '' | 'no' | 'yes'
+    summary, problems, hosts, error, at_cap = _collect(severity, ack)
+    return render_template('monitoring_center.html',
+                           problems=problems, hosts=hosts, summary=summary,
+                           severities=SEVERITIES, sev_colors=SEV_COLORS,
+                           f_severity=severity, f_ack=ack, error=error,
+                           at_cap=at_cap)
+
+
+@bp.route('/api/live')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def api_live():
+    """Pollable twin of center() for the 30s autosync (same shaping)."""
+    severity = request.args.get('severity', '').strip()
+    ack = request.args.get('ack', '').strip()
+    summary, problems, hosts, error, at_cap = _collect(severity, ack)
+    for p in problems:
+        p['sev_color'] = SEV_COLORS.get(p['severity'], '#97AAB3')
+    return jsonify({'summary': summary, 'problems': problems, 'hosts': hosts,
+                    'error': error, 'at_cap': at_cap})
+
+
+def _collect(severity, ack):
     error = None
     problems = []
     hosts = []
@@ -170,9 +193,4 @@ def center():
                 p['host'] = tmap[p['objectid']]
     summary['problems'] = len(all_problems)
     summary['unacked'] = sum(1 for p in all_problems if not p['acknowledged'])
-
-    return render_template('monitoring_center.html',
-                           problems=problems, hosts=hosts, summary=summary,
-                           severities=SEVERITIES, sev_colors=SEV_COLORS,
-                           f_severity=severity, f_ack=ack, error=error,
-                           at_cap=len(raw_problems) >= 100)
+    return summary, problems, hosts, error, len(raw_problems) >= 100

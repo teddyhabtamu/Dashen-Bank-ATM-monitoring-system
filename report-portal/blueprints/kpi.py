@@ -6,13 +6,30 @@ dashboard (config/grafana/dashboards/*), rendered natively from Postgres
 yield empty sections, never a 500.
 """
 import logging
-from flask import Blueprint, render_template
+import decimal
+import datetime as _dt
+from flask import Blueprint, render_template, jsonify
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from db import get_db
 
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('kpi', __name__, url_prefix='/kpi')
+
+
+def _jclean(rows):
+    """Decimal/datetime → JSON-safe (Flask jsonify chokes on Decimal)."""
+    out = []
+    for r in rows:
+        d = {}
+        for k, v in r.items():
+            if isinstance(v, decimal.Decimal):
+                v = float(v)
+            elif isinstance(v, (_dt.datetime, _dt.date)):
+                v = str(v)
+            d[k] = v
+        out.append(d)
+    return out
 
 
 def _all(sql, params=()):
@@ -33,6 +50,36 @@ def _all(sql, params=()):
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def dashboard():
+    d = _collect()
+    return render_template('kpi.html', availability=d['availability'], ranking=d['ranking'],
+                           errors=d['errors'], heat=d['heat'], days=d['days'], peak_max=d['peak_max'],
+                           faults=d['faults'], chart=d['chart'])
+
+
+@bp.route('/api/live')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def api_live():
+    """Pollable twin of dashboard() for the 5-minute autosync."""
+    d = _collect()
+    return jsonify({
+        'ranking': _jclean(d['ranking']),
+        'faults': _jclean(d['faults']),
+        'heat': d['heat'],
+        'days': d['days'],
+        'peak_max': d['peak_max'],
+        'chart': {
+            'avail_labels': d['chart']['avail_labels'],
+            'avail': d['chart']['avail'],
+            'err_labels': d['chart']['err_labels'],
+            'err_data': d['chart']['err_data'],
+            'fault_labels': d['chart']['fault_labels'],
+            'fault_data': d['chart']['fault_data'],
+        },
+    })
+
+
+def _collect():
     availability = _all("""SELECT d.day AS day,
         ROUND(100.0 * COALESCE(SUM(CASE WHEN s.state = 'IN_SERVICE'
           THEN EXTRACT(EPOCH FROM (LEAST(COALESCE(s.ended_at, NOW()), d.day + INTERVAL '1 day')
@@ -96,6 +143,6 @@ def dashboard():
         'fault_data': [int(r['cnt']) for r in errors],
     }
 
-    return render_template('kpi.html', availability=availability, ranking=ranking,
-                           errors=errors, heat=heat, days=days, peak_max=peak_max,
-                           faults=faults, chart=chart)
+    return {'availability': availability, 'ranking': ranking,
+            'errors': errors, 'heat': heat, 'days': days, 'peak_max': peak_max,
+            'faults': faults, 'chart': chart}

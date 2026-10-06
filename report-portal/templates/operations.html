@@ -38,18 +38,19 @@
   <div>
     <h1 class="page-title">Operations</h1>
     <p class="page-subtitle">Live transaction flow and fleet health — same numbers as Grafana, no second login.</p>
+    <span id="liveStamp" style="font-size:11px;color:#64748B;font-weight:600"></span>
   </div>
   <a href="{{ grafana_url }}" target="_blank" rel="noopener" class="btn-live btn-outline"><i data-lucide="external-link"></i> Open in Grafana</a>
 </div>
 <div class="page-content">
 
   <div class="stat-row">
-    <div class="stat-card ok"><div class="num">{{ '{:,.0f}'.format(cash_today) }} <small>ETB</small></div><div class="lbl">Cash Dispensed Today</div></div>
-    <div class="stat-card {% if success_rate is not none and success_rate < 80 %}rate-low{% endif %}">
-      <div class="num">{% if success_rate is none %}—{% else %}{{ success_rate }}<small>%</small>{% endif %}</div>
+    <div class="stat-card ok"><div class="num"><span id="opsCash">{{ '{:,.0f}'.format(cash_today) }}</span> <small>ETB</small></div><div class="lbl">Cash Dispensed Today</div></div>
+    <div class="stat-card {% if success_rate is not none and success_rate < 80 %}rate-low{% endif %}" id="opsRateCard">
+      <div class="num"><span id="opsRate">{% if success_rate is none %}—{% else %}{{ success_rate }}{% endif %}</span>{% if success_rate is not none %}<small>%</small>{% endif %}</div>
       <div class="lbl">Success Rate — Last 1 Hour</div>
     </div>
-    <div class="stat-card {% if unacked %}warn{% endif %}"><div class="num">{{ unacked }}</div><div class="lbl">Unacknowledged Anomalies (1h)</div></div>
+    <div class="stat-card {% if unacked %}warn{% endif %}" id="opsUnackedCard"><div class="num" id="opsUnacked">{{ unacked }}</div><div class="lbl">Unacknowledged Anomalies (1h)</div></div>
   </div>
 
   <div class="card" style="margin-bottom:16px">
@@ -102,7 +103,7 @@
     <div class="op-table-wrap">
       <table class="op-table">
         <thead><tr><th>ATM ID</th><th>Branch</th><th>City</th><th>Vendor</th><th>Txns</th><th>Approved</th><th>Success %</th><th>Cash (ETB)</th><th>Health</th></tr></thead>
-        <tbody>
+        <tbody id="fleetBody">
           {% for r in fleet %}
           <tr>
             <td style="font-family:monospace">{{ r.atm_id }}</td>
@@ -131,7 +132,7 @@
     <div class="op-table-wrap">
       <table class="op-table">
         <thead><tr><th>Time</th><th>ATM</th><th>Branch</th><th>Type</th><th>Card</th><th>Amount (ETB)</th><th>Status</th></tr></thead>
-        <tbody>
+        <tbody id="feedBody">
           {% for r in feed %}
           <tr>
             <td style="white-space:nowrap">{{ r.recorded_at }}</td>
@@ -154,7 +155,7 @@
     <div class="op-table-wrap">
       <table class="op-table">
         <thead><tr><th>ATM ID</th><th>Total</th><th>Approved</th><th>Declined</th><th>Errors</th></tr></thead>
-        <tbody>
+        <tbody id="sumBody">
           {% for r in summary %}
           <tr>
             <td style="font-family:monospace">{{ r.atm_id }}</td>
@@ -181,7 +182,7 @@
 (function(){
   var el = document.getElementById('hourlyChart');
   if(!el || typeof Chart === 'undefined') return;
-  new Chart(el, {type:'bar',
+  window.hourlyChart = new Chart(el, {type:'bar',
     data:{labels:{{ chart.labels|tojson }},
       datasets:[
         {label:'Approved', data:{{ chart.approved|tojson }}, backgroundColor:'#16A34A'},
@@ -217,13 +218,11 @@
     if(Math.sqrt(dx * dx + dy * dy) < TH) parent[find(i)] = find(j);
   }
   var groups = {};
-  nodes.forEach(function(n, k){ var r = find(k); (groups[r] = groups[r] || []).push(n); });
-  var rank = {Critical: 0, Degraded: 1, 'No Data': 2, Healthy: 3};
+  nodes.forEach(function(n, k){ var r = find(k); (groups[r] = groups[r] || []).push(n); });  var rank = {Critical: 0, Degraded: 1, 'No Data': 2, Healthy: 3};
   var color = {Critical: '#DC2626', Degraded: '#F59E0B', 'No Data': '#94A3B8', Healthy: '#10B981'};
   Object.keys(groups).forEach(function(k){
     var g = groups[k];
-    if(g.length < 2) return;
-    var cx = 0, cy = 0, worst = 'Healthy';
+    if(g.length < 2) return;    var cx = 0, cy = 0, worst = 'Healthy';
     g.forEach(function(n){
       cx += n.x; cy += n.y;
       if((rank[n.health] ?? 3) < (rank[worst] ?? 3)) worst = n.health;
@@ -281,6 +280,107 @@
   });
 })();
 </script>
+<script>
+/* 60s autosync: stat cards, fleet/feed/summary tables, hourly chart and map
+   dots re-render from /operations/api/live (same page params). Skips while
+   the tab is hidden; failures back off silently (stamp shows it). Map
+   viewports are never touched — only dot colors/titles refresh, so no
+   flicker or lost zoom. (Cluster badges recompute on full reload.) */
+(function(){
+  var fails = 0, busy = false;
+  var HEALTH_COLORS = {Healthy:'#10B981', Degraded:'#F59E0B', Critical:'#DC2626', 'No Data':'#94A3B8'};
+  function esc(s){ return String(s == null ? '—' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function fmtCash(n){ return Number(n || 0).toLocaleString('en-US', {maximumFractionDigits: 0}); }
+  function stamp(ok){
+    var el = document.getElementById('liveStamp');
+    if(!el) return;
+    if(ok){ el.textContent = 'Live · updated ' + new Date().toLocaleTimeString('en-ET',{hour12:false}); el.style.color = ''; }
+    else { el.textContent = 'Update failed — retrying…'; el.style.color = '#DC2626'; }
+  }
+  function pill(h){ return '<span class="pill pill-' + String(h || 'No Data').toLowerCase().replace(' ','') + '">' + esc(h || 'No Data') + '</span>'; }
+  async function tick(){
+    if(busy || document.hidden){ schedule(); return; }
+    busy = true;
+    try{
+      var q = new URLSearchParams(window.location.search);
+      if(!q.get('page')) q.set('page', '1');
+      if(!q.get('spage')) q.set('spage', '1');
+      var r = await fetch('/operations/api/live?' + q.toString());
+      if(!r.ok) throw new Error('Server returned ' + r.status);
+      var d = await r.json();
+      var c = document.getElementById('opsCash');
+      if(c) c.textContent = fmtCash(d.cash_today);
+      var rate = document.getElementById('opsRate');
+      if(rate) rate.textContent = (d.success_rate == null ? '—' : d.success_rate);
+      var rc = document.getElementById('opsRateCard');
+      if(rc) rc.classList.toggle('rate-low', d.success_rate != null && d.success_rate < 80);
+      var u = document.getElementById('opsUnacked');
+      if(u) u.textContent = d.unacked == null ? '0' : d.unacked;
+      var uc = document.getElementById('opsUnackedCard');
+      if(uc) uc.classList.toggle('warn', !!(d.unacked && d.unacked > 0));
+      var fb = document.getElementById('fleetBody');
+      if(fb){
+        fb.innerHTML = (d.fleet || []).map(function(x){
+          return '<tr><td style="font-family:monospace">' + esc(x.atm_id) + '</td><td>' + esc(x.branch) +
+            '</td><td>' + esc(x.city) + '</td><td>' + esc(x.vendor) + '</td><td>' + (x.txns == null ? 0 : x.txns) +
+            '</td><td>' + (x.approved == null ? 0 : x.approved) + '</td><td>' + (x.success_rate == null ? 0 : x.success_rate) +
+            '</td><td>' + fmtCash(x.cash) + '</td><td>' + pill(x.health) + '</td></tr>';
+        }).join('') || '<tr class="empty-row"><td colspan="9">No ATMs registered.</td></tr>';
+      }
+      var eb = document.getElementById('feedBody');
+      if(eb){
+        eb.innerHTML = (d.feed || []).map(function(x){
+          return '<tr><td style="white-space:nowrap">' + esc(x.recorded_at) + '</td>' +
+            '<td style="font-family:monospace">' + esc(x.atm_id) + '</td><td>' + esc(x.branch) +
+            '</td><td>' + esc(x.txn_type) + '</td><td style="font-family:monospace">' + esc(x.card_masked) +
+            '</td><td>' + (x.amount == null ? '—' : esc(x.amount)) + '</td>' +
+            '<td class="st-' + String(x.status || '').toLowerCase() + '">' + esc(x.status) + '</td></tr>';
+        }).join('') || '<tr class="empty-row"><td colspan="7">No transactions yet.</td></tr>';
+      }
+      var sb = document.getElementById('sumBody');
+      if(sb){
+        sb.innerHTML = (d.summary || []).map(function(x){
+          return '<tr><td style="font-family:monospace">' + esc(x.atm_id) + '</td><td>' + (x.total || 0) +
+            '</td><td>' + (x.approved || 0) + '</td><td>' + (x.declined || 0) + '</td><td>' + (x.errors || 0) + '</td></tr>';
+        }).join('') || '<tr class="empty-row"><td colspan="5">No transactions in the last 24 hours.</td></tr>';
+      }
+      if(window.hourlyChart && d.chart){
+        window.hourlyChart.data.labels = d.chart.labels || [];
+        if(window.hourlyChart.data.datasets[0]) window.hourlyChart.data.datasets[0].data = d.chart.approved || [];
+        if(window.hourlyChart.data.datasets[1]) window.hourlyChart.data.datasets[1].data = d.chart.failed || [];
+        window.hourlyChart.update();
+      }
+      // Map dots: recolor in place (both render paths), viewport untouched.
+      var byId = {};
+      (d.map_dots || []).forEach(function(x){ byId[x.atm_id] = x; });
+      document.querySelectorAll('#fleetMapSvg a[data-map-dot]').forEach(function(a){
+        var x = byId[a.getAttribute('data-atm')];
+        if(!x) return;
+        var c = a.querySelector('circle');
+        if(c){
+          c.setAttribute('fill', HEALTH_COLORS[x.health] || '#94A3B8');
+          c.setAttribute('data-health', x.health || 'No Data');
+          var t = c.querySelector('title');
+          if(t) t.textContent = x.atm_id + ' · ' + (x.branch || '') + ' — ' + (x.state || '') + ' · ' + (x.health || '') + ' (' + (x.txns || 0) + ' txns/1h)';
+        }
+      });
+      if(window._fleetMarkers){
+        Object.keys(window._fleetMarkers).forEach(function(id){
+          var x = byId[id], m = window._fleetMarkers[id];
+          if(!x || !m) return;
+          m.setStyle({fillColor: HEALTH_COLORS[x.health] || '#94A3B8'});
+          m.setTooltipContent(id + ' · ' + (x.branch || '') + ' — ' + (x.state || '') + ' · ' + (x.health || '') + ' (' + (x.txns || 0) + ' txns/1h)');
+        });
+      }
+      fails = 0; stamp(true);
+    }catch(e){ fails++; stamp(false); }
+    busy = false;
+    schedule();
+  }
+  function schedule(){ setTimeout(tick, Math.min(60000 * Math.pow(2, fails), 300000)); }
+  tick();
+})();
+</script>
 {% endblock %}
 {% block extra_scripts %}
 <script src="/static/vendor/leaflet/leaflet.js"></script>
@@ -336,6 +436,8 @@
     m.bindTooltip(d.atm_id + ' · ' + d.branch + (d.city ? ' (' + d.city + ')' : '') +
       ' — ' + d.state + ' · ' + d.health + ' (' + d.txns + ' txns/1h)', {sticky: true});
     m.on('click', function(){ window.location = '/admin/atm/' + encodeURIComponent(d.atm_id); });
+    m.options.atmId = d.atm_id;
+    (window._fleetMarkers = window._fleetMarkers || {})[d.atm_id] = m;
     group.addLayer(m);
     bounds.push([d.lat, d.lng]);
   });

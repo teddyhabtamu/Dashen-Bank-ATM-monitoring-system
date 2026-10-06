@@ -10,7 +10,9 @@ a missing table yields zeros, never a 500.
 import logging
 import json
 import os
-from flask import Blueprint, render_template, request
+import decimal
+import datetime as _dt
+from flask import Blueprint, render_template, request, jsonify
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from db import get_db
 
@@ -107,6 +109,52 @@ def _all(sql, params=()):
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def dashboard():
+    d = _collect()
+    return render_template('operations.html',
+                           cash_today=d['cash_today'], success_rate=d['success_rate'],
+                           unacked=d['unacked'], fleet=d['fleet_page'], feed=d['feed'],
+                           summary=d['summary_page'], chart=d['chart'],
+                           fleet_pg=d['fleet_pg'], fleet_pages=d['fleet_pages'],
+                           fleet_total=d['fleet_total'],
+                           sum_pg=d['sum_pg'], sum_pages=d['sum_pages'],
+                           map_svg=_ethiopia_svg_path(), map_dots=d['map_dots'],
+                           map_missing=d['map_missing'])
+
+
+@bp.route('/api/live')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def api_live():
+    """Pollable twin of dashboard() for the 60s autosync (same shaping)."""
+    d = _collect()
+    return jsonify({
+        'cash_today': d['cash_today'], 'success_rate': d['success_rate'],
+        'unacked': d['unacked'],
+        'fleet': _jclean(d['fleet_page']), 'fleet_pg': d['fleet_pg'],
+        'fleet_pages': d['fleet_pages'], 'fleet_total': d['fleet_total'],
+        'feed': _jclean(d['feed']),
+        'summary': _jclean(d['summary_page']),
+        'sum_pg': d['sum_pg'], 'sum_pages': d['sum_pages'],
+        'chart': d['chart'], 'map_dots': d['map_dots'],
+    })
+
+
+def _jclean(rows):
+    """Decimal/datetime → JSON-safe (Flask jsonify chokes on Decimal)."""
+    out = []
+    for r in rows:
+        d = {}
+        for k, v in r.items():
+            if isinstance(v, decimal.Decimal):
+                v = float(v)
+            elif isinstance(v, (_dt.datetime, _dt.date)):
+                v = str(v)
+            d[k] = v
+        out.append(d)
+    return out
+
+
+def _collect():
     # ── Stat row ──
     # EAT day boundary: CURRENT_DATE is DB (UTC) midnight = 03:00 EAT, which
     # misattributes the 00:00–03:00 window. EAT midnight as a UTC instant is
@@ -208,11 +256,9 @@ def dashboard():
                 'x': round(x, 1), 'y': round(y, 1),
             })
 
-    return render_template('operations.html',
-                           cash_today=cash_today, success_rate=success_rate,
-                           unacked=unacked_count, fleet=fleet_page, feed=feed,
-                           summary=summary_page, chart=chart,
-                           fleet_pg=fleet_pg, fleet_pages=fleet_pages, fleet_total=len(fleet),
-                           sum_pg=sum_pg, sum_pages=sum_pages,
-                           map_svg=_ethiopia_svg_path(), map_dots=map_dots,
-                           map_missing=map_missing)
+    return {'cash_today': cash_today, 'success_rate': success_rate,
+            'unacked': unacked_count, 'fleet_page': fleet_page, 'feed': feed,
+            'summary_page': summary_page, 'chart': chart,
+            'fleet_pg': fleet_pg, 'fleet_pages': fleet_pages, 'fleet_total': len(fleet),
+            'sum_pg': sum_pg, 'sum_pages': sum_pages,
+            'map_dots': map_dots, 'map_missing': map_missing}

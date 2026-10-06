@@ -24,6 +24,7 @@
   <div>
     <h1 class="page-title">Management KPI</h1>
     <p class="page-subtitle">7-day network performance — same numbers as Grafana, no second login.</p>
+    <span id="liveStamp" style="font-size:11px;color:#64748B;font-weight:600"></span>
   </div>
   <a href="{{ grafana_url }}" target="_blank" rel="noopener" class="btn-live btn-outline"><i data-lucide="external-link"></i> Open in Grafana</a>
 </div>
@@ -39,7 +40,7 @@
     <div class="kpi-table-wrap">
       <table class="kpi-table">
         <thead><tr><th>ATM</th><th>Branch</th><th>Total Transactions</th><th>Success Rate %</th><th>Cash Dispensed (ETB)</th></tr></thead>
-        <tbody>
+        <tbody id="rankBody">
           {% for r in ranking %}
           <tr>
             <td style="font-family:monospace">{{ r.atm_id }}</td><td>{{ r.branch or '—' }}</td>
@@ -74,7 +75,7 @@
           <tr><th>{{ d }}</th>
             {% for v in heat[d] %}
             {% set frac = (v / peak_max) if peak_max else 0 %}
-            <td style="background:rgba(1,33,105,{{ 0.04 + 0.86 * frac }}){% if frac > 0.5 %};color:#fff{% endif %}" title="{{ d }} {{ loop.index0 }}:00 — {{ v }}">{{ v or '' }}</td>
+            <td id="heat-{{ d }}-{{ loop.index0 }}" style="background:rgba(1,33,105,{{ 0.04 + 0.86 * frac }}){% if frac > 0.5 %};color:#fff{% endif %}" title="{{ d }} {{ loop.index0 }}:00 — {{ v }}">{{ v or '' }}</td>
             {% endfor %}
           </tr>
           {% endfor %}
@@ -88,7 +89,7 @@
     <div class="kpi-table-wrap">
       <table class="kpi-table">
         <thead><tr><th>Name</th><th>Branch</th><th>ATM</th><th>Fault</th><th>Count</th></tr></thead>
-        <tbody>
+        <tbody id="faultBody">
           {% for r in faults %}
           <tr>
             <td>{{ r.name or '—' }}</td><td>{{ r.branch or '—' }}</td>
@@ -110,18 +111,96 @@
   var base = {responsive:true, maintainAspectRatio:false,
     plugins:{legend:{position:'bottom', labels:{boxWidth:12, font:{size:11}}}}};
   var el1 = document.getElementById('availChart');
-  if(el1) new Chart(el1, {type:'line',
+  if(el1) window.availChart = new Chart(el1, {type:'line',
     data:{labels:{{ chart.avail_labels|tojson }}, datasets:[{label:'Availability %', data:{{ chart.avail|tojson }},
       borderColor:'#16A34A', backgroundColor:'rgba(22,163,74,.12)', fill:true, tension:.3, pointRadius:3}]},
     options:base});
   var el2 = document.getElementById('errChart');
-  if(el2) new Chart(el2, {type:'doughnut',
+  if(el2) window.errChart = new Chart(el2, {type:'doughnut',
     data:{labels:{{ chart.err_labels|tojson }}, datasets:[{data:{{ chart.err_data|tojson }},
       backgroundColor:['#012169','#D97706','#DC2626','#2563EB','#059669','#7C3AED','#DB2777']}]}, options:base});
   var el3 = document.getElementById('faultChart');
-  if(el3) new Chart(el3, {type:'bar',
+  if(el3) window.faultChart = new Chart(el3, {type:'bar',
     data:{labels:{{ chart.fault_labels|tojson }}, datasets:[{label:'Count', data:{{ chart.fault_data|tojson }},
       backgroundColor:'#012169'}]}, options:Object.assign({}, base, {plugins:{legend:{display:false}}})});
+})();
+</script>
+<script>
+/* 5-minute autosync: ranking/fault tables, heatmap cells and all three
+   charts re-render from /kpi/api/live. 7-day aggregates move slowly, so a
+   longer interval keeps DB load trivial. Hidden tabs pause; failures back
+   off silently (stamp shows it). */
+(function(){
+  var fails = 0, busy = false;
+  function esc(s){ return String(s == null ? '—' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function fmtCash(n){ return Number(n || 0).toLocaleString('en-US', {maximumFractionDigits: 0}); }
+  function stamp(ok){
+    var el = document.getElementById('liveStamp');
+    if(!el) return;
+    if(ok){ el.textContent = 'Live · updated ' + new Date().toLocaleTimeString('en-ET',{hour12:false}); el.style.color = ''; }
+    else { el.textContent = 'Update failed — retrying…'; el.style.color = '#DC2626'; }
+  }
+  function cycleColors(c, n){
+    if(!Array.isArray(c)) return c;
+    var out = []; for(var i = 0; i < n; i++) out.push(c[i % c.length]); return out;
+  }
+  function setChart(ref, labels, data){
+    if(!ref) return;
+    ref.data.labels = labels || [];
+    if(ref.data.datasets[0]){
+      ref.data.datasets[0].data = data || [];
+      if(ref.data.datasets[0].backgroundColor) ref.data.datasets[0].backgroundColor = cycleColors(ref.data.datasets[0].backgroundColor, (labels || []).length);
+    }
+    ref.update();
+  }
+  async function tick(){
+    if(busy || document.hidden){ schedule(); return; }
+    busy = true;
+    try{
+      var r = await fetch('/kpi/api/live');
+      if(!r.ok) throw new Error('Server returned ' + r.status);
+      var d = await r.json();
+      var rb = document.getElementById('rankBody');
+      if(rb){
+        rb.innerHTML = (d.ranking || []).map(function(x){
+          return '<tr><td style="font-family:monospace">' + esc(x.atm_id) + '</td><td>' + esc(x.branch) +
+            '</td><td>' + (x.total || 0) + '</td><td>' + (x.success == null ? '—' : x.success) +
+            '</td><td>' + fmtCash(x.cash) + '</td></tr>';
+        }).join('') || '<tr class="empty-row"><td colspan="5">No transactions in the last 7 days.</td></tr>';
+      }
+      var fb = document.getElementById('faultBody');
+      if(fb){
+        fb.innerHTML = (d.faults || []).map(function(x){
+          return '<tr><td>' + esc(x.name) + '</td><td>' + esc(x.branch) +
+            '</td><td style="font-family:monospace">' + esc(x.atm) + '</td><td>' + esc(x.fault) +
+            '</td><td>' + (x.cnt || 0) + '</td></tr>';
+        }).join('') || '<tr class="empty-row"><td colspan="5">No faults recorded in the last 7 days.</td></tr>';
+      }
+      var pm = d.peak_max || 0;
+      (d.days || []).forEach(function(day){
+        var row = (d.heat || {})[day] || [];
+        for(var h = 0; h < 24; h++){
+          var cell = document.getElementById('heat-' + day + '-' + h);
+          if(!cell) continue;
+          var v = row[h] || 0;
+          var frac = pm ? v / pm : 0;
+          cell.textContent = v || '';
+          cell.style.background = 'rgba(1,33,105,' + (0.04 + 0.86 * frac).toFixed(3) + ')';
+          cell.style.color = frac > 0.5 ? '#fff' : '';
+          cell.title = day + ' ' + h + ':00 — ' + v;
+        }
+      });
+      var c = d.chart || {};
+      setChart(window.availChart, c.avail_labels, c.avail);
+      setChart(window.errChart, c.err_labels, c.err_data);
+      setChart(window.faultChart, c.fault_labels, c.fault_data);
+      fails = 0; stamp(true);
+    }catch(e){ fails++; stamp(false); }
+    busy = false;
+    schedule();
+  }
+  function schedule(){ setTimeout(tick, Math.min(300000 * Math.pow(2, fails), 1800000)); }
+  tick();
 })();
 </script>
 {% endblock %}
