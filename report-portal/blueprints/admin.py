@@ -1565,6 +1565,42 @@ def schedule_delete():
         return jsonify({'error': True, 'message': str(e)}), 500
 
 
+@bp.route('/schedules/send-now', methods=['POST'])
+@login_required
+@role_required(ROLE_ADMIN)
+def schedule_send_now():
+    """Manually fire a schedule immediately (testing + resends). Runs in a
+    background thread like the poller; works whether or not enabled."""
+    data = request.get_json(silent=True) or {}
+    sid = str(data.get('id', ''))
+    if not sid.isdigit():
+        return jsonify({'success': False, 'message': 'Missing schedule id.'})
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, name, report_type, format, schedule, recipients, params"
+                        " FROM scheduled_reports WHERE id = %s", (sid,))
+            row = cur.fetchone()
+            cur.close()
+        if not row:
+            return jsonify({'success': False, 'message': 'Schedule not found.'}), 404
+        rid, name, report_type, fmt, cron_expr, recipients, params = row
+        from scheduler import _dispatch, _running, _running_lock
+        with _running_lock:
+            if rid in _running:
+                return jsonify({'success': False,
+                                'message': 'This schedule is already sending — wait a minute.'})
+            _running.add(rid)
+        threading.Thread(target=_dispatch,
+                         args=(rid, report_type, fmt, cron_expr, recipients, params),
+                         daemon=True).start()
+        log_action('SCHEDULE_SEND_NOW', f'Manually triggered "{name}" ({report_type}/{fmt})')
+        return jsonify({'success': True,
+                        'message': f'Sending "{name}" now — check the inbox, then Last Run.'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @bp.route('/schedules/get')
 @login_required
 @role_required(ROLE_ADMIN)

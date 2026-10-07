@@ -126,6 +126,7 @@
             <td style="text-align:center" class="kebab-wrap">
               <button class="kebab-btn" onclick="toggleKebab(event,this)" title="Actions">&#8942;</button>
               <div class="kebab-menu">
+                <button class="kebab-item" data-id="{{ s[0] }}" onclick="sendNowSchedule(this.dataset.id)"><i data-lucide="send" style="width:14px;height:14px"></i> Send now</button>
                 <button class="kebab-item edit" data-id="{{ s[0] }}" onclick="editSchedule(this.dataset.id)"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
                 <button class="kebab-item delete" data-id="{{ s[0] }}" onclick="deleteSchedule(this.dataset.id)"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
               </div>
@@ -442,6 +443,15 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 });
 
+function sendNowSchedule(id){
+  if(!confirm('Send this report now to its recipients?')) return;
+  fetch('/admin/schedules/send-now', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+    body: JSON.stringify({id: id})})
+  .then(function(r){ return r.json(); })
+  .then(function(d){ showToast(d.message || (d.success ? 'Sending.' : 'Failed.'), d.success ? 'success' : 'error', 8000); })
+  .catch(function(){ showToast('Network error. Please try again.', 'error', 8000); });
+}
 function toggleSchedule(id){
   fetch('/admin/schedules/toggle', {
     method: 'POST',
