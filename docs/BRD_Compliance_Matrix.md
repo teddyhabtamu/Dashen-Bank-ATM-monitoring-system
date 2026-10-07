@@ -4,8 +4,8 @@
 | Field | Value |
 |-------|-------|
 | Source | `docs/BRD for ATM Monitoring system (1).md` (§§5–10 + minimum-requirements table rows 1–19) |
-| Version | 1.0 |
-| Date | 2026-09-05 |
+| Version | 2.0 (changelog at bottom) |
+| Date | 2026-10-07 |
 | Branch | `uat-prep` |
 | Status legend | ✅ built + proven · 🟡 built, needs cutover data / verification / decision · ❌ gap |
 
@@ -18,8 +18,8 @@
 | Area | ✅ | 🟡 | ❌ |
 |------|----|----|----|
 | §5 Functional (5.1–5.6) | 2 | 4 | 0 (+2 sub-gaps) |
-| §6 Reporting (6.1–6.5) | 2 | 3 | 0 |
-| §7 Non-functional (7.1–7.4) | 0 | 2 | 2 |
+| §6 Reporting (6.1–6.5) | 5 | 0 | 0 |
+| §7 Non-functional (7.1–7.4) | 2 | 3 | 2 |
 | §8 Integrations | 2 | 3 | 4 |
 | §9 User roles | 1 | 2 | 0 |
 | Table rows 1–19 (M) | 0 | 14 | 5 |
@@ -62,9 +62,9 @@
 
 | Requirement | Status | Evidence / next step |
 |-------------|--------|----------------------|
-| Email notifications | 🟡 | Zabbix email media exists; needs bank SMTP relay |
+| Email notifications | 🟡 | End-to-end proven 2026-10-06 via Gmail (scheduled outage Excel delivered; real MIME types; content-type guard rejects login-page-as-PDF). Bank relay (`atmmonitoringsystem@`) still pending — same code path, new credentials |
 | SMS alerts | ❌ | Only an empty `AT_API_KEY` placeholder. Owner: TBD (build sender post-cutover) |
-| Dashboard notifications | ✅ | Grafana + portal live |
+| Dashboard notifications | ✅ | Grafana + portal live; portal autosync (15s KPIs / 20s monitoring / 30s ops / 3min KPI) with live stamps + hidden-tab pause |
 | Triggers: offline, cash-out, hardware, suspicious pattern | 🟡 | Anomaly detector live; fault triggers at cutover |
 
 ### 5.6 Real-Time Dashboard — ✅
@@ -81,11 +81,11 @@
 | Requirement | Status | Evidence / next step |
 |-------------|--------|----------------------|
 | 6.1 Availability (uptime %, downtime, reasons; daily/weekly/monthly) | ✅ | Rewritten off `atm_state_history` (was transaction-activity proxy — wrong metric); verified live: 0.0/168.0/0.00%/UNREACHABLE on real history. PDF/Excel/CSV paths checked |
-| 6.2 Transaction summary (totals, success rate, failed, value) | 🟡 | Queries exist in dashboards; same verification needed |
+| 6.2 Transaction summary (totals, success rate, failed, value) | ✅ | Overhauled Oct: S.N column, filter/freeze panes, plain subtitle, `ATM_ID`/`Owner Branch` vocabulary, `Success Rate (%)` units; EAT-midnight cash boundary aligned with Operations (was UTC) |
 | 6.3 Cash report (level, dispensed, replenishment history) | ✅ | Live on UAT: Cash Loads page (form + history + audit, AUTO/MANUAL source), verified submit→DB→list; test row cleaned |
-| 6.4 Error/incident (errors, resolution time, frequency) | 🟡 | GLPI holds the data; portal-side resolution-time view to verify |
-| 6.5 Performance (most/least used, peak hours) | 🟡 | Countable from `atm_transactions`; verify views |
-| PDF / Excel / CSV, scheduled + on-demand | ✅ | Portal export + scheduler ticking (observed) |
+| 6.4 Error/incident (errors, resolution time, frequency) | ✅ | Same overhaul as 6.2 + fault-code descriptions; resolution lifecycle in GLPI via portal (acknowledge/assign/solve + Assignee column) |
+| 6.5 Performance (most/least used, peak hours) | ✅ | Same overhaul; availability sorted worst-first; heatmap re-bucketed to EAT with 12-hour-clock axis labels |
+| PDF / Excel / CSV, scheduled + on-demand | ✅ | Portal export + scheduler proven live (daily outage Excel emailed 2026-10-06); scheduler gained an Excel branch + content-type guard; new Daily ATM Outage report mirrors the team's manual template (same columns/order, periwinkle header) with suspected-cause drafting + GLPI-ticket prefill |
 
 ---
 
@@ -94,9 +94,9 @@
 | Requirement | Status | Evidence / next step |
 |-------------|--------|----------------------|
 | 7.1 System availability 99.9% | ❌ | Single-host deploy, no HA/DR design. Backups proven (`backup_db.sh` drill). Production HA decision required before go-live. Owner: IT + architect |
-| 7.2 Data updates within 5 seconds | ❌ | SNMP polls at 30s by design; EJ path is seconds. Propose tiered SLA (30s state / seconds EJ) — 5s fleet SNMP is unrealistic. Owner: negotiate with bank |
+| 7.2 Data updates within 5 seconds | 🟡 | As-written unmet (SNMP polls at 30s by design); portal autosync now 15s KPIs / 20s monitoring / 30s ops with anchored cadence; EJ path is seconds. Tiered SLA proposal (30s state / seconds EJ) still awaiting bank decision — Owner: negotiate with bank |
 | 7.3 RBAC | 🟡 | Portal roles (admin/viewer) + native Zabbix/GLPI/Grafana RBAC; end-to-end matrix unmapped |
-| 7.3 Audit logging | ✅ | `audit_log` table, 770+ rows observed |
+| 7.3 Audit logging | ✅ | `audit_log` table + before/after field history on ATM save/delete (`field: old => new`, secrets masked), expandable rows, bulk-ack summaries |
 | 7.3 Data encryption | ❌ | No TLS on UIs/DB, no at-rest encryption. Must add (reverse-proxy TLS, PG SSL, volume encryption) before production. Owner: IT + architect |
 | 7.4 Expansion of ATM network | ✅ | Bulk import scripts (1,202-ATM path), DB-driven inventory |
 | 7.4 Integration with additional tools | 🟡 | SNMP / ISO 8583 / REST in place; NDC/DDC absent (see §8) |
@@ -142,14 +142,14 @@
 | 8 | EJ management (collect, multi-vendor, search, correlate, dispute, export/retention) | 🟡 | Transport + NCR/GRG grok + portal masked search proven with fixtures (5/5 parsed, 3/3 raw retained); false-NCR vendor default removed (absent unless explicit); EJ index pattern + OSD import done. Retention: 90d ISM policy live + PG daily sweep (periods TBD with Risk/Compliance). Raw-vendor multiline normalization: confirm at cutover whether ATMs send pre-normalized lines |
 | 9 | Camera & surveillance | ❌ | Unbuilt: no camera polling, snapshots, tampering alerts, or balance-check capture. Needs scope/Phase-2 decision + OID confirmation. Owner: bank + team |
 | 10 | Power & environmental (mains/UPS/battery, correlation) | ❌ | Unbuilt. Same decision path as row 9 |
-| 11 | Alert management (all triggers; email/SMS/push; severity/escalation; ack/suppress) | 🟡 | Four severity actions (Disaster/High/Average/Warning) route ATMs-group events to GLPI with recovery ops — full PROBLEM→solve lifecycle drill passed; escalation via GLPI SLAs. Email needs bank relay; SMS/push missing |
-| 12 | Incident/ticket/SLA (auto+manual, lifecycle, assign, SLA, RCA, attachments) | 🟡 | Auto-create + lifecycle + assign + SLAs proven live; **RCA**: `ATM Fault RCA` solution template in GLPI (root-cause/corrective/preventive/verified-by) + close-with-RCA process. Native enforcement still impossible — process control |
+| 11 | Alert management (all triggers; email/SMS/push; severity/escalation; ack/suppress) | 🟡 | Four severity actions (Disaster/High/Average/Warning) route ATMs-group events to GLPI with recovery ops — full PROBLEM→solve lifecycle drill passed; escalation via GLPI SLAs. Email proven end-to-end via Gmail (bank relay pending); SMS/push missing |
+| 12 | Incident/ticket/SLA (auto+manual, lifecycle, assign, SLA, RCA, attachments) | 🟡 | Auto-create + lifecycle proven live; true reassignment (releases previous tech) + Assignee column + self-assign on acknowledge + unresolved-macro test-ticket tags; **RCA**: `ATM Fault RCA` solution template in GLPI (root-cause/corrective/preventive/verified-by) + close-with-RCA process. Native enforcement still impossible — process control |
 | 13 | Mobile app (Android mandatory) | ❌ | Nothing exists. Scope decision required (build / waive / Phase 2); portal is mobile-browser-usable as mitigation. Owner: bank |
-| 14 | Dashboards (operational, KPI, geo-map, drill-down, widgets/filters) | 🟡 | 7 dashboards live; geo-map pins verified for both test ATMs (4 Kilo coords seeded); EJ datasource green since :9200 opened |
-| 15 | Txn reporting & analytics (uptime, downtime, SLA, vendor, success/failure, cash-out, export, scheduled) | 🟡 | All 7 reports executed against live sim data and cross-checked (txn↔cash↔vendor agree to the birr); PDFs render; Complete report gained §6 Availability |
+| 14 | Dashboards (operational, KPI, geo-map, drill-down, widgets/filters) | 🟡 | 7 dashboards live; geo-map pins verified for both test ATMs (4 Kilo coords seeded); EJ datasource green since :9200 opened; portal autosync (anchored 15s–3min cadence, live stamps, SNMP-aware host states, Groups column) |
+| 15 | Txn reporting & analytics (uptime, downtime, SLA, vendor, success/failure, cash-out, export, scheduled) | 🟡 | All reports executed against live data and cross-checked; PDFs render; Complete report gained §6 Availability; Oct overhaul (S.N, filters, subtitles, units, worst-first, EAT); Daily ATM Outage report added with suspected-cause + GLPI prefill |
 | 16 | Integrations (switch, CBS, vendor tools, NMS, ISO/SNMP/NDC/REST) | 🟡 | See §8 |
-| 17 | Security & compliance (RBAC, audit, encryption, PCI, regulatory, retention) | 🟡 | Audit ✅ + masking ✅ (last-4 proven); encryption ❌; PCI scope + retention mapping pending with Risk/Compliance |
-| 18 | Non-functional (99.9%, HA, DR, scalable, web) | 🟡 | Scalable ✅ + web ✅ + backups ✅; HA/DR ❌ (see 7.1) |
+| 17 | Security & compliance (RBAC, audit, encryption, PCI, regulatory, retention) | 🟡 | Audit ✅ (incl. field history + masking) + masking ✅ (last-4 proven); per-consumer Zabbix API accounts cut over (shared-Admin lockout class eliminated); encryption ❌; PCI scope + retention mapping pending with Risk/Compliance |
+| 18 | Non-functional (99.9%, HA, DR, scalable, web) | 🟡 | Scalable ✅ (gunicorn workers + shared aggregate cache + composite indexes) + web ✅ + backups ✅; HA/DR ❌ (see 7.1) |
 | 19 | Vendor responsibilities (architecture, rollout, testing, training, support) | 🟡 | Docs + pilot checklist + UAT in progress; training sessions + support SLA unstarted (normal for this stage) |
 
 ---
@@ -172,3 +172,25 @@
 - Cutover procedure: `docs/UAT_Phase0_Runbook.md`
 - Deployment: `docs/UAT_Migration_Guide.md`
 - RFP compliance artifact: this document (also satisfies BRD §19 proposal-compliance needs)
+
+## 10. Changelog (v1.0 → v2.0, 2026-09-05 → 2026-10-07)
+
+- §6 Reporting → all ✅: report overhaul (S.N, filters, subtitles, units,
+  worst-first, EAT cash boundary), Daily ATM Outage report (template-mirror
+  + suspected-cause + GLPI prefill), scheduler Excel branch, MIME +
+  content-type email hardening, first automated delivery 2026-10-06.
+- §7: audit evidence extended (field history, masking); 7.2 moved ❌→🟡
+  (autosync cadence documented; tiered-SLA decision still with bank).
+- Scale track landed: gunicorn workers (+singleton scheduler, shared
+  internal key), shared aggregate cache (`livecache`), composite indexes.
+- Ticketing: true reassignment, Assignee column, self-assign on
+  acknowledge, test-ticket tags, unresolved-macro evidence trail.
+- Zabbix edit-sync completed (`host.update` reconciler: name, IP,
+  community, macro, template, groups; additive-only) + branch
+  normalization convention (`… BRANCH`).
+- Security: per-consumer Zabbix API accounts cut over (shared-`Admin`
+  lockout class eliminated); GLPI split documented with webhook
+  credential-gotcha; default passwords scrubbed from tracked files.
+- Unchanged gaps (still blocked/ unbuilt, not drift): SNMP cutover data,
+  cassette counts, depletion forecast, SMS, cameras/power, mobile app,
+  CBS/Card/NDC scope, HA/DR, encryption, retention mapping.
