@@ -296,22 +296,31 @@ def pdf_send(title, headers, rows, days, atm, name, kpis=None, subtitle=''):
 
 
 def mktable(headers, rows):
-    """Build a fully styled reportlab Table for use in PDFs."""
-    data = [headers] + [[str(v) if v is not None else '—' for v in r] for r in rows]
+    """Build a fully styled reportlab Table for use in PDFs.
+
+    Cells are Paragraphs (not raw strings) so long text WRAPS instead of
+    overprinting its neighbours; row heights size to content. Fixed
+    ROWHEIGHT + raw strings was the overlap bug in mailed PDFs.
+    """
+    from xml.sax.saxutils import escape
+    hdr_style = ParagraphStyle('_mth', fontName='Helvetica-Bold', fontSize=9,
+                               leading=11, textColor=colors.white, alignment=TA_CENTER)
+    cell_style = ParagraphStyle('_mtb', fontName='Helvetica', fontSize=8,
+                                leading=10, alignment=TA_CENTER)
+    data = [[Paragraph(escape(str(h)), hdr_style) for h in headers]]
+    for r in rows:
+        data.append([Paragraph(escape(str(v) if v is not None else '—'), cell_style)
+                     for v in r])
     page_w = landscape(A4)[0] - 3 * cm
     cw = page_w / len(headers)
     t = Table(data, colWidths=[cw] * len(headers), repeatRows=1)
     t.setStyle(TableStyle([
         ('BACKGROUND',    (0, 0), (-1,  0), colors.HexColor('#273274')),
         ('TEXTCOLOR',     (0, 0), (-1,  0), colors.white),
-        ('FONTNAME',      (0, 0), (-1,  0), 'Helvetica-Bold'),
-        ('FONTSIZE',      (0, 0), (-1,  0), 9),
         ('ALIGN',         (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
         ('ROWBACKGROUNDS',(0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-        ('FONTSIZE',      (0, 1), (-1, -1), 8),
         ('GRID',          (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
-        ('ROWHEIGHT',     (0, 0), (-1, -1), 20),
         ('TOPPADDING',    (0, 0), (-1, -1), 5),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
     ]))
