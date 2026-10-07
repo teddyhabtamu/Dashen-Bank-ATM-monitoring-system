@@ -48,7 +48,7 @@
   <div class="err-banner">{{ error }}</div>
   {% elif ticket %}
   <div class="t-head">
-    <h2>#{{ ticket.id }} — {{ ticket.title }}</h2>
+    <h2>#{{ ticket.id }} — {{ ticket.title }}{% if '{' in ticket.title %} <span class="unread-tag" style="background:#F1F5F9;color:#64748B" title="Created from the media-type Test button — macros are only resolved on real alerts">test</span>{% endif %}</h2>
     <div class="t-meta">
       <span>Status: <b>{{ ticket.status }}</b></span>
       <span>Priority: <b>{{ ticket.priority }}</b></span>

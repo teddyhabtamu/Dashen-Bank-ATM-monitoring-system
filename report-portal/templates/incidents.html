@@ -87,7 +87,7 @@
           {% for t in tickets %}
           <tr data-href="/incidents/{{ t.id }}" onclick="if(event.target.closest('.kebab-wrap'))return;window.location=this.dataset.href">
             <td style="font-family:monospace">{{ t.id }}</td>
-            <td>{{ t.title }}{% if t.unread %}<span class="unread-tag">● New{% if t.last_by %} · {{ t.last_by }}{% endif %}</span>{% endif %}</td>
+            <td>{{ t.title }}{% if '{' in t.title %}<span class="unread-tag" style="background:#F1F5F9;color:#64748B" title="Created from the media-type Test button — macros are only resolved on real alerts"> ● test</span>{% endif %}{% if t.unread %}<span class="unread-tag">● New{% if t.last_by %} · {{ t.last_by }}{% endif %}</span>{% endif %}</td>
             <td class="st {% if t.status in ('New','Processing (assigned)','Processing (planned)') %}st-open{% elif t.status == 'Pending' %}st-pending{% else %}st-solved{% endif %}">{{ t.status }}</td>
             <td class="{% if t.priority_n >= 4 %}pr-high{% endif %}">{{ t.priority }}</td>
             <td>{{ t.category }}</td>
