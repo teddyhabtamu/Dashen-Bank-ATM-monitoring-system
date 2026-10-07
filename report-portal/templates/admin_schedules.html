@@ -112,9 +112,9 @@
           {% for s in schedules %}
           <tr style="--i: {{ loop.index0 }}">
             <td style="font-weight:600;color:#0F172A">{{ s[1] }}</td>
-            <td>{{ s[2] }}</td>
+            <td>{{ type_labels.get(s[2], s[2]) }}</td>
             <td><span class="badge">{{ s[3]|upper }}</span></td>
-            <td style="font-family:monospace;font-size:11px">{{ s[4] }}</td>
+            <td style="font-family:monospace;font-size:11px"><span data-cron="{{ s[4] }}">{{ s[4] }}</span><div class="cron-human" style="font-family:inherit;font-size:10px;color:#64748B;margin-top:2px"></div></td>
             <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ s[5] }}">{{ s[5] }}</td>
             <td style="text-align:center">
               <label class="toggle-switch">
@@ -157,7 +157,7 @@
       <div class="sched-card-info">
         <div>
           <div class="sched-card-label">Report</div>
-          <div class="sched-card-value">{{ s[2] }}</div>
+          <div class="sched-card-value">{{ type_labels.get(s[2], s[2]) }}</div>
         </div>
         <div>
           <div class="sched-card-label">Last Run</div>
@@ -434,6 +434,13 @@ function describeCron(cron){
 function closeScheduleModal(){
   document.getElementById('scheduleModal').classList.remove('show');
 }
+// Humanize each row's cron on load (same describeCron as the modal).
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('[data-cron]').forEach(function(el){
+    var human = el.parentElement ? el.parentElement.querySelector('.cron-human') : null;
+    if(human && typeof describeCron === 'function') human.textContent = describeCron(el.dataset.cron);
+  });
+});
 
 function toggleSchedule(id){
   fetch('/admin/schedules/toggle', {

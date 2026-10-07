@@ -5,6 +5,9 @@
 .form-grid .full{grid-column:1/-1}
 .form-actions{padding:0 24px 24px;display:flex;gap:10px;justify-content:flex-end}
 .form-actions .btn{padding:10px 20px}
+/* The ATM filter's custom dropdown is clipped by the header otherwise
+   (same class of bug the audit page already fixed). */
+.card-header{overflow:visible}
 {% endblock %}
 {% block body %}
 <div class="page-header">

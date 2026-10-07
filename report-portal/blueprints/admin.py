@@ -10,6 +10,7 @@ from werkzeug.security import generate_password_hash
 from blueprints.auth import login_required, role_required, ROLE_ADMIN, ROLE_OPERATOR, ROLE_VIEWER, password_error
 from db import get_db
 from audit import log_action
+from scheduler import REPORT_TYPE_LABELS
 
 logger = logging.getLogger(__name__)
 
@@ -1428,7 +1429,8 @@ def schedule_list():
         rows = []
         failed = []
     failed = [r for r in rows if len(r) > 8 and r[8] == 'failed']
-    return render_template('admin_schedules.html', schedules=rows, failed=failed)
+    return render_template('admin_schedules.html', schedules=rows, failed=failed,
+                           type_labels=REPORT_TYPE_LABELS)
 
 
 def _valid_cron(expr):
