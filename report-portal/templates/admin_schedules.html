@@ -82,8 +82,12 @@
 {% if failed %}
 <div style="background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px">
   <strong>{{ failed|length }} schedule{{ 's' if failed|length != 1 }} failing:</strong>
-  {{ failed|map(attribute=1)|join(', ') }} — last run did not deliver.
-  Check SMTP / report endpoint, then re-enable or wait for the next run.
+  {% for f in failed %}
+  <div style="margin-top:6px">{{ f[1] }} — last run did not deliver.
+    {% if f[6] %}It is enabled: use ⋮ → <strong>Send now</strong> to retry immediately, or wait for the next run. The banner clears on success.
+    {% else %}It is currently <strong>disabled</strong>: re-enable it to resume.{% endif %}
+  </div>
+  {% endfor %}
 </div>
 {% endif %}
 <div class="card">
