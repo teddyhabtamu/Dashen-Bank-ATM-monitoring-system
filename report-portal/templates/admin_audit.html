@@ -13,7 +13,7 @@
 /* ── Expandable audit rows: truncated one-liner → full wrapped detail ── */
 tr.audit-row{cursor:pointer}
 tr.audit-row td.detail-cell{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:#475569}
-tr.audit-row.expanded td.detail-cell{white-space:normal;overflow:visible;text-overflow:clip}
+tr.audit-row.expanded td.detail-cell{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
 tr.audit-row:hover td.detail-cell{color:#012169}
 
 @media(max-width:768px){

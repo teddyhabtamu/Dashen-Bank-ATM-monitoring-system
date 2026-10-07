@@ -229,7 +229,8 @@ def anomaly_bulk_acknowledge():
             cur.close()
 
         log_action('ANOMALY_BULK_ACK',
-                   f'{updated} anomalies acknowledged by {username}: {",".join(str(i) for i in ids)}')
+                   f'{updated} anomalies acknowledged by {username}: {",".join(str(i) for i in ids[:10])}'
+                   f'{f" (+{len(ids) - 10} more)" if len(ids) > 10 else ""}')
         return jsonify({'success': True, 'updated': updated})
     except Exception as e:
         return jsonify({'error': True, 'message': str(e)}), 500
