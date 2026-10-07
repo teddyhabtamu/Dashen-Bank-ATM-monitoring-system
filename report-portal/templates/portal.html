@@ -149,7 +149,7 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
         Monitored ATMs
       </div>
       <div class="kpi-value" style="color:var(--text-primary);" id="kpi-atm-count">&mdash;</div>
-      <div class="kpi-footer">Active endpoints</div>
+      <div class="kpi-footer">Registered &amp; active (see status chart for live state)</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-header">
@@ -299,7 +299,7 @@ async function loadCharts() {
     txnVolumeChart = new Chart(txnCtx, {
       type: 'line',
       data: {
-        labels: d.txn_volume.labels,
+        labels: markToday(d.txn_volume.labels),
         datasets: [{
           label: 'Transactions',
           data: d.txn_volume.data,
@@ -352,7 +352,7 @@ async function loadCharts() {
     };
     const statusLabels = d.atm_status.labels;
     const statusData = d.atm_status.data;
-    const statusBg = statusLabels.map(l => statusColors[l] || chartColors.muted);
+    const statusBg = d.atm_status.labels.map(l => statusColors[String(l).replace(/ \([0-9,]+\)$/, '')] || chartColors.muted);
     atmStatusChart = new Chart(statusCtx, {
       type: 'doughnut',
       data: {
@@ -393,7 +393,7 @@ async function loadCharts() {
     cashTrendChart = new Chart(cashCtx, {
       type: 'bar',
       data: {
-        labels: d.cash_trend.labels,
+        labels: markToday(d.cash_trend.labels),
         datasets: [{
           label: 'Cash Dispensed (ETB)',
           data: d.cash_trend.data,
@@ -414,12 +414,26 @@ async function loadCharts() {
 
 // ── END CHARTS ─────────────────────────────────────────────────────────────
 
+// Partial-day honesty: the last bucket is still accumulating today — label
+// it so nobody reads the trailing dip as an outage.
+function markToday(labels){
+  if(!labels || !labels.length) return labels || [];
+  var out = labels.slice();
+  var today = new Date().toLocaleDateString('en-CA');
+  if(out[out.length - 1] === today) out[out.length - 1] = today + ' • today';
+  return out;
+}
+
 // ── 30s AUTOSYNC: KPIs + all charts refresh in place (no rebuild, no
 // viewport jumps). Skips while the tab is hidden; failures back off
 // silently (stamp shows it) instead of toasting every 30 seconds.
 function cycleColors(c, n){
   if(!Array.isArray(c)) return c;
   var out = []; for(var i = 0; i < n; i++) out.push(c[i % c.length]); return out;
+}
+function withToday(p){
+  if(!p) return p;
+  return {labels: markToday(p.labels), data: p.data};
 }
 function refreshChart(chart, payload){
   if(!chart || !payload) return;
@@ -452,11 +466,11 @@ async function liveTick(){
       if(!r.ok) throw new Error('Server returned ' + r.status);
       const d = await r.json();
       if(d.error) throw new Error(d.error);
-      refreshChart(txnVolumeChart, d.txn_volume);
-      refreshChart(successRateChart, d.success_rate);
-      refreshChart(atmStatusChart, d.atm_status);
-      refreshChart(vendorComparisonChart, d.vendor_comparison);
-      refreshChart(cashTrendChart, d.cash_trend);
+    refreshChart(txnVolumeChart, withToday(d.txn_volume));
+    refreshChart(successRateChart, d.success_rate);
+    refreshChart(atmStatusChart, d.atm_status);
+    refreshChart(vendorComparisonChart, d.vendor_comparison);
+    refreshChart(cashTrendChart, withToday(d.cash_trend));
     }
     _liveFails = 0; liveStamp(true);
   }catch(e){ _liveFails++; liveStamp(false); }

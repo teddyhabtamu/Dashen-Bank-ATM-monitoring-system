@@ -115,15 +115,16 @@
   if(el1) window.availChart = new Chart(el1, {type:'line',
     data:{labels:{{ chart.avail_labels|tojson }}, datasets:[{label:'Availability %', data:{{ chart.avail|tojson }},
       borderColor:'#16A34A', backgroundColor:'rgba(22,163,74,.12)', fill:true, tension:.3, pointRadius:3}]},
-    options:base});
+    options:Object.assign({}, base, {scales:{y:{min:0, max:100, ticks:{callback:function(v){return v+'%'}}}}, plugins:{legend:{position:'bottom', labels:{boxWidth:12, font:{size:11}}}}})});
   var el2 = document.getElementById('errChart');
   if(el2) window.errChart = new Chart(el2, {type:'doughnut',
     data:{labels:{{ chart.err_labels|tojson }}, datasets:[{data:{{ chart.err_data|tojson }},
-      backgroundColor:['#012169','#D97706','#DC2626','#2563EB','#059669','#7C3AED','#DB2777']}]}, options:base});
+      backgroundColor:['#012169','#D97706','#DC2626','#2563EB','#059669','#7C3AED','#DB2777']}]},
+    options:Object.assign({}, base, {scales:{x:{display:false}, y:{display:false}}})});
   var el3 = document.getElementById('faultChart');
   if(el3) window.faultChart = new Chart(el3, {type:'bar',
     data:{labels:{{ chart.fault_labels|tojson }}, datasets:[{label:'Count', data:{{ chart.fault_data|tojson }},
-      backgroundColor:'#012169'}]}, options:Object.assign({}, base, {plugins:{legend:{display:false}}})});
+      backgroundColor:'#012169'}]}, options:Object.assign({}, base, {scales:{y:{beginAtZero:true, ticks:{precision:0}}}}, plugins:{legend:{display:false}}})});
 })();
 </script>
 <script>

@@ -130,8 +130,9 @@ def api_stats():
                 cur.execute("""
                     SELECT COUNT(*),
                         ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),1),
-                        COALESCE(SUM(CASE WHEN t.status='APPROVED' AND t.txn_type='WITHDRAWAL'
-                            AND t.recorded_at>=CURRENT_DATE THEN t.amount ELSE 0 END),0),
+                    COALESCE(SUM(CASE WHEN t.status='APPROVED' AND t.txn_type='WITHDRAWAL'
+                        AND t.recorded_at >= date_trunc('day', NOW() AT TIME ZONE 'Africa/Addis_Ababa') AT TIME ZONE 'Africa/Addis_Ababa'
+                        THEN t.amount ELSE 0 END),0),
                         (SELECT COUNT(*) FROM atm_locations WHERE status = 'active')
                     FROM atm_transactions t
                     JOIN atm_locations l ON t.atm_id = l.atm_id
@@ -224,7 +225,7 @@ def api_charts():
                 'data': [float(r[1]) for r in sr_rows],
             },
             'atm_status': {
-                'labels': [str(r[0]) for r in status_rows],
+                'labels': [f'{r[0]} ({int(r[1])})' for r in status_rows],
                 'data': [int(r[1]) for r in status_rows],
             },
             'vendor_comparison': {
