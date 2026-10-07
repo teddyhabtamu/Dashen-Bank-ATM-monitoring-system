@@ -394,14 +394,28 @@ function addRecipTag(raw){
   _recipSync(); renderRecipTags();
   return true;
 }
-function commitRecipInput(){
+function commitRecipInput(opts){
+  opts = opts || {};
   var input = document.getElementById('recipInput');
   var parts = input.value.split(/[,;\n]+/);
-  var ok = false;
-  parts.forEach(function(p){ if(addRecipTag(p)) ok = true; });
-  input.value = '';
-  document.getElementById('recipientMatches').innerHTML = '';
-  return ok;
+  var leftover = [];
+  parts.forEach(function(p){
+    var email = String(p || '').trim().replace(/[;,]+$/, '').trim();
+    if(!email) return;
+    if(!_recipValid(email)){
+      if(!opts.quiet) showToast('"' + email + '" is not a valid email address.', 'error', 5000);
+      leftover.push(email);
+    } else if(_recipTags.indexOf(email) === -1){
+      _recipTags.push(email);
+    }
+  });
+  _recipSync(); renderRecipTags();
+  // Keep uncommitted text for fixing; never eat the user's typing.
+  // (The suggestion box is left alone here — clearing it on blur is what
+  // used to destroy suggestion clicks between mousedown and mouseup.)
+  input.value = leftover.join(', ');
+  if(!opts.keepMatches) document.getElementById('recipientMatches').innerHTML = '';
+  return leftover.length === 0;
 }
 document.addEventListener('DOMContentLoaded', function(){
   var input = document.getElementById('recipInput');
@@ -416,7 +430,7 @@ document.addEventListener('DOMContentLoaded', function(){
   input.addEventListener('paste', function(){
     setTimeout(commitRecipInput, 0);
   });
-  input.addEventListener('blur', function(){ if(input.value.trim()) commitRecipInput(); });
+  input.addEventListener('blur', function(){ if(input.value.trim()) commitRecipInput({quiet: true, keepMatches: true}); });
   var form = document.getElementById('scheduleForm');
   if(form) form.addEventListener('submit', function(e){
     commitRecipInput();
@@ -443,6 +457,9 @@ function suggestRecipients(q){
         b.className = 'btn btn-outline';
         b.style.cssText = 'padding:4px 10px;font-size:11px';
         b.textContent = u.username + ' <' + u.email + '>';
+        // mousedown (not click): preventDefault keeps focus in the typing
+        // box, so no blur fires and this button survives to receive the click.
+        b.onmousedown = function(e){ e.preventDefault(); };
         b.onclick = function(){
           addRecipTag(u.email);
           document.getElementById('recipInput').value = '';
