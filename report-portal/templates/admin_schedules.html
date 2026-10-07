@@ -212,7 +212,7 @@
         </div>
         <div class="form-group">
           <label>Report Type</label>
-          <select name="report_type" id="schedType">
+          <select name="report_type" id="schedType" onchange="togglePeriodVisibility()">
             <option value="transaction">Transaction Summary</option>
             <option value="cash">Cash Level & Dispensing</option>
             <option value="error">Error & Incident</option>
@@ -266,10 +266,22 @@
           <div id="recipientHints" style="font-size:11px;color:#64748B;margin-top:4px">Type any address, or pick a system user below.</div>
           <div id="recipientMatches" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
         </div>
-        <div class="form-group full">
-          <label>Extra Parameters (optional)</label>
-          <input type="text" name="params" id="schedParams" placeholder="days=7, atm=all" style="font-family:monospace">
+        <div class="form-group" id="schedPeriodWrap">
+          <label>Reporting Period</label>
+          <select id="schedDays">
+            <option value="1">Today</option>
+            <option value="7" selected>Last 7 Days</option>
+            <option value="30">Last 30 Days</option>
+            <option value="90">Last 90 Days</option>
+          </select>
         </div>
+        <div class="form-group">
+          <label>ATM</label>
+          <select id="schedAtm">
+            <option value="all" selected>All ATMs</option>
+          </select>
+        </div>
+        <input type="hidden" name="params" id="schedParams">
       </div>
       <div class="form-actions">
         <button type="button" class="btn btn-outline" onclick="closeScheduleModal()">Cancel</button>
@@ -418,6 +430,7 @@ function commitRecipInput(opts){
   return leftover.length === 0;
 }
 document.addEventListener('DOMContentLoaded', function(){
+  loadSchedAtms();
   var input = document.getElementById('recipInput');
   if(!input) return;
   input.addEventListener('keydown', function(e){
@@ -433,6 +446,7 @@ document.addEventListener('DOMContentLoaded', function(){
   input.addEventListener('blur', function(){ if(input.value.trim()) commitRecipInput({quiet: true, keepMatches: true}); });
   var form = document.getElementById('scheduleForm');
   if(form) form.addEventListener('submit', function(e){
+    buildSchedParams();
     commitRecipInput();
     if(!_recipTags.length){
       e.preventDefault();
@@ -486,7 +500,8 @@ function openScheduleModal(data) {  data = data || {};
   _recipTags = String(data.recipients || '').split(',').map(function(s){ return s.trim(); }).filter(Boolean);
   renderRecipTags();
   document.getElementById('recipInput').value = '';
-  document.getElementById('schedParams').value = data.params || '';
+  setSchedParams(String(data.params || ''));
+  togglePeriodVisibility();
   document.getElementById('scheduleModal').classList.add('show');
   setTimeout(syncCustomSelects, 10);
 }
@@ -530,6 +545,116 @@ function describeCron(cron){
   return parts.length ? 'Runs ' + parts.join(', ') + '.' : '';
 }
 
+function parseSchedParams(str){
+  var out = {days: '7', atm: 'all'};
+  var m = String(str || '').match(/days\s*=\s*(\d+)/);
+  if(m && ['1', '7', '30', '90'].indexOf(m[1]) !== -1) out.days = m[1];
+  var a = String(str || '').match(/atm\s*=\s*([^,\s]+)/);
+  if(a && a[1]) out.atm = a[1];
+  return out;
+}
+function setSchedParams(str){
+  var p = parseSchedParams(str);
+  var days = document.getElementById('schedDays');
+  var atm = document.getElementById('schedAtm');
+  if(days) days.value = p.days;
+  if(atm){
+    var has = Array.prototype.some.call(atm.options, function(o){ return o.value === p.atm; });
+    atm.value = has ? p.atm : 'all';
+  }
+  if(typeof syncCustomSelects === 'function') syncCustomSelects();
+}
+function buildSchedParams(){
+  var typeEl = document.getElementById('schedType');
+  var type = typeEl ? typeEl.value : '';
+  var daysEl = document.getElementById('schedDays');
+  var atmEl = document.getElementById('schedAtm');
+  var days = (daysEl && daysEl.value) || '7';
+  var atm = (atmEl && atmEl.value) || 'all';
+  if(type === 'outage') days = '1';
+  document.getElementById('schedParams').value = 'days=' + days + ', atm=' + atm;
+}
+function togglePeriodVisibility(){
+  var typeEl = document.getElementById('schedType');
+  var type = typeEl ? typeEl.value : '';
+  var wrap = document.getElementById('schedPeriodWrap');
+  // Daily Outage is a right-now snapshot — a period picker would be a lie.
+  if(wrap) wrap.style.display = type === 'outage' ? 'none' : '';
+}
+var _schedAtmsLoaded = false;
+function loadSchedAtms(){
+  if(_schedAtmsLoaded) return;
+  _schedAtmsLoaded = true;
+  fetch('/api/atms')
+    .then(function(r){ return r.json(); })
+    .then(function(atms){
+      if(!atms || atms.error || !atms.length) return;
+      var sel = document.getElementById('schedAtm');
+      if(!sel) return;
+      atms.forEach(function(a){
+        sel.add(new Option(a.id + ' — ' + a.branch, a.id));
+      });
+      rebuildCustomSelect(sel);
+    })
+    .catch(function(){});
+}
+// Rebuild the custom dropdown items after options change (base.js only
+// builds them once at page load).
+function rebuildCustomSelect(sel){
+  var wrap = sel.closest('.cust-select');
+  if(!wrap) return;
+  var trig = wrap.querySelector('.cust-trigger');
+  var drop = wrap.querySelector('.cust-drop');
+  if(!trig || !drop) return;
+  trig.textContent = sel.options[sel.selectedIndex].text;
+  drop.innerHTML = '';
+  if(sel.length > 6){
+    drop.classList.add('has-search');
+    var sw = document.createElement('div');
+    sw.className = 'cust-search';
+    var searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search…';
+    searchInput.setAttribute('autocomplete', 'off');
+    searchInput.addEventListener('click', function(e){ e.stopPropagation(); });
+    (function(si, dr){
+      si.addEventListener('input', function(){
+        var q = this.value.trim().toLowerCase(), visible = 0;
+        dr.querySelectorAll('.cust-opt').forEach(function(o){
+          var match = o.textContent.toLowerCase().indexOf(q) > -1;
+          o.style.display = match ? '' : 'none';
+          if(match) visible++;
+        });
+        var em = dr.querySelector('.cust-empty');
+        if(em) em.style.display = visible ? 'none' : 'block';
+      });
+    })(searchInput, drop);
+    sw.appendChild(searchInput);
+    drop.appendChild(sw);
+    var em = document.createElement('div');
+    em.className = 'cust-empty';
+    em.textContent = 'No matches';
+    em.style.display = 'none';
+    drop.appendChild(em);
+  }
+  for(var i = 0; i < sel.length; i++){
+    (function(idx){
+      var o = document.createElement('div');
+      o.className = 'cust-opt' + (idx === sel.selectedIndex ? ' sel' : '');
+      o.textContent = sel.options[idx].text;
+      o.addEventListener('click', function(){
+        sel.selectedIndex = idx;
+        trig.textContent = sel.options[idx].text;
+        drop.querySelectorAll('.cust-opt').forEach(function(c){ c.classList.remove('sel'); });
+        o.classList.add('sel');
+        trig.classList.remove('open');
+        drop.classList.remove('show');
+        sel.dispatchEvent(new Event('change'));
+      });
+      drop.appendChild(o);
+    })(i);
+  }
+}
 function closeScheduleModal(){
   document.getElementById('scheduleModal').classList.remove('show');
 }
@@ -594,6 +719,40 @@ function editSchedule(id){
     .then(function(r){ return r.json(); })
     .then(function(d){ openScheduleModal(d); })
     .catch(function(){ showToast('Error loading schedule', 'error'); });
+}
+function sendNowSchedule(id){
+  fetch('/admin/schedules/get?id=' + id)
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.error){ showToast('Schedule not found.', 'error'); return; }
+      document.getElementById('deleteModalTitle').textContent = 'Send Report Now';
+      document.getElementById('deleteModalText').textContent =
+        'Send "' + (d.name || 'this report') + '" (' + (d.format || '').toUpperCase() +
+        ') now to ' + (d.recipients || 'its recipients') + '?';
+      var btn = document.getElementById('deleteConfirmBtn');
+      btn.textContent = 'Send Now';
+      btn.onclick = function(){ doSendNow(id); };
+      document.getElementById('deleteModal').classList.add('show');
+    })
+    .catch(function(){ showToast('Error loading schedule', 'error'); });
+}
+function doSendNow(id){
+  var btn = document.getElementById('deleteConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  fetch('/admin/schedules/send-now', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+    body: JSON.stringify({id: id})})
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    closeDeleteModal();
+    btn.disabled = false; btn.textContent = 'Send Now';
+    showToast(d.message || (d.success ? 'Sending.' : 'Failed.'), d.success ? 'success' : 'error', 8000);
+  })
+  .catch(function(){
+    closeDeleteModal();
+    btn.disabled = false; btn.textContent = 'Send Now';
+    showToast('Network error. Please try again.', 'error', 8000);
+  });
 }
 </script>
 {% endblock %}
