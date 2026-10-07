@@ -56,6 +56,14 @@ SMTP_FROM = os.environ.get('SMTP_FROM', 'atm-monitor@dashenbank.com')
 SMTP_TIMEOUT = int(os.environ.get('SMTP_TIMEOUT', '15'))
 # Implicit TLS (port 465) for relays that mandate it; default stays STARTTLS.
 SMTP_USE_SSL = os.environ.get('SMTP_USE_SSL', 'false').lower() in ('1', 'true', 'yes', 'on')
+# Bank relays often present private-CA/self-signed certs that public trust
+# stores reject (CERTIFICATE_VERIFY_FAILED). Preferred: mount the bank CA
+# bundle and point SMTP_CA_FILE at it (verification stays ON). Escape hatch:
+# SMTP_INSECURE=true skips verification — acceptable on the bank LAN to keep
+# morning reports flowing, but log a warning every time and replace with the
+# CA file as soon as the team supplies it. Default is secure.
+SMTP_CA_FILE = os.environ.get('SMTP_CA_FILE', '')
+SMTP_INSECURE = os.environ.get('SMTP_INSECURE', 'false').lower() in ('1', 'true', 'yes', 'on')
 BASE_URL  = os.environ.get('BASE_URL', 'http://localhost:8888')
 # Internal generation URL: the scheduler runs INSIDE the portal container,
 # so it always reaches the app via loopback — never via the public BASE_URL
@@ -127,6 +135,18 @@ def _generate_report(report_type, fmt, days=7, atm='all'):
     return None, None, None
 
 
+def _smtp_context():
+    """TLS context for the relay: verified by default, bank CA if supplied,
+    unverified only under explicit SMTP_INSECURE (warns loudly)."""
+    if SMTP_INSECURE:
+        logger.warning('SMTP_INSECURE is set: relay certificate is NOT verified '
+                       '(bank LAN only — install the CA bundle and unset it)')
+        return ssl._create_unverified_context()
+    if SMTP_CA_FILE:
+        return ssl.create_default_context(cafile=SMTP_CA_FILE)
+    return ssl.create_default_context()
+
+
 def _send_email(recipients, subject, body, filename, filedata, mimetype):
     if not SMTP_HOST:
         logger.warning('SMTP not configured, skipping email')
@@ -158,12 +178,12 @@ def _send_email(recipients, subject, body, filename, filedata, mimetype):
 
         if SMTP_USE_SSL:
             server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT,
-                                      context=ssl.create_default_context())
+                                      context=_smtp_context())
         else:
             server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT)
         with server:
             if not SMTP_USE_SSL:
-                server.starttls(context=ssl.create_default_context())
+                server.starttls(context=_smtp_context())
             if SMTP_USER:
                 server.login(SMTP_USER, SMTP_PASS)
             server.send_message(msg)
