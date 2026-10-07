@@ -2,6 +2,15 @@
 {% block title %}Schedule Reports — ATM Monitoring{% endblock %}
 {% block extra_style %}
 .modal{background:#fff;border-radius:14px;width:540px;max-width:94vw;max-height:88vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.2);animation:modalIn .25s ease}
+/* Compact schedule modal: every field reachable without scrolling the modal
+   on normal desktop heights (dropdowns still flip up when space is short). */
+#scheduleModal .form-grid{gap:10px;padding:18px 24px 12px}
+#scheduleModal .form-group{margin-bottom:2px}
+#scheduleModal .form-group label{margin-bottom:4px}
+#scheduleModal .cron-help{margin-top:2px}
+#scheduleModal #recipientHints{margin-top:2px}
+#scheduleModal #recipientMatches{margin-top:4px}
+#scheduleModal .form-actions{padding:6px 24px 18px;margin-top:2px}
 @keyframes modalIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
 .modal-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid #EEF1F6}
 .modal-header h2{font-size:16px;font-weight:700;color:#012169}
@@ -608,7 +617,9 @@ function rebuildCustomSelect(sel){
   if(!trig || !drop) return;
   trig.textContent = sel.options[sel.selectedIndex].text;
   drop.innerHTML = '';
-  if(sel.length > 6){
+  // Search from a handful of options upward: at 1300 ATMs this list is long,
+  // and even today it saves scrolling past All + 4.
+  if(sel.length > 3){
     drop.classList.add('has-search');
     var sw = document.createElement('div');
     sw.className = 'cust-search';
@@ -655,6 +666,30 @@ function rebuildCustomSelect(sel){
     })(i);
   }
 }
+// Modal-aware flip for EVERY select in this modal (not just rebuilt ones):
+// after base.js positions the drop against the viewport, flip it upward
+// when it would spill past the modal's own bounds (the modal scrolls, so a
+// downward drop forces scrolling to reach options). Capture listener runs
+// before base's handler despite its stopPropagation.
+document.addEventListener('DOMContentLoaded', function(){
+  var modal = document.getElementById('scheduleModal');
+  if(!modal) return;
+  modal.addEventListener('click', function(e){
+    var trig = e.target.closest ? e.target.closest('.cust-trigger') : null;
+    if(!trig) return;
+    var wrap = trig.closest('.cust-select');
+    var drop = wrap ? wrap.querySelector('.cust-drop') : null;
+    if(!drop) return;
+    setTimeout(function(){
+      if(!drop.classList.contains('show')) return;
+      var box = modal.querySelector('.modal').getBoundingClientRect();
+      var dr = drop.getBoundingClientRect();
+      var flip = dr.bottom > box.bottom - 8 || dr.top < box.top + 8;
+      drop.classList.toggle('up', flip);
+      trig.classList.toggle('up', flip);
+    }, 0);
+  }, true);
+});
 function closeScheduleModal(){
   document.getElementById('scheduleModal').classList.remove('show');
 }
