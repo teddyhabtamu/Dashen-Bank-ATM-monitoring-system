@@ -1596,7 +1596,9 @@ def schedule_send_now():
                          daemon=True).start()
         log_action('SCHEDULE_SEND_NOW', f'Manually triggered "{name}" ({report_type}/{fmt})')
         return jsonify({'success': True,
-                        'message': f'Sending "{name}" now — check the inbox, then Last Run. The failing banner clears on success.'})
+                        'message': f'Sending "{name}" in background — Last Run advances only on success. '
+                                    'If it stays FAILED, the delivery failed too: check the log. '
+                                    'The failing banner clears on success.'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
