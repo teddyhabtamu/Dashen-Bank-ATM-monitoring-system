@@ -5,10 +5,6 @@
 .form-grid .full{grid-column:1/-1}
 .form-actions{padding:0 24px 24px;display:flex;gap:10px;justify-content:flex-end}
 .form-actions .btn{padding:10px 20px}
-/* Native selects on this page (see data-native): OS-rendered popups that
-   can never clip under table headers, unlike the custom dropdowns. */
-select.native-select{background:#fff;border:1px solid #E4E9F1;border-radius:6px;padding:8px 28px 8px 10px;font-size:12px;color:#0F172A;font-family:inherit;outline:none;cursor:pointer;max-width:100%}
-select.native-select:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
 /* The ATM filter's custom dropdown is clipped by the header otherwise
    (same class of bug the audit page already fixed). */
 .card-header{overflow:visible}
@@ -34,7 +30,7 @@ select.native-select:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,1
     <div class="form-grid">
       <div class="form-group">
         <label>ATM</label>
-        <select name="atm_id" required data-native class="native-select">
+        <select name="atm_id" required>
           <option value="">-- Select ATM --</option>
           {% for a in atms %}
           <option value="{{ a.atm_id }}" {% if a.atm_id == atm_filter %}selected{% endif %}>{{ a.atm_id }} — {{ a.atm_name }}</option>
@@ -43,7 +39,7 @@ select.native-select:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,1
       </div>
       <div class="form-group">
         <label>Cassette</label>
-        <select name="cassette" required data-native class="native-select">
+        <select name="cassette" required>
           <option value="1">Cassette 1</option>
           <option value="2">Cassette 2</option>
           <option value="3">Cassette 3</option>
@@ -70,7 +66,7 @@ select.native-select:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,1
     <span class="card-title">Recent loads{% if atm_filter %} — {{ atm_filter }}{% endif %}</span>
     <div>
       <form method="get" action="/admin/cash" style="display:flex;gap:8px;align-items:center">
-        <select name="atm_id" onchange="this.form.submit()" data-native class="native-select">
+        <select name="atm_id" onchange="this.form.submit()">
           <option value="">All ATMs</option>
           {% for a in atms %}
           <option value="{{ a.atm_id }}" {% if a.atm_id == atm_filter %}selected{% endif %}>{{ a.atm_id }}</option>
