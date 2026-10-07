@@ -124,7 +124,7 @@
   var el3 = document.getElementById('faultChart');
   if(el3) window.faultChart = new Chart(el3, {type:'bar',
     data:{labels:{{ chart.fault_labels|tojson }}, datasets:[{label:'Count', data:{{ chart.fault_data|tojson }},
-      backgroundColor:'#012169'}]}, options:Object.assign({}, base, {scales:{y:{beginAtZero:true, ticks:{precision:0}}}}, plugins:{legend:{display:false}}})});
+      backgroundColor:'#012169'}]}, options:Object.assign({}, base, {scales:{y:{beginAtZero:true, ticks:{precision:0}}}, plugins:{legend:{display:false}}})});
 })();
 </script>
 <script>
@@ -137,11 +137,11 @@
   var INTERVAL = 180000, BACKOFF_MAX = 1800000;
   function esc(s){ return String(s == null ? '—' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function fmtCash(n){ return Number(n || 0).toLocaleString('en-US', {maximumFractionDigits: 0}); }
-  function stamp(ok){
+  function stamp(ok, err){
     var el = document.getElementById('liveStamp');
     if(!el) return;
-    if(ok){ el.textContent = 'Live · updated ' + new Date().toLocaleTimeString('en-ET',{hour12:false}); el.style.color = ''; }
-    else { el.textContent = 'Update failed — retrying…'; el.style.color = '#DC2626'; }
+    if(ok){ el.textContent = 'Live · updated ' + new Date().toLocaleTimeString('en-ET',{hour12:false}); el.style.color = ''; el.title = ''; }
+    else { el.textContent = 'Update failed — retrying…'; el.style.color = '#DC2626'; el.title = String((err && err.message) || err || ''); }
   }
   function cycleColors(c, n){
     if(!Array.isArray(c)) return c;
@@ -199,7 +199,7 @@
       setChart(window.errChart, c.err_labels, c.err_data);
       setChart(window.faultChart, c.fault_labels, c.fault_data);
       fails = 0; stamp(true);
-    }catch(e){ fails++; stamp(false); }
+    }catch(e){ fails++; stamp(false, e); }
     busy = false;
     schedule();
   }
