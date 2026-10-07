@@ -20,6 +20,14 @@
 .toggle-switch input:checked+.toggle-slider:before{transform:translateX(16px)}
 .cron-help{font-size:10px;color:#94A3B8;margin-top:4px;line-height:1.5}
 .cron-help code{background:#F1F5F9;padding:1px 5px;border-radius:3px;font-size:10px}
+/* ── Outlook-style recipient tags ── */
+.recip-editor{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid #E4E9F1;border-radius:8px;padding:6px 8px;cursor:text;background:#fff}
+.recip-editor:focus-within{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
+.recip-tags{display:flex;flex-wrap:wrap;gap:6px}
+.recip-tag{display:inline-flex;align-items:center;gap:6px;background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF;border-radius:16px;padding:3px 6px 3px 10px;font-size:12px;max-width:280px}
+.recip-tag span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recip-tag button{border:none;background:#DBEAFE;color:#1E40AF;border-radius:50%;width:18px;height:18px;line-height:1;cursor:pointer;font-size:13px;font-weight:700;padding:0}
+#recipInput{border:none;outline:none;flex:1;min-width:140px;font-size:13px;font-family:inherit;padding:4px 2px}
 
 /* ── Kebab menu ── */
 .kebab-wrap{position:relative;text-align:center}
@@ -250,7 +258,11 @@
         </div>
         <div class="form-group full">
           <label>Recipients</label>
-          <input type="text" name="recipients" id="schedRecipients" required placeholder="manager@bank.com, ops@bank.com" autocomplete="off" oninput="suggestRecipients(this.value)">
+          <div class="recip-editor" id="recipEditor" onclick="document.getElementById('recipInput').focus()">
+            <div class="recip-tags" id="recipTags"></div>
+            <input type="text" id="recipInput" placeholder="Type an address, then comma or Enter…" autocomplete="off" oninput="suggestRecipients(this.value)">
+          </div>
+          <input type="hidden" name="recipients" id="schedRecipients">
           <div id="recipientHints" style="font-size:11px;color:#64748B;margin-top:4px">Type any address, or pick a system user below.</div>
           <div id="recipientMatches" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
         </div>
@@ -351,6 +363,70 @@ function syncCustomSelects(){
 }
 
 var _recipTimer = null;
+var _recipTags = [];
+function _recipSync(){
+  document.getElementById('schedRecipients').value = _recipTags.join(', ');
+}
+function _recipValid(email){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
+function renderRecipTags(){
+  var box = document.getElementById('recipTags');
+  box.innerHTML = '';
+  _recipTags.forEach(function(email, idx){
+    var chip = document.createElement('span');
+    chip.className = 'recip-tag';
+    var label = document.createElement('span');
+    label.textContent = email;
+    var x = document.createElement('button');
+    x.type = 'button';
+    x.textContent = '×';
+    x.title = 'Remove';
+    x.onclick = function(){ _recipTags.splice(idx, 1); _recipSync(); renderRecipTags(); };
+    chip.appendChild(label);
+    chip.appendChild(x);
+    box.appendChild(chip);
+  });
+}
+function addRecipTag(raw){
+  var email = String(raw || '').trim().replace(/[;,]+$/, '').trim();
+  if(!email) return false;
+  if(!_recipValid(email)){ showToast('"' + email + '" is not a valid email address.', 'error', 5000); return false; }
+  if(_recipTags.indexOf(email) === -1) _recipTags.push(email);
+  _recipSync(); renderRecipTags();
+  return true;
+}
+function commitRecipInput(){
+  var input = document.getElementById('recipInput');
+  var parts = input.value.split(/[,;\n]+/);
+  var ok = false;
+  parts.forEach(function(p){ if(addRecipTag(p)) ok = true; });
+  input.value = '';
+  document.getElementById('recipientMatches').innerHTML = '';
+  return ok;
+}
+document.addEventListener('DOMContentLoaded', function(){
+  var input = document.getElementById('recipInput');
+  if(!input) return;
+  input.addEventListener('keydown', function(e){
+    if(e.key === 'Enter' || e.key === ',' || e.key === ';' || e.key === 'Tab'){
+      if(input.value.trim()){ e.preventDefault(); commitRecipInput(); }
+    } else if(e.key === 'Backspace' && !input.value && _recipTags.length){
+      _recipTags.pop(); _recipSync(); renderRecipTags();
+    }
+  });
+  input.addEventListener('paste', function(){
+    setTimeout(commitRecipInput, 0);
+  });
+  input.addEventListener('blur', function(){ if(input.value.trim()) commitRecipInput(); });
+  var form = document.getElementById('scheduleForm');
+  if(form) form.addEventListener('submit', function(e){
+    commitRecipInput();
+    if(!_recipTags.length){
+      e.preventDefault();
+      showToast('Add at least one recipient.', 'error', 5000);
+      input.focus();
+    }
+  });
+});
 function suggestRecipients(q){
   clearTimeout(_recipTimer);
   var box = document.getElementById('recipientMatches');
@@ -368,11 +444,9 @@ function suggestRecipients(q){
         b.style.cssText = 'padding:4px 10px;font-size:11px';
         b.textContent = u.username + ' <' + u.email + '>';
         b.onclick = function(){
-          var input = document.getElementById('schedRecipients');
-          var parts = input.value.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
-          parts[parts.length - 1] = u.email;
-          input.value = parts.join(', ') + ', ';
-          input.focus();
+          addRecipTag(u.email);
+          document.getElementById('recipInput').value = '';
+          document.getElementById('recipInput').focus();
           box.innerHTML = '';
         };
         box.appendChild(b);
@@ -392,6 +466,9 @@ function openScheduleModal(data) {  data = data || {};
   document.getElementById('schedPreset').value = '';
   document.getElementById('cronDescription').textContent = describeCron(data.schedule || '');
   document.getElementById('schedRecipients').value = data.recipients || '';
+  _recipTags = String(data.recipients || '').split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+  renderRecipTags();
+  document.getElementById('recipInput').value = '';
   document.getElementById('schedParams').value = data.params || '';
   document.getElementById('scheduleModal').classList.add('show');
   setTimeout(syncCustomSelects, 10);
