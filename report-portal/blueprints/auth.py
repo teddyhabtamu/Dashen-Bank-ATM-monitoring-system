@@ -390,7 +390,20 @@ def login():
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def profile():
     """Self-service account page (password change). All roles."""
+    email = ''
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT email FROM app_users WHERE username = %s",
+                        (session.get('username', ''),))
+            row = cur.fetchone()
+            cur.close()
+            email = (row[0] if row and row[0] else '')
+    except Exception:
+        pass
     return render_template('profile.html', username=session.get('username', ''),
+                           role=session.get('role', ''),
+                           email=email,
                            must_change=bool(session.get('must_change_pw')))
 
 

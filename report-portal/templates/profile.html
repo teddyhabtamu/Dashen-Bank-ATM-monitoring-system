@@ -19,7 +19,7 @@ input.field-bad{border-color:#FCA5A5 !important}
     {% if must_change %}
     <p class="page-subtitle" style="color:#B45309">You must change the password you were given before continuing.</p>
     {% else %}
-    <p class="page-subtitle">Signed in as <strong>{{ username }}</strong> — update your password anytime.</p>
+    <p class="page-subtitle">Signed in as <strong>{{ username }}</strong>{% if role %} ({{ role|capitalize }}){% endif %}{% if email %} · {{ email }}{% endif %} — update your password anytime.</p>
     {% endif %}
   </div>
 </div>
