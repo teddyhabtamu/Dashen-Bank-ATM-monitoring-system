@@ -95,13 +95,14 @@
     <div class="card-header"><h2>Hosts ({{ hosts|length }})</h2></div>
     <div class="mc-table-wrap">
       <table class="mc-table">
-        <thead><tr><th>Host</th><th>Name</th><th>IP</th><th>State</th></tr></thead>
+        <thead><tr><th>Host</th><th>Name</th><th>IP</th><th>Groups</th><th>State</th></tr></thead>
         <tbody id="hostBody">
           {% for h in hosts %}
           <tr>
             <td style="font-family:monospace">{{ h.host }}</td>
             <td>{{ h.name }}</td>
             <td style="font-family:monospace">{{ h.ip }}</td>
+            <td style="font-size:11px;color:#64748B">{{ h.groups }}</td>
             <td>
               {% if h.state == 'UP' %}<span class="host-up">● UP</span>
               {% elif h.state == 'DOWN' %}<span class="host-down">● DOWN</span>
@@ -109,7 +110,7 @@
             </td>
           </tr>
           {% else %}
-          <tr class="empty-row"><td colspan="4">No monitored hosts found.{% if error %} Zabbix may be unreachable.{% endif %}</td></tr>
+          <tr class="empty-row"><td colspan="5">No monitored hosts found.{% if error %} Zabbix may be unreachable.{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -162,8 +163,8 @@
           var st = h.state === 'UP' ? '<span class="host-up">● UP</span>'
                  : h.state === 'DOWN' ? '<span class="host-down">● DOWN</span>' : '<span class="host-unk">● UNKNOWN</span>';
           return '<tr><td style="font-family:monospace">' + esc(h.host) + '</td><td>' + esc(h.name) +
-            '</td><td style="font-family:monospace">' + esc(h.ip) + '</td><td>' + st + '</td></tr>';
-        }).join('') || '<tr class="empty-row"><td colspan="4">No monitored hosts found.</td></tr>';
+            '</td><td style="font-family:monospace">' + esc(h.ip) + '</td><td style="font-size:11px;color:#64748B">' + esc(h.groups) + '</td><td>' + st + '</td></tr>';
+        }).join('') || '<tr class="empty-row"><td colspan="5">No monitored hosts found.</td></tr>';
       }
       var eb = document.getElementById('mcErr');
       if(eb) eb.style.display = 'none';

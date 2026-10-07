@@ -62,8 +62,10 @@ def _cached_zabbix():
     try:
         with ThreadPoolExecutor(max_workers=2) as ex:
             fh = ex.submit(_zbx_call, 'host.get', {
-                'output': ['hostid', 'host', 'name', 'status', 'available'],
+                'output': ['hostid', 'host', 'name', 'status', 'available',
+                           'snmp_available', 'jmx_available', 'ipmi_available'],
                 'selectInterfaces': ['ip'],
+                'selectGroups': ['name'],
                 'sortfield': 'host',
             }, auth)
             fp = ex.submit(_zbx_call, 'problem.get', {
@@ -140,17 +142,25 @@ def _collect(severity, ack):
         error = 'Cannot reach Zabbix API — showing last known state is unavailable. Check that zabbix-web is running.'
         raw_hosts, raw_problems = [], []
     # ── Hosts ──
+    # Interface-aware state: our ATM hosts are SNMP-polled (type 2), so the
+    # agent-only `available` field sits at 0/unknown forever. UP if ANY
+    # interface reports 1, DOWN if any reports 2 with none up, else UNKNOWN.
     for h in raw_hosts:
         if str(h.get('status')) != '0':
             continue  # unmonitored — not part of the fleet view
-        avail = str(h.get('available', '0'))
+        signals = [str(h.get(k, '0')) for k in
+                   ('available', 'snmp_available', 'jmx_available', 'ipmi_available')]
+        state = ('UP' if '1' in signals
+                 else 'DOWN' if '2' in signals else 'UNKNOWN')
+        groups = ', '.join(g.get('name', '') for g in (h.get('groups') or []) if g.get('name'))
         hosts.append({
             'hostid': h.get('hostid'),
             'host': h.get('host'),
             'name': h.get('name') or h.get('host'),
             'ip': (h.get('interfaces') or [{}])[0].get('ip', '—'),
-            'available': avail,
-            'state': 'UP' if avail == '1' else ('DOWN' if avail == '2' else 'UNKNOWN'),
+            'groups': groups or '—',
+            'available': signals[0],
+            'state': state,
         })
     summary['hosts'] = len(hosts)
     summary['up'] = sum(1 for h in hosts if h['state'] == 'UP')
