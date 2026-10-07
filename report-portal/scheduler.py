@@ -224,15 +224,14 @@ def _email_body(report_type, fmt, days, atm):
       <!-- ── MAIN CARD ── -->
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(1,33,105,.08)">
 
-        <!-- ── HEADER ── -->
+        <!-- ── HEADER (compact: internal mail, not marketing) ── -->
         <tr>
-          <td style="background:#012169;padding:32px 40px 24px">
+          <td style="background:#012169;padding:20px 40px 16px">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td align="center">
-                  <img src="{logo_url}" alt="Dashen Bank" style="border:0;display:block;margin:0 auto 12px;width:120px;max-width:100%;height:auto">
-                  <div style="font-size:20px;font-weight:700;color:#fff;letter-spacing:-.3px">Dashen Bank S.C.</div>
-                  <div style="font-size:11px;color:rgba(255,255,255,.5);font-weight:500;text-transform:uppercase;letter-spacing:1.5px;margin-top:4px">ATM Monitoring System</div>
+                  <img src="{logo_url}" alt="Dashen Bank" style="border:0;display:block;margin:0 auto 8px;width:76px;max-width:100%;height:auto">
+                  <div style="font-size:16px;font-weight:700;color:#fff;letter-spacing:-.2px">Dashen Bank S.C. <span style="font-weight:400;color:rgba(255,255,255,.65);font-size:11px;letter-spacing:1px">&nbsp;·&nbsp; ATM MONITORING SYSTEM</span></div>
                 </td>
               </tr>
             </table>
