@@ -641,7 +641,12 @@ def board():
 def detail(ticket_id):
     error = None
     ticket, timeline, ticket_files = None, [], []
-    hit = _get_detail(ticket_id)
+    # ?fresh=1 bypasses the read cache. Needed because the cache is
+    # per-process and we run 3 gunicorn workers: the POST invalidates only
+    # its own worker, so the auto-reload GET can land on a sibling still
+    # holding the pre-reply snapshot (message seemingly missing until the
+    # next refresh). Fresh fetch still re-populates the cache.
+    hit = None if request.args.get('fresh') == '1' else _get_detail(ticket_id)
     if hit is not None:
         ticket, timeline, ticket_files = hit['ticket'], hit['timeline'], hit['ticket_files']
         token = None

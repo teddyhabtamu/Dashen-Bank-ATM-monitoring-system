@@ -203,7 +203,7 @@
       headers: {'X-Requested-With': 'XMLHttpRequest'}})
     .then(function(r){ return r.json(); })
     .then(function(data){
-      if(data.success){ showToast(data.message, 'success'); setTimeout(function(){ location.reload(); }, 900); }
+      if(data.success){ showToast(data.message, 'success'); setTimeout(function(){ location.replace(window.location.pathname + '?fresh=1'); }, 900); }
       else { showToast(data.message || 'Action failed.', 'error'); btn.disabled = false; btn.textContent = btn.dataset.label; }
     })
     .catch(function(){ showToast('Network error.', 'error'); btn.disabled = false; });
@@ -215,7 +215,7 @@
       body: body ? JSON.stringify(body) : '{}'})
     .then(function(r){ return r.json(); })
     .then(function(data){
-      if(data.success){ showToast(data.message, 'success'); setTimeout(function(){ location.reload(); }, 900); }
+      if(data.success){ showToast(data.message, 'success'); setTimeout(function(){ location.replace(window.location.pathname + '?fresh=1'); }, 900); }
       else { showToast(data.message || 'Action failed.', 'error'); if(btn){ btn.disabled = false; btn.textContent = btn.dataset.label; } }
     })
     .catch(function(){ showToast('Network error.', 'error'); if(btn){ btn.disabled = false; } });
