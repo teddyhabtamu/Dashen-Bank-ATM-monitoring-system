@@ -45,6 +45,41 @@ DISTRICT_PROXY = {
 }
 
 
+def parse_snmp_version(raw):
+    """Coerce a DB-or-CSV snmp_version to int (default 2).
+
+    DB returns int, CSV returns str, both may be empty/None/garbage.
+    Pure function — covered by tests/test_sync_atms.py (bulk day must
+    never die mid-loop on a column type again).
+    """
+    if raw is None:
+        return 2
+    text = str(raw).strip()
+    try:
+        return int(text or 2)
+    except ValueError:
+        return 2
+
+
+def resolve_host_key(row):
+    """Zabbix technical name: atm_id, falling back to terminal_id."""
+    return (row.get('atm_id', '') or '').strip() or \
+           (row.get('terminal_id', '') or '').strip()
+
+
+def select_templates(vendor, ncr_tid, grg_tid, wmi_tid):
+    """(template_ids, vendor_group_name) for a row, or (None, None) to skip.
+
+    NCR hosts take the WMI Parts template alongside SNMP (agent items);
+    GRG is SNMP-only. Unknown vendor or missing vendor template → skip.
+    """
+    if vendor == 'NCR' and ncr_tid:
+        return ([ncr_tid] + ([wmi_tid] if wmi_tid else []), 'ATM-NCR')
+    if vendor == 'GRG' and grg_tid:
+        return ([grg_tid], 'ATM-GRG')
+    return (None, None)
+
+
 def csv_atms():
     atms = []
     with open(CSV_PATH, newline='') as f:
@@ -300,19 +335,14 @@ def do_apply(atms, import_templates=False):
     skipped = 0
     no_ip = 0
     for a in atms:
-        host = a.get('atm_id', '').strip() or a.get('terminal_id', '').strip()
-        name = a.get('atm_name', '').strip() or host
-        ip = a.get('ip_address', '').strip()
-        vendor = a.get('vendor', '').strip()
+        host = resolve_host_key(a)
+        name = (a.get('atm_name', '') or '').strip() or host
+        ip = (a.get('ip_address', '') or '').strip()
+        vendor = (a.get('vendor', '') or '').strip()
         community = (a.get('snmp_community', '') or '').strip() or os.environ.get('ATM_SNMP_COMMUNITY', 'dashen_sim')
-        # DB returns snmp_version as int, CSV as str — coerce before strip
-        # (bulk day would otherwise die mid-run after partial creates).
-        _snmp_v = a.get('snmp_version', '')
-        _snmp_v = str(_snmp_v).strip() if _snmp_v is not None else ''
-        try:
-            version = int(_snmp_v or 2)
-        except ValueError:
-            version = 2
+        # DB returns snmp_version as int, CSV as str — coerce via helper
+        # (bulk day must never die mid-run after partial creates).
+        version = parse_snmp_version(a.get('snmp_version', ''))
 
         snmp_v3 = None
         if version == 3:
@@ -341,18 +371,14 @@ def do_apply(atms, import_templates=False):
             skipped += 1
             continue
 
-        # Select template and vendor group.
+        # Select template and vendor group (pure helper — see tests).
         # NCR hosts also take the WMI Parts template (agent items) — without
         # it bulk-created NCR hosts would silently miss all 41 part items.
-        if vendor == 'NCR' and ncr_tid:
-            template_ids = [ncr_tid] + ([wmi_tid] if wmi_tid else [])
-            vgroup = grp_ncr
-        elif vendor == 'GRG' and grg_tid:
-            template_ids = [grg_tid]
-            vgroup = grp_grg
-        else:
+        template_ids, vgroup_name = select_templates(vendor, ncr_tid, grg_tid, wmi_tid)
+        if template_ids is None:
             skipped += 1
             continue
+        vgroup = grp_ncr if vgroup_name == 'ATM-NCR' else grp_grg
 
         d = a.get('district', '') or 'UNKNOWN'
         group_ids = [grp_all, vgroup, district_groups.get(d, grp_all)]
