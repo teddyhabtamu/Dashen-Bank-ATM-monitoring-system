@@ -420,6 +420,25 @@ def _clean_html(html, ticket_id=None):
     return ''.join(p.out).strip()
 
 
+def _is_portal_written(raw_content):
+    """Did this timeline entry originate from this portal (either side of
+    the glass)? Every message the portal writes carries the product name —
+    '— actor (ATM Monitoring System)', 'via ATM Monitoring System',
+    'from ATM Monitoring System by …'. Sides therefore mean TEAMS, not
+    individuals: right/blue = our ops portal, left/white = vendor techs
+    writing directly in GLPI (plus system entries).
+
+    The old test demanded the exact parenthesized signature, so our own
+    'Reassigned from … by …' and '(attachment … via …)' lines rendered as
+    the other side. Bare-substring covers all portal templates; checked
+    against RAW content (cleaned HTML may reformat spacing).
+    """
+    try:
+        return 'ATM Monitoring System' in (raw_content or '')
+    except Exception:
+        return False
+
+
 def _subitems(token, ticket_id, sub):
     ok, data = _api(token, 'GET', f'Ticket/{ticket_id}/{sub}/', None)
     if ok and isinstance(data, list):
@@ -672,10 +691,10 @@ def detail(ticket_id):
                             'author': _user_label(token, f.get('users_id'), names),
                             'date': _fmt_ts(f.get('date_creation') or f.get('date')),
                             'private': bool(int(f.get('is_private') or 0)),
-                            'html': html,
-                            'mine': '(ATM Monitoring System)' in html,
-                            'files': [],
-                        })
+                        'html': html,
+                        'mine': _is_portal_written(f.get('content') or ''),
+                        'files': [],
+                    })
                 timeline.extend(followup_rows)
                 for s in _subitems(token, ticket_id, 'ITILSolution'):
                     timeline.append({
@@ -685,7 +704,7 @@ def detail(ticket_id):
                         'date': _fmt_ts(s.get('date_creation') or s.get('date')),
                         'private': False,
                         'html': _clean_html(s.get('content') or '', ticket_id),
-                        'mine': False,
+                        'mine': _is_portal_written(_clean_html(s.get('content') or '', ticket_id)),
                         'files': [],
                     })
                 for k in _subitems(token, ticket_id, 'TicketTask'):
@@ -698,7 +717,7 @@ def detail(ticket_id):
                         'html': _clean_html(
                             f"<b>{k.get('taskcategories_id') or 'Task'}</b><br>" + (k.get('content') or ''),
                             ticket_id),
-                        'mine': False,
+                        'mine': _is_portal_written(k.get('content') or ''),
                         'files': [],
                     })
                 # ITILFollowup + TicketFollowup endpoints serve the same rows
