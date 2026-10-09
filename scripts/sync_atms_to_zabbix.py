@@ -305,8 +305,12 @@ def do_apply(atms, import_templates=False):
         ip = a.get('ip_address', '').strip()
         vendor = a.get('vendor', '').strip()
         community = (a.get('snmp_community', '') or '').strip() or os.environ.get('ATM_SNMP_COMMUNITY', 'dashen_sim')
+        # DB returns snmp_version as int, CSV as str — coerce before strip
+        # (bulk day would otherwise die mid-run after partial creates).
+        _snmp_v = a.get('snmp_version', '')
+        _snmp_v = str(_snmp_v).strip() if _snmp_v is not None else ''
         try:
-            version = int(a.get('snmp_version', '').strip() or 2)
+            version = int(_snmp_v or 2)
         except ValueError:
             version = 2
 
