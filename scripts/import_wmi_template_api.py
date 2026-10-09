@@ -119,7 +119,9 @@ def main():
                 'type': 18, 'value_type': 3, 'delay': '0',
                 'history': '7d', 'trends': '0',
                 'master_itemid': mid,
-                'preprocessing': [{'type': 5,
+                # Preprocessing type 12 = JSONPath (5 is Regular expression,
+                # whose two-parameter shape is what the API just rejected).
+                'preprocessing': [{'type': 12,
                                    'params': f'$.parts["{part}"].{fname}'}]}, auth)
         made += 1
     print(f'Done: {made} items created, {len(have)} already present '
