@@ -1,12 +1,12 @@
 <?xml version="1.0" ?>
 <zabbix_export>
   <version>6.4</version>
-  <groups>
-    <group>
+  <template_groups>
+    <template_group>
       <uuid>f31d97d4-a282-5eb4-9a1e-7c50cbc6956e</uuid>
       <name>Templates/ATMs</name>
-    </group>
-  </groups>
+    </template_group>
+  </template_groups>
   <templates>
     <template>
       <uuid>1c552005-581a-54ea-9444-580807f33ef9</uuid>

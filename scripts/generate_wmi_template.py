@@ -75,8 +75,8 @@ def main():
     ET.SubElement(zbx, "version").text = "6.4"
     # NOTE: no <date> element — Zabbix 6.4's importer rejects it
     # (Invalid tag "/zabbix_export": unexpected tag "date").
-    groups = ET.SubElement(zbx, "groups")
-    g = ET.SubElement(groups, "group")
+    groups = ET.SubElement(zbx, "template_groups")
+    g = ET.SubElement(groups, "template_group")
     _el(g, "uuid", _uid("group"))
     _el(g, "name", TEMPLATE_GROUP)
     templates = ET.SubElement(zbx, "templates")
