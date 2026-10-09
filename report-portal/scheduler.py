@@ -11,7 +11,13 @@ from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
 from email import encoders
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta
+
+# Bank wall-clock: cron expressions mean EAST AFRICA TIME (no DST there —
+# fixed +3 forever). Evaluating in UTC silently shifted every schedule by
+# 3 hours (0 7 * * * fired at 10:00 EAT). All cron matching and next-run
+# math below uses EAT; second-level dedupe stays in UTC instants.
+EAT = timezone(timedelta(hours=3))
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from db import get_db
@@ -465,7 +471,7 @@ def _calc_next_run(schedule):
         parts = schedule.split()
         if len(parts) == 5:
             trigger = CronTrigger.from_crontab(schedule)
-            return trigger.get_next_fire_time(None, datetime.now(timezone.utc))
+            return trigger.get_next_fire_time(None, datetime.now(EAT))
     except Exception:
         pass
     return None
@@ -504,8 +510,9 @@ def _run_retention():
 
 def _check_schedules():
     try:
-        now = datetime.now(timezone.utc)
-        if now.hour == 0:
+        now_utc = datetime.now(timezone.utc)
+        now = now_utc.astimezone(EAT)
+        if now_utc.hour == 0:
             _run_retention()
         with get_db() as conn:
             cur = conn.cursor()
@@ -520,7 +527,7 @@ def _check_schedules():
             try:
                 if not _cron_matches(cron_expr, now):
                     continue
-                if last_run and (now - last_run.replace(tzinfo=timezone.utc)).total_seconds() < 60:
+                if last_run and (now_utc - last_run.replace(tzinfo=timezone.utc)).total_seconds() < 60:
                     continue
                 with _running_lock:
                     if rid in _running:

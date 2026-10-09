@@ -551,7 +551,7 @@ function describeCron(cron){
   }
   if(hour !== '*' && min === '0') parts.push('on the hour');
   if(dom === '*' && dow === '*' && mon === '*') parts.push('every day');
-  return parts.length ? 'Runs ' + parts.join(', ') + '.' : '';
+  return parts.length ? 'Runs ' + parts.join(', ') + ' (EAT).' : '';
 }
 
 function parseSchedParams(str){
