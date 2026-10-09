@@ -4,9 +4,13 @@ WMI part-state collector (scripts/atm-wmi-collector.ps1).
 
 One master item (atm.parts, full JSON) + JSONPath dependents per part:
 part_status for every part, replenishment_status for replenishable ones.
-No triggers: PartStatus/ReplenishmentStatus code semantics are not yet
+No VALUE triggers: PartStatus/ReplenishmentStatus code semantics are not yet
 calibrated against observed states — alerting on unknown codes would page
-on healthy ATMs. Triggers come after one observation cycle (see runbook).
+on healthy ATMs, and even disabled guessed triggers are banned (they become
+pages the day anyone enables template triggers wholesale). Value triggers
+come after RDP fault drills prove the mappings (see runbook). The single
+allowed trigger — master nodata(10m), semantics-free collector health — is
+ensured by import_wmi_template_api.py, not here.
 
 Part list = live union from ATM-TEST-NCR 2026-10-01. Rerun to regenerate;
 UUIDs are deterministic (uuid5), so re-imports update instead of duplicating.

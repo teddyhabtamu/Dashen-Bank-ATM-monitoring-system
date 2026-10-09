@@ -75,6 +75,28 @@ def wanted_items():
                    f'atm.part.replenishment_status[{part}]', ('replenishment_status', part))
 
 
+def ensure_master_nodata_trigger(tid, auth):
+    # Semantics-free health only: fires when the collector goes blind.
+    # Deliberately the ONLY trigger here — value thresholds on part_status /
+    # replenishment_status are uncalibrated guesses until RDP fault drills
+    # prove them (see runbook). Guesses live in docs as UNPROVEN, never as
+    # triggers (disabled or otherwise): a disabled guess still becomes a page
+    # the day anyone enables template triggers wholesale.
+    desc = 'ATM Parts collector — no data for 10m (agent/collector down)'
+    found = call('trigger.get', {'templateids': [tid],
+                                 'filter': {'description': [desc]},
+                                 'output': ['triggerid']}, auth)
+    if found:
+        print(f'Health trigger present ({found[0]["triggerid"]})')
+        return
+    expr = '{%s:atm.parts.nodata(10m)}=1' % TEMPLATE_NAME
+    nid = call('trigger.create', {'description': desc,
+                                  'expression': expr,
+                                  'priority': 2,
+                                  'status': 0}, auth)['triggerids'][0]
+    print(f'Health trigger created ({nid})')
+
+
 def main():
     recreate = '--recreate' in sys.argv
     auth = call('user.login', {'username': ZBX_USER, 'password': ZBX_PASS})
@@ -152,6 +174,7 @@ def main():
     print(f'Done: {made} items created, {fixed} paths repaired, '
           f'{len(have) - fixed} already present '
           f'({len(have) + made} total, want {1 + sum(1 + int(r) for _, r in PARTS)})')
+    ensure_master_nodata_trigger(tid, auth)
     call('user.logout', [], auth)
     return 0
 
