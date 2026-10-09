@@ -83,12 +83,12 @@ def main():
         tid = existing[0]['templateid']
         print(f'Template exists: {TEMPLATE_NAME} ({tid}) — verifying items')
     else:
-    groups = call('hostgroup.get', {'filter': {'name': [TEMPLATE_GROUP]},
-                                    'output': ['groupid']}, auth)
-    if not groups:
-        print(f'ERROR: host group "{TEMPLATE_GROUP}" not found — refusing to create one (see comment above).')
-        return 1
-    gid = groups[0]['groupid']
+        groups = call('hostgroup.get', {'filter': {'name': [TEMPLATE_GROUP]},
+                                        'output': ['groupid']}, auth)
+        if not groups:
+            print(f'ERROR: host group "{TEMPLATE_GROUP}" not found — refusing to create one (see comment above).')
+            return 1
+        gid = groups[0]['groupid']
         tid = call('template.create', {'host': TEMPLATE_NAME, 'name': TEMPLATE_NAME,
                                        'groups': [{'groupid': gid}]}, auth)['templateids'][0]
         print(f'Created template {TEMPLATE_NAME} ({tid})')
