@@ -83,10 +83,13 @@ def main():
         tid = existing[0]['templateid']
         print(f'Template exists: {TEMPLATE_NAME} ({tid}) — verifying items')
     else:
-        groups = call('hostgroup.get', {'filter': {'name': [TEMPLATE_GROUP]},
-                                        'output': ['groupid']}, auth)
+        # NOTE: templates link to TEMPLATE groups (templategroup API), not host
+        # groups — same numeric ID realm confusion burned two rounds: API-created
+        # host groups return IDs that template.create rejects as unreferenceable.
+        groups = call('templategroup.get', {'filter': {'name': [TEMPLATE_GROUP]},
+                                           'output': ['groupid']}, auth)
         if not groups:
-            print(f'ERROR: host group "{TEMPLATE_GROUP}" not found — refusing to create one (see comment above).')
+            print(f'ERROR: template group "{TEMPLATE_GROUP}" not found.')
             return 1
         gid = groups[0]['groupid']
         tid = call('template.create', {'host': TEMPLATE_NAME, 'name': TEMPLATE_NAME,
