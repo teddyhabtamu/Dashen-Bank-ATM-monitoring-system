@@ -89,7 +89,11 @@ def ensure_master_nodata_trigger(tid, auth):
     if found:
         print(f'Health trigger present ({found[0]["triggerid"]})')
         return
-    expr = '{%s:atm.parts.nodata(10m)}=1' % TEMPLATE_NAME
+    # 6.4 trigger.create speaks the functional syntax (last(/host/key),
+    # nodata(/host/key,10m)) — the old {host:key.func()} brace form dies at
+    # char 0 (proven live: nodata AND last() both rejected). Doc example:
+    # "last(/Linux server/system.cpu.load[percpu,avg1])>5".
+    expr = 'nodata(/%s/atm.parts,10m)=1' % TEMPLATE_NAME
     nid = call('trigger.create', {'description': desc,
                                   'expression': expr,
                                   'priority': 2,
