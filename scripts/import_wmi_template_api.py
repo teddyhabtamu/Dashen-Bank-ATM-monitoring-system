@@ -53,9 +53,16 @@ def call(method, params, auth=None):
 
 
 def path_for(part, field):
-    # Pure bracket notation: the dotted form ($.parts["X"].y) dies in
-    # Zabbix's parser with "invalid control character" on spaced names.
+    # Kept for reference/back-compat only. Zabbix 6.4's JSONPath cannot
+    # address spaced keys in ANY bracket form (proven live: single AND
+    # double quotes die with "invalid control character" at the first
+    # space). Dependents use JavaScript preprocessing instead (see below).
     return f'$["parts"]["{part}"]["{field}"]'
+
+
+def js_for(part, field):
+    return (f'var j = JSON.parse(value);\n'
+            f'return j.parts["{part}"].{field};')
 
 
 def wanted_items():
@@ -116,15 +123,14 @@ def main():
                 mid = have[key]['itemid']
                 continue
             fname, part = field
-            want = path_for(part, fname)
-            cur = (have[key].get('preprocessing') or [{}])[0].get('params')
-            if cur != want:
-                call('item.update', {
-                    'itemid': have[key]['itemid'],
-                    'preprocessing': [{'type': 12, 'params': want,
-                                       'error_handler': 0,
-                                       'error_handler_params': ''}]}, auth)
-                fixed += 1
+            # Converge every dependent to the JavaScript step (see above):
+            # anything else on these keys is a leftover of the JSONPath era.
+            call('item.update', {
+                'itemid': have[key]['itemid'],
+                'preprocessing': [{'type': 21, 'params': js_for(part, fname),
+                                   'error_handler': 0,
+                                   'error_handler_params': ''}]}, auth)
+            fixed += 1
             continue
         if field is None:
             mid = call('item.create', {
@@ -138,12 +144,8 @@ def main():
                 'type': 18, 'value_type': 3, 'delay': '0',
                 'history': '7d', 'trends': '0',
                 'master_itemid': mid,
-                # Preprocessing type 12 = JSONPath (5 is Regular expression,
-                # whose two-parameter shape is what the API just rejected).
-                # 6.4 also mandates error_handler per step (0 = set error,
-                # the default UI behavior).
-                'preprocessing': [{'type': 12,
-                                   'params': path_for(part, fname),
+                'preprocessing': [{'type': 21,
+                                   'params': js_for(part, fname),
                                    'error_handler': 0,
                                    'error_handler_params': ''}]}, auth)
         made += 1
