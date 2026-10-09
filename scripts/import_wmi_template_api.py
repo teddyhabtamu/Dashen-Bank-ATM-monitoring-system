@@ -121,8 +121,12 @@ def main():
                 'master_itemid': mid,
                 # Preprocessing type 12 = JSONPath (5 is Regular expression,
                 # whose two-parameter shape is what the API just rejected).
+                # 6.4 also mandates error_handler per step (0 = set error,
+                # the default UI behavior).
                 'preprocessing': [{'type': 12,
-                                   'params': f'$.parts["{part}"].{fname}'}]}, auth)
+                                   'params': f'$.parts["{part}"].{fname}',
+                                   'error_handler': 0,
+                                   'error_handler_params': ''}]}, auth)
         made += 1
     print(f'Done: {made} items created, {len(have)} already present '
           f'({len(have) + made} total, want {1 + sum(1 + int(r) for _, r in PARTS)})')
