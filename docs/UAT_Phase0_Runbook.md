@@ -207,6 +207,14 @@ collides with `atm.parts` (use singular `atm.part[*]`), and the agent's
 (`connection ... rejected, allowed hosts` in the agent log names the fix).
 UAT-01 polling still waits on the TCP 10050 NAT forward.
 
+**Proven 2026-10-09 (collector output framing):** `Write-Output` of the
+~3.8KB JSON line wraps at console width (~80 cols) with literal CRLF,
+snapping key names mid-token (`Card Captu<CRLF>re Bin`) — payload fails
+`json.tool` at char 159, all 41 dependents die (JSONPath control-character
++ Duktape offset-161 errors are downstream symptoms of the same broken
+document). Fix is `[System.Console]::WriteLine(...)` (bypasses formatting,
+one clean line). Signature: `wc -l` shows ~48 lines pre-fix, 1 post-fix.
+
 ## 9c. Import + link the WMI template
 
 ```bash

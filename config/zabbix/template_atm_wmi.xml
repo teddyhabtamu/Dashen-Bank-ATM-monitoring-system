@@ -43,7 +43,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Capture Bin"]["part_status"]</params>
+              <params>$['parts']['Capture Bin']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -62,7 +62,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Card Capture Bin"]["part_status"]</params>
+              <params>$['parts']['Card Capture Bin']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -81,7 +81,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Card Reader"]["part_status"]</params>
+              <params>$['parts']['Card Reader']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -100,7 +100,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Carriage"]["part_status"]</params>
+              <params>$['parts']['Carriage']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -119,7 +119,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Control Board"]["part_status"]</params>
+              <params>$['parts']['Control Board']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -138,7 +138,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Divert Area"]["part_status"]</params>
+              <params>$['parts']['Divert Area']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -157,7 +157,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Electronics"]["part_status"]</params>
+              <params>$['parts']['Electronics']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -176,7 +176,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Exit Shutter"]["part_status"]</params>
+              <params>$['parts']['Exit Shutter']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -195,7 +195,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["FDKs"]["part_status"]</params>
+              <params>$['parts']['FDKs']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -214,7 +214,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["First Cassette"]["part_status"]</params>
+              <params>$['parts']['First Cassette']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -233,7 +233,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["First Cassette"]["replenishment_status"]</params>
+              <params>$['parts']['First Cassette']['replenishment_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -252,7 +252,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["First Pick Module"]["part_status"]</params>
+              <params>$['parts']['First Pick Module']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -271,7 +271,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Fourth Cassette"]["part_status"]</params>
+              <params>$['parts']['Fourth Cassette']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -290,7 +290,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Fourth Cassette"]["replenishment_status"]</params>
+              <params>$['parts']['Fourth Cassette']['replenishment_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -309,7 +309,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Fourth Pick Module"]["part_status"]</params>
+              <params>$['parts']['Fourth Pick Module']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -328,7 +328,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Knife"]["part_status"]</params>
+              <params>$['parts']['Knife']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -347,7 +347,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Mechanism"]["part_status"]</params>
+              <params>$['parts']['Mechanism']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -366,7 +366,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Media Aligner"]["part_status"]</params>
+              <params>$['parts']['Media Aligner']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -385,7 +385,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Paper"]["part_status"]</params>
+              <params>$['parts']['Paper']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -404,7 +404,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Paper"]["replenishment_status"]</params>
+              <params>$['parts']['Paper']['replenishment_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -423,7 +423,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["PinPad"]["part_status"]</params>
+              <params>$['parts']['PinPad']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -442,7 +442,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Presenter"]["part_status"]</params>
+              <params>$['parts']['Presenter']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -461,7 +461,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Print Head"]["part_status"]</params>
+              <params>$['parts']['Print Head']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -480,7 +480,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Purge Bin"]["part_status"]</params>
+              <params>$['parts']['Purge Bin']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -499,7 +499,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Purge Bin"]["replenishment_status"]</params>
+              <params>$['parts']['Purge Bin']['replenishment_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -518,7 +518,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Read/Write Magnetic Head"]["part_status"]</params>
+              <params>$['parts']['Read/Write Magnetic Head']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -537,7 +537,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Reject Area"]["part_status"]</params>
+              <params>$['parts']['Reject Area']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -556,7 +556,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Reject Area"]["replenishment_status"]</params>
+              <params>$['parts']['Reject Area']['replenishment_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -575,7 +575,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Retract Area"]["part_status"]</params>
+              <params>$['parts']['Retract Area']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -594,7 +594,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Retract Area"]["replenishment_status"]</params>
+              <params>$['parts']['Retract Area']['replenishment_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -613,7 +613,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Second Cassette"]["part_status"]</params>
+              <params>$['parts']['Second Cassette']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -632,7 +632,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Second Cassette"]["replenishment_status"]</params>
+              <params>$['parts']['Second Cassette']['replenishment_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -651,7 +651,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Second Pick Module"]["part_status"]</params>
+              <params>$['parts']['Second Pick Module']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -670,7 +670,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Single Note Transport"]["part_status"]</params>
+              <params>$['parts']['Single Note Transport']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -689,7 +689,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Smart Card Reader"]["part_status"]</params>
+              <params>$['parts']['Smart Card Reader']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -708,7 +708,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Suction Cups"]["part_status"]</params>
+              <params>$['parts']['Suction Cups']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -727,7 +727,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Third Cassette"]["part_status"]</params>
+              <params>$['parts']['Third Cassette']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -746,7 +746,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Third Cassette"]["replenishment_status"]</params>
+              <params>$['parts']['Third Cassette']['replenishment_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -765,7 +765,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Third Pick Module"]["part_status"]</params>
+              <params>$['parts']['Third Pick Module']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -784,7 +784,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Transport"]["part_status"]</params>
+              <params>$['parts']['Transport']['part_status']</params>
             </step>
           </preprocessing>
         </item>
@@ -803,7 +803,7 @@
           <preprocessing>
             <step>
               <type>JSONPATH</type>
-              <params>$["parts"]["Vacuum System"]["part_status"]</params>
+              <params>$['parts']['Vacuum System']['part_status']</params>
             </step>
           </preprocessing>
         </item>

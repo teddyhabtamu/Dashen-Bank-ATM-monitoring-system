@@ -68,9 +68,13 @@ def _dependent(items_el, part, field, label):
     pre = ET.SubElement(item, "preprocessing")
     step = ET.SubElement(pre, "step")
     _el(step, "type", "JSONPATH")
-    # Pure bracket notation — dotted form dies in Zabbix's parser with
-    # "invalid control character" on spaced part names (proven live).
-    _el(step, "params", f'$["parts"]["{part}"]["{field}"]')
+    # Single-quote bracket notation — proven live 2026-10-09: double-quoted
+    # brackets die in Zabbix's parser with "invalid control character" on
+    # spaced part names, single quotes extract fine (Capture Bin Status live).
+    # NOTE: live template currently runs JavaScript preprocessing (see
+    # import_wmi_template_api.js_for) pending post-observation convergence
+    # back to this native form — do not "fix" this back to double quotes.
+    _el(step, "params", f"$['parts']['{part}']['{field}']")
     return item
 
 
