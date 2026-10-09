@@ -68,7 +68,9 @@ def _dependent(items_el, part, field, label):
     pre = ET.SubElement(item, "preprocessing")
     step = ET.SubElement(pre, "step")
     _el(step, "type", "JSONPATH")
-    _el(step, "params", f"$.parts[\"{part}\"].{field}")
+    # Pure bracket notation — dotted form dies in Zabbix's parser with
+    # "invalid control character" on spaced part names (proven live).
+    _el(step, "params", f'$["parts"]["{part}"]["{field}"]')
     return item
 
 

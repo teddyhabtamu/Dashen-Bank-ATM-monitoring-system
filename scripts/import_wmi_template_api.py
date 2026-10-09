@@ -52,6 +52,12 @@ def call(method, params, auth=None):
     return data['result']
 
 
+def path_for(part, field):
+    # Pure bracket notation: the dotted form ($.parts["X"].y) dies in
+    # Zabbix's parser with "invalid control character" on spaced names.
+    return f'$["parts"]["{part}"]["{field}"]'
+
+
 def wanted_items():
     """(name, key, field) for master + all dependents, mirroring the XML."""
     yield ('ATM Parts — full WMI tree', 'atm.parts', None)
@@ -96,16 +102,29 @@ def main():
                                        'groups': [{'groupid': gid}]}, auth)['templateids'][0]
         print(f'Created template {TEMPLATE_NAME} ({tid})')
 
-    have = {i['key_']: i['itemid'] for i in
+    have = {i['key_']: i for i in
             call('item.get', {'templateids': [tid],
                               'output': ['itemid', 'key_'],
+                              'selectPreprocessing': ['type', 'params'],
                               'limit': 500}, auth)}
     mid = None
     made = 0
+    fixed = 0
     for name, key, field in wanted_items():
         if key in have:
             if field is None:
-                mid = have[key]
+                mid = have[key]['itemid']
+                continue
+            fname, part = field
+            want = path_for(part, fname)
+            cur = (have[key].get('preprocessing') or [{}])[0].get('params')
+            if cur != want:
+                call('item.update', {
+                    'itemid': have[key]['itemid'],
+                    'preprocessing': [{'type': 12, 'params': want,
+                                       'error_handler': 0,
+                                       'error_handler_params': ''}]}, auth)
+                fixed += 1
             continue
         if field is None:
             mid = call('item.create', {
@@ -124,11 +143,12 @@ def main():
                 # 6.4 also mandates error_handler per step (0 = set error,
                 # the default UI behavior).
                 'preprocessing': [{'type': 12,
-                                   'params': f'$.parts["{part}"].{fname}',
+                                   'params': path_for(part, fname),
                                    'error_handler': 0,
                                    'error_handler_params': ''}]}, auth)
         made += 1
-    print(f'Done: {made} items created, {len(have)} already present '
+    print(f'Done: {made} items created, {fixed} paths repaired, '
+          f'{len(have) - fixed} already present '
           f'({len(have) + made} total, want {1 + sum(1 + int(r) for _, r in PARTS)})')
     call('user.logout', [], auth)
     return 0
