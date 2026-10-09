@@ -21,6 +21,9 @@ TEMPLATE_WMI_PATH = "config/zabbix/template_atm_wmi.xml"
 
 TEMPLATE_NCR_NAME = "Dashen Bank ATM Hardware"
 TEMPLATE_GRG_NAME = "Dashen Bank ATM Hardware - GRG"
+# Must match generate_wmi_template.TEMPLATE_NAME (note: shared "Dashen" typo
+# is deliberate consistency — renaming is post-UAT cleanup, see runbook).
+TEMPLATE_WMI_NAME = "Dashen Bank ATM WMI Parts"
 
 # Proxy assignment per district (see docs/proxy-topology.md)
 # None = no proxy (monitored directly by Zabbix server)
@@ -190,12 +193,25 @@ class Zabbix:
             'port': '161',
             'details': details,
         }
+        interfaces = [interface]
+        if vendor == 'NCR':
+            # WMI part items are agent items — without this interface they
+            # sit unsupported forever (proven on the test host, which needed
+            # the agent row added by hand before Latest Data flowed).
+            interfaces.append({
+                'type': 1,  # Zabbix agent
+                'main': 1,
+                'useip': 1,
+                'ip': ip,
+                'dns': '',
+                'port': '10050',
+            })
         params = {
             'host': host,
             'name': visible_name,
             'templates': [{'templateid': tid} for tid in template_ids],
             'groups': [{'groupid': gid} for gid in group_ids],
-            'interfaces': [interface],
+            'interfaces': interfaces,
             'macros': [{'macro': '{$ATM_VENDOR}', 'value': vendor or 'Unknown'}],
             'status': 0,  # monitored
         }
@@ -227,19 +243,25 @@ def do_apply(atms, import_templates=False):
     z.login()
 
     # Step 1: Import templates if requested (each template embeds its own
-    # value maps, so no separate valuemap step is needed)
+    # value maps, so no separate valuemap step is needed).
+    # NOTE: WMI template intentionally NOT imported here — 6.4's
+    # configuration.import rejects its generated XML tag-by-tag (proven:
+    # <date>, <groups>, ZABBIX_AGENT constant). It is owned by
+    # import_wmi_template_api.py. Importing it here would only print an
+    # API error and continue.
     if import_templates:
         z.import_template(TEMPLATE_NCR_PATH)
         z.import_template(TEMPLATE_GRG_PATH)
-        z.import_template(TEMPLATE_WMI_PATH)
         print("  Templates imported, waiting 3s for indexing...")
         time.sleep(3)
 
     # Step 2: Verify templates exist
     ncr_tid = z.get_template_id(TEMPLATE_NCR_NAME)
     grg_tid = z.get_template_id(TEMPLATE_GRG_NAME)
+    wmi_tid = z.get_template_id(TEMPLATE_WMI_NAME)
     print(f"  NCR template: {'found (' + ncr_tid + ')' if ncr_tid else 'NOT FOUND'}")
     print(f"  GRG template: {'found (' + grg_tid + ')' if grg_tid else 'NOT FOUND'}")
+    print(f"  WMI template: {'found (' + wmi_tid + ')' if wmi_tid else 'NOT FOUND (run import_wmi_template_api.py)'}")
 
     if not ncr_tid and not grg_tid:
         print("  ERROR: No ATM templates found. Use --import-templates or import manually.")
@@ -315,9 +337,11 @@ def do_apply(atms, import_templates=False):
             skipped += 1
             continue
 
-        # Select template and vendor group
+        # Select template and vendor group.
+        # NCR hosts also take the WMI Parts template (agent items) — without
+        # it bulk-created NCR hosts would silently miss all 41 part items.
         if vendor == 'NCR' and ncr_tid:
-            template_ids = [ncr_tid]
+            template_ids = [ncr_tid] + ([wmi_tid] if wmi_tid else [])
             vgroup = grp_ncr
         elif vendor == 'GRG' and grg_tid:
             template_ids = [grg_tid]
