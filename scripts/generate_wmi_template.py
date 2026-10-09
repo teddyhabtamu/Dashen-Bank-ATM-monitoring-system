@@ -73,7 +73,8 @@ def _dependent(items_el, part, field, label):
 def main():
     zbx = ET.Element("zabbix_export")
     ET.SubElement(zbx, "version").text = "6.4"
-    ET.SubElement(zbx, "date").text = "2026-10-01T00:00:00Z"
+    # NOTE: no <date> element — Zabbix 6.4's importer rejects it
+    # (Invalid tag "/zabbix_export": unexpected tag "date").
     groups = ET.SubElement(zbx, "groups")
     g = ET.SubElement(groups, "group")
     _el(g, "uuid", _uid("group"))

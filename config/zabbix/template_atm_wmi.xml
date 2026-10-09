@@ -1,7 +1,6 @@
 <?xml version="1.0" ?>
 <zabbix_export>
   <version>6.4</version>
-  <date>2026-10-01T00:00:00Z</date>
   <groups>
     <group>
       <uuid>f31d97d4-a282-5eb4-9a1e-7c50cbc6956e</uuid>
