@@ -70,4 +70,12 @@ foreach ($k in ($parts.Keys | Sort-Object)) {
     ',"powered_on":' + $pon + '}')
 }
 [void]$sb.Append('}}')
-Write-Output $sb.ToString()
+# NOTE: [Console]::WriteLine, NOT Write-Output. Write-Output sends the long
+# JSON line through PowerShell's formatting pipeline, which hard-wraps it at
+# console width (~80 cols) with literal CRLF — splitting key names mid-token
+# ("Card Captu<CRLF>re Bin") and producing invalid JSON. Proven live 2026-10-09:
+# zabbix_get payload failed json.tool at char 159 with exactly such a split,
+# and all 41 dependents died (JSONPath control-character + Duktape offset-161
+# errors are both downstream symptoms of the same broken document).
+# Console.WriteLine bypasses formatting: one clean line, single trailing CRLF.
+[System.Console]::WriteLine($sb.ToString())
