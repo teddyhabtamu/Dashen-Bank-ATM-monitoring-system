@@ -25,7 +25,10 @@ import sys
 import requests
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from generate_wmi_template import PARTS, TEMPLATE_NAME, TEMPLATE_GROUP
+from generate_wmi_template import PARTS, TEMPLATE_NAME
+# Flat group — see generate_wmi_template.py (nested groups break references
+# when the implied parent object doesn't exist).
+TEMPLATE_GROUP = "Dashen-ATM-Templates"
 
 ZBX_URL = os.environ.get('ZBX_URL') or os.environ.get(
     'ZABBIX_URL', 'http://localhost:8080/api_jsonrpc.php')

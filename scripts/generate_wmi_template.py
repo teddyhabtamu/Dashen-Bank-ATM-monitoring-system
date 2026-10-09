@@ -16,7 +16,10 @@ import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
 TEMPLATE_NAME = "Dashen Bank ATM WMI Parts"
-TEMPLATE_GROUP = "Templates/ATMs"
+# Flat top-level group: nested "Templates/ATMs" breaks template.create when
+# the implied parent object doesn't exist (proven on UAT: group visible but
+# unreferenceable). Cosmetic location only.
+TEMPLATE_GROUP = "Dashen-ATM-Templates"
 
 # (part name, watch_replenishment)
 PARTS = [

@@ -4,7 +4,7 @@
   <template_groups>
     <template_group>
       <uuid>f31d97d4-a282-5eb4-9a1e-7c50cbc6956e</uuid>
-      <name>Templates/ATMs</name>
+      <name>Dashen-ATM-Templates</name>
     </template_group>
   </template_groups>
   <templates>
@@ -14,7 +14,7 @@
       <name>Dashen Bank ATM WMI Parts</name>
       <groups>
         <group>
-          <name>Templates/ATMs</name>
+          <name>Dashen-ATM-Templates</name>
         </group>
       </groups>
       <items>
