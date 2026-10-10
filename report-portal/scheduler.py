@@ -110,7 +110,7 @@ def _generate_report(report_type, fmt, days=7, atm='all'):
     today = date.today().strftime('%Y-%m-%d')
     label = REPORT_TYPE_LABELS.get(report_type, report_type.title())
     atm_part = f'_{atm}' if atm and atm != 'all' else ''
-    filename = _report_filename(report_type, fmt, days, atm)
+    filename = f'Dashen_Bank_{label.replace(" ", "_")}{atm_part}_{today}.{fmt}'
     # Expected bytes per format: never attach a login page (or any HTML)
     # as a report — a 302→login slipping through used to get emailed out
     # as a fake PDF. Fail loudly instead.
@@ -153,8 +153,7 @@ def _smtp_context():
     return ssl.create_default_context()
 
 
-def _send_email(recipients, subject, body, filename, filedata, mimetype,
-                body_text=None):
+def _send_email(recipients, subject, body, filename, filedata, mimetype):
     if not SMTP_HOST:
         logger.warning('SMTP not configured, skipping email')
         return False
@@ -163,13 +162,7 @@ def _send_email(recipients, subject, body, filename, filedata, mimetype,
         msg['From'] = SMTP_FROM
         msg['To'] = ', '.join(recipients)
         msg['Subject'] = subject
-        if body_text:
-            alt = MIMEMultipart('alternative')
-            alt.attach(MIMEText(body_text, 'plain', 'utf-8'))
-            alt.attach(MIMEText(body, 'html', 'utf-8'))
-            msg.attach(alt)
-        else:
-            msg.attach(MIMEText(body, 'html'))
+        msg.attach(MIMEText(body, 'html'))
 
         if _LOGO_BYTES:
             logo = MIMEImage(_LOGO_BYTES)
@@ -219,368 +212,134 @@ REPORT_TYPE_LABELS = {
 }
 
 
-# ── SCHEDULED-REPORT EMAIL CONTENT ─────────────────────────────────────────
-# Thresholds for red/amber highlighting (config = these two constants).
-EMAIL_AVAIL_TARGET = 99.0   # below: amber
-EMAIL_AVAIL_ALERT = 95.0    # below: red
-# IT contact shown in the footer. No dedicated config exists; override with
-# EMAIL_SUPPORT in .env, else the line falls back to plain "IT Operations".
-EMAIL_SUPPORT = os.environ.get('EMAIL_SUPPORT', '')
-
-
-def _email_window(days):
-    """Report window as EAT day boundaries (UTC instants for Postgres).
-
-    days=N covers the N calendar days ending today: start = (today-N+1)
-    00:00 EAT, end = tomorrow 00:00 EAT. Returns (start, end, start_prev,
-    period_label). Never raises (falls back to naive NOW math).
-    """
-    try:
-        eat_today = datetime.now(EAT).date()
-    except Exception:
-        eat_today = date.today()
-    start_eat = eat_today - timedelta(days=max(1, days) - 1)
-    end_eat = eat_today + timedelta(days=1)
-    start_prev = start_eat - timedelta(days=max(1, days))
-    start = datetime(start_eat.year, start_eat.month, start_eat.day,
-                     tzinfo=EAT).astimezone(timezone.utc).replace(tzinfo=None)
-    end = datetime(end_eat.year, end_eat.month, end_eat.day,
-                   tzinfo=EAT).astimezone(timezone.utc).replace(tzinfo=None)
-    start_p = datetime(start_prev.year, start_prev.month, start_prev.day,
-                       tzinfo=EAT).astimezone(timezone.utc).replace(tzinfo=None)
-    s = start_eat.strftime('%b %-d')
-    e = end_eat - timedelta(days=1)
-    label = (f'{s} to {e.strftime("%b %-d, %Y")}' if start_eat.month == e.month
-             else f'{s}, {start_eat.year} to {e.strftime("%b %-d, %Y")}')
-    return start, end, start_p, label
-
-
-def _email_metrics(days, atm='all'):
-    """Headline numbers for the email, from the same tables as the PDF.
-
-    Returns dict; any uncomputable metric is None and the template skips
-    it (never invented). Cash-out incidents have no honest source
-    (cassette counts are the open C1 gap) and are NOT included.
-    """
-    m = {'availability': None, 'availability_prev': None,
-         'downtime_hrs': None, 'downtime_prev': None,
-         'offline': [], 'offline_total': 0, 'top_fault': None}
-    try:
-        from db import get_db
-    except Exception:
-        return m
-    # Headline numbers are fleet-wide by design (the attached PDF carries
-    # per-ATM detail); only the attention list honours an atm filter.
-    try:
-        with get_db() as conn:
-            cur = conn.cursor()
-            for tag, s, e in (('cur', start, end), ('prev', start_p, start)):
-                cur.execute("""
-                    SELECT COUNT(DISTINCT l.atm_id),
-                        COALESCE(SUM(EXTRACT(EPOCH FROM (
-                            LEAST(COALESCE(h.ended_at, %(e)s), %(e)s)
-                            - GREATEST(h.started_at, %(s)s))) / 3600.0)
-                            FILTER (WHERE h.state = 'IN_SERVICE'), 0)
-                    FROM atm_locations l
-                    LEFT JOIN atm_state_history h ON h.atm_id = l.atm_id
-                        AND h.started_at < %(e)s
-                        AND (h.ended_at IS NULL OR h.ended_at > %(s)s)
-                    WHERE l.status = 'active'
-                """, {'s': s, 'e': e})
-                # NOTE: atm scoping applied in Python below (keeps one query).
-                n, up = cur.fetchone() or (0, 0)
-                n = int(n or 0)
-                up = float(up or 0)
-                pct = round(100.0 * up / (n * window_h), 1) if n else None
-                down = round(n * window_h - up, 1) if n else None
-                if tag == 'cur':
-                    m['availability'], m['downtime_hrs'] = pct, down
-                else:
-                    m['availability_prev'], m['downtime_prev'] = pct, down
-            cur.execute("""
-                SELECT s.atm_id, COALESCE(l.branch, s.atm_id), s.state,
-                    EXTRACT(EPOCH FROM (NOW() - s.state_changed_at)) / 3600.0
-                FROM atm_current_state s
-                LEFT JOIN atm_locations l ON l.atm_id = s.atm_id
-                WHERE s.state <> 'IN_SERVICE'
-                  AND (%(atm)s = 'all' OR s.atm_id = %(atm)s)
-                ORDER BY 4 DESC
-            """, {'atm': atm or 'all'})
-            rows = cur.fetchall()
-            m['offline_total'] = len(rows)
-            for atm_id, branch, state, hrs in rows[:5]:
-                m['offline'].append({
-                    'atm_id': atm_id, 'branch': branch or atm_id,
-                    'state': state, 'duration': _email_duration(hrs or 0)})
-            cur.execute("""
-                SELECT COALESCE(f.display_name, t.error_code, 'Unknown'), COUNT(*)
-                FROM atm_transactions t
-                LEFT JOIN atm_locations l ON l.atm_id = t.atm_id
-                LEFT JOIN fault_type_map f ON f.raw_fault_code = t.error_code
-                    AND (f.vendor = l.vendor OR l.vendor IS NULL)
-                WHERE t.status = 'ERROR' AND t.error_code IS NOT NULL
-                  AND t.recorded_at >= %(s)s AND t.recorded_at < %(e)s
-                  AND (%(atm)s = 'all' OR t.atm_id = %(atm)s)
-                GROUP BY 1 ORDER BY 2 DESC LIMIT 1
-            """, {'s': start, 'e': end, 'atm': atm or 'all'})
-            row = cur.fetchone()
-            if row:
-                m['top_fault'] = {'label': row[0], 'count': int(row[1])}
-            cur.close()
-    except Exception as e:
-        logger.warning('Email metrics unavailable (skipped, not invented): %s', e)
-    # Per-ATM scoping for the availability pair (single shared query above
-    # counts the fleet; narrow it when the report targets one ATM).
-    return m
-
-
-def _email_duration(hours):
-    """363.5 → '15d 3h'. Zero/negative → '—'."""
-    try:
-        total_m = int(float(hours) * 60)
-    except (TypeError, ValueError):
-        return '—'
-    if total_m <= 0:
-        return '—'
-    d, rem = divmod(total_m, 1440)
-    h, _m = divmod(rem, 60)
-    if d:
-        return f'{d}d {h}h'
-    if h:
-        return f'{h}h'
-    return f'{_m}m'
-
-
-def _email_frequency(cron_expr):
-    """Daily / Weekly / Monthly / Scheduled from a 5-field cron."""
-    try:
-        p = (cron_expr or '').strip().split()
-        if len(p) != 5:
-            return 'Scheduled'
-        _min, _h, dom, mon, dow = p
-        if dow != '*':
-            return 'Weekly'
-        if dom != '*' or mon != '*':
-            return 'Monthly'
-        if _h != '*' or _min != '*':
-            return 'Daily'
-    except Exception:
-        pass
-    return 'Scheduled'
-
-
-def _email_subject(report_type, cron_expr, days):
+def _email_body(report_type, fmt, days, atm):
     label = REPORT_TYPE_LABELS.get(report_type, report_type.title())
-    _start, _end, _prev, period = _email_window(days)
-    freq = _email_frequency(cron_expr)
-    return f'[ATM Monitor] {label} ({freq}): {period}'
-
-
-def _report_filename(report_type, fmt, days, atm='all'):
-    label = REPORT_TYPE_LABELS.get(report_type, report_type.title())
-    safe = ''.join(c if (c.isalnum() or c in ('-', '_')) else '_'
-                   for c in label.replace(' ', '_'))
-    ext = {'excel': 'xlsx', 'pdf': 'pdf', 'csv': 'csv'}.get(fmt, fmt)
-    # EAT calendar days (not UTC instants — midnight crossover otherwise
-    # shifts the stamped dates by one, disagreeing with the subject).
-    try:
-        eat_today = datetime.now(EAT).date()
-    except Exception:
-        eat_today = date.today()
-    end_d = eat_today
-    start_d = eat_today - timedelta(days=(days or 7) - 1)
-    atm_part = f'_{atm}' if atm and atm != 'all' else ''
-    if (days or 7) == 1:
-        return f'ATM_{safe}_{end_d.strftime("%Y-%m-%d")}{atm_part}.{ext}'
-    return (f'ATM_{safe}_{start_d.strftime("%Y-%m-%d")}'
-            f'_to_{end_d.strftime("%Y-%m-%d")}{atm_part}.{ext}')
-def _email_context(report_type, fmt, days, atm, cron_expr=None, metrics=None):
-    """Shared computed values for the HTML + plain-text bodies."""
-    label = REPORT_TYPE_LABELS.get(report_type, report_type.title())
-    freq = _email_frequency(cron_expr)
-    _start, _end, _prev, period = _email_window(days)
+    now = datetime.now().strftime('%Y-%m-%d %H:%M')
     atm_display = atm if atm and atm != 'all' else 'All ATMs'
-    try:
-        gen = datetime.now(EAT).strftime('%Y-%m-%d %H:%M EAT')
-    except Exception:
-        gen = datetime.now().strftime('%Y-%m-%d %H:%M')
-    m = metrics if metrics is not None else _email_metrics(days, atm)
-    av, avp = m.get('availability'), m.get('availability_prev')
-    if av is None:
-        hero_color, delta_txt = '#0F172A', ''
-    else:
-        hero_color = ('#DC2626' if av < EMAIL_AVAIL_ALERT
-                      else '#D97706' if av < EMAIL_AVAIL_TARGET else '#0F172A')
-        if avp is None:
-            delta_txt = ''
-        else:
-            d = round(av - avp, 1)
-            arrow = '↓' if d < 0 else '↑' if d > 0 else '→'
-            delta_txt = (f'{arrow}{abs(d)}% vs previous {days} days'
-                         if d else f'unchanged vs previous {days} days')
-    down, downp = m.get('downtime_hrs'), m.get('downtime_prev')
-    down_color = ('#D97706' if (down is not None and downp is not None
-                                and down > downp) else '#0F172A')
-    off_total = m.get('offline_total') or 0
-    off_color = '#DC2626' if off_total > 0 else '#0F172A'
-    top = m.get('top_fault') or {}
-    support = EMAIL_SUPPORT or 'IT Operations'
-    return {
-        'label': label, 'freq': freq, 'period': period,
-        'atm_display': atm_display, 'gen': gen, 'metrics': m,
-        'avail': av, 'avail_prev': avp, 'hero_color': hero_color,
-        'delta_txt': delta_txt, 'down': down, 'down_color': down_color,
-        'off_total': off_total, 'off_color': off_color,
-        'top_label': top.get('label'), 'top_count': top.get('count'),
-        'support': support,
-        'title': label,
-    }
-
-
-def _email_body(report_type, fmt, days, atm, cron_expr=None, metrics=None):
     logo_url = 'cid:dashen-logo'
-    c = _email_context(report_type, fmt, days, atm, cron_expr, metrics)
-    m = c['metrics']
-
-    def metric_row(label, value, color='#0F172A'):
-        return (
-            '<tr><td style="padding:9px 0;font-size:14px;color:#64748B">'
-            + label + '</td>'
-            '<td align="right" style="padding:9px 0;font-size:14px;font-weight:700;color:'
-            + color + '">' + value + '</td></tr>'
-            '<tr><td colspan="2" style="border-top:1px solid #EEF1F6;font-size:0;line-height:0">&nbsp;</td></tr>'
-        )
-
-    rows = ''
-    if c['down'] is not None:
-        rows += metric_row('Total downtime', f"{c['down']:g} hrs", c['down_color'])
-    rows += metric_row('ATMs currently offline', str(c['off_total']), c['off_color'])
-    if c['top_label'] is not None:
-        rows += metric_row('Top fault', f"{c['top_label']} ({c['top_count']})")
-
-    if m.get('offline'):
-        att_rows = ''
-        for o in m['offline'][:5]:
-            att_rows += (
-                '<tr>'
-                '<td style="padding:7px 0;font-size:13px;font-weight:700;color:#0F172A">'
-                + o['atm_id'] + '</td>'
-                '<td style="padding:7px 0;font-size:13px;color:#475569">'
-                + o['branch'] + '</td>'
-                '<td style="padding:7px 0;font-size:13px;color:#475569">'
-                + o['state'].replace('_', ' ') + '</td>'
-                '<td align="right" style="padding:7px 0;font-size:13px;font-weight:700;color:#0F172A">'
-                + o['duration'] + '</td></tr>'
-            )
-        attention = (
-            '<div style="font-size:15px;font-weight:700;color:#012169;margin:26px 0 6px">Needs attention</div>'
-            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">'
-            + att_rows + '</table>'
-        )
-    else:
-        attention = (
-            '<div style="font-size:15px;font-weight:700;color:#012169;margin:26px 0 6px">Needs attention</div>'
-            '<div style="font-size:14px;color:#475569">No ATMs need attention this period.</div>'
-        )
-
-    if c['avail'] is None:
-        hero = ''
-    else:
-        hero = (
-            '<div style="font-size:40px;font-weight:800;color:' + c['hero_color'] + ';line-height:1.1">'
-            + f"{c['avail']}%</div>"
-            '<div style="font-size:13px;color:#64748B;margin-top:2px">ATM availability'
-            + (f' &nbsp;{c["delta_txt"]}' if c['delta_txt'] else '') + '</div>'
-        )
-
-    preheader_bits = []
-    if c['avail'] is not None:
-        preheader_bits.append(f"Availability {c['avail']}%")
-    if c['down'] is not None:
-        preheader_bits.append(f"{c['down']:g} hrs downtime")
-    preheader_bits.append(f"{c['off_total']} ATMs offline")
-    preheader = ' · '.join(preheader_bits)
-
     return f'''<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <meta name="supported-color-schemes" content="light dark">
 </head>
-<body style="margin:0;padding:0;background:#F7F8FA;font-family:'Segoe UI',Arial,Helvetica,sans-serif">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;color:#F7F8FA">{preheader}</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F7F8FA">
-    <tr><td align="center" style="padding:0">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff">
+<body style="margin:0;padding:0;background:#F0F2F6;font-family:'Segoe UI',Helvetica,Arial,sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F0F2F6;min-width:100%">
+    <tr><td align="center" style="padding:32px 16px">
+
+      <!-- ── MAIN CARD ── -->
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(1,33,105,.08)">
+
+        <!-- ── HEADER (compact: internal mail, not marketing) ── -->
         <tr>
-          <td style="background:#012169;padding:14px 28px">
+          <td style="background:#012169;padding:20px 40px 16px">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td align="left" style="font-size:12px;color:rgba(255,255,255,.8)">ATM Monitoring System</td>
-                <td align="right"><img src="{logo_url}" alt="Dashen Bank" width="90" style="border:0;display:block;width:90px;max-width:90px;height:auto"></td>
+                <td align="center">
+                  <img src="{logo_url}" alt="Dashen Bank" style="border:0;display:block;margin:0 auto 8px;width:76px;max-width:100%;height:auto">
+                  <div style="font-size:16px;font-weight:700;color:#fff;letter-spacing:-.2px">Dashen Bank S.C. <span style="font-weight:400;color:rgba(255,255,255,.65);font-size:11px;letter-spacing:1px">&nbsp;·&nbsp; ATM MONITORING SYSTEM</span></div>
+                </td>
               </tr>
             </table>
           </td>
         </tr>
-        <tr><td style="height:3px;background:#FDD79A;padding:0;font-size:0;line-height:0">&nbsp;</td></tr>
+
+        <!-- ── GOLD BAR ── -->
+        <tr><td style="height:4px;background:#FDD79A;padding:0;font-size:0;line-height:0">&zwnj;</td></tr>
+
+        <!-- ── CONTENT ── -->
         <tr>
-          <td style="padding:28px 28px 24px">
-            <div style="font-size:23px;font-weight:800;color:#012169;line-height:1.25">{c['title']}</div>
-            <div style="font-size:13px;color:#64748B;margin-top:4px">{c['period']} · {c['atm_display']} · {c['freq']}</div>
-            <div style="margin:20px 0 4px">{hero}</div>
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px">{rows}</table>
-            {attention}
-            <div style="margin:26px 0 6px">
-              <table role="presentation" cellpadding="0" cellspacing="0">
+          <td style="padding:36px 40px 24px">
+
+            <div style="font-size:22px;font-weight:800;color:#012169;margin-bottom:4px">Scheduled Report</div>
+            <div style="font-size:13px;color:#64748B;margin-bottom:24px">{label}</div>
+
+            <!-- ── INFO PANEL ── -->
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FAFBFC;border:1px solid #EEF1F6;border-radius:10px;margin-bottom:24px">
+              <tr>
+                <td style="padding:20px 24px">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="width:50%;padding:6px 0">
+                        <div style="font-size:10px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px">Report Type</div>
+                        <div style="font-size:14px;font-weight:600;color:#0F172A;margin-top:2px">{label}</div>
+                      </td>
+                      <td style="width:50%;padding:6px 0">
+                        <div style="font-size:10px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px">Period</div>
+                        <div style="font-size:14px;font-weight:600;color:#0F172A;margin-top:2px">Last {days} day{'s' if days != 1 else ''}</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="width:50%;padding:6px 0">
+                        <div style="font-size:10px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px">ATM(s)</div>
+                        <div style="font-size:14px;font-weight:600;color:#0F172A;margin-top:2px">{atm_display}</div>
+                      </td>
+                      <td style="width:50%;padding:6px 0">
+                        <div style="font-size:10px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px">Generated</div>
+                        <div style="font-size:14px;font-weight:600;color:#0F172A;margin-top:2px">{now} EAT</div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <!-- ── ATTACHMENT NOTE ── -->
+            <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:16px 20px;margin-bottom:24px">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td align="center" style="background:#012169;padding:12px 28px">
-                    <a href="{BASE_URL}/reports" style="font-size:14px;font-weight:700;color:#ffffff;text-decoration:none">View report in dashboard</a>
+                  <td width="28" valign="top" style="padding-right:12px">
+                    <div style="width:28px;height:28px;background:#2563EB;border-radius:6px;text-align:center;line-height:28px;color:#fff;font-size:11px;font-weight:700;font-family:Arial,sans-serif">{fmt.upper()}</div>
+                  </td>
+                  <td>
+                    <div style="font-size:13px;font-weight:600;color:#1E40AF">Report Attached</div>
+                    <div style="font-size:12px;color:#475569;margin-top:2px">The <b>{label}</b> is attached to this email as a <b>{fmt.upper()}</b> file. Please download and review at your convenience.</div>
                   </td>
                 </tr>
               </table>
             </div>
-            <div style="font-size:13px;color:#64748B;margin-top:10px">Full report attached.</div>
+
+            <!-- ── CTA ── -->
+            <table role="presentation" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="background:#012169;border-radius:8px;padding:0">
+                  <a href="{BASE_URL}" style="display:inline-block;padding:12px 28px;font-size:13px;font-weight:600;color:#fff;text-decoration:none;border-radius:8px">&#8594; Open ATM Monitoring System</a>
+                </td>
+              </tr>
+            </table>
+
           </td>
         </tr>
+
+        <!-- ── FOOTER ── -->
         <tr>
-          <td style="padding:16px 28px 24px;font-size:12px;color:#94A3B8;line-height:1.5">
-            Generated {c['gen']} · Automated report from the ATM Monitoring System. Questions: {c['support']}
+          <td style="background:#FAFBFC;border-top:1px solid #EEF1F6;padding:20px 40px">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td align="center" style="font-size:11px;color:#94A3B8;line-height:1.6">
+                  <div style="font-weight:600;color:#64748B;margin-bottom:2px">Dashen Bank S.C.</div>
+                  <div>ATM Monitoring System &mdash; Confidential Management Report</div>
+                  <div style="margin-top:8px;padding-top:8px;border-top:1px solid #EEF1F6">
+                    This email was automatically generated by the Dashen Bank ATM Monitoring System.<br>
+                    Please do not reply to this message. For support, contact IT Operations.
+                  </div>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
+
       </table>
+
+      <!-- ── FOOTER SPACER ── -->
+      <div style="text-align:center;font-size:10px;color:#CBD5E1;margin-top:16px">
+        &copy; {datetime.now().strftime('%Y')} Dashen Bank S.C. All rights reserved.
+      </div>
+
     </td></tr>
   </table>
 </body>
 </html>'''
-
-
-def _email_text(report_type, fmt, days, atm, cron_expr=None, metrics=None):
-    c = _email_context(report_type, fmt, days, atm, cron_expr, metrics)
-    m = c['metrics']
-    lines = [c['title'], f"{c['period']} · {c['atm_display']} · {c['freq']}", '']
-    if c['avail'] is None:
-        lines.append('ATM availability: unavailable')
-    else:
-        lines.append(f"ATM availability: {c['avail']}%"
-                     + (f" ({c['delta_txt']})" if c['delta_txt'] else ''))
-    if c['down'] is not None:
-        lines.append(f"Total downtime: {c['down']:g} hrs")
-    lines.append(f"ATMs currently offline: {c['off_total']}")
-    if c['top_label'] is not None:
-        lines.append(f"Top fault: {c['top_label']} ({c['top_count']})")
-    lines += ['', 'Needs attention']
-    if m.get('offline'):
-        for o in m['offline'][:5]:
-            lines.append(f"- {o['atm_id']}  {o['branch']}  "
-                         f"{o['state'].replace('_', ' ')}  {o['duration']}")
-    else:
-        lines.append('No ATMs need attention this period.')
-    lines += ['', 'Full report attached.',
-              f"Generated {c['gen']} · Automated report from the ATM Monitoring System. Questions: {c['support']}"]
-    return '\n'.join(lines)
-
 
 
 def _record_run_status(report_id, ok, error, schedule):
@@ -629,9 +388,8 @@ def _run_scheduled_report(report_id, report_type, fmt, schedule, recipients, par
             return
 
     label = REPORT_TYPE_LABELS.get(report_type, report_type.upper())
-    subject = _email_subject(report_type, schedule, days)
-    body = _email_body(report_type, fmt, days, atm, cron_expr=schedule)
-    body_text = _email_text(report_type, fmt, days, atm, cron_expr=schedule)
+    subject = f'[ATM Monitor] {label} - {today}'
+    body = _email_body(report_type, fmt, days, atm)
 
     filedata, filename, mimetype = _generate_report(report_type, fmt, days, atm)
     if filedata is None:
@@ -642,8 +400,7 @@ def _run_scheduled_report(report_id, report_type, fmt, schedule, recipients, par
         return
 
     recipient_list = [r.strip() for r in recipients.split(',') if r.strip()]
-    ok = _send_email(recipient_list, subject, body, filename, filedata,
-                     mimetype, body_text=body_text)
+    ok = _send_email(recipient_list, subject, body, filename, filedata, mimetype)
 
     if ok:
         log_action('SCHEDULED_REPORT', f'Report {report_id} ({report_type}/{fmt}) sent to {len(recipient_list)} recipients')
