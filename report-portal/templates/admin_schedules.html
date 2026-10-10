@@ -302,7 +302,7 @@
 
 <div class="modal-overlay" id="deleteModal" onclick="if(event.target===this)closeDeleteModal()">
   <div class="modal-confirm">
-    <div class="modal-confirm-icon">
+    <div class="modal-confirm-icon" id="deleteModalIcon">
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
     </div>
     <h3 id="deleteModalTitle">Delete Schedule</h3>
@@ -726,6 +726,7 @@ function toggleSchedule(id){
 
 function deleteSchedule(id){
   deleteTargetId = id;
+  setConfirmMode('delete');
   document.getElementById('deleteModalTitle').textContent = 'Delete Schedule';
   document.getElementById('deleteModalText').textContent = 'Are you sure you want to delete this schedule? This action cannot be undone.';
   document.getElementById('deleteConfirmBtn').onclick = function(){
@@ -755,6 +756,27 @@ function editSchedule(id){
     .then(function(d){ openScheduleModal(d); })
     .catch(function(){ showToast('Error loading schedule', 'error'); });
 }
+// The confirm modal serves two masters: Delete (red trash) and Send now
+// (navy paper plane). Mode is set explicitly every time it opens, so the
+// red never leaks onto a harmless action.
+var _TRASH_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>';
+var _SEND_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#012169" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
+function setConfirmMode(mode){
+  var icon = document.getElementById('deleteModalIcon');
+  var btn = document.getElementById('deleteConfirmBtn');
+  if(!icon || !btn) return;
+  if(mode === 'send'){
+    icon.innerHTML = _SEND_SVG;
+    icon.style.background = '#EEF2FF';
+    icon.style.color = '#012169';
+    btn.style.background = '#012169';
+  } else {
+    icon.innerHTML = _TRASH_SVG;
+    icon.style.background = '';
+    icon.style.color = '';
+    btn.style.background = '#DC2626';
+  }
+}
 function sendNowSchedule(id){
   fetch('/admin/schedules/get?id=' + id)
     .then(function(r){ return r.json(); })
@@ -764,6 +786,7 @@ function sendNowSchedule(id){
       document.getElementById('deleteModalText').textContent =
         'Send "' + (d.name || 'this report') + '" (' + (d.format || '').toUpperCase() +
         ') now to ' + (d.recipients || 'its recipients') + '?';
+      setConfirmMode('send');
       var btn = document.getElementById('deleteConfirmBtn');
       btn.textContent = 'Send Now';
       btn.onclick = function(){ doSendNow(id); };
