@@ -214,96 +214,71 @@ REPORT_TYPE_LABELS = {
 
 def _email_body(report_type, fmt, days, atm):
     label = REPORT_TYPE_LABELS.get(report_type, report_type.title())
-    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    eat = timezone(timedelta(hours=3))  # fixed +3, no DST in Ethiopia
+    now = datetime.now(eat).strftime('%Y-%m-%d %H:%M')
     atm_display = atm if atm and atm != 'all' else 'All ATMs'
     logo_url = 'cid:dashen-logo'
+    preheader = f'{label} · Last {days} day{"s" if days != 1 else ""} · {atm_display}'
     return f'''<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
 </head>
-<body style="margin:0;padding:0;background:#F0F2F6;font-family:'Segoe UI',Helvetica,Arial,sans-serif">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F0F2F6;min-width:100%">
-    <tr><td align="center" style="padding:32px 16px">
-
-      <!-- ── MAIN CARD ── -->
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(1,33,105,.08)">
-
-        <!-- ── HEADER (compact: internal mail, not marketing) ── -->
+<body style="margin:0;padding:0;background:#F7F8FA;font-family:'Segoe UI',Arial,Helvetica,sans-serif">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;color:#F7F8FA">{preheader}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F7F8FA">
+    <tr><td align="center" style="padding:0">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff">
         <tr>
-          <td style="background:#012169;padding:20px 40px 16px">
+          <td style="background:#012169;padding:12px 28px">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td align="center">
-                  <img src="{logo_url}" alt="Dashen Bank" style="border:0;display:block;margin:0 auto 8px;width:76px;max-width:100%;height:auto">
-                  <div style="font-size:16px;font-weight:700;color:#fff;letter-spacing:-.2px">Dashen Bank S.C. <span style="font-weight:400;color:rgba(255,255,255,.65);font-size:11px;letter-spacing:1px">&nbsp;·&nbsp; ATM MONITORING SYSTEM</span></div>
-                </td>
+                <td align="left" style="font-size:12px;color:rgba(255,255,255,.8)">ATM Monitoring System</td>
+                <td align="right"><img src="{logo_url}" alt="Dashen Bank" width="86" style="border:0;display:block;width:86px;max-width:86px;height:auto"></td>
               </tr>
             </table>
           </td>
         </tr>
-
-        <!-- ── GOLD BAR ── -->
-        <tr><td style="height:4px;background:#FDD79A;padding:0;font-size:0;line-height:0">&zwnj;</td></tr>
-
-        <!-- ── CONTENT ── -->
+        <tr><td style="height:3px;background:#FDD79A;padding:0;font-size:0;line-height:0">&nbsp;</td></tr>
         <tr>
-          <td style="padding:36px 40px 24px">
-
-            <div style="font-size:22px;font-weight:800;color:#012169;margin-bottom:4px">Scheduled Report</div>
-            <div style="font-size:13px;color:#64748B;margin-bottom:24px">{label}</div>
+          <td style="padding:26px 28px 22px">
+            <div style="font-size:22px;font-weight:800;color:#012169;line-height:1.25">Scheduled Report</div>
+            <div style="font-size:13px;color:#64748B;margin-top:4px">{label}</div>
 
             <!-- ── INFO PANEL ── -->
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FAFBFC;border:1px solid #EEF1F6;border-radius:10px;margin-bottom:24px">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 4px">
               <tr>
-                <td style="padding:20px 24px">
-                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                    <tr>
-                      <td style="width:50%;padding:6px 0">
-                        <div style="font-size:10px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px">Report Type</div>
-                        <div style="font-size:14px;font-weight:600;color:#0F172A;margin-top:2px">{label}</div>
-                      </td>
-                      <td style="width:50%;padding:6px 0">
-                        <div style="font-size:10px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px">Period</div>
-                        <div style="font-size:14px;font-weight:600;color:#0F172A;margin-top:2px">Last {days} day{'s' if days != 1 else ''}</div>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style="width:50%;padding:6px 0">
-                        <div style="font-size:10px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px">ATM(s)</div>
-                        <div style="font-size:14px;font-weight:600;color:#0F172A;margin-top:2px">{atm_display}</div>
-                      </td>
-                      <td style="width:50%;padding:6px 0">
-                        <div style="font-size:10px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px">Generated</div>
-                        <div style="font-size:14px;font-weight:600;color:#0F172A;margin-top:2px">{now} EAT</div>
-                      </td>
-                    </tr>
-                  </table>
+                <td style="width:50%;padding:7px 0">
+                  <div style="font-size:11px;font-weight:600;color:#94A3B8;letter-spacing:.6px">REPORT TYPE</div>
+                  <div style="font-size:14px;font-weight:600;color:#0F172A;margin-top:2px">{label}</div>
+                </td>
+                <td style="width:50%;padding:7px 0">
+                  <div style="font-size:11px;font-weight:600;color:#94A3B8;letter-spacing:.6px">PERIOD</div>
+                  <div style="font-size:14px;font-weight:600;color:#0F172A;margin-top:2px">Last {days} day{'s' if days != 1 else ''}</div>
+                </td>
+              </tr>
+              <tr>
+                <td style="width:50%;padding:7px 0">
+                  <div style="font-size:11px;font-weight:600;color:#94A3B8;letter-spacing:.6px">ATM(S)</div>
+                  <div style="font-size:14px;font-weight:600;color:#0F172A;margin-top:2px">{atm_display}</div>
+                </td>
+                <td style="width:50%;padding:7px 0">
+                  <div style="font-size:11px;font-weight:600;color:#94A3B8;letter-spacing:.6px">GENERATED</div>
+                  <div style="font-size:14px;font-weight:600;color:#0F172A;margin-top:2px">{now} EAT</div>
                 </td>
               </tr>
             </table>
 
-            <!-- ── ATTACHMENT NOTE ── -->
-            <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:16px 20px;margin-bottom:24px">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td width="28" valign="top" style="padding-right:12px">
-                    <div style="width:28px;height:28px;background:#2563EB;border-radius:6px;text-align:center;line-height:28px;color:#fff;font-size:11px;font-weight:700;font-family:Arial,sans-serif">{fmt.upper()}</div>
-                  </td>
-                  <td>
-                    <div style="font-size:13px;font-weight:600;color:#1E40AF">Report Attached</div>
-                    <div style="font-size:12px;color:#475569;margin-top:2px">The <b>{label}</b> is attached to this email as a <b>{fmt.upper()}</b> file. Please download and review at your convenience.</div>
-                  </td>
-                </tr>
-              </table>
-            </div>
+            <div style="font-size:13px;color:#64748B;margin:14px 0 4px">Full report attached.</div>
 
             <!-- ── CTA ── -->
-            <table role="presentation" cellpadding="0" cellspacing="0">
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:14px">
               <tr>
-                <td style="background:#012169;border-radius:8px;padding:0">
-                  <a href="{BASE_URL}" style="display:inline-block;padding:12px 28px;font-size:13px;font-weight:600;color:#fff;text-decoration:none;border-radius:8px">&#8594; Open ATM Monitoring System</a>
+                <td style="background:#012169;padding:0">
+                  <a href="{BASE_URL}" style="display:inline-block;padding:12px 28px;font-size:13px;font-weight:600;color:#fff;text-decoration:none">&#8594; Open ATM Monitoring System</a>
                 </td>
               </tr>
             </table>
@@ -313,29 +288,12 @@ def _email_body(report_type, fmt, days, atm):
 
         <!-- ── FOOTER ── -->
         <tr>
-          <td style="background:#FAFBFC;border-top:1px solid #EEF1F6;padding:20px 40px">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-              <tr>
-                <td align="center" style="font-size:11px;color:#94A3B8;line-height:1.6">
-                  <div style="font-weight:600;color:#64748B;margin-bottom:2px">Dashen Bank S.C.</div>
-                  <div>ATM Monitoring System &mdash; Confidential Management Report</div>
-                  <div style="margin-top:8px;padding-top:8px;border-top:1px solid #EEF1F6">
-                    This email was automatically generated by the Dashen Bank ATM Monitoring System.<br>
-                    Please do not reply to this message. For support, contact IT Operations.
-                  </div>
-                </td>
-              </tr>
-            </table>
+          <td style="padding:4px 28px 24px;font-size:12px;color:#94A3B8;line-height:1.5">
+            Generated {now} EAT · Automated report from the ATM Monitoring System. Questions: contact IT Operations.
           </td>
         </tr>
 
       </table>
-
-      <!-- ── FOOTER SPACER ── -->
-      <div style="text-align:center;font-size:10px;color:#CBD5E1;margin-top:16px">
-        &copy; {datetime.now().strftime('%Y')} Dashen Bank S.C. All rights reserved.
-      </div>
-
     </td></tr>
   </table>
 </body>
