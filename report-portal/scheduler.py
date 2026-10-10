@@ -236,7 +236,7 @@ def _email_body(report_type, fmt, days, atm):
           <td style="background:#012169;padding:12px 28px">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td align="left" style="font-size:12px;color:rgba(255,255,255,.8)">ATM Monitoring System</td>
+                <td align="left" style="font-size:12px;color:#CBD5E1">ATM Monitoring System</td>
                 <td align="right"><img src="{logo_url}" alt="Dashen Bank" width="86" style="border:0;display:block;width:86px;max-width:86px;height:auto"></td>
               </tr>
             </table>
