@@ -4,6 +4,17 @@
 .back-link{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#012169;text-decoration:none;margin-bottom:12px}
 .back-link:hover{text-decoration:underline}
 .unread-tag{display:inline-block;background:#012169;color:#fff;font-size:10px;font-weight:700;border-radius:100px;padding:2px 9px;margin-left:8px;white-space:nowrap;vertical-align:middle}
+/* ── Contact popover (technician card on avatar/name click) ── */
+.who-card{cursor:pointer}
+.who-card:hover{filter:brightness(.94)}
+#whoPop{position:fixed;z-index:3000;min-width:230px;max-width:300px;background:#fff;border:1px solid #E4E9F1;border-radius:12px;box-shadow:0 12px 40px rgba(1,33,105,.16);padding:14px 16px;display:none}
+#whoPop.show{display:block}
+#whoPop .who-name{font-size:14px;font-weight:800;color:#012169;margin-bottom:8px}
+#whoPop .who-row{display:flex;gap:8px;align-items:center;font-size:12px;color:#0F172A;padding:4px 0;overflow-wrap:anywhere}
+#whoPop .who-row a{color:#012169;font-weight:600;text-decoration:none}
+#whoPop .who-row a:hover{text-decoration:underline}
+#whoPop .who-empty{font-size:12px;color:#94A3B8}
+#whoPop .who-note{font-size:10px;color:#94A3B8;margin-top:8px;border-top:1px solid #EEF1F6;padding-top:8px}
 .t-head{background:#fff;border-radius:12px;border:1px solid #EEF1F6;padding:18px 20px;margin-bottom:14px}
 .t-head h2{font-size:16px;font-weight:700;color:#0F172A;margin:0 0 8px}
 .t-meta{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#64748B}
@@ -75,11 +86,11 @@
   </div>
   {% else %}
   <div class="msg-row {% if m.mine %}mine{% endif %}">
-    {% if not m.mine %}<div class="avatar">{{ m.author[:2]|upper }}</div>{% endif %}
+    {% if not m.mine %}<div class="avatar who-card" data-uid="{{ m.author_id or '' }}" title="View contact">{{ m.author[:2]|upper }}</div>{% endif %}
     <div style="min-width:0;max-width:100%">
       <div class="bubble">
         <div class="bubble-head">
-          <span class="bubble-who">{{ m.author }}</span>
+          <span class="bubble-who who-card" data-uid="{{ m.author_id or '' }}" title="View contact">{{ m.author }}</span>
           <span class="bubble-time">{{ m.date }}</span>
           {% if m.private %}<span class="bubble-kind private">private</span>{% endif %}
         </div>
@@ -93,7 +104,7 @@
         {% endif %}
       </div>
     </div>
-    {% if m.mine %}<div class="avatar">{{ m.author[:2]|upper }}</div>{% endif %}
+    {% if m.mine %}<div class="avatar who-card" data-uid="{{ m.author_id or '' }}" title="View contact">{{ m.author[:2]|upper }}</div>{% endif %}
   </div>
   {% endif %}
   {% else %}
@@ -111,8 +122,7 @@
   {% endif %}
 
   {% if session.get('role') in ('admin', 'operator') %}
-  <div class="reply-box">
-    <div style="font-size:13px;font-weight:700;color:#012169;margin-bottom:8px">Reply as {{ session.get('username') }}</div>
+  <div class="reply-box">    <div style="font-size:13px;font-weight:700;color:#012169;margin-bottom:8px">Reply as {{ session.get('username') }}</div>
     <textarea id="replyText" placeholder="Type an update for the technician…"></textarea>
     <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
       <label for="replyFiles" class="act-btn" style="padding:8px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i data-lucide="paperclip" style="width:13px;height:13px"></i> Attach (max 3, 10MB each)</label>
@@ -129,6 +139,60 @@
     </div>
   </div>
   <script>
+  window.TICKET_CONTACTS = {{ contacts|tojson }};
+  function whoPopEl(){
+    var el = document.getElementById('whoPop');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'whoPop';
+      el.setAttribute('role', 'dialog');
+      el.setAttribute('aria-label', 'Contact details');
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+  function escHtml(s){
+    return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function closeWhoPop(){ var el = document.getElementById('whoPop'); if(el) el.classList.remove('show'); }
+  function openWhoPop(anchor){
+    var uid = anchor.getAttribute('data-uid') || '';
+    var card = (window.TICKET_CONTACTS || {})[uid] || (window.TICKET_CONTACTS || {})[String(uid)];
+    var pop = whoPopEl();
+    var name = anchor.textContent.trim() || 'Unknown';
+    var html = '<div class="who-name">' + escHtml(card && card.name ? card.name : name) + '</div>';
+    var hasEmail = !!(card && card.email);
+    var hasPhone = !!(card && (card.phone || card.mobile));
+    if(hasEmail) html += '<div class="who-row"><span style="color:#94A3B8">Email:</span> <a href="mailto:' + escHtml(card.email) + '">' + escHtml(card.email) + '</a></div>';
+    if(card && card.phone) html += '<div class="who-row"><span style="color:#94A3B8">Office:</span> <a href="tel:' + escHtml(card.phone.replace(/[\s-]/g,'')) + '">' + escHtml(card.phone) + '</a></div>';
+    if(card && card.mobile) html += '<div class="who-row"><span style="color:#94A3B8">Mobile:</span> <a href="tel:' + escHtml(card.mobile.replace(/[\s-]/g,'')) + '">' + escHtml(card.mobile) + '</a></div>';
+    if(!hasEmail && !hasPhone) html += '<div class="who-empty">No contact details on file in GLPI.</div>';
+    html += '<div class="who-note">From the GLPI directory — ask an admin to update it there.</div>';
+    pop.innerHTML = html;
+    var rect = anchor.getBoundingClientRect();
+    pop.classList.add('show');
+    var pw = pop.offsetWidth, ph = pop.offsetHeight;
+    var x = Math.max(8, Math.min(rect.left, window.innerWidth - pw - 8));
+    var y = rect.bottom + 8;
+    if(y + ph > window.innerHeight - 8) y = Math.max(8, rect.top - ph - 8);
+    pop.style.left = x + 'px';
+    pop.style.top = y + 'px';
+  }
+  document.addEventListener('click', function(e){
+    var anchor = e.target.closest ? e.target.closest('.who-card') : null;
+    var pop = document.getElementById('whoPop');
+    if(anchor && anchor.getAttribute('data-uid')){
+      e.stopPropagation();
+      var uid = anchor.getAttribute('data-uid');
+      if(pop && pop.classList.contains('show') && pop.dataset.uid === uid){ closeWhoPop(); return; }
+      openWhoPop(anchor);
+      pop = document.getElementById('whoPop');
+      if(pop) pop.dataset.uid = uid;
+      return;
+    }
+    if(!e.target.closest || !e.target.closest('#whoPop')) closeWhoPop();
+  });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeWhoPop(); });
   function replyAction(kind, btn){
     var url = kind === 'acknowledge'
       ? '/incidents/{{ ticket.id }}/acknowledge'

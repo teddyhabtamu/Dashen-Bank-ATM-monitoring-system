@@ -209,11 +209,12 @@ def _get_detail(ticket_id):
     return None
 
 
-def _put_detail(ticket_id, ticket, timeline, ticket_files):
+def _put_detail(ticket_id, ticket, timeline, ticket_files, contacts=None):
     try:
         _detail_cache[int(ticket_id)] = {
             'ts': time.time(), 'ticket': ticket,
             'timeline': timeline, 'ticket_files': ticket_files,
+            'contacts': contacts or {},
         }
     except (TypeError, ValueError):
         pass
@@ -498,6 +499,37 @@ def _ticket_item_ids(token, ticket_id):
     return ids
 
 
+def _user_contact(token, users_id, cache):
+    """Contact card for the ticket thread popover: name + email + phones.
+
+    Cached per request in `cache` (keyed by user id). Anything missing
+    stays '' — the template hides empty rows instead of showing blanks.
+    Never raises.
+    """
+    try:
+        uid = int(users_id or 0)
+    except (TypeError, ValueError):
+        return {'name': '—', 'email': '', 'phone': '', 'mobile': ''}
+    if uid in cache:
+        return cache[uid]
+    card = {'name': f'#{uid}', 'email': '', 'phone': '', 'mobile': ''}
+    try:
+        ok, data = _api(token, 'GET', f'User/{uid}', None)
+        if ok and isinstance(data, dict):
+            name = ' '.join(p for p in ((data.get('realname') or '').strip(),
+                                        (data.get('firstname') or '').strip()) if p)
+            card = {
+                'name': name or (data.get('name') or f'#{uid}'),
+                'email': (data.get('email') or '').strip(),
+                'phone': (data.get('phone') or '').strip(),
+                'mobile': (data.get('mobile') or '').strip(),
+            }
+    except Exception:
+        pass
+    cache[uid] = card
+    return card
+
+
 def _user_label(token, users_id, cache):
     if not users_id or users_id in cache:
         return cache.get(users_id, '—')
@@ -694,6 +726,7 @@ def detail(ticket_id):
                             'fid': f.get('id'),
                             'fsrc': src,
                             'author': _user_label(token, f.get('users_id'), names),
+                            'author_id': f.get('users_id'),
                             'date': _fmt_ts(f.get('date_creation') or f.get('date')),
                             'private': bool(int(f.get('is_private') or 0)),
                         'html': html,
@@ -706,6 +739,7 @@ def detail(ticket_id):
                         'kind': 'solution',
                         'sid': s.get('id'),
                         'author': _user_label(token, s.get('users_id'), names),
+                        'author_id': s.get('users_id'),
                         'date': _fmt_ts(s.get('date_creation') or s.get('date')),
                         'private': False,
                         'html': _clean_html(s.get('content') or '', ticket_id),
@@ -717,6 +751,7 @@ def detail(ticket_id):
                         'kind': 'task',
                         'fid': None,
                         'author': _user_label(token, k.get('users_id'), names),
+                        'author_id': k.get('users_id'),
                         'date': _fmt_ts(k.get('date_creation') or k.get('date')),
                         'private': False,
                         'html': _clean_html(
@@ -750,18 +785,41 @@ def detail(ticket_id):
                     except (TypeError, ValueError):
                         continue
                 ticket_files = _linked_docs(token, 'Ticket', ticket_id)
+                # Contact cards for the thread popover (one User call per
+                # distinct author; empty fields stay '' and render hidden).
+                _ccache, _seen_uids = {}, set()
+                for m in timeline:
+                    try:
+                        _uid = int(m.get('author_id') or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    if _uid and _uid not in _seen_uids:
+                        _seen_uids.add(_uid)
+                        _user_contact(token, _uid, _ccache)
+                ticket_contacts = dict(_ccache)
         finally:
             _close(token)
     if ticket is not None and hit is None:
-        _put_detail(ticket_id, ticket, timeline, ticket_files)
+        _put_detail(ticket_id, ticket, timeline, ticket_files,
+                    ticket_contacts if 'ticket_contacts' in dir() else None)
     if ticket is not None:
         try:
             _mark_seen(session.get('username', ''), ticket_id)
         except Exception:
             pass
+    contacts = (hit.get('contacts', {}) if hit
+                else (ticket_contacts if 'ticket_contacts' in dir() else {}))
+    # PII restraint: phone numbers to operator/admin only. Viewers get
+    # names + email. Stripped server-side — never rendered into the page.
+    if session.get('role', '') not in ('admin', 'operator'):
+        contacts = {str(uid): {'name': c.get('name', '—'), 'email': c.get('email', ''),
+                               'phone': '', 'mobile': ''}
+                    for uid, c in contacts.items()}
+    else:
+        contacts = {str(uid): c for uid, c in contacts.items()}
     return render_template('incidents_detail.html', ticket=ticket,
                            timeline=timeline, ticket_files=ticket_files if ticket else [],
-                           error=error)
+                           contacts=contacts, error=error)
 
 
 def _safe_filename(raw, doc_id):
