@@ -196,7 +196,9 @@
     if(!e.target.closest || !e.target.closest('#whoPop')) closeWhoPop();
   });
   document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeWhoPop(); });
+  </script>
   {% if session.get('role') in ('admin', 'operator') %}
+  <script>
   function replyAction(kind, btn){
     var url = kind === 'acknowledge'
       ? '/incidents/{{ ticket.id }}/acknowledge'
