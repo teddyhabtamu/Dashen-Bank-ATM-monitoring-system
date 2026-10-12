@@ -54,8 +54,17 @@ def _cached_zabbix():
     hosts, problems = [], None
     if not auth:
         if _cache['hosts'] is None:
-            return None, None  # unreachable, nothing stale to show
-        return _cache['hosts'], _cache['problems']
+            # Cold cache (fresh worker boot) + failed login: one retry —
+            # transient account blocks and slow API starts are the common
+            # causes, and a single cold-window failure is exactly what
+            # renders the Access-Denied banner (proven live 2026-10-12:
+            # 3 gunicorn workers × cold caches = flapping banner).
+            time.sleep(3)
+            auth = _zbx_login()
+        if not auth:
+            if _cache['hosts'] is None:
+                return None, None  # unreachable, nothing stale to show
+            return _cache['hosts'], _cache['problems']
     # host.get + problem.get are independent — run them together so a slow
     # Zabbix costs one timeout window, not two, before stale cache serves.
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutureTimeout
