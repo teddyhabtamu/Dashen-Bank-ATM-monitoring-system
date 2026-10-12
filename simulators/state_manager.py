@@ -68,6 +68,14 @@ def zbx_call(method, params, auth):
         return None
 
 
+def _fresh_values(items):
+    # Zabbix reports lastvalue "0" for items that never collected — use
+    # lastclock to tell those apart from genuine zeros, otherwise a dataless
+    # host reads OUT_OF_CASH instead of UNREACHABLE.
+    return {it['key_']: (it.get('lastvalue') if str(it.get('lastclock')) != '0' else None)
+            for it in items}
+
+
 def fetch_host_metrics(auth, host):
     hosts = zbx_call('host.get', {'output': ['hostid'], 'filter': {'host': [host]}}, auth)
     if not hosts:
@@ -75,13 +83,17 @@ def fetch_host_metrics(auth, host):
     hostid = hosts[0]['hostid']
     items = zbx_call('item.get', {'output': ['key_', 'lastvalue', 'lastclock'], 'hostids': [hostid],
                                   'filter': {'key_': STATE_KEYS}}, auth)
-    if not items:
+    if items is None:
         return {}
-    # Zabbix reports lastvalue "0" for items that never collected — use
-    # lastclock to tell those apart from genuine zeros, otherwise a dataless
-    # host reads OUT_OF_CASH instead of UNREACHABLE.
-    return {it['key_']: (it.get('lastvalue') if str(it.get('lastclock')) != '0' else None)
-            for it in items}
+    merged = _fresh_values(items)
+    # WMI (NCR agent) path: master + per-part dependents. `search` is
+    # substring-based — 'atm.part.' matches dependents, never 'atm.parts'.
+    wmi = zbx_call('item.get', {'output': ['key_', 'lastvalue', 'lastclock'], 'hostids': [hostid],
+                                'filter': {'key_': ['atm.parts']}}, auth) or []
+    deps = zbx_call('item.get', {'output': ['key_', 'lastvalue', 'lastclock'], 'hostids': [hostid],
+                                 'search': {'key_': 'atm.part.'}}, auth) or []
+    merged.update(_fresh_values(wmi + deps))
+    return merged
 
 
 def determine_state(m, vendor='NCR'):

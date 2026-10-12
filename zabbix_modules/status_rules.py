@@ -7,6 +7,13 @@ a config file: during UAT, edit status_map.json instead of touching code.
 
 Precedence (most severe first): OFFLINE -> OUT_OF_SERVICE -> SUPERVISOR ->
 OUT_OF_CASH -> HARDWARE_FAULT -> IN_SERVICE -> UNKNOWN.
+
+NCR agent (WMI) path: when the atm.parts master is fresh, WMI is
+authoritative for that host and the SNMP keys (simulator OIDs, unmapped on
+real hardware) are ignored. Vendor legend from NCR_DevDevicePart
+qualifiers (TESTMACHINE 2026-10-09): PartStatus 0 OK, 1 Warning, 2 Error,
+3 Not Configured, 4 Unknown, 5 Accessed. Only Error feeds state today;
+Warning/Unknown/PM are v2 after burn-in.
 """
 import json
 import os
@@ -39,10 +46,33 @@ def load_status_map():
         return {"default": dict(DEFAULTS)}
 
 
+WMI_MASTER_KEY = 'atm.parts'
+WMI_STATUS_PREFIX = 'atm.part.part_status['
+
+
+def wmi_part_errors(m):
+    """Sorted names of parts whose WMI part_status == 2 (Error).
+
+    Values arrive as strings ('2'), None when never collected. Anything
+    unparseable is ignored (never fault on unreadable data).
+    """
+    out = []
+    for k, v in (m or {}).items():
+        if k.startswith(WMI_STATUS_PREFIX) and k.endswith(']') \
+                and _to_int(v, -1) == 2:
+            out.append(k[len(WMI_STATUS_PREFIX):-1])
+    return sorted(out)
+
+
 def interpret_state(vendor, m):
     """Return ATM state from a metrics dict keyed by Zabbix item keys."""
     if not m:
         return 'UNREACHABLE'
+    if m.get(WMI_MASTER_KEY) not in (None, ""):
+        # NCR agent path live: WMI authoritative, SNMP ignored for host.
+        if wmi_part_errors(m):
+            return 'HARDWARE_FAULT'
+        return 'IN_SERVICE'
     # If even the core items were never collected, the ATM is unreachable
     # rather than (falsely) healthy. Guards against incomplete OID mapping.
     # Empty strings count as missing: Zabbix returns "" (not None) for items

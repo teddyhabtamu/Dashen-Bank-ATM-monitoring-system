@@ -32,6 +32,7 @@
 .dot-ok{background:#059669}.dot-warn{background:#D97706}.dot-error{background:#DC2626}.dot-grey{background:#94A3B8}
 .hw-status{margin-left:8px;padding:2px 9px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
 .hw-status.ok{background:rgba(5,150,105,.12);color:#059669}
+.hw-status.unknown{background:#F1F5F9;color:#64748B}
 .hw-status.warn{background:rgba(217,119,6,.14);color:#B45309}
 .hw-status.error{background:rgba(220,38,38,.12);color:#DC2626}
 table.txn{width:100%;border-collapse:collapse;font-size:12px}
@@ -183,10 +184,11 @@ table.txn tbody tr:hover{background:#EEF2FF}
             {% for h in hardware %}
             <span class="pill">
               <span class="dot dot-{{ h.status }}"></span>{{ h.name }}
-              <span class="hw-status hw-{{ h.status }}">{{ {'ok':'OK','warn':'Warning','error':'Fault'}[h.status] }}</span>
+              <span class="hw-status hw-{{ h.status }}">{{ {'ok':'OK','warn':'Warning','error':'Fault','unknown':'Unknown'}[h.status] }}</span>
             </span>
             {% endfor %}
           </div>
+          <div class="atm-cap">Live telemetry from {{ hw_source or 'SNMP' }}</div>
           {% else %}
           <div class="no-data">Live hardware status unavailable (ATM not reachable).</div>
           {% endif %}

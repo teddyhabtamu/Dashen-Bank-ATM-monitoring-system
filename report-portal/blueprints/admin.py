@@ -363,13 +363,59 @@ def build_cassettes(vendor, m, capacity=CASSETTE_MAX):
     return out
 
 
+def _wmi_chip(m, *part_names):
+    """Worst-of chip status across WMI part instances.
+
+    Vendor legend (NCR_DevDevicePart qualifiers): 0 OK, 1 Warning, 2 Error,
+    other nonzero Unknown; missing data renders grey 'unknown' — never red.
+    No-data-red was the portal's oldest lie (Card Reader showed Fault while
+    WMI read OK); this helper makes that impossible by construction.
+    """
+    worst, rank, seen = 'unknown', -1, False
+    for p in part_names:
+        v = m.get(f'atm.part.part_status[{p}]')
+        if v is None or v == '':
+            continue
+        seen = True
+        try:
+            code = int(float(v))
+        except (TypeError, ValueError):
+            continue
+        if code == 2:
+            r, s = 3, 'error'
+        elif code == 1:
+            r, s = 2, 'warn'
+        elif code == 0:
+            r, s = 0, 'ok'
+        else:
+            r, s = 1, 'unknown'
+        if r > rank:
+            worst, rank = s, r
+    return worst if seen else 'unknown'
+
+
 def build_hardware(vendor, m):
     """Hardware component status pills. ok=green, warn=amber, error=red.
 
     The components shown here MUST mirror the OIDs that drive the overall
     ATM state in `state_manager.determine_state` (cash_jam + card_reader),
     otherwise the detail page disagrees with the HARDWARE_FAULT badge.
+
+    NCR agent hosts: WMI dependents are authoritative (SNMP OIDs are
+    unmapped simulator roots on real hardware) — returns (chips, 'WMI').
+    Otherwise the legacy SNMP mapping — returns (chips, 'SNMP').
     """
+    if m.get('atm.parts') not in (None, ""):
+        comps = [
+            ('Card reader', _wmi_chip(m, 'Card Reader', 'Smart Card Reader')),
+            ('Printer', _wmi_chip(m, 'Print Head', 'Paper')),
+            ('Pin pad', _wmi_chip(m, 'PinPad')),
+            ('Cash jam', _wmi_chip(m, 'Mechanism', 'Single Note Transport')),
+            ('Retract bin', _wmi_chip(m, 'Retract Area', 'Purge Bin', 'Reject Area')),
+            ('Network', 'unknown'),  # no WMI source — grey, never red
+            ('UPS', 'unknown'),      # no WMI source — grey, never red
+        ]
+        return ([{'name': n, 'status': s} for n, s in comps], 'WMI')
     def num(v, default=0):
         # Zabbix API returns every value as a string (or None when an item
         # has never collected). Coerce once so comparisons below are safe
@@ -390,7 +436,7 @@ def build_hardware(vendor, m):
         ('Network', 'ok' if num(m.get('atm.net.link'), None) == 1 else 'error'),
         ('UPS', 'ok' if num(m.get('atm.power.ups')) > 0 else 'error'),
     ]
-    return [{'name': n, 'status': s} for n, s in comps]
+    return ([{'name': n, 'status': s} for n, s in comps], 'SNMP')
 
 
 FIELDS = [
@@ -551,7 +597,7 @@ def atm_detail(atm_id):
         cap_map = load_cassette_capacity()
         cassette_cap = cap_map.get(atm_id, CASSETTE_MAX)
         cassettes = build_cassettes(vendor, metrics, cassette_cap) if metrics else []
-        hardware = build_hardware(vendor, metrics) if metrics else []
+        hw, hw_source = build_hardware(vendor, metrics) if metrics else ([], None)
 
         # Override current_state with live data for consistency
         if metrics:
@@ -600,7 +646,8 @@ def atm_detail(atm_id):
 
         return render_template('admin_atm_detail.html',
                                atm=atm, vendor=vendor, cassettes=cassettes,
-                               hardware=hardware, metrics_online=metrics is not None,
+                               hardware=hw, hw_source=hw_source,
+                               metrics_online=metrics is not None,
                                total_txns=total_txns, success_rate=success_rate,
                                cash_today=cash_today, active_faults=active_faults,
                                txns=txns)

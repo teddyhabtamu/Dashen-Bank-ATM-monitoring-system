@@ -94,10 +94,16 @@ def create_app():
     def external_links():
         """UI links for the sidebar/header — configurable per environment
         (localhost defaults keep laptop dev working unchanged)."""
+        try:
+            from db import sim_feed_active
+            sim_banner = sim_feed_active()
+        except Exception:
+            sim_banner = False
         return {
             'grafana_url': os.environ.get('GRAFANA_URL', 'http://localhost:3000'),
             'zabbix_ui_url': os.environ.get('ZABBIX_UI_URL', 'http://localhost:8080'),
             'glpi_ui_url': os.environ.get('GLPI_UI_URL', 'http://localhost:8082'),
+            'sim_banner': sim_banner,
         }
 
     @app.after_request

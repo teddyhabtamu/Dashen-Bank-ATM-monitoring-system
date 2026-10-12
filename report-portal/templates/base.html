@@ -498,6 +498,9 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
 </div>
 
 <div class="main-content">
+{% if sim_banner %}
+<div style="background:#FFFBEB;border-bottom:1px solid #FDD79A;color:#92400E;font-size:12px;font-weight:600;padding:8px 36px">SIMULATED TRANSACTIONS — synthetic feed until switch integration. Hardware states are live.</div>
+{% endif %}
 {% if error %}
 <div class="page-content">
   <div class="alert-card error">
