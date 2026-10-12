@@ -75,6 +75,44 @@ def wanted_items():
                    f'atm.part.replenishment_status[{part}]', ('replenishment_status', part))
 
 
+def ensure_proven_triggers(tid, auth):
+    # v1 proven triggers (vendor legend from NCR_DevDevicePart qualifiers,
+    # TESTMACHINE 2026-10-09 — zero guessing):
+    #   part_status == 2 (Error), replenishment_status == 2 (Error).
+    # Deliberately NOT triggering: 1 Warning (noise level unknown — v2),
+    # 3/4/5 Not Configured/Unknown/Accessed (test core sits at Unknown on
+    # cassettes by configuration, not by fault), PM (no items yet — v2).
+    # Severity High: live proof fires immediately (Transport (2), Paper
+    # replenishment) — expect 2 problems + possible GLPI test tickets.
+    wanted = []
+    for part, repl in PARTS:
+        wanted.append(
+            (f'ATM Part — {part} ERROR',
+             f'last(/{TEMPLATE_NAME}/atm.part.part_status[{part}])=2'))
+        if repl:
+            wanted.append(
+                (f'ATM Part — {part} REPLENISHMENT ERROR',
+                 f'last(/{TEMPLATE_NAME}/atm.part.replenishment_status[{part}])=2'))
+    have = {t['description']: t['triggerid'] for t in
+            call('trigger.get', {'templateids': [tid],
+                                 'output': ['triggerid', 'description'],
+                                 'limit': 500}, auth)}
+    made, failed = 0, []
+    for desc, expr in wanted:
+        if desc in have:
+            continue
+        try:
+            call('trigger.create', {'description': desc, 'expression': expr,
+                                    'priority': 4, 'status': 0}, auth)
+            made += 1
+        except RuntimeError as e:
+            failed.append(f'{desc}: {e}')
+    print(f'Proven triggers: {made} created, {len(have)} already present, '
+          f'{len(failed)} failed')
+    for f in failed:
+        print(f'  TRIGGER-FAIL: {f}')
+
+
 def ensure_master_nodata_trigger(tid, auth):
     # Semantics-free health only: fires when the collector goes blind.
     # Deliberately the ONLY trigger here — value thresholds on part_status /
@@ -179,6 +217,7 @@ def main():
           f'{len(have) - fixed} already present '
           f'({len(have) + made} total, want {1 + sum(1 + int(r) for _, r in PARTS)})')
     ensure_master_nodata_trigger(tid, auth)
+    ensure_proven_triggers(tid, auth)
     call('user.logout', [], auth)
     return 0
 

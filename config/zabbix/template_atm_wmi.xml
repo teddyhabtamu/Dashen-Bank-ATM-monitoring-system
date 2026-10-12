@@ -124,6 +124,25 @@
           </preprocessing>
         </item>
         <item>
+          <uuid>8c35422a-c13b-51d8-880e-55665468c1ba</uuid>
+          <name>ATM Part — Control Board (2) Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Control Board (2)]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$['parts']['Control Board (2)']['part_status']</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
           <uuid>fb5f7d87-7718-5f18-a41d-3554cde33b46</uuid>
           <name>ATM Part — Divert Area Status</name>
           <type>DEPENDENT</type>
@@ -785,6 +804,25 @@
             <step>
               <type>JSONPATH</type>
               <params>$['parts']['Transport']['part_status']</params>
+            </step>
+          </preprocessing>
+        </item>
+        <item>
+          <uuid>c32318b3-c581-5bbf-9bed-cf107698b427</uuid>
+          <name>ATM Part — Transport (2) Status</name>
+          <type>DEPENDENT</type>
+          <key>atm.part.part_status[Transport (2)]</key>
+          <delay>0</delay>
+          <history>7d</history>
+          <trends>0</trends>
+          <value_type>UNSIGNED</value_type>
+          <master_item>
+            <key>atm.parts</key>
+          </master_item>
+          <preprocessing>
+            <step>
+              <type>JSONPATH</type>
+              <params>$['parts']['Transport (2)']['part_status']</params>
             </step>
           </preprocessing>
         </item>

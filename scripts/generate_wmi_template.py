@@ -25,9 +25,19 @@ TEMPLATE_NAME = "Dashen Bank ATM WMI Parts"
 TEMPLATE_GROUP = "Templates"
 
 # (part name, watch_replenishment)
+# Proven vendor legend (NCR_DevDevicePart qualifiers, TESTMACHINE 2026-10-09):
+#   PartStatus: 0 OK, 1 Warning, 2 Error, 3 Not Configured, 4 Unknown, 5 Accessed
+#   PMStatus: 0 OK, 1 PM Required
+#   ReplenishmentStatus ValueMap {0,1,2,3} = OK, Warning, Error, Unknown
+#   (provider Description text wrongly says "4 - Unknown" — trust ValueMap)
+# Duplicate names are physical pairs sharing one WMI Name (Control Board x2,
+# Transport x2, differing DeviceInstance) — the collector binds the bare name
+# to the lowest (DeviceInstance,PartId) and suffixes the rest " (2)", so the
+# template must carry the same suffixed keys or they go unmonitored.
 PARTS = [
     ("Capture Bin", False), ("Card Capture Bin", False), ("Card Reader", False),
-    ("Carriage", False), ("Control Board", False), ("Divert Area", False),
+    ("Carriage", False), ("Control Board", False), ("Control Board (2)", False),
+    ("Divert Area", False),
     ("Electronics", False), ("Exit Shutter", False), ("FDKs", False),
     ("First Cassette", True), ("First Pick Module", False),
     ("Fourth Cassette", True), ("Fourth Pick Module", False), ("Knife", False),
@@ -38,7 +48,7 @@ PARTS = [
     ("Second Cassette", True), ("Second Pick Module", False),
     ("Single Note Transport", False), ("Smart Card Reader", False),
     ("Suction Cups", False), ("Third Cassette", True),
-    ("Third Pick Module", False), ("Transport", False),
+    ("Third Pick Module", False), ("Transport", False), ("Transport (2)", False),
     ("Vacuum System", False),
 ]
 

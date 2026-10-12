@@ -27,17 +27,43 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 function Get-Parts {
   $rows = Get-WmiObject -Class NCR_DevicePart
-  $out = @{}
+  # NOTE 2026-10-09 (proven on TESTMACHINE): names are NOT unique —
+  # Control Board x2 (dev 65674/65722), Transport x2 (dev 65673/65674).
+  # A name-keyed hashtable collapses each pair last-write-wins in RANDOM
+  # order, so Zabbix flaps between the instances (live case: Transport
+  # #2=OK vs #5=Error while "Transport" read 0). Disambiguate
+  # deterministically: sort by name,DeviceInstance,PartId; the first keeps
+  # the bare name (history continuity), the rest get " (2)", " (3)".
+  # Template PARTS and trigger lists must carry the same suffixed names.
+  $list = @()
   foreach ($r in $rows) {
     $name = [string]$r.Name
     if ([string]::IsNullOrEmpty($name)) { continue }
     if ($Part -ne "" -and $name -ne $Part) { continue }
-    $out[$name] = @{
+    $list += New-Object PSObject -Property @{
+      Name = $name
+      Dev  = [uint32]$r.DeviceInstance
+      Pid  = [uint16]$r.PartId
+      Row  = $r
+    }
+  }
+  $list = $list | Sort-Object -Property Name, Dev, Pid
+  $out = @{}
+  $prev = ""
+  $dup = 0
+  foreach ($e in $list) {
+    $r = $e.Row
+    if ($e.Name -eq $prev) { $dup += 1 } else { $prev = $e.Name; $dup = 0 }
+    $key = $e.Name
+    if ($dup -gt 0) { $key = "$($e.Name) ($($dup + 1))" }
+    $out[$key] = @{
       part_status          = [int]$r.PartStatus
       pm_status            = [int]$r.PMStatus
       replenishment_status = [int]$r.ReplenishmentStatus
       replenishable        = [bool]$r.Replenishable
       powered_on           = $r.PoweredOn
+      device_instance      = [uint32]$r.DeviceInstance
+      part_id              = [uint16]$r.PartId
     }
   }
   return $out
@@ -67,7 +93,9 @@ foreach ($k in ($parts.Keys | Sort-Object)) {
     ',"pm_status":' + $v['pm_status'] +
     ',"replenishment_status":' + $v['replenishment_status'] +
     ',"replenishable":' + ($v['replenishable'].ToString().ToLower()) +
-    ',"powered_on":' + $pon + '}')
+    ',"powered_on":' + $pon +
+    ',"device_instance":' + $v['device_instance'] +
+    ',"part_id":' + $v['part_id'] + '}')
 }
 [void]$sb.Append('}}')
 # NOTE: [Console]::WriteLine, NOT Write-Output. Write-Output sends the long
