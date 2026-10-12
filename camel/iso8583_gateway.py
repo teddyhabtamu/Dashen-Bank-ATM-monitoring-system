@@ -17,6 +17,7 @@ require ZERO changes when switching from simulation to production.
 """
 
 import os
+import sys
 import json
 import time
 import random
@@ -440,7 +441,17 @@ def main():
         # Production: listen for real switch
         start_tcp_server(conn)
     else:
-        # Simulation: generate test messages
+        # Simulation: generate test messages — but ONLY when explicitly
+        # enabled. Proven 2026-10-12: with ENABLE_SIMULATORS=false the
+        # gateway still wrote 4,289 ISO8583_SIM rows/24h into UAT while the
+        # three engines stayed silent, and every portal KPI/fault count on
+        # the test ATMs was fiction. Same kill-switch pattern as
+        # simulators/*_engine.py. TCP (real-switch) mode is unaffected.
+        if os.environ.get('ENABLE_SIMULATORS', 'false').lower() not in \
+                ('1', 'true', 'yes', 'on'):
+            print("ENABLE_SIMULATORS is not set — refusing to write "
+                  "simulator transactions. Exiting.")
+            sys.exit(0)
         print(f"\nSimulation mode: generating "
               f"1 transaction every "
               f"{INTERVAL} seconds")
