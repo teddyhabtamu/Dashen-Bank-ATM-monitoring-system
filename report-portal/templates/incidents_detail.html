@@ -138,7 +138,10 @@
       <button class="act-btn" id="replyBtn" onclick="sendReply()" style="padding:8px 18px;background:#012169;color:#fff;border-color:#012169">Send reply</button>
     </div>
   </div>
+  {% endif %}
   <script>
+  // Contact popover — deliberately OUTSIDE the operator gate above: viewers
+  // get name+email cards (phones are stripped server-side for their role).
   window.TICKET_CONTACTS = {{ contacts|tojson }};
   function whoPopEl(){
     var el = document.getElementById('whoPop');
@@ -193,6 +196,7 @@
     if(!e.target.closest || !e.target.closest('#whoPop')) closeWhoPop();
   });
   document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeWhoPop(); });
+  {% if session.get('role') in ('admin', 'operator') %}
   function replyAction(kind, btn){
     var url = kind === 'acknowledge'
       ? '/incidents/{{ ticket.id }}/acknowledge'
