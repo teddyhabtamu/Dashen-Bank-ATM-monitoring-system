@@ -47,6 +47,9 @@ services:
     container_name: iso8583-gateway
     environment:
       MODE: "${ISO8583_MODE:-simulation}"
+      # Kill-switch: sim loop exits unless explicitly true (UAT keeps
+      # simulation ON until switch integration; production sets false).
+      ENABLE_SIMULATORS: "${ENABLE_SIMULATORS:-false}"
       SWITCH_HOST: "${SWITCH_HOST:-0.0.0.0}"
       SWITCH_PORT: "${SWITCH_PORT:-9876}"
       DB_HOST: "${APPS_VM_IP}"
