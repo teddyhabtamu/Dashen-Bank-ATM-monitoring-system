@@ -12,10 +12,16 @@
   Classes (all verified present on SelfServ test core, 2026-09-30):
     NCR_DevicePart  - per-part state (reader, shutter, printers, cassettes,
                       purge/reject/retract, PinPad, presenter, ...)
-  Output shape (stable contract — Zabbix JSONPath dependents rely on it):
+    NCR_Device      - per-device operational state, added 2026-10-12
+                      (14 instances on TESTMACHINE; DeviceStatus 0 OK,
+                      1 Warning, 2 Unavailable)
+  Output shape (stable contract — Zabbix dependents rely on it):
     {"ts":"2026-09-30T12:00:00","parts":{"First Cassette":{"part_status":4,
      "pm_status":0,"replenishment_status":1,"replenishable":true,
-     "powered_on":null}, ...}}
+     "powered_on":null,"device_instance":65722,"part_id":8}, ...},
+     "devices":{"CASH-01-UsbMediaDispenser":{"device_status":1,...}, ...}}
+  Duplicate part names are " (2)"-suffixed, bare name binds lowest
+  (DeviceInstance,PartId) — see Get-Parts. Master key stays atm.parts.
 .PARAMETER Part
   Optional single-part mode for zabbix_get testing:
     powershell -File atm-wmi-collector.ps1 -Part "First Cassette"
@@ -79,7 +85,42 @@ function Escape-JsonString([string]$s) {
   return $s
 }
 
+# NCR_Device sweep: device-level operational states. Discovered 2026-10-12
+# (14 instances on TESTMACHINE; DeviceStatus legend 0 OK, 1 Warning,
+# 2 Unavailable — same qualifier pattern as PartStatus). Same duplicate
+# guard as parts (names assumed unique, suffixed if ever not).
+function Get-Devices {
+  $rows = Get-WmiObject -Class NCR_Device
+  $list = @()
+  foreach ($r in $rows) {
+    $name = [string]$r.Name
+    if ([string]::IsNullOrEmpty($name)) { continue }
+    $list += New-Object PSObject -Property @{
+      Name = $name
+      Dev  = [uint32]$r.DeviceInstance
+      Row  = $r
+    }
+  }
+  $list = $list | Sort-Object -Property Name, Dev
+  $out = @{}
+  $prev = ""
+  $dup = 0
+  foreach ($e in $list) {
+    $r = $e.Row
+    if ($e.Name -eq $prev) { $dup += 1 } else { $prev = $e.Name; $dup = 0 }
+    $key = $e.Name
+    if ($dup -gt 0) { $key = "$($e.Name) ($($dup + 1))" }
+    $out[$key] = @{
+      device_status   = [int]$r.DeviceStatus
+      pm_status       = [int]$r.PMStatus
+      device_instance = [uint32]$r.DeviceInstance
+    }
+  }
+  return $out
+}
+
 $parts = Get-Parts
+$devices = Get-Devices
 $ts = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss')
 $sb = New-Object System.Text.StringBuilder
 [void]$sb.Append('{"ts":"' + $ts + '","parts":{')
@@ -96,6 +137,16 @@ foreach ($k in ($parts.Keys | Sort-Object)) {
     ',"powered_on":' + $pon +
     ',"device_instance":' + $v['device_instance'] +
     ',"part_id":' + $v['part_id'] + '}')
+}
+[void]$sb.Append('},"devices":{')
+$first = $true
+foreach ($k in ($devices.Keys | Sort-Object)) {
+  $v = $devices[$k]
+  if (-not $first) { [void]$sb.Append(',') }
+  $first = $false
+  [void]$sb.Append('"' + (Escape-JsonString $k) + '":{"device_status":' + $v['device_status'] +
+    ',"pm_status":' + $v['pm_status'] +
+    ',"device_instance":' + $v['device_instance'] + '}')
 }
 [void]$sb.Append('}}')
 # NOTE: [Console]::WriteLine, NOT Write-Output. Write-Output sends the long

@@ -52,6 +52,19 @@ PARTS = [
     ("Vacuum System", False),
 ]
 
+# Device union from TESTMACHINE 2026-10-12 (NCR_Device, 14 instances;
+# DeviceStatus 0 OK, 1 Warning, 2 Unavailable). Names are model-canonical
+# but fleet variance is expected across models — names absent on a host are
+# simply never emitted, and their items sit dataless (grey, never red).
+# Per-device discovery (LLD) is the fleet-scale follow-up, not this list.
+DEVICES = [
+    "ALRM-01-USBAlarms", "ALT_-01-USBAdvertLight", "CASH-01-UsbMediaDispenser",
+    "FLT_-01-USBFasciaLight", "KEYB-01-PcQwertyKeyboardPS2", "KEYB-01-USBEPP2",
+    "MCRW-01-USBMotorised", "MDSW-01-MODESWITCH", "MEEI-01-USBMediaEntryExitInd",
+    "MISC-01-USBMiscInterface", "RPNT-01-UsbThermal", "RRLY-01-USBRemoteRelay",
+    "RSI_-01-USBRemoteStatusInd", "SND_-01-PcSound",
+]
+
 NS = "http://www.w3.org/2001/XMLSchema-instance"
 
 
@@ -126,6 +139,25 @@ def main():
         if repl:
             _dependent(items_el, part, "replenishment_status", "Replenishment")
             n_dep += 1
+    for dev in DEVICES:
+        # Device dependents address the devices tree; reference-only (live
+        # runs JavaScript via the API importer — see import script).
+        item = ET.SubElement(items_el, "item")
+        _el(item, "uuid", _uid("item", "dev", dev))
+        _el(item, "name", f"ATM Device — {dev} Status")
+        _el(item, "type", "DEPENDENT")
+        _el(item, "key", f"atm.device.status[{dev}]")
+        _el(item, "delay", "0")
+        _el(item, "history", "7d")
+        _el(item, "trends", "0")
+        _el(item, "value_type", "UNSIGNED")
+        master = ET.SubElement(item, "master_item")
+        _el(master, "key", "atm.parts")
+        pre = ET.SubElement(item, "preprocessing")
+        step = ET.SubElement(pre, "step")
+        _el(step, "type", "JSONPATH")
+        _el(step, "params", f"$['devices']['{dev}']['device_status']")
+        n_dep += 1
     xml = minidom.parseString(ET.tostring(zbx, encoding="unicode")).toprettyxml(indent="  ")
     with open("config/zabbix/template_atm_wmi.xml", "w") as f:
         f.write(xml)

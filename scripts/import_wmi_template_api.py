@@ -25,7 +25,7 @@ import sys
 import requests
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from generate_wmi_template import PARTS, TEMPLATE_NAME
+from generate_wmi_template import PARTS, DEVICES, TEMPLATE_NAME
 # Flat group — see generate_wmi_template.py (nested groups break references
 # when the implied parent object doesn't exist).
 TEMPLATE_GROUP = "Templates"
@@ -60,30 +60,40 @@ def path_for(part, field):
     return f'$["parts"]["{part}"]["{field}"]'
 
 
-def js_for(part, field):
+def js_for(tree, name, field):
     return (f'var j = JSON.parse(value);\n'
-            f'return j.parts["{part}"].{field};')
+            f'return j.{tree}["{name}"].{field};')
 
 
 def wanted_items():
-    """(name, key, field) for master + all dependents, mirroring the XML."""
+    """(name, key, field) for master + all dependents, mirroring the XML.
+
+    field is (tree, object-name, leaf) — parts live under j.parts,
+    devices under j.devices.
+    """
     yield ('ATM Parts — full WMI tree', 'atm.parts', None)
     for part, repl in PARTS:
-        yield (f'ATM Part — {part} Status', f'atm.part.part_status[{part}]', ('part_status', part))
+        yield (f'ATM Part — {part} Status', f'atm.part.part_status[{part}]',
+               ('parts', part, 'part_status'))
         if repl:
             yield (f'ATM Part — {part} Replenishment',
-                   f'atm.part.replenishment_status[{part}]', ('replenishment_status', part))
+                   f'atm.part.replenishment_status[{part}]',
+                   ('parts', part, 'replenishment_status'))
+    for dev in DEVICES:
+        yield (f'ATM Device — {dev} Status', f'atm.device.status[{dev}]',
+               ('devices', dev, 'device_status'))
 
 
 def ensure_proven_triggers(tid, auth):
-    # v1 proven triggers (vendor legend from NCR_DevDevicePart qualifiers,
-    # TESTMACHINE 2026-10-09 — zero guessing):
-    #   part_status == 2 (Error), replenishment_status == 2 (Error).
+    # v1 proven triggers (vendor legends from NCR_DevDevicePart qualifiers
+    # 2026-10-09 and NCR_DevDevice.DeviceStatus 2026-10-12 — zero guessing):
+    #   part_status == 2 (Error), replenishment_status == 2 (Error),
+    #   device_status == 2 (Unavailable).
     # Deliberately NOT triggering: 1 Warning (noise level unknown — v2),
     # 3/4/5 Not Configured/Unknown/Accessed (test core sits at Unknown on
     # cassettes by configuration, not by fault), PM (no items yet — v2).
     # Severity High: live proof fires immediately (Transport (2), Paper
-    # replenishment) — expect 2 problems + possible GLPI test tickets.
+    # replenishment, RPNT Unavailable) — expect problems + GLPI test tickets.
     wanted = []
     for part, repl in PARTS:
         wanted.append(
@@ -93,6 +103,10 @@ def ensure_proven_triggers(tid, auth):
             wanted.append(
                 (f'ATM Part — {part} REPLENISHMENT ERROR',
                  f'last(/{TEMPLATE_NAME}/atm.part.replenishment_status[{part}])=2'))
+    for dev in DEVICES:
+        wanted.append(
+            (f'ATM Device — {dev} UNAVAILABLE',
+             f'last(/{TEMPLATE_NAME}/atm.device.status[{dev}])=2'))
     have = {t['description']: t['triggerid'] for t in
             call('trigger.get', {'templateids': [tid],
                                  'output': ['triggerid', 'description'],
@@ -181,41 +195,42 @@ def main():
     mid = None
     made = 0
     fixed = 0
-    for name, key, field in wanted_items():
+    for iname, key, field in wanted_items():
         if key in have:
             if field is None:
                 mid = have[key]['itemid']
                 continue
-            fname, part = field
+            tree, obj, leaf = field
             # Converge every dependent to the JavaScript step (see above):
             # anything else on these keys is a leftover of the JSONPath era.
             call('item.update', {
                 'itemid': have[key]['itemid'],
-                'preprocessing': [{'type': 21, 'params': js_for(part, fname),
+                'preprocessing': [{'type': 21, 'params': js_for(tree, obj, leaf),
                                    'error_handler': 0,
                                    'error_handler_params': ''}]}, auth)
             fixed += 1
             continue
         if field is None:
             mid = call('item.create', {
-                'name': name, 'key_': key, 'hostid': tid,
+                'name': iname, 'key_': key, 'hostid': tid,
                 'type': 0, 'value_type': 4, 'delay': '5m',
                 'history': '7d', 'trends': '0'}, auth)['itemids'][0]
         else:
-            fname, part = field
+            tree, obj, leaf = field
             call('item.create', {
-                'name': name, 'key_': key, 'hostid': tid,
+                'name': iname, 'key_': key, 'hostid': tid,
                 'type': 18, 'value_type': 3, 'delay': '0',
                 'history': '7d', 'trends': '0',
                 'master_itemid': mid,
                 'preprocessing': [{'type': 21,
-                                   'params': js_for(part, fname),
+                                   'params': js_for(tree, obj, leaf),
                                    'error_handler': 0,
                                    'error_handler_params': ''}]}, auth)
         made += 1
+    want_total = 1 + sum(1 + int(r) for _, r in PARTS) + len(DEVICES)
     print(f'Done: {made} items created, {fixed} paths repaired, '
           f'{len(have) - fixed} already present '
-          f'({len(have) + made} total, want {1 + sum(1 + int(r) for _, r in PARTS)})')
+          f'({len(have) + made} total, want {want_total})')
     ensure_master_nodata_trigger(tid, auth)
     ensure_proven_triggers(tid, auth)
     call('user.logout', [], auth)

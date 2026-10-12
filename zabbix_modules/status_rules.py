@@ -14,6 +14,10 @@ real hardware) are ignored. Vendor legend from NCR_DevDevicePart
 qualifiers (TESTMACHINE 2026-10-09): PartStatus 0 OK, 1 Warning, 2 Error,
 3 Not Configured, 4 Unknown, 5 Accessed. Only Error feeds state today;
 Warning/Unknown/PM are v2 after burn-in.
+Device branch (NCR_Device sweep, added 2026-10-12; DeviceStatus 0 OK,
+1 Warning, 2 Unavailable): CASH-cluster Unavailable → OUT_OF_SERVICE
+(dispenser down means no cash — reasoned policy, no guessing: the prefix
+is the cluster by construction); other-device Unavailable → HARDWARE_FAULT.
 """
 import json
 import os
@@ -48,6 +52,7 @@ def load_status_map():
 
 WMI_MASTER_KEY = 'atm.parts'
 WMI_STATUS_PREFIX = 'atm.part.part_status['
+WMI_DEV_PREFIX = 'atm.device.status['
 
 
 def wmi_part_errors(m):
@@ -64,13 +69,26 @@ def wmi_part_errors(m):
     return sorted(out)
 
 
+def wmi_device_unavail(m):
+    """Sorted names of devices whose WMI device_status == 2 (Unavailable)."""
+    out = []
+    for k, v in (m or {}).items():
+        if k.startswith(WMI_DEV_PREFIX) and k.endswith(']') \
+                and _to_int(v, -1) == 2:
+            out.append(k[len(WMI_DEV_PREFIX):-1])
+    return sorted(out)
+
+
 def interpret_state(vendor, m):
     """Return ATM state from a metrics dict keyed by Zabbix item keys."""
     if not m:
         return 'UNREACHABLE'
     if m.get(WMI_MASTER_KEY) not in (None, ""):
         # NCR agent path live: WMI authoritative, SNMP ignored for host.
-        if wmi_part_errors(m):
+        devs = wmi_device_unavail(m)
+        if any(d.startswith('CASH-') for d in devs):
+            return 'OUT_OF_SERVICE'
+        if devs or wmi_part_errors(m):
             return 'HARDWARE_FAULT'
         return 'IN_SERVICE'
     # If even the core items were never collected, the ATM is unreachable
