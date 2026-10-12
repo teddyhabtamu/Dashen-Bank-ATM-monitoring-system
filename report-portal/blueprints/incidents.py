@@ -520,7 +520,9 @@ def _user_contact(token, users_id, cache):
                                         (data.get('firstname') or '').strip()) if p)
             card = {
                 'name': name or (data.get('name') or f'#{uid}'),
-                'email': (data.get('email') or '').strip(),
+                # Emails live on UserEmail sub-items, NOT on the User object
+                # (GLPI supports several per user) — prefer the default one.
+                'email': _user_default_email(token, uid),
                 'phone': (data.get('phone') or '').strip(),
                 'mobile': (data.get('mobile') or '').strip(),
             }
@@ -528,6 +530,26 @@ def _user_contact(token, users_id, cache):
         pass
     cache[uid] = card
     return card
+
+
+def _user_default_email(token, users_id):
+    """Default address from the UserEmail sub-items (may be empty)."""
+    try:
+        rows = _subitems_of(token, 'User', users_id, 'UserEmail')
+        if not isinstance(rows, list) or not rows:
+            return ''
+        for r in rows:
+            try:
+                if int(r.get('is_default') or 0) == 1 and r.get('email'):
+                    return str(r.get('email')).strip()
+            except (TypeError, ValueError):
+                continue
+        for r in rows:
+            if r.get('email'):
+                return str(r.get('email')).strip()
+    except Exception:
+        pass
+    return ''
 
 
 def _user_label(token, users_id, cache):
