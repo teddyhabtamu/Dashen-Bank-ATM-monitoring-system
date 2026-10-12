@@ -215,6 +215,25 @@ snapping key names mid-token (`Card Captu<CRLF>re Bin`) — payload fails
 document). Fix is `[System.Console]::WriteLine(...)` (bypasses formatting,
 one clean line). Signature: `wc -l` shows ~48 lines pre-fix, 1 post-fix.
 
+**Calibrated 2026-10-12 (RDP legend hunt, TESTMACHINE — no guessing):**
+Part legend (`NCR_DevDevicePart` qualifiers): PartStatus 0 OK, 1 Warning,
+2 Error, 3 Not Configured, 4 Unknown, 5 Accessed; PMStatus 0 OK, 1 PM
+Required; ReplenishmentStatus ValueMap {0,1,2,3} = OK, Warning, Error,
+Unknown (provider text wrongly says "4 - Unknown" — ValueMap wins).
+Device legend (`NCR_DevDevice.DeviceStatus`): 0 OK, 1 Warning,
+2 Unavailable, 3+ Unknown. `NCR_ATM` is unpopulated (4 empty props) —
+device-level state comes from `NCR_Device` (14 instances), never `NCR_ATM`.
+Duplicate names are physical pairs (Control Board dev 65674/65722,
+Transport dev 65673/65674) — collector binds bare name to lowest
+(DeviceInstance,PartId), suffixes rest " (2)".
+Live cross-validation: RPNT printer device Unavailable(2) == Paper
+replenishment Error(2); CASH dispenser device Warning(1) alongside
+Transport(2) part Error — two independent sources agree.
+ATM-state policy (parts-only until device items land): any part Error →
+HARDWARE_FAULT, else IN_SERVICE ("reporting and fault-free", not
+"dispensing"); supervisor/out-of-cash explicitly unsourced (APTRA app
+state and note counts exist nowhere in this provider — never infer).
+
 ## 9c. Import + link the WMI template
 
 ```bash
