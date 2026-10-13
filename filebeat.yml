@@ -12,14 +12,15 @@ filebeat.inputs:
     fields:
       log_type: atm_ej
     fields_under_root: true
-    multiline.pattern: '^\x1b?\[020t'
+    multiline.pattern: '\[020t'
     multiline.negate: true
     multiline.match: after
-    # NDC record split (proven live 2026-10-13): NCR journals are ESC-led
-    # [020t*SEQ*MM/DD/YYYY*HH:MM*TEXT records, NOT date-led lines — the old
-    # ^\d{4}- pattern glued whole files into one event. \x1b? tolerates a
-    # leading ESC byte. Non-NDC (pipe-delimited) lines pass through as
-    # single-line events, caught by the pipeline's legacy patterns.
+    # NDC record split (proven live 2026-10-13): a record starts wherever the
+    # literal marker [020t appears. Deliberately unanchored with no hex
+    # escapes: filebeat/Go dialect handling of ^ and \x1b proved unreliable
+    # in UAT (pattern loaded yet zero splits across 5 files), while the bare
+    # marker matches under every regex semantic. Continuation lines never
+    # contain the marker, so over-split risk is negligible.
 
   # Real-ATM EJ collection: the 2 UAT test ATMs forward their Electronic Journal via
   # syslog (UDP/TCP 514). filebeat parses each message and ships it through the same
