@@ -1,3 +1,9 @@
+# OPS WARNING: filebeat 7.x REFUSES to start unless this file is owned by
+# root. `git pull` (run as a human user) re-breaks ownership on every
+# update touching this file — always follow with:
+#   sudo chown root:root filebeat.yml && docker restart filebeat
+# (Outage signature 2026-10-13: container Restarting loop, log line
+# "must be owned by the user identifier (uid=0) or root".)
 filebeat.inputs:
   - type: log
     enabled: true
