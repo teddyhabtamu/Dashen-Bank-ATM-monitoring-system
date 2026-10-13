@@ -53,7 +53,7 @@ def test_ndc_record_pattern_and_scrub():
     text = json.loads(PIPELINE.read_text())
     blob = json.dumps(text["processors"])
     assert "020t" in blob, "no NDC record pattern"
-    assert "MM/dd/yyyy HH:mm" in blob, "no NDC date format"
+    assert "MM/dd/yyyy" in blob, "no NDC date format"
     assert "atm.host" in blob and "TESTMACHINE" in blob, "no filename->atm mapping"
     assert "d{6}" in blob and "******" in blob, "no ingest PAN scrub"
     # Control-byte strip must precede grok (else ESC-led lines never match).
@@ -61,6 +61,34 @@ def test_ndc_record_pattern_and_scrub():
     first_gsub = kinds.index("gsub")
     first_grok = kinds.index("grok")
     assert first_gsub < first_grok, "scrub must run before grok"
+
+
+def _es_grok_to_python(pattern: str):
+    """Translate a pure-regex ES named-capture pattern to Python re.
+
+    Only for patterns without %{MACRO} references (the NDC record pattern).
+    Dots in names become underscores (Python restriction, ES allows dots).
+    """
+    assert "%{" not in pattern, "macro patterns not translatable"
+    return re.sub(r"\(\?<([A-Za-z0-9_.]+)>",
+                  lambda m: "(?P<" + m.group(1).replace(".", "_") + ">",
+                  pattern)
+
+
+def test_ndc_record_pattern_matches_live_shape():
+    """Regression: the record separator is '*' between DATE and TIME
+    ([020t*SEQ*MM/DD/YYYY*HH:MM*TEXT) — a space-joined pattern silently
+    matches nothing, which is exactly the 2026-10-13 blob recurrence."""
+    doc = json.loads(PIPELINE.read_text())
+    rec = next(
+        p["grok"]["patterns"][0] for p in doc["processors"]
+        if "grok" in p and any("020t" in pat for pat in p["grok"]["patterns"]))
+    rx = re.compile(_es_grok_to_python(rec))
+    m = rx.match("[020t*708*10/10/2026*17:35*[05pSST OUT OF SERVICE")
+    assert m, "NDC record pattern does not match live shape"
+    assert m.group("event_time") == "10/10/2026*17:35"
+    m2 = rx.match("[020t*559*10/08/2026*11:33*TRANSACTION END")
+    assert m2 and m2.group("transaction_sequence") == "559"
 
 
 def test_pipeline_has_trim_processors():
