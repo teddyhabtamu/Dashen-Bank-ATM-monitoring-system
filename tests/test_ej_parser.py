@@ -112,6 +112,21 @@ def test_pipeline_has_trim_processors():
     assert "card.masked" in trimmed, "no trim processor for card.masked"
 
 
+def test_amount_converted_to_float():
+    """transaction.amount must index numeric (template formats it with
+    :,.2f — a string amount 500s the whole EJ Search page, seen live
+    2026-10-13). Convert runs after trims (trim needs the raw string)."""
+    doc = json.loads(PIPELINE.read_text())
+    procs = doc["processors"]
+    kinds = [next(iter(p)) for p in procs]
+    conv = [p["convert"] for p in procs if "convert" in p
+            and p["convert"].get("field") == "transaction.amount"]
+    assert conv and conv[0].get("type") == "float", "no float convert for amount"
+    last_trim = max(i for i, p in enumerate(procs) if "trim" in p)
+    conv_at = kinds.index("convert")
+    assert conv_at > last_trim, "convert must run after trims"
+
+
 def test_parser_function_if_importable():
     """Smoke-test the portal's own parser if it imports without a live app."""
     try:

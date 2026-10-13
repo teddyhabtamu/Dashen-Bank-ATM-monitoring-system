@@ -149,6 +149,14 @@
       }
     },
     {
+      "convert": {
+        "field": "transaction.amount",
+        "type": "float",
+        "ignore_missing": true,
+        "ignore_failure": true
+      }
+    },
+    {
       "set": {
         "if": "ctx.event?.category == null && ctx.transaction != null",
         "field": "event.category",

@@ -65,7 +65,11 @@ def _parse_ej_log_line(src):
         src['seq']         = txn.get('sequence')
         src['card_masked'] = card.get('masked')
         src['status']      = txn.get('status')
-        src['amount']      = txn.get('amount')
+        try:
+            src['amount'] = float(txn.get('amount')) \
+                if txn.get('amount') not in (None, '') else None
+        except (TypeError, ValueError):
+            src['amount'] = None
         src['currency']    = txn.get('currency')
         src['auth_code']   = txn.get('auth_code')
         src['error_code']  = fault.get('code')
