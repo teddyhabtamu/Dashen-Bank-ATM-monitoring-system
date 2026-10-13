@@ -39,10 +39,12 @@ def test_full_marker_splits():
 
 
 def test_continuation_marker_glues():
-    # Starts with [020t but carries no *SEQ*DATE*TIME fields.
+    # Starts with [020t but carries no *SEQ*DATE*TIME fields: dateless
+    # fragments like these filled the index with 790 ingest-stamped rows.
     assert _split(["[020t CARD INSERTED"]) == ["glue"]
     assert _split(["[020t 17:34:52 CARD TAKEN"]) == ["glue"]
-    assert _split(["[020t     *1177*1*P*21,M-"]) == ["split"]
+    assert _split(["[020t     *1177*1*P*21,M-"]) == ["glue"]
+    assert _split(["[020t     *    *1*P*21,M-"]) == ["glue"]
 
 
 def test_plain_lines_glue():

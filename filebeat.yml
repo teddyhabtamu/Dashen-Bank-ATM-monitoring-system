@@ -12,16 +12,18 @@ filebeat.inputs:
     fields:
       log_type: atm_ej
     fields_under_root: true
-    multiline.pattern: '\[020t[^\[]*\*'
+    multiline.pattern: '\[020t\s*\*[^*]*\*\d{2}/\d{2}/\d{4}\*'
     multiline.negate: true
     multiline.match: after
-    # NDC record split (proven live 2026-10-13): a NEW event starts only at a
-    # FULL marker — [020t followed by *SEQ*DATE*TIME fields. Continuation
-    # lines that merely begin with "[020t " (CARD INSERTED, timestamps, no
-    # star-fields) glue onto the running record. The bare-marker form split
-    # every continuation into dateless fragments (599 rows, all ingest time).
-    # Non-NDC (pipe-delimited) lines pass through as single-line events,
-    # caught by the pipeline's legacy patterns.
+    # NDC record split (proven live 2026-10-13, corrected same day): a NEW
+    # event starts ONLY at a full marker — [020t*SEQ*MM/DD/YYYY*HH:MM*.
+    # Spaced/partial markers ([020t CARD ..., [020t *1177* supervisor key
+    # echoes) carry no date and MUST glue onto the running record, or the
+    # index fills with dateless fragments stamped ingest time (815 rows of
+    # which ~790 said nothing — seen live). The rule mirrors the pipeline's
+    # record grok by construction: every split event is grok-able, every
+    # grok-able marker splits. Non-NDC (pipe-delimited) lines pass through
+    # as single-line events, caught by the pipeline's legacy patterns.
 
   # Real-ATM EJ collection: the 2 UAT test ATMs forward their Electronic Journal via
   # syslog (UDP/TCP 514). filebeat parses each message and ships it through the same
