@@ -394,6 +394,42 @@ def _wmi_chip(m, *part_names):
     return worst if seen else 'unknown'
 
 
+def _wmi_dev(m, *dev_names):
+    """Worst-of chip status across WMI devices (DeviceStatus legend:
+    0 OK, 1 Warning, 2 Unavailable; anything else Unknown; missing Unknown).
+    Same no-data-never-red contract as _wmi_chip."""
+    worst, rank, seen = 'unknown', -1, False
+    for d in dev_names:
+        v = m.get(f'atm.device.status[{d}]')
+        if v is None or v == '':
+            continue
+        seen = True
+        try:
+            code = int(float(v))
+        except (TypeError, ValueError):
+            continue
+        if code == 2:
+            r, s = 3, 'error'
+        elif code == 1:
+            r, s = 2, 'warn'
+        elif code == 0:
+            r, s = 0, 'ok'
+        else:
+            r, s = 1, 'unknown'
+        if r > rank:
+            worst, rank = s, r
+    return worst if seen else 'unknown'
+
+
+_RANK = {'ok': 0, 'unknown': 1, 'warn': 2, 'error': 3}
+
+
+def _worst(*statuses):
+    """Worst of several chip statuses (lets part- and device-derived
+    readings share one chip honestly)."""
+    return max(statuses, key=lambda s: _RANK.get(s, 1))
+
+
 def build_hardware(vendor, m):
     """Hardware component status pills. ok=green, warn=amber, error=red.
 
@@ -408,9 +444,15 @@ def build_hardware(vendor, m):
     if m.get('atm.parts') not in (None, ""):
         comps = [
             ('Card reader', _wmi_chip(m, 'Card Reader', 'Smart Card Reader')),
-            ('Printer', _wmi_chip(m, 'Print Head', 'Paper')),
+            # Printer: part states plus the RPNT device (Unavailable(2) today
+            # while Print Head reads 0 — the chip must agree with ticket #19).
+            ('Printer', _worst(_wmi_chip(m, 'Print Head', 'Paper'),
+                                _wmi_dev(m, 'RPNT-01-UsbThermal'))),
             ('Pin pad', _wmi_chip(m, 'PinPad')),
-            ('Cash jam', _wmi_chip(m, 'Mechanism', 'Single Note Transport')),
+            # Cash jam: mechanism parts plus the CASH dispenser device
+            # (Warning(1) today reads amber, not red, not green).
+            ('Cash jam', _worst(_wmi_chip(m, 'Mechanism', 'Single Note Transport'),
+                                _wmi_dev(m, 'CASH-01-UsbMediaDispenser'))),
             ('Retract bin', _wmi_chip(m, 'Retract Area', 'Purge Bin', 'Reject Area')),
             ('Network', 'unknown'),  # no WMI source — grey, never red
             ('UPS', 'unknown'),      # no WMI source — grey, never red
