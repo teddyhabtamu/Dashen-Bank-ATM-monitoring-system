@@ -37,7 +37,7 @@
       "grok": {
         "field": "message",
         "patterns": [
-          "^\\[020t\\*(?<transaction.sequence>[^*]*)\\*(?<event_time>\\d{2}/\\d{2}/\\d{4}\\*\\d{2}:\\d{2})\\*(?<ndc.text>.*)$"
+          "^\\[020t\\*(?<transaction.sequence>[^*]*)\\*(?<event_time>\\d{2}/\\d{2}/\\d{4}\\*\\d{2}:\\d{2})\\*(?<ndc.text>[\\s\\S]*)$"
         ],
         "ignore_failure": true
       }
@@ -46,7 +46,7 @@
       "grok": {
         "field": "ndc.text",
         "patterns": [
-          "(?<transaction.status>APPROVED|DECLINED|TIMEOUT|ERROR)"
+          "[\\s\\S]*?(?<transaction.status>APPROVED|DECLINED|TIMEOUT|ERROR)[\\s\\S]*"
         ],
         "ignore_failure": true
       }
@@ -55,7 +55,7 @@
       "grok": {
         "field": "ndc.text",
         "patterns": [
-          "(?<transaction.type>WITHDRAWAL|BALANCE_INQ|MINI_STATEMENT|TRANSFER|CARDLESS_TXN)"
+          "[\\s\\S]*?(?<transaction.type>WITHDRAWAL|BALANCE_INQ|MINI_STATEMENT|TRANSFER|CARDLESS_TXN)[\\s\\S]*"
         ],
         "ignore_failure": true
       }
@@ -64,7 +64,7 @@
       "grok": {
         "field": "ndc.text",
         "patterns": [
-          "(?<card.masked>\\d{6}\\*{6}\\d{4})"
+          "[\\s\\S]*?(?<card.masked>\\d{6}\\*{6}\\d{4})[\\s\\S]*"
         ],
         "ignore_failure": true
       }
@@ -73,7 +73,7 @@
       "grok": {
         "field": "ndc.text",
         "patterns": [
-          "(?<transaction.amount>\\d+\\.\\d{2})"
+          "[\\s\\S]*?(?<transaction.amount>\\d+\\.\\d{2})[\\s\\S]*"
         ],
         "ignore_failure": true
       }

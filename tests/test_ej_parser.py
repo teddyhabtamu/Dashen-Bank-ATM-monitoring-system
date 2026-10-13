@@ -68,11 +68,15 @@ def _es_grok_to_python(pattern: str):
 
     Only for patterns without %{MACRO} references (the NDC record pattern).
     Dots in names become underscores (Python restriction, ES allows dots).
+    Uses FULLMATCH: ES ingest grok requires the pattern to cover the whole
+    field, so prefix-only matching hides multi-line failures (proven live:
+    single-line records parsed while receipt-bearing multi-line records
+    fell through silently).
     """
     assert "%{" not in pattern, "macro patterns not translatable"
-    return re.sub(r"\(\?<([A-Za-z0-9_.]+)>",
-                  lambda m: "(?P<" + m.group(1).replace(".", "_") + ">",
-                  pattern)
+    return re.compile(re.sub(r"\(\?<([A-Za-z0-9_.]+)>",
+                             lambda m: "(?P<" + m.group(1).replace(".", "_") + ">",
+                             pattern))
 
 
 def test_ndc_record_pattern_matches_live_shape():
@@ -83,11 +87,17 @@ def test_ndc_record_pattern_matches_live_shape():
     rec = next(
         p["grok"]["patterns"][0] for p in doc["processors"]
         if "grok" in p and any("020t" in pat for pat in p["grok"]["patterns"]))
-    rx = re.compile(_es_grok_to_python(rec))
-    m = rx.match("[020t*708*10/10/2026*17:35*[05pSST OUT OF SERVICE")
-    assert m, "NDC record pattern does not match live shape"
-    assert m.group("event_time") == "10/10/2026*17:35"
-    m2 = rx.match("[020t*559*10/08/2026*11:33*TRANSACTION END")
+    rx = _es_grok_to_python(rec)
+    # Multi-line record (marker + receipt continuations): must FULL-match
+    # with the text spanning newlines — prefix matching hides this class.
+    multi = ("[020t*571*10/08/2026*14:59*\n     *TRANSACTION START*\n"
+             "␛[020t CARD INSERTED\n 14:59:18 ATR RECEIVED T=0\n"
+             "    DASHEN BANK\n    WITHDRAWAL\n    TRANSACTION DECLINED\n    56")
+    m = rx.fullmatch(multi)
+    assert m, "NDC record pattern does not full-match a multi-line record"
+    assert m.group("event_time") == "10/08/2026*14:59"
+    assert "WITHDRAWAL" in m.group("ndc_text")
+    m2 = rx.fullmatch("[020t*559*10/08/2026*11:33*TRANSACTION END")
     assert m2 and m2.group("transaction_sequence") == "559"
 
 
