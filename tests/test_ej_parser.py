@@ -127,6 +127,24 @@ def test_amount_converted_to_float():
     assert conv_at > last_trim, "convert must run after trims"
 
 
+def test_state_lines_not_labeled_txn():
+    """SST/POWER-UP/SUPERVISOR records are device state, not transactions.
+    The blanket transaction!=null default labeled everything TXN (seen live:
+    SST ON-LINE rows badged TXN). STATE rule must precede the TXN default,
+    and the default must require type or status — never bare sequence."""
+    doc = json.loads(PIPELINE.read_text())
+    procs = doc["processors"]
+    sets = [(i, p["set"]) for i, p in enumerate(procs) if "set" in p]
+    state_at = next(i for i, s in sets
+                    if s.get("value") == "STATE" and "SST" in s.get("if", ""))
+    txn_at = next(i for i, s in sets
+                  if s.get("value") == "TXN" and "transaction" in s.get("if", ""))
+    assert state_at < txn_at, "STATE rule must precede TXN default"
+    txn_if = next(s["if"] for _, s in sets if s.get("value") == "TXN")
+    assert "transaction?.type" in txn_if and "transaction?.status" in txn_if, \
+        "TXN default must require type or status, not bare sequence"
+
+
 def test_parser_function_if_importable():
     """Smoke-test the portal's own parser if it imports without a live app."""
     try:

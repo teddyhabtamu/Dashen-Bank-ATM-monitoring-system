@@ -158,7 +158,14 @@
     },
     {
       "set": {
-        "if": "ctx.event?.category == null && ctx.transaction != null",
+        "if": "ctx.ndc?.text != null && (ctx.ndc.text.contains('SST ') || ctx.ndc.text.contains('POWER-UP') || ctx.ndc.text.contains('SUPERVISOR') || ctx.ndc.text.contains('COMPONENT VERSIONS') || ctx.ndc.text.contains('EMV CHECKSUM'))",
+        "field": "event.category",
+        "value": "STATE"
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.event?.category == null && (ctx.transaction?.type != null || ctx.transaction?.status != null)",
         "field": "event.category",
         "value": "TXN"
       }
