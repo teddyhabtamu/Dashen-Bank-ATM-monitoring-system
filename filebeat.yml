@@ -6,9 +6,14 @@ filebeat.inputs:
     fields:
       log_type: atm_ej
     fields_under_root: true
-    multiline.pattern: '^\d{4}-\d{2}-\d{2}'
+    multiline.pattern: '^\x1b?\[020t'
     multiline.negate: true
     multiline.match: after
+    # NDC record split (proven live 2026-10-13): NCR journals are ESC-led
+    # [020t*SEQ*MM/DD/YYYY*HH:MM*TEXT records, NOT date-led lines — the old
+    # ^\d{4}- pattern glued whole files into one event. \x1b? tolerates a
+    # leading ESC byte. Non-NDC (pipe-delimited) lines pass through as
+    # single-line events, caught by the pipeline's legacy patterns.
 
   # Real-ATM EJ collection: the 2 UAT test ATMs forward their Electronic Journal via
   # syslog (UDP/TCP 514). filebeat parses each message and ships it through the same

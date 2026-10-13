@@ -1,6 +1,22 @@
 {
-      "description": "Parse ATM Electronic Journal log lines (NCR + GRG, legacy and current shapes) into a structured nested schema: atm.id, terminal.id, transaction.*, card.masked, fault.*, event.category. Referenced by filebeat.yml (output.elasticsearch.pipeline). Real (non-simulator) EJ lines that do not match the grok patterns are retained verbatim in `ej_raw` and tagged `ej_parsed:false` so they can be tuned later without data loss.",
+      "description": "Parse ATM Electronic Journal log lines (NCR + GRG, legacy and current shapes) into a structured nested schema: atm.id, terminal.id, transaction.*, card.masked, fault.*, event.category. Referenced by filebeat.yml (output.elasticsearch.pipeline). NDC records (ESC-led [020t*SEQ*MM/DD/YYYY*HH:MM*TEXT, proven live 2026-10-13) are split by filebeat multiline, then grokked here. Control bytes are stripped and PANs scrubbed (first6******last4) BEFORE storage, so raw PANs never rest at rest — portal display-scrub is defense in depth. Real (non-simulator) EJ lines that do not match the grok patterns are retained verbatim in `ej_raw` and tagged `ej_parsed:false` so they can be tuned later without data loss.",
   "processors": [
+    {
+      "gsub": {
+        "field": "message",
+        "pattern": "[\\x00-\\x1F]",
+        "replacement": "",
+        "ignore_missing": true
+      }
+    },
+    {
+      "gsub": {
+        "field": "message",
+        "pattern": "\\b(\\d{6})\\d{6,9}(\\d{4})\\b",
+        "replacement": "$1******$2",
+        "ignore_missing": true
+      }
+    },
     {
       "grok": {
         "field": "message",
@@ -15,6 +31,67 @@
           "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:event.category} \\| %{DATA:event.action} \\| OPERATOR=%{DATA:operator_id}$"
         ],
         "ignore_failure": true
+      }
+    },
+    {
+      "grok": {
+        "field": "message",
+        "patterns": [
+          "^\\[020t\\*(?<transaction.sequence>[^*]*)\\*(?<event_time>\\d{2}/\\d{2}/\\d{4} \\d{2}:\\d{2})\\*(?<ndc.text>.*)$"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "grok": {
+        "field": "ndc.text",
+        "patterns": [
+          "(?<transaction.status>APPROVED|DECLINED|TIMEOUT|ERROR)"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "grok": {
+        "field": "ndc.text",
+        "patterns": [
+          "(?<transaction.type>WITHDRAWAL|BALANCE_INQ|MINI_STATEMENT|TRANSFER|CARDLESS_TXN)"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "grok": {
+        "field": "ndc.text",
+        "patterns": [
+          "(?<card.masked>\\d{6}\\*{6}\\d{4})"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "grok": {
+        "field": "ndc.text",
+        "patterns": [
+          "(?<transaction.amount>\\d+\\.\\d{2})"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "grok": {
+        "field": "log.file.path",
+        "patterns": [
+          ".*/(?<atm.host>[^/]+)$"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.atm?.host != null && ctx.atm.host.contains('TESTMACHINE')",
+        "field": "atm.id",
+        "value": "ATM-TEST-NCR"
       }
     },
     {
@@ -91,7 +168,8 @@
         "target_field": "@timestamp",
         "formats": [
           "yyyy-MM-dd'T'HH:mm:ss",
-          "yyyy-MM-dd HH:mm:ss"
+          "yyyy-MM-dd HH:mm:ss",
+          "MM/dd/yyyy HH:mm"
         ],
         "ignore_failure": true
       }

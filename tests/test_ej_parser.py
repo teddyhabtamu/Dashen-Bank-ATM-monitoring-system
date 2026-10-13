@@ -37,12 +37,30 @@ def test_pipeline_has_8_patterns_and_expected_fields():
     procs = doc["processors"]
     grok = next(p for p in procs if "grok" in p)
     patterns = grok["grok"]["patterns"]
-    assert len(patterns) == 8, f"expected 8 patterns, got {len(patterns)}"
+    assert len(patterns) >= 8, f"expected >= 8 legacy patterns, got {len(patterns)}"
     covered = set()
-    for p in patterns:
-        covered |= _named_captures(p)
+    for p in procs:
+        if "grok" in p:
+            for pat in p["grok"]["patterns"]:
+                covered |= _named_captures(pat)
     missing = EXPECTED_FIELDS - covered
     assert not missing, f"pipeline missing expected fields: {sorted(missing)}"
+
+
+def test_ndc_record_pattern_and_scrub():
+    """Live NCR dialect (proven 2026-10-13): ESC-led [020t records, PAN
+    scrubbed at ingest before storage."""
+    text = json.loads(PIPELINE.read_text())
+    blob = json.dumps(text["processors"])
+    assert "020t" in blob, "no NDC record pattern"
+    assert "MM/dd/yyyy HH:mm" in blob, "no NDC date format"
+    assert "atm.host" in blob and "TESTMACHINE" in blob, "no filename->atm mapping"
+    assert "d{6}" in blob and "******" in blob, "no ingest PAN scrub"
+    # Control-byte strip must precede grok (else ESC-led lines never match).
+    kinds = [next(iter(p)) for p in text["processors"]]
+    first_gsub = kinds.index("gsub")
+    first_grok = kinds.index("grok")
+    assert first_gsub < first_grok, "scrub must run before grok"
 
 
 def test_pipeline_has_trim_processors():
