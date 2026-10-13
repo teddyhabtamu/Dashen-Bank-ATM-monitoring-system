@@ -220,11 +220,11 @@ def _collect():
                       GROUP BY atm_id ORDER BY atm_id""")
 
     # ── Per-hour chart data (last 12h) ──
-    # EAT buckets: date_trunc on raw timestamptz groups by DB-session (UTC)
-    # hours, shifting every bar 3h behind wall time. Convert first (same
-    # pattern as the cash_today EAT-midnight boundary above) — bare UTC
-    # labels here were the reported bug (2026-10-12).
-    hourly = _all("""SELECT date_trunc('hour', recorded_at AT TIME ZONE 'Africa/Addis_Ababa') AS h,
+    # EAT buckets: recorded_at is timestamp WITHOUT time zone holding UTC
+    # wall time (PG session TZ Etc/UTC — verified 2026-10-13), so a single
+    # AT TIME ZONE 'Africa/Addis_Ababa' converts the WRONG way (UTC-3 labels,
+    # seen live). Double conversion first: naive-UTC → instant → EAT wall.
+    hourly = _all("""SELECT date_trunc('hour', recorded_at AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa') AS h,
                         SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) AS approved,
                         SUM(CASE WHEN status != 'APPROVED' THEN 1 ELSE 0 END) AS failed
                      FROM atm_transactions
