@@ -80,6 +80,31 @@
     },
     {
       "grok": {
+        "field": "ndc.text",
+        "patterns": [
+          "TRANSACTION\\s+(?:DECLINED|TIMEOUT|ERROR)\\s+(?<fault.code>\\d{2})"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "grok": {
+        "field": "ndc.text",
+        "patterns": [
+          "\\*PRIMARY (?<component.name>[A-Z ]+) ACTIVATED\\*"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.component?.name != null && ctx.event?.category == null",
+        "field": "event.category",
+        "value": "COMPONENT"
+      }
+    },
+    {
+      "grok": {
         "field": "log.file.path",
         "patterns": [
           ".*/(?<atm.host>[^/]+)$"

@@ -127,13 +127,20 @@ def test_amount_converted_to_float():
     assert conv_at > last_trim, "convert must run after trims"
 
 
-def test_state_lines_not_labeled_txn():
-    """SST/POWER-UP/SUPERVISOR records are device state, not transactions.
-    The blanket transaction!=null default labeled everything TXN (seen live:
-    SST ON-LINE rows badged TXN). STATE rule must precede the TXN default,
-    and the default must require type or status — never bare sequence."""
+def test_component_category_and_response_code():
+    """Review-driven (2026-10-14): component ACTIVATED lines are COMPONENT
+    (not TXN), decline codes land in fault.code. Structural assertions on
+    the pipeline (live _simulate proves behavior on DATA_VM)."""
     doc = json.loads(PIPELINE.read_text())
     procs = doc["processors"]
+    blob = json.dumps(procs)
+    assert "component.name" in blob, "no component extraction"
+    assert "fault.code" in blob, "no response-code extraction"
+    comp_at = next(i for i, p in enumerate(procs)
+                   if "grok" in p and "component.name" in json.dumps(p))
+    txn_default_at = next(i for i, p in enumerate(procs)
+                          if "set" in p and p["set"].get("value") == "TXN")
+    assert comp_at < txn_default_at, "component must categorize before TXN default"
     sets = [(i, p["set"]) for i, p in enumerate(procs) if "set" in p]
     state_at = next(i for i, s in sets
                     if s.get("value") == "STATE" and "SST" in s.get("if", ""))

@@ -17,6 +17,32 @@ bp = Blueprint('ej_search', __name__)
 ES_HOST  = os.environ.get('ES_HOST', 'opensearch:9200')
 ES_INDEX = os.environ.get('ES_INDEX', 'atm-ej-live-*,atm-electronic-journal')
 
+_TID_CACHE = {'at': 0.0, 'map': {}}
+
+
+def _terminal_map(ttl=300):
+    """atm_id -> terminal_id from the registry, cached.
+
+    The journal never carries the TID (proven: every NDC record lacks it),
+    so the portal fills it from atm_locations instead of showing blank.
+    Fail-closed (empty map) — a DB hiccup must not break search.
+    """
+    import time
+    now = time.time()
+    if now - _TID_CACHE['at'] < ttl:
+        return _TID_CACHE['map']
+    mapping = {}
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT atm_id, terminal_id FROM atm_locations")
+            mapping = {a: (t or '') for a, t in cur.fetchall()}
+            cur.close()
+    except Exception as e:
+        logger.warning('terminal map refresh failed: %s', e)
+    _TID_CACHE.update(at=now, map=mapping)
+    return mapping
+
 
 def _scrub_pan(text):
     """Mask PAN-like digit runs in free text (first6/last4, C12).
@@ -59,9 +85,13 @@ def _parse_ej_log_line(src):
         ev    = src.get('event')       if isinstance(src.get('event'), dict) else {}
         term  = src.get('terminal')    if isinstance(src.get('terminal'), dict) else {}
         src['atm_id']      = atm_obj.get('id')
-        src['terminal_id'] = term.get('id')
+        src['terminal_id'] = term.get('id') or \
+            _terminal_map().get(atm_obj.get('id'), '')
         src['event_type']  = ev.get('category')
         src['sub_type']    = txn.get('type')
+        comp = src.get('component') if isinstance(src.get('component'), dict) else {}
+        if comp.get('name') and not src['sub_type']:
+            src['sub_type'] = comp.get('name')
         src['seq']         = txn.get('sequence')
         src['card_masked'] = card.get('masked')
         src['status']      = txn.get('status')
