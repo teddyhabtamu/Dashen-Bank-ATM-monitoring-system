@@ -363,7 +363,8 @@ def build_cassettes(vendor, m, capacity=CASSETTE_MAX):
     return out
 
 
-def _wmi_chip(m, *part_names):    """Worst-of chip status across WMI part instances.
+def _wmi_chip(m, *part_names):
+    """Worst-of chip status across WMI part instances.
 
     Vendor legend (NCR_DevDevicePart qualifiers): 0 OK, 1 Warning, 2 Error,
     other nonzero Unknown; missing data renders grey 'unknown' — never red.
