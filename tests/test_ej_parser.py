@@ -127,8 +127,7 @@ def test_amount_converted_to_float():
     assert conv_at > last_trim, "convert must run after trims"
 
 
-def test_component_category_and_response_code():
-    """Review-driven (2026-10-14): component ACTIVATED lines are COMPONENT
+def test_component_category_and_response_code():    """Review-driven (2026-10-14): component ACTIVATED lines are COMPONENT
     (not TXN), decline codes land in fault.code. Structural assertions on
     the pipeline (live _simulate proves behavior on DATA_VM)."""
     doc = json.loads(PIPELINE.read_text())
@@ -141,6 +140,20 @@ def test_component_category_and_response_code():
     txn_default_at = next(i for i, p in enumerate(procs)
                           if "set" in p and p["set"].get("value") == "TXN")
     assert comp_at < txn_default_at, "component must categorize before TXN default"
+
+
+def test_amount_kept_only_for_money_types():
+    """Version strings are not cash: CAM 03.00.00 parsed as ETB 3.00 and
+    APTRA 05.00.01 as ETB 5.00 on STATE rows (seen live 2026-10-14). The
+    remove-gate keeps amounts only on WITHDRAWAL/TRANSFER records."""
+    doc = json.loads(PIPELINE.read_text())
+    procs = doc["processors"]
+    gates = [p["remove"] for p in procs if "remove" in p
+             and p["remove"].get("field") == "transaction.amount"]
+    assert gates, "no amount gate"
+    cond = gates[0].get("if", "")
+    assert "WITHDRAWAL" in cond and "TRANSFER" in cond, \
+        "amount gate must allow money-moving types"
     sets = [(i, p["set"]) for i, p in enumerate(procs) if "set" in p]
     state_at = next(i for i, s in sets
                     if s.get("value") == "STATE" and "SST" in s.get("if", ""))

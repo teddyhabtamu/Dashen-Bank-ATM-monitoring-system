@@ -79,6 +79,13 @@
       }
     },
     {
+      "remove": {
+        "field": "transaction.amount",
+        "if": "ctx.transaction?.type != 'WITHDRAWAL' && ctx.transaction?.type != 'TRANSFER'",
+        "ignore_missing": true
+      }
+    },
+    {
       "grok": {
         "field": "ndc.text",
         "patterns": [
