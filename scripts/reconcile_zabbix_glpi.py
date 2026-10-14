@@ -40,6 +40,10 @@ except ImportError:
     print("ERROR: 'requests' is required (pip install requests).", file=sys.stderr)
     sys.exit(2)
 
+# .env fills whatever the shell didn't export (GLPI_* included).
+from zbx_env import ensure_loaded as _ensure_env
+_ensure_env()
+
 ZBX_URL = (os.environ.get("ZBX_URL") or os.environ.get("ZABBIX_URL")
            or "http://localhost:8080/api_jsonrpc.php")
 ZBX_USER = (os.environ.get("ZBX_USER") or os.environ.get("ZABBIX_USER") or "Admin")

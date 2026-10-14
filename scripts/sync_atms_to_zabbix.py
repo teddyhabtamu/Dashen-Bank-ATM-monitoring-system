@@ -11,6 +11,11 @@ Connects to Zabbix API at localhost:8080.
 
 import csv, json, os, sys, time
 
+# .env fills whatever the shell didn't export (no more per-shell exports;
+# explicit environment still wins). Must run before the constants below.
+from zbx_env import ensure_loaded as _ensure_env
+_ensure_env()
+
 ZBX_URL = os.environ.get("ZBX_URL", "http://localhost:8080/api_jsonrpc.php")
 ZBX_USER = os.environ.get("ZBX_USER", "Admin")
 ZBX_PASS = os.environ.get("ZBX_PASS", "zabbix")

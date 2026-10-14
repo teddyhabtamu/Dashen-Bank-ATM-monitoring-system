@@ -25,6 +25,9 @@ import sys
 import requests
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# .env fills whatever the shell didn't export.
+from zbx_env import ensure_loaded as _ensure_env
+_ensure_env()
 from generate_wmi_template import PARTS, DEVICES, TEMPLATE_NAME
 # Flat group — see generate_wmi_template.py (nested groups break references
 # when the implied parent object doesn't exist).
