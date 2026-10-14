@@ -127,7 +127,8 @@ def test_amount_converted_to_float():
     assert conv_at > last_trim, "convert must run after trims"
 
 
-def test_component_category_and_response_code():    """Review-driven (2026-10-14): component ACTIVATED lines are COMPONENT
+def test_component_category_and_response_code():
+    """Review-driven (2026-10-14): component ACTIVATED lines are COMPONENT
     (not TXN), decline codes land in fault.code. Structural assertions on
     the pipeline (live _simulate proves behavior on DATA_VM)."""
     doc = json.loads(PIPELINE.read_text())
