@@ -448,13 +448,23 @@ def build_part_rows(m):
     Sorted faults-first so a technician sees the broken rows on top.
     """
     rows = []
+    try:
+        import sys as _sys, os as _os
+        _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '..', '..'))
+        from zabbix_modules.status_rules import part_display as _display
+    except Exception:
+        _display = None
     for k in sorted(m):
         if not (k.startswith('atm.part.part_status[') and k.endswith(']')):
             continue
         name = k[len('atm.part.part_status['):-1]
         code = _wmi_code(m, k)
-        word, css = PART_WORDS.get(code, ('Unknown', 'unknown')) \
-            if code is not None else ('Unknown', 'unknown')
+        if _display is not None:
+            repl = _wmi_code(m, f'atm.part.replenishment_status[{name}]')
+            word, css = _display(code, repl)
+        else:
+            word, css = PART_WORDS.get(code, ('Unknown', 'unknown')) \
+                if code is not None else ('Unknown', 'unknown')
         rows.append({'name': name, 'word': word, 'css': css,
                      'rank': _RANK[css]})
     rows.sort(key=lambda r: (-r['rank'], r['name']))

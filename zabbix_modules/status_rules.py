@@ -55,6 +55,35 @@ WMI_STATUS_PREFIX = 'atm.part.part_status['
 WMI_DEV_PREFIX = 'atm.device.status['
 
 
+def part_display(part_code, repl_code):
+    """Human word + css for one part from its two codes.
+
+    A review (2026-10-14) argued part_status 4 should read 'Not Present'
+    instead of 'Unknown'. Rejected on vendor evidence: NCR_DevDevicePart's
+    own qualifiers say 4 = Unknown (3 = Not Configured) — renaming to an
+    invented term would break the traceability chain. What the review got
+    RIGHT is composition: 4+replenishment pairs carry the real meaning
+    (Paper 4+2 is empty, cassettes 4+1 are low), so the word is derived
+    from the PAIR, never from part_status alone:
+      part Error(2) -> Error | repl Error(2) -> Empty |
+      part Warning(1) -> Warning | repl Warning(1) -> Low |
+      part 3/4/5 or unreadable -> Unknown | else OK.
+    """
+    if part_code == 2:
+        return ('Error', 'error')
+    if repl_code == 2:
+        return ('Empty', 'error')
+    if part_code == 1:
+        return ('Warning', 'warn')
+    if repl_code == 1:
+        return ('Low', 'warn')
+    if part_code in (None, 3, 4, 5):
+        return ('Unknown', 'unknown')
+    if part_code == 0:
+        return ('OK', 'ok')
+    return ('Unknown', 'unknown')
+
+
 def wmi_part_errors(m):
     """Sorted names of parts whose WMI part_status == 2 (Error).
 

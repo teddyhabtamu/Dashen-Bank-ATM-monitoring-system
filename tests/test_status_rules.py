@@ -10,7 +10,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from zabbix_modules.status_rules import interpret_state, wmi_part_errors, wmi_device_unavail
+from zabbix_modules.status_rules import interpret_state, wmi_part_errors, wmi_device_unavail, part_display
 
 
 def test_wmi_error_surfaces_fault():
@@ -59,6 +59,31 @@ def test_device_warning_does_not_fault():
     m = {'atm.parts': '{...}',
          'atm.device.status[CASH-01-UsbMediaDispenser]': '1'}
     assert interpret_state('NCR', m) == 'IN_SERVICE'
+
+
+def test_composite_empty_beats_unknown():
+    # Paper today: part 4 (Unknown) + replenishment 2 (Error) reads Empty.
+    assert part_display(4, 2) == ('Empty', 'error')
+
+
+def test_composite_low_beats_unknown():
+    # Cassettes today: part 4 (Unknown) + replenishment 1 (Warning).
+    assert part_display(4, 1) == ('Low', 'warn')
+
+
+def test_composite_quiet_pairs_stay_unknown():
+    # Bins at 4+0: non-actionable either way — grey, never red.
+    assert part_display(4, 0) == ('Unknown', 'unknown')
+    assert part_display(4, None) == ('Unknown', 'unknown')
+
+
+def test_composite_error_dominates():
+    assert part_display(2, 2) == ('Error', 'error')
+    assert part_display(2, 0) == ('Error', 'error')
+    assert part_display(0, 0) == ('OK', 'ok')
+    assert part_display(1, 0) == ('Warning', 'warn')
+    assert part_display(0, 1) == ('Low', 'warn')
+    assert part_display(None, None) == ('Unknown', 'unknown')
 
 
 def test_snmp_only_host_unchanged():
