@@ -363,8 +363,7 @@ def build_cassettes(vendor, m, capacity=CASSETTE_MAX):
     return out
 
 
-def _wmi_chip(m, *part_names):
-    """Worst-of chip status across WMI part instances.
+def _wmi_chip(m, *part_names):    """Worst-of chip status across WMI part instances.
 
     Vendor legend (NCR_DevDevicePart qualifiers): 0 OK, 1 Warning, 2 Error,
     other nonzero Unknown; missing data renders grey 'unknown' — never red.
@@ -428,6 +427,55 @@ def _worst(*statuses):
     """Worst of several chip statuses (lets part- and device-derived
     readings share one chip honestly)."""
     return max(statuses, key=lambda s: _RANK.get(s, 1))
+
+
+PART_WORDS = {0: ('OK', 'ok'), 1: ('Warning', 'warn'), 2: ('Error', 'error')}
+DEV_WORDS = {0: ('OK', 'ok'), 1: ('Warning', 'warn'), 2: ('Unavailable', 'error')}
+
+
+def _wmi_code(m, key):
+    try:
+        return int(float(m.get(key)))
+    except (TypeError, ValueError):
+        return None
+
+
+def build_part_rows(m):
+    """Every WMI part as (name, word, css) — the detail behind the 7 chips.
+
+    Unknown codes and missing data render grey 'Unknown', never red.
+    Sorted faults-first so a technician sees the broken rows on top.
+    """
+    rows = []
+    for k in sorted(m):
+        if not (k.startswith('atm.part.part_status[') and k.endswith(']')):
+            continue
+        name = k[len('atm.part.part_status['):-1]
+        code = _wmi_code(m, k)
+        word, css = PART_WORDS.get(code, ('Unknown', 'unknown')) \
+            if code is not None else ('Unknown', 'unknown')
+        rows.append({'name': name, 'word': word, 'css': css,
+                     'rank': _RANK[css]})
+    rows.sort(key=lambda r: (-r['rank'], r['name']))
+    return [{'name': r['name'], 'word': r['word'], 'css': r['css']}
+            for r in rows]
+
+
+def build_device_rows(m):
+    """Every WMI device as (name, word, css), faults-first. See above."""
+    rows = []
+    for k in sorted(m):
+        if not (k.startswith('atm.device.status[') and k.endswith(']')):
+            continue
+        name = k[len('atm.device.status['):-1]
+        code = _wmi_code(m, k)
+        word, css = DEV_WORDS.get(code, ('Unknown', 'unknown')) \
+            if code is not None else ('Unknown', 'unknown')
+        rows.append({'name': name, 'word': word, 'css': css,
+                     'rank': _RANK[css]})
+    rows.sort(key=lambda r: (-r['rank'], r['name']))
+    return [{'name': r['name'], 'word': r['word'], 'css': r['css']}
+            for r in rows]
 
 
 def build_hardware(vendor, m):
@@ -640,6 +688,8 @@ def atm_detail(atm_id):
         cassette_cap = cap_map.get(atm_id, CASSETTE_MAX)
         cassettes = build_cassettes(vendor, metrics, cassette_cap) if metrics else []
         hw, hw_source = build_hardware(vendor, metrics) if metrics else ([], None)
+        part_rows = build_part_rows(metrics) if metrics else []
+        device_rows = build_device_rows(metrics) if metrics else []
 
         # Override current_state with live data for consistency
         if metrics:
@@ -689,6 +739,7 @@ def atm_detail(atm_id):
         return render_template('admin_atm_detail.html',
                                atm=atm, vendor=vendor, cassettes=cassettes,
                                hardware=hw, hw_source=hw_source,
+                               part_rows=part_rows, device_rows=device_rows,
                                metrics_online=metrics is not None,
                                total_txns=total_txns, success_rate=success_rate,
                                cash_today=cash_today, active_faults=active_faults,

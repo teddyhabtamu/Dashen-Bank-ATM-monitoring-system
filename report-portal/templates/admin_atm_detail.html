@@ -194,6 +194,41 @@ table.txn tbody tr:hover{background:#EEF2FF}
           {% endif %}
         </div>
       </div>
+
+      <div class="card">
+        <div class="card-header"><h2>Parts &amp; Devices</h2></div>
+        <div class="card-body">
+          {% if metrics_online and (part_rows or device_rows) %}
+          <div class="atm-cap" style="margin-bottom:10px">Every live reading, faults first — the detail behind the chips above.</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+            <div>
+              <div class="atm-cap">Parts ({{ part_rows|length }})</div>
+              <div style="max-height:320px;overflow-y:auto">
+              {% for r in part_rows %}
+              <span class="pill" style="margin:0 6px 6px 0">
+                {% if r.css == 'unknown' %}<span class="dot dot-grey"></span>{% else %}<span class="dot dot-{{ r.css }}"></span>{% endif %}{{ r.name }}
+                <span class="hw-status hw-{{ r.css }}">{{ r.word }}</span>
+              </span>
+              {% endfor %}
+              </div>
+            </div>
+            <div>
+              <div class="atm-cap">Devices ({{ device_rows|length }})</div>
+              <div style="max-height:320px;overflow-y:auto">
+              {% for r in device_rows %}
+              <span class="pill" style="margin:0 6px 6px 0">
+                {% if r.css == 'unknown' %}<span class="dot dot-grey"></span>{% else %}<span class="dot dot-{{ r.css }}"></span>{% endif %}{{ r.name }}
+                <span class="hw-status hw-{{ r.css }}">{{ r.word }}</span>
+              </span>
+              {% endfor %}
+              </div>
+            </div>
+          </div>
+          {% else %}
+          <div class="no-data">Live parts data unavailable (ATM not reachable).</div>
+          {% endif %}
+        </div>
+      </div>
     </div>
   </div>
 
