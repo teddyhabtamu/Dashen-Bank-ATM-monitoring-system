@@ -400,6 +400,12 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
       <i data-lucide="settings"></i>
       <span>ATM Registration</span>
     </a>
+    {% if session.get('role') == 'admin' %}
+    <a href="/admin/onboard" class="nav-item {% if request.path.startswith('/admin/onboard') %}active{% endif %}">
+      <i data-lucide="plus-circle"></i>
+      <span>Onboard ATM</span>
+    </a>
+    {% endif %}
     <a href="/admin/cash" class="nav-item {% if request.path.startswith('/admin/cash') %}active{% endif %}">
       <i data-lucide="banknote"></i>
       <span>Cash Loads</span>
