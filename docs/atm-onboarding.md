@@ -97,8 +97,23 @@ never duplicated):
       template + both network interfaces; GRG gets its SNMP template.
       You do not link anything by hand.
 
-## Step 4 — Prove data flows (Zabbix UI + one command)
+## Step 4 — Prove data flows (one command, then Zabbix UI)
 
+Read-only. Nothing is written; safe to run any time, and it is the gate for
+calling an ATM live.
+
+- [ ] On UAT-01 run:
+      `docker exec report-portal python3 verify.py <ATM-ID>`
+      `OK    <ATM-ID>   reporting` — items arriving within the freshness window.
+      `SILENT <ATM-ID> provisioned_not_reporting` — host exists, nothing is
+      arriving; the printed blocker names the cause (unreachable IP, Zabbix
+      agent not running, all items unsupported).
+      `NONE  <ATM-ID>   not_provisioned` — no Zabbix host yet: run Step 3.
+      Widen the window when a box polls slowly: `--window 30`.
+- [ ] Whole fleet at once (bulk rollout / after a Zabbix restore):
+      `docker exec report-portal python3 verify.py`
+      prints one line per ATM and counts; exit code 1 if any ATM is silent.
+      Add `--json` to feed the onboarding wizard in Phase 4.
 - [ ] **NCR:** on UAT-01 run
       `zabbix_get -s <ATM-IP> -k "atm.parts" | python3 -m json.tool > /dev/null && echo JSON-OK`
       then open Zabbix → Monitoring → Latest data → filter the new host:
