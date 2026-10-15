@@ -16,11 +16,28 @@ logger = logging.getLogger(__name__)
 
 
 def _bg_zabbix_sync(rows):
-    """Best-effort background host creation — never fails the request."""
+    """Best-effort background host creation - never fails the request.
+
+    Routed through provision.provision_atms() (the single provisioning front
+    door) instead of calling zabbix_sync directly, so the onboarding wizard
+    provisions through the exact same code path. dry_run=False because this is
+    the real write; the provisioner reads the COMMITTED DB row (the save has
+    already committed before this thread starts) rather than the submitted form
+    dict, so what gets provisioned is what is actually stored.
+    """
     try:
-        from zabbix_sync import sync_hosts
-        s = sync_hosts(rows)
-        log_action('ZABBIX_SYNC', f'auto: created={s["created"]} reenabled={s.get("reenabled", 0)} macros={s.get("macros_fixed", 0)} updated={s.get("updated", 0)} skipped={s["skipped"]} no_ip={s["no_ip"]} failed={s["failed"]}')
+        from provision import provision_atms
+        ids = [r.get('atm_id') for r in (rows or []) if (r.get('atm_id') or '').strip()]
+        if not ids:
+            return
+        out = provision_atms(ids, dry_run=False, actor='registration-save')
+        if out.get('error'):
+            logger.warning('background provisioning read failed: %s', out['error'])
+        summary = out.get('summary') or {}
+        log_action('ZABBIX_SYNC', 'auto: created={} reenabled={} macros={} updated={} skipped={} no_ip={} failed={}'.format(
+            summary.get('created', 0), summary.get('reenabled', 0), summary.get('macros_fixed', 0),
+            summary.get('updated', 0), summary.get('skipped', 0), summary.get('no_ip', 0),
+            summary.get('failed', 0)))
     except Exception as e:
         logger.warning('background Zabbix sync failed: %s', e)
 
