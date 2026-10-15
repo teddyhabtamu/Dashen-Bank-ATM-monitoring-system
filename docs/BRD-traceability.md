@@ -116,8 +116,19 @@ UAT (3 ATMs, templates in `config/zabbix/`):
 |---|---|---|---|
 | WMI parts/devices | Zabbix polls the agent (port 10050) | **10–30s** (5 items @10s, 26 @30s) | No |
 | ATM offline / link | poll (agent / ping) | **10–60s** | No |
-| EJ transactions | hourly `pull_ej_logs.sh`, then filebeat → OpenSearch | **up to 60 min** | No — ~700x over |
-| Portal page render | Zabbix API + Postgres per request | ~0.3s at 3 ATMs, **uncached** | n/a |
+| EJ transactions | `pull_ej_logs.sh` every minute, then filebeat → OpenSearch | **~70s** (60s poll + 0.14s fetch + ≤10s filebeat) | No — ~14x over |
+| Portal page render | Zabbix API + Postgres, 10s TTL cache | ~0.3s at 3 ATMs | n/a |
+
+**EJ cadence: measured, not estimated.** Enabled on UAT 2026-10-15. A full run
+(resolver + 1 fetch) takes **0.138s**, so at 1,300 ATMs with `EJ_PARALLEL=8` a
+run is ~22s and the per-minute cadence still holds — the setting does not need
+to rise for fleet scale. `flock` skips a run rather than overlapping it, and the
+puller follows the box's own bank date for the live journal (an NCR box names it
+by *its* date, which trailed the server's, so a "today only" puller collected
+nothing).
+
+**~70s is the floor for polling, not a tuning failure.** Getting to 5s for
+transactions means the ATM sends the event, not that we fetch it faster.
 
 **5 seconds is not achievable by polling, for any data type.** It requires the
 event source to push. So the requirement has to be split by data type, with a
@@ -162,12 +173,11 @@ transactions and state, never telemetry history — Zabbix owns that).
 
 1. Put this budget in front of the bank and get the per-data-type targets
    agreed — claiming "5 seconds" for polled hardware is not deliverable.
-2. **Cheap, measurable win now:** EJ pull cadence hourly → every minute. The
-   Zabbix agent is already installed on the boxes, so this is a crontab change
-   with no ATM-side work, and it moves transaction visibility from ~60 min to
-   ~1–2 min.
-3. **Cheap, measurable win now:** 5–10s TTL cache for Zabbix reads in the
-   portal, so pages render from cache instead of hammering the API.
+2. ~~EJ pull cadence hourly → every minute~~ **DONE.** Measured ~60 min → ~70s
+   on UAT, with no ATM-side work. Safe because the puller now takes a lock,
+   bounds concurrency, re-fetches only the growing journal per box, and appends
+   instead of rewriting the file filebeat tails.
+3. ~~5–10s TTL cache for Zabbix reads~~ **DONE.** `zbx_cache.py`, 10s default.
 4. ~~Cash input for NCR~~ **DONE (estimate only).** The WMI collector returns
    cassette **health**, not note counts, so physical cash is unavailable for NCR.
    The forecast now falls back to *book cash* (loads − withdrawals) labelled as
