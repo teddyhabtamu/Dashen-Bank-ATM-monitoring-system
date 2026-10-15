@@ -128,3 +128,61 @@ def test_next_action_per_status():
         assert row['status'] == status, f'{status} collapsed to {row["status"]}'
         assert row['needs_action'] is True
         assert expected in fr.recommend_next_action(row)
+
+
+# ── the wiring between verify.fleet() and the two workers ───────────────
+def test_fleet_joins_verification_with_a_provisioning_plan():
+    """Regression: fleet() unpacked provision_atms() as a tuple when it
+    returns a dict, so the whole plan was swallowed and planned_changes came
+    out empty. This pins both return-shape contracts."""
+    import verify
+
+    def fake_verify(atm_id, window_minutes=15):
+        return {'atm_id': atm_id, 'verdict': 'reporting', 'ok': True,
+                'blockers': [], 'facts': {'items_reporting': 5, 'items_total': 5,
+                                          'vendor': 'NCR', 'ip_address': '10.0.0.9'},
+                'checks': []}
+
+    def fake_plan(atm_ids, dry_run=True, actor=''):
+        assert dry_run is True, 'the fleet report must never write'
+        return {'ok': True, 'error': '', 'summary': {},
+                'results': [{'atm_id': a, 'action': 'update',
+                             'changes': ['agent interface'], 'error': ''}
+                            for a in atm_ids]}
+
+    out = verify.fleet(atm_ids=['ATM-9'], verify_fn=fake_verify, plan_fn=fake_plan)
+    row = out['rows'][0]
+    assert row['changes'] == ['agent interface']
+    assert 'agent interface' in row['next_action']
+    assert 'agent interface' in out['csv'], 'the plan must reach the CSV too'
+
+
+def test_fleet_survives_a_planner_that_blows_up():
+    import verify
+
+    def fake_verify(atm_id, window_minutes=15):
+        return {'atm_id': atm_id, 'verdict': 'provisioned_not_reporting', 'ok': False,
+                'blockers': ['quiet'], 'facts': {'items_reporting': 0, 'items_total': 9},
+                'checks': []}
+
+    def broken_plan(*a, **k):
+        raise RuntimeError('zabbix down')
+
+    out = verify.fleet(atm_ids=['ATM-8'], verify_fn=fake_verify, plan_fn=broken_plan)
+    assert out['rows'][0]['status'] == 'provisioned_not_reporting'
+    assert out['counts']['needs_action'] == 1
+
+
+def test_fleet_reports_a_planner_error_instead_of_hiding_it():
+    import verify
+
+    def fake_verify(atm_id, window_minutes=15):
+        return {'atm_id': atm_id, 'verdict': 'reporting', 'ok': True,
+                'blockers': [], 'facts': {'items_reporting': 1, 'items_total': 1},
+                'checks': []}
+
+    def plan_with_error(atm_ids, dry_run=True, actor=''):
+        return {'ok': False, 'error': 'Zabbix login failed', 'summary': {}, 'results': []}
+
+    out = verify.fleet(atm_ids=['ATM-7'], verify_fn=fake_verify, plan_fn=plan_with_error)
+    assert out['rows'][0]['status'] == 'reporting', 'verification still stands'

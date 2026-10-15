@@ -303,11 +303,15 @@ def verify_all(atm_ids=None, window_minutes=15, client=None):
             'results': results}
 
 
-def fleet(atm_ids=None, window_minutes=15, with_plan=True):
+def fleet(atm_ids=None, window_minutes=15, with_plan=True,
+          verify_fn=None, plan_fn=None):
     """The fleet answer: one row per ATM, worst first, with the next action.
 
     Read-only. `with_plan` adds a provisioning DRY RUN so the report can also
     say "these hosts would be created/repaired" without writing anything.
+
+    verify_fn / plan_fn exist for tests: they pin the return-shape contract of
+    the two workers, which is exactly where this function went wrong once.
     """
     from fleet_report import counts, recommend_next_action, summarise, to_csv
     if atm_ids is None:
@@ -320,13 +324,21 @@ def fleet(atm_ids=None, window_minutes=15, with_plan=True):
                 cur.close()
         except Exception:
             atm_ids = []
-    results = [verify_atm(a, window_minutes=window_minutes) for a in atm_ids]
+    verify_fn = verify_fn or verify_atm
+    results = [verify_fn(a, window_minutes=window_minutes) for a in atm_ids]
     plans = None
     if with_plan and atm_ids:
         try:
-            from provision import provision_atms
-            _, plan_rows = provision_atms(atm_ids, dry_run=True, actor='verify')
-            plans = plan_rows
+            if plan_fn is None:
+                from provision import provision_atms
+                plan_fn = provision_atms
+            # provision_atms() returns a DICT: {ok, summary, results, review,
+            # error, ...}. The rows the report needs live under 'results'.
+            planned = plan_fn(atm_ids, dry_run=True, actor='verify')
+            plans = (planned or {}).get('results') or []
+            if (planned or {}).get('error'):
+                sys.stderr.write(f"verify: provisioning plan unavailable: "
+                                 f"{planned.get('error')}\n")
         except Exception as e:
             sys.stderr.write(f'verify: could not plan provisioning: {e}\n')
     rows = summarise(results, plans)
@@ -386,8 +398,8 @@ def main_fleet(argv=None):
         print(out['csv'])
         return 0
     for r in out['rows']:
-        mark = '  ' if r['needs_action'] else 'ok'
-        print(f"{mark}  {r['atm_id']:<18} {r['status_label']:<28} "
+        mark = 'ACTION' if r['needs_action'] else 'ok'
+        print(f"{mark:<6}  {r['atm_id']:<18} {r['status_label']:<28} "
               f"{r['vendor']:<4} {r['ip']:<15} {r['summary']}")
         if r['needs_action']:
             print(f"      next: {r['next_action']}")
