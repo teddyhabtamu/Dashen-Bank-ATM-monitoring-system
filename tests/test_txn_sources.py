@@ -137,11 +137,11 @@ def test_iso8583_real_is_not_trusted():
 JUSTIFIED = [
     ('report-portal/audit.py', 'ALTER TABLE atm_transactions',
      'constraint DDL - must target the real table'),
-    ('report-portal/audit.py', 'SELECT t.* FROM atm_transactions t',
-     'the view definition itself - the single place allowed to read the base '
-     'table, in order to build the filtered projection everything else uses'),
     ('report-portal/audit.py', 'ON atm_transactions(',
      'index DDL - indexes the real table, which the view selects from'),
+    ('report-portal/txn_sources.py', 'SELECT t.* FROM atm_transactions t',
+     'the view definition itself - the single place allowed to read the base '
+     'table, in order to build the filtered projection everything else uses'),
     ('report-portal/txn_sources.py', 'WHERE NOT EXISTS',
      'counts the hidden rows so the banner can say how many are suppressed'),
     ('report-portal/scheduler.py', "('atm_transactions', 'recorded_at'",
@@ -151,17 +151,21 @@ JUSTIFIED = [
 SQL_MARKERS = ('FROM atm_transactions', 'JOIN atm_transactions')
 
 
-def _startup_ddl():
-    """TXN_SOURCE_DDL read via AST rather than by importing audit.
+def _ddl_from(path, name):
+    """Read a module-level list-of-strings constant via AST.
 
-    Importing audit would need psycopg2, which the test venv does not have, and
-    a test that cannot run locally is a test that stops being run.
+    Importing the module would need psycopg2, which the test venv does not have,
+    and a test that cannot run locally is a test that stops being run.
     """
-    tree = ast.parse((REPO / 'report-portal' / 'audit.py').read_text())
+    tree = ast.parse((REPO / path).read_text())
     for node in tree.body:
-        if isinstance(node, ast.Assign) and getattr(node.targets[0], 'id', '') == 'TXN_SOURCE_DDL':
+        if isinstance(node, ast.Assign) and getattr(node.targets[0], 'id', '') == name:
             return [el.value for el in node.value.elts]
-    raise AssertionError('TXN_SOURCE_DDL not found in report-portal/audit.py')
+    raise AssertionError('%s not found in %s' % (name, path))
+
+
+def _startup_ddl():
+    return _ddl_from('report-portal/txn_sources.py', 'POLICY_DDL')
 
 
 def _is_delete(line):
@@ -215,6 +219,46 @@ def test_read_paths_use_the_view():
     assert 'atm_transactions_visible' in kpi
     cash = (REPO / 'report-portal' / 'cash_service.py').read_text()
     assert 'atm_transactions_visible' in cash, 'cash forecast still reads simulated withdrawals'
+
+
+def test_app_boot_applies_the_schema():
+    """The outage this prevents: the code deploy landed first, the schema did
+    not, and every page that reads transactions 500'd. The app must therefore
+    apply the schema itself before serving."""
+    app_src = (REPO / 'report-portal' / 'app.py').read_text()
+    assert 'ensure_schema_best_effort' in app_src, (
+        'create_app must apply the policy schema at boot')
+    # ...and it must not be fatal, or a DB hiccup would take down login too.
+    assert 'except Exception' in app_src
+    boot = app_src.index('ensure_schema_best_effort')
+    assert app_src.rindex('return app') > boot, 'schema must be ensured before returning the app'
+
+
+def test_schema_is_only_created_when_missing():
+    """Recreating the view on every start would make three gunicorn workers each
+    take an ACCESS EXCLUSIVE lock on it for nothing."""
+    src = (REPO / 'report-portal' / 'txn_sources.py').read_text()
+    assert 'to_regclass' in src, 'must check for the view before running DDL'
+    fn = src[src.index('def ensure_schema_best_effort'):]
+    check = fn.index('to_regclass')
+    ddl = fn.index('for stmt in POLICY_DDL')
+    assert check < ddl, 'the existence check must come before the DDL'
+
+
+def test_advisory_lock_is_transaction_scoped():
+    """get_db() pools connections. A session-scoped advisory lock would return to
+    the pool still held and block the next worker forever."""
+    src = (REPO / 'report-portal' / 'txn_sources.py').read_text()
+    assert 'pg_advisory_xact_lock' in src
+    fn = src[src.index('def ensure_schema_best_effort'):]
+    assert 'pg_advisory_lock(' not in fn.replace('pg_advisory_xact_lock(', '')
+
+
+def test_boot_failure_is_logged_with_a_fix():
+    """If it cannot self-heal, the operator needs the exact command."""
+    src = (REPO / 'report-portal' / 'txn_sources.py').read_text()
+    assert 'migrate_txn_sources.sql' in src, 'the failure path must name the fix'
+    assert 'logger.error' in src
 
 
 def test_startup_schema_never_resets_operator_choices():

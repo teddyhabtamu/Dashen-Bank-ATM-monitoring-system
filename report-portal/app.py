@@ -147,6 +147,19 @@ def create_app():
         logging.getLogger(__name__).error('500 error: %s', e, exc_info=True)
         return render_template('error_500.html'), 500
 
+    # The portal queries atm_transactions_visible on nearly every page, so a
+    # code deploy that lands before its schema takes the whole portal down - it
+    # did, once. Applied here (no-op once the view exists) so the ordering can
+    # never bite again. Never fatal: the app must still boot and say so.
+    try:
+        from txn_sources import ensure_schema_best_effort
+        if not ensure_schema_best_effort():
+            app.logger.error(
+                'Transaction source policy schema missing - apply '
+                'scripts/migrate_txn_sources.sql')
+    except Exception:
+        app.logger.exception('Transaction source policy check failed at startup')
+
     @app.route('/health')
     def health():
         return {'status': 'ok'}, 200

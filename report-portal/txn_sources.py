@@ -86,6 +86,84 @@ def status(conn):
     return f'Transaction data: {shown} only{suffix}.', 'info'
 
 
+# Canonical DDL. Mirrored by scripts/migrate_txn_sources.sql for operators who
+# prefer to apply it by hand, and run at startup by ensure_schema_best_effort()
+# so a code deploy can never land before its own schema.
+#
+# That failure is not hypothetical: shipping this change once took the whole
+# portal down, because nearly every page queries atm_transactions_visible and the
+# view had not been created. A unit test suite cannot catch a missing migration -
+# only applying it at boot can.
+#
+# No statement here may UPDATE policy rows: startup runs on every container
+# start, so re-asserting the seed would silently revert an operator's choice and
+# make the audit log a lie. ON CONFLICT DO NOTHING seeds only new sources.
+POLICY_LOCK = 999888778
+
+POLICY_DDL = [
+    """CREATE TABLE IF NOT EXISTS txn_source_policy (
+        source  varchar(20) PRIMARY KEY,
+        label   varchar(60) NOT NULL,
+        trusted boolean NOT NULL DEFAULT false,
+        enabled boolean NOT NULL DEFAULT false,
+        note    text
+    )""",
+    """INSERT INTO txn_source_policy (source, label, trusted, enabled, note) VALUES
+        ('EJ',           'EJ journal (real ATM)',  true,  true,
+         'System of record for what the terminal did.'),
+        ('ISO8583',      'ATM switch (ISO 8583)',  true,  true,
+         'System of record for what the bank authorised.'),
+        ('SIMULATOR',    'Transaction simulator',  false, false,
+         'simulators/txn_engine.py invents transactions.'),
+        ('ISO8583_SIM',  'Switch simulator',       false, false,
+         'scripts/fake_iso8583_switch.py --sim output.'),
+        ('ISO8583_REAL', 'Switch test generator',  false, false,
+         'Fabricated despite the name.')
+       ON CONFLICT (source) DO NOTHING""",
+    """CREATE OR REPLACE VIEW atm_transactions_visible AS
+        SELECT t.* FROM atm_transactions t
+         WHERE t.source IN (SELECT p.source FROM txn_source_policy p WHERE p.enabled)""",
+]
+
+
+def ensure_schema_best_effort():
+    """Create the policy table and view if they are missing. Returns True/False.
+
+    Checked before acting, so a normal restart issues no DDL at all: three
+    gunicorn workers booting together would otherwise each take an ACCESS
+    EXCLUSIVE lock on the view to re-create something identical.
+
+    Uses a transaction-scoped advisory lock, not the session-scoped one, because
+    get_db() pools connections: a session lock would go back into the pool still
+    held and block the next worker indefinitely. A transaction lock is released
+    automatically at commit or rollback.
+    """
+    try:
+        from db import get_db
+        with get_db() as conn:
+            cur = conn.cursor()
+            try:
+                cur.execute("SELECT pg_advisory_xact_lock(%s)", (POLICY_LOCK,))
+                cur.execute("SELECT to_regclass('public.atm_transactions_visible')")
+                if cur.fetchone()[0]:
+                    conn.commit()
+                    return True
+                for stmt in POLICY_DDL:
+                    cur.execute(stmt)
+                conn.commit()
+                logger.info('Transaction source policy schema created')
+                return True
+            finally:
+                cur.close()
+    except Exception as e:
+        # Must not stop the app from booting, but must be loud: without this
+        # schema every transaction page fails.
+        logger.error('Could not create the transaction source policy schema (%s). '
+                     'Apply scripts/migrate_txn_sources.sql - until then '
+                     'transaction pages will error.', e)
+        return False
+
+
 _cache = {'at': 0.0, 'note': '', 'level': 'info'}
 
 

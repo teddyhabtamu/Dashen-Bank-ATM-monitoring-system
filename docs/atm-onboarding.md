@@ -164,6 +164,36 @@ calling an ATM live.
 
 ---
 
+## Deploying a change to the portal
+
+```bash
+cd /data/atm-monitoring
+git pull origin uat-prep
+docker restart report-portal
+docker logs --tail 20 report-portal      # expect no ERROR lines
+```
+
+Schema changes that the portal depends on are applied automatically at startup,
+so **code and schema can no longer arrive in the wrong order**. That is not
+decoration: shipping the transaction-source view once took the whole portal down,
+because every page reads it and it had not been created yet. `create_app()` now
+runs `txn_sources.ensure_schema_best_effort()`, which checks for the view first
+and issues no DDL on a normal restart.
+
+To apply a migration by hand instead (e.g. during a maintenance window):
+
+```bash
+docker exec -i zabbix-db psql -U zabbix -d zabbix < scripts/migrate_txn_sources.sql
+```
+
+**Scripts live on the host, not in the container.** `./report-portal` is mounted
+at `/app`, so `scripts/` is not there. Run them with the repo virtualenv:
+
+```bash
+venv/bin/python scripts/set_txn_sources.py     # which transaction sources are visible
+venv/bin/python scripts/ej_profile.py          # what the EJ journals actually contain
+```
+
 ## Troubleshooting (symptom → cause, in order)
 
 - `parts: 33` (or missing new keys) after copying the script → the ATM

@@ -53,46 +53,6 @@ VENDOR_CONSTRAINTS = [
 ]
 
 
-# Transaction source policy — see scripts/migrate_txn_sources.sql, which applies
-# the same DDL for operators who want it explicit. Kept here as well so that a
-# `docker restart` is self-healing: the portal queries
-# atm_transactions_visible everywhere, and a code deploy that lands before the
-# migration would otherwise 500 on every transaction page.
-#
-# The seed is an ALLOWLIST. An unrecognised source is invisible until an operator
-# trusts it, so a new generator cannot leak by default. ISO8583_REAL is
-# deliberately NOT trusted despite the name - scripts/fake_iso8583_switch.py
-# fabricates it.
-TXN_SOURCE_DDL = [
-    """CREATE TABLE IF NOT EXISTS txn_source_policy (
-        source  varchar(20) PRIMARY KEY,
-        label   varchar(60) NOT NULL,
-        trusted boolean NOT NULL DEFAULT false,
-        enabled boolean NOT NULL DEFAULT false,
-        note    text
-    )""",
-    """INSERT INTO txn_source_policy (source, label, trusted, enabled, note) VALUES
-        ('EJ',           'EJ journal (real ATM)',   true,  true,
-         'System of record for what the terminal did.'),
-        ('ISO8583',      'ATM switch (ISO 8583)',   true,  true,
-         'System of record for what the bank authorised.'),
-        ('SIMULATOR',    'Transaction simulator',   false, false,
-         'simulators/txn_engine.py invents transactions.'),
-        ('ISO8583_SIM',  'Switch simulator',        false, false,
-         'scripts/fake_iso8583_switch.py --sim output.'),
-        ('ISO8583_REAL', 'Switch test generator',   false, false,
-         'Fabricated despite the name.')
-       ON CONFLICT (source) DO NOTHING""",
-    # NOTE: no UPDATE re-asserting the defaults. init_schema() runs on every
-    # container start, so re-asserting would silently revert an operator's
-    # choice (e.g. demo mode) on the next restart or deploy - and an audit trail
-    # that a reboot can undo is worse than none. ON CONFLICT DO NOTHING seeds
-    # only genuinely new sources; existing rows are left exactly as set.
-    """CREATE OR REPLACE VIEW atm_transactions_visible AS
-        SELECT t.* FROM atm_transactions t
-         WHERE t.source IN (SELECT p.source FROM txn_source_policy p WHERE p.enabled)""",
-]
-
 
 SCHEMA_MIGRATIONS = [
     "ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45)",
@@ -154,11 +114,12 @@ def init_audit_schema():
                 # exist yet — skip those statements instead of aborting the
                 # whole init (which would leave app_users uncreated and break
                 # login until the next restart).
+                from txn_sources import POLICY_DDL
                 for q in [
                     AUDIT_TABLE_SQL, USERS_TABLE_SQL,
                 ] + USERS_MIGRATIONS + SCHEMA_MIGRATIONS + [
                     FAULT_TYPE_MAP_SQL,
-                ] + VENDOR_CONSTRAINTS + TXN_SOURCE_DDL + [
+                ] + VENDOR_CONSTRAINTS + POLICY_DDL + [
                     "CREATE INDEX IF NOT EXISTS idx_audit_performed ON audit_log(performed_at DESC)",
                     "CREATE INDEX IF NOT EXISTS idx_audit_username  ON audit_log(username)",
                     "CREATE INDEX IF NOT EXISTS idx_audit_action    ON audit_log(action)",
