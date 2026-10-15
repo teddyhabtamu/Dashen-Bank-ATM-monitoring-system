@@ -121,7 +121,7 @@ def _page(values, errors, checks, stage='facts', **extra):
     ctx = {'vendors': VENDORS, 'districts': DISTRICTS, 'values': values,
            'errors': errors, 'checks': checks, 'stage': stage,
            'saved': False, 'plan': None, 'provision': None, 'verification': None,
-           'save_errors': {}, 'blocking': []}
+           'save_errors': {}, 'blocking': [], 'step_error': ''}
     ctx.update(extra)
     ctx['blocking'] = _blocking(ctx.get('checks'))
     return render_template('onboarding.html', **ctx)
@@ -207,12 +207,14 @@ def onboard_provision():
     plan = provision_atms([atm_id], dry_run=True, actor='onboarding-wizard')
     out = provision_atms([atm_id], dry_run=False, actor='onboarding-wizard')
     summary = out.get('summary') or {}
+    # A failed transition must say so: an empty card here reads as "done".
+    step_error = out.get('error') or (plan.get('error') if plan else '')
     log_action('ZABBIX_SYNC', f'wizard: {atm_id} created={summary.get("created", 0)} '
                               f'updated={summary.get("updated", 0)} '
                               f'skipped={summary.get("skipped", 0)} '
                               f'failed={summary.get("failed", 0)}')
     return _page(_saved_values(atm_id), {}, None, stage='provision', saved=True,
-                 plan=plan, provision=out)
+                 plan=plan, provision=out, step_error=step_error)
 
 
 @bp.route('/onboard/verify', methods=['POST'])
@@ -227,7 +229,9 @@ def onboard_verify():
     # values.atm_id is the only field this step needs.
     out = verify_atm(atm_id)
     return _page(_saved_values(atm_id), {}, None, stage='verify', saved=True,
-                 verification=out)
+                 verification=out,
+                 step_error=('' if out.get('verdict') != 'unknown' else
+                             (out.get('blockers') or ['Zabbix could not be read'])[0]))
 
 
 @bp.route('/onboard/stage', methods=['POST'])

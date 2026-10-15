@@ -72,6 +72,49 @@ details.wstep.pending>summary{opacity:.55}
 {% set facts_done = checks or saved or plan or provision or verification %}
 {% set provisioned = provision or (verification and verification.verdict != 'not_provisioned') %}
 {% set verified_ok = verification and verification.ok %}
+{% if values.atm_id %}
+{% set state, state_tone, state_icon = (
+     ('Live and reporting', 'success', 'circle-check')
+     if verified_ok else
+     ('Provisioned, but not reporting', 'error', 'alert-triangle')
+     if provisioned else
+     ('Saved, not provisioned yet', 'warning', 'circle-minus')
+     if saved else
+     ('Not saved yet', 'info', 'info')) %}
+<div class="alert-card {{ state_tone }}" id="wiz-summary" style="margin-bottom:20px">
+  <i data-lucide="{{ state_icon }}" class="alert-icon"></i>
+  <div class="alert-content">
+    <div class="alert-title">{{ values.atm_id }} — {{ state }}</div>
+    <div class="alert-message">
+      {% if verified_ok %}
+        Vendor telemetry is arriving. This ATM counts as live.
+      {% elif provisioned and verification %}
+        {{ verification.facts.items_reporting }}/{{ verification.facts.items_total }} items reporting.
+        {% for b in verification.blockers %}<div>&rarr; {{ b }}</div>{% endfor %}
+      {% elif provisioned %}
+        Host exists in Zabbix. Run step 4 to prove it is reporting.
+      {% elif saved %}
+        The record is saved. Step 3 will preview and provision the Zabbix host.
+      {% else %}
+        Fill in the facts to continue.
+      {% endif %}
+    </div>
+    <div class="alert-action">
+      {% if blocking %}
+        <a class="btn btn-outline" href="/admin/onboard/stage">Fix the failing check</a>
+      {% elif not saved %}
+        <a class="btn btn-primary" href="/admin/onboard">Start the wizard</a>
+      {% elif not provisioned %}
+        <a class="btn btn-primary" href="/admin/onboard/stage">Go to provisioning</a>
+      {% elif not verification %}
+        <a class="btn btn-primary" href="/admin/onboard/stage">Verify reporting</a>
+      {% endif %}
+      <a class="btn btn-outline" href="/admin/onboard">Start over</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <div class="stepper">
   {% set steps = [
         ('facts', '1', 'ATM facts', stage == 'facts'),
@@ -227,6 +270,31 @@ details.wstep.pending>summary{opacity:.55}
 </details>
 
 <!-- ── Step 3 · Provision ────────────────────────────────────────── -->
+{% if step_error %}
+<div class="alert-card error" style="margin-bottom:20px">
+  <i data-lucide="wifi-off" class="alert-icon"></i>
+  <div class="alert-content">
+    <div class="alert-title">Could not reach Zabbix</div>
+    <div class="alert-message">{{ step_error }} Nothing was changed — retry when the connection is back.</div>
+    <div class="alert-action">
+      {% if stage == 'provision' %}
+      <form method="post" action="/admin/onboard/provision">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+        <button type="submit" class="btn btn-outline"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Retry provisioning</button>
+      </form>
+      {% else %}
+      <form method="post" action="/admin/onboard/verify">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+        <button type="submit" class="btn btn-outline"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Retry verification</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <details class="card wstep {% if not facts_done %}pending{% endif %}" id="step3" {% if stage == 'provision' %}open{% endif %}>
   <summary>
     <i data-lucide="chevron-right" class="chev"></i>
