@@ -12,7 +12,8 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'report-portal'))
 
-from onboard_rules import WRITER_DEFAULTS, to_atm_data  # noqa: E402
+from onboard_rules import (WRITER_DEFAULTS, classify_existing,  # noqa: E402
+                            to_atm_data)
 
 FACTS = {'atm_id': 'Test1', 'atm_name': 'Test1', 'branch': 'Test1', 'district': 'Kirkos',
          'city': 'Addis Ababa', 'region': 'Addis Ababa', 'terminal_id': 'Test1',
@@ -73,3 +74,28 @@ def test_optional_fields_not_collected_by_the_wizard():
     data = to_atm_data(FACTS)
     for field in ('install_date', 'snmp_community', 'snmp_version', 'ej_log_format'):
         assert field not in data or data[field] is None
+
+# ── duplicate check: create vs update vs hard stop ──────────────────────
+def test_unused_id_and_ip_are_free():
+    assert classify_existing(None, 'Test1')[0] == 'free'
+
+
+def test_re_running_the_wizard_on_the_same_atm_is_an_update_not_a_failure():
+    """The UAT case: re-running the wizard for Test1 reported a red failure
+    AND still let the user continue. Now it is an informational 'edit'."""
+    kind, message = classify_existing('Test1', 'Test1')
+    assert kind == 'edit'
+    assert 'Updating the existing record' in message
+
+
+def test_a_different_atm_holding_the_id_is_a_hard_stop():
+    kind, message = classify_existing('ATM-OTHER', 'Test1')
+    assert kind == 'clash'
+    assert 'ATM-OTHER' in message
+
+
+def test_only_a_clash_blocks_the_next_step():
+    free = classify_existing(None, 'Test1')
+    edit = classify_existing('Test1', 'Test1')
+    clash = classify_existing('ATM-OTHER', 'Test1')
+    assert free[0] != 'clash' and edit[0] != 'clash' and clash[0] == 'clash'

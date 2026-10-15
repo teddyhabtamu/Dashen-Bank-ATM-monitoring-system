@@ -22,8 +22,8 @@ from flask import Blueprint, render_template, request
 from blueprints.auth import login_required, role_required, ROLE_ADMIN
 from audit import log_action
 from db import get_db
-from onboard_rules import (VENDORS, DISTRICTS, PROBE_PORT, validate_facts,
-                            to_atm_data)
+from onboard_rules import (VENDORS, DISTRICTS, PROBE_PORT, BLOCKING,
+                            classify_existing, to_atm_data, validate_facts)
 from provision import provision_atms
 from verify import verify_atm
 
@@ -43,8 +43,10 @@ def _tcp_probe(ip, port, timeout=3):
 
 
 def _preflight(cleaned):
-    """Run ordered checks. Each result: (label, ok: True/False/None,
-    detail, fixer). ok=None means STATIC (verified later, stated)."""
+    """Run ordered checks. Each result:
+    (label, ok: True/False/None, detail, fixer, blocking: bool).
+    ok=None means STATIC (verified later, stated). Only checks flagged BLOCKING
+    stop the wizard: the next step is not offered while one of them fails."""
     out = []
     ip = cleaned['ip_address']
     vendor = cleaned['vendor']
@@ -56,45 +58,56 @@ def _preflight(cleaned):
                         (cleaned['atm_id'], ip))
             clash = cur.fetchone()
             cur.close()
-        if clash:
-            out.append(('Not already registered', False,
-                        f'Conflicts with existing row {clash[0]}.',
-                        'Your fix: pick an unused ATM ID / IP.'))
+        kind, message = classify_existing(clash[0] if clash else None,
+                                          cleaned['atm_id'])
+        if kind == 'edit':
+            out.append(('ATM already registered', None, message,
+                        'This run will update the record, not create a second one.', False))
+        elif kind == 'clash':
+            out.append(('Not already registered', False, message,
+                        'Your fix: pick an unused ATM ID / IP.', True))
         else:
-            out.append(('Not already registered', True,
-                        'ATM ID and IP are unused.', '—'))
+            out.append(('Not already registered', True, message, '—', False))
     except Exception as e:
         logger.warning('onboard uniqueness check failed: %s', e)
         out.append(('Not already registered', None,
                     'Database check unavailable right now.',
-                    'Engineer: verify DB reachability.'))
+                    'Engineer: verify DB reachability.', False))
     # 2. Reachability (LIVE where possible).
     if vendor in PROBE_PORT:
         port = PROBE_PORT[vendor]
         if _tcp_probe(ip, port):
             out.append((f'Reachable on TCP/{port}', True,
-                        f'{ip}:{port} answered.', '—'))
+                        f'{ip}:{port} answered.', '—', False))
         else:
+            # Advisory, not blocking: the host can be created before the box
+            # answers, and verify.py is the gate that decides "reporting".
             out.append((f'Reachable on TCP/{port}', False,
                         f'{ip}:{port} silent.',
-                        'Network team: forward the vendor port (see onboarding doc Step 0).'))
+                        'Network team: forward the vendor port (see onboarding doc Step 0). '
+                        'You can still provision — Step 4 will keep saying it is not reporting.', False))
     else:
         out.append(('Reachability', None,
                     'GRG speaks UDP/SNMP — no TCP equivalent; verified live at provision.',
-                    'Not a failure. Continue.'))
+                    'Not a failure. Continue.', False))
     # 3. Model known (STATIC by construction — closed dropdown).
     out.append(('Model known', True,
                 f"{cleaned['vendor']} {cleaned['model']} has templates.",
-                '—'))
+                '—', False))
     # 4. Credential reference (STATIC in preview — escrow lands with RBAC).
     out.append(('Credential reference', None,
-                'Preview build: credentials resolve at provision time.',
-                'Admin: pick the sealed escrow entry when provisioning.'))
+                'Credentials resolve at provision time.',
+                'Admin: pick the sealed escrow entry when provisioning.', False))
     # 5. Journal preview (STATIC — pattern stated).
     out.append(('Journal path preview', None,
-                'Journals pull hourly per ATM after onboarding.',
-                'Nothing to do now.'))
+                'Journals pull hourly per ATM once an EJ hostname is set.',
+                'Nothing to do now.', False))
     return out
+
+
+def _blocking(checks):
+    """Checks that must stop the wizard (see onboard_rules.BLOCKING)."""
+    return [c for c in checks or [] if len(c) > 4 and c[4]]
 
 
 # The four steps of the flow, in order. `stage` is which one is open: it is
@@ -108,8 +121,9 @@ def _page(values, errors, checks, stage='facts', **extra):
     ctx = {'vendors': VENDORS, 'districts': DISTRICTS, 'values': values,
            'errors': errors, 'checks': checks, 'stage': stage,
            'saved': False, 'plan': None, 'provision': None, 'verification': None,
-           'save_errors': {}}
+           'save_errors': {}, 'blocking': []}
     ctx.update(extra)
+    ctx['blocking'] = _blocking(ctx.get('checks'))
     return render_template('onboarding.html', **ctx)
 
 

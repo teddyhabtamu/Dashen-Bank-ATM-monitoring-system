@@ -31,6 +31,11 @@
 .step.current{color:#012169;border-color:#012169;background:rgba(1,33,105,.04)}
 .step.current .n{background:#012169;color:#fff}
 .step.pending{opacity:.6}
+.stepper form{margin:0}
+button.step{border:1px solid #EEF1F6;cursor:pointer;font-family:inherit}
+button.step:hover{border-color:#CBD5E1;color:#012169}
+button.step.done{color:#059669;border-color:rgba(5,150,105,.25)}
+button.step.done:hover{background:rgba(5,150,105,.06)}
 
 details.wstep{margin-bottom:0;overflow:visible}
 details.wstep[open]{margin-bottom:24px}
@@ -68,10 +73,25 @@ details.wstep.pending>summary{opacity:.55}
 {% set provisioned = provision or (verification and verification.verdict != 'not_provisioned') %}
 {% set verified_ok = verification and verification.ok %}
 <div class="stepper">
-  <div class="step {{ 'done' if stage != 'facts' else 'current' }}"><span class="n">1</span> ATM facts</div>
-  <div class="step {{ 'current' if stage == 'checks' else 'done' if facts_done else 'pending' }}"><span class="n">2</span> Pre-flight</div>
-  <div class="step {{ 'current' if stage == 'provision' else 'done' if provisioned else 'pending' if not saved }}"><span class="n">3</span> Provision</div>
-  <div class="step {{ 'current' if stage == 'verify' else 'done' if verified_ok else 'pending' if not provisioned }}"><span class="n">4</span> Verify</div>
+  {% set steps = [
+        ('facts', '1', 'ATM facts', stage == 'facts'),
+        ('checks', '2', 'Pre-flight', stage == 'checks' or (not stage == 'facts' and facts_done)),
+        ('provision', '3', 'Provision', stage == 'provision' or provisioned),
+        ('verify', '4', 'Verify', stage == 'verify')] %}
+  {% for key, num, label, reached in steps %}
+    {% if reached and stage != key %}
+      <form method="post" action="/admin/onboard/stage">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="stage" value="{{ key }}">
+        <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+        <button type="submit" class="step {{ 'done' if stage != key }}">
+          <span class="n">{{ num }}</span>{{ label }}
+        </button>
+      </form>
+    {% else %}
+      <div class="step {{ 'current' if stage == key else 'pending' }}"><span class="n">{{ num }}</span>{{ label }}</div>
+    {% endif %}
+  {% endfor %}
 </div>
 
 <!-- ── Step 1 · ATM facts ─────────────────────────────────────────── -->
@@ -160,26 +180,46 @@ details.wstep.pending>summary{opacity:.55}
   </summary>
   <div class="step-body">
     {% if checks %}
-      {% for label, ok, detail, fixer in checks %}
+      {% for label, ok, detail, fixer, blocking in checks %}
         {% if ok is true %}{% set tone = 'success' %}{% set icon = 'circle-check' %}
         {% elif ok is false %}{% set tone = 'error' %}{% set icon = 'circle-x' %}
         {% else %}{% set tone = 'info' %}{% set icon = 'circle-minus' %}{% endif %}
         <div class="alert-card {{ tone }}">
           <i data-lucide="{{ icon }}" class="alert-icon"></i>
           <div class="alert-content">
-            <div class="alert-title">{{ label }}</div>
+            <div class="alert-title">{{ label }}{% if blocking %} — must be fixed{% endif %}</div>
             <div class="alert-message">{{ detail }}</div>
             {% if fixer and fixer != '—' %}<div class="check-fix">→ {{ fixer }}</div>{% endif %}
           </div>
         </div>
       {% endfor %}
-      <div class="wiz-actions">
-        <form method="post" action="/admin/onboard/save">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          {% for k, v in values.items() %}{% if v is not none %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
-          <button type="submit" class="btn btn-primary"><i data-lucide="save" style="width:14px;height:14px"></i> Save ATM &amp; preview provisioning</button>
-        </form>
-      </div>
+      {% if blocking %}
+        <div class="wiz-actions" style="justify-content:space-between;align-items:center">
+          <span class="step-note" style="margin:0">
+            Fix the failing check{% if blocking|length > 1 %}s{% endif %} above — Step 3 stays closed until it passes.
+          </span>
+          <form method="post" action="/admin/onboard/stage">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="stage" value="facts">
+            <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+            <button type="submit" class="btn btn-outline"><i data-lucide="pencil" style="width:14px;height:14px"></i> Fix the facts</button>
+          </form>
+        </div>
+      {% else %}
+        <div class="wiz-actions" style="justify-content:space-between;align-items:center">
+          <form method="post" action="/admin/onboard/stage">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="stage" value="facts">
+            <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+            <button type="submit" class="btn btn-outline">&larr; Back</button>
+          </form>
+          <form method="post" action="/admin/onboard/save">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% for k, v in values.items() %}{% if v is not none %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+            <button type="submit" class="btn btn-primary">Save ATM &amp; preview provisioning <i data-lucide="arrow-right" style="width:14px;height:14px"></i></button>
+          </form>
+        </div>
+      {% endif %}
     {% else %}
       <p class="step-note">Fill in the facts and run the checks first.</p>
     {% endif %}
@@ -237,7 +277,13 @@ details.wstep.pending>summary{opacity:.55}
             </div>
           </div>
         {% endfor %}
-        <div class="wiz-actions">
+        <div class="wiz-actions" style="justify-content:space-between;align-items:center">
+          <form method="post" action="/admin/onboard/stage">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="stage" value="checks">
+            <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+            <button type="submit" class="btn btn-outline">&larr; Back</button>
+          </form>
           <form method="post" action="/admin/onboard/provision">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="atm_id" value="{{ values.atm_id }}">

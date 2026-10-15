@@ -59,6 +59,31 @@ def to_atm_data(values):
     return data
 
 
+# A pre-flight check is either BLOCKING (the next step must not be offered) or
+# advisory. Reachability is advisory on purpose: a host can be provisioned
+# before the box answers, and verify.py is what decides whether it reports.
+BLOCKING = 'blocking'
+
+
+def classify_existing(clash_id, atm_id):
+    """Duplicate check that distinguishes three real situations.
+
+    Returns (kind, message) with kind in:
+      free  - nothing uses this ATM ID or IP
+      edit  - the clash IS this ATM, so the wizard is updating it
+      clash - a DIFFERENT ATM owns this ID or IP: hard stop
+
+    'edit' matters: before this, re-running the wizard for an existing ATM
+    reported "Conflicts with existing row Test1" as a failure and still let the
+    user continue, which reads as broken and is how a duplicate gets saved.
+    """
+    if not clash_id:
+        return 'free', 'ATM ID and IP are unused.'
+    if clash_id == atm_id:
+        return 'edit', f'Updating the existing record {clash_id}.'
+    return 'clash', f'Conflicts with existing row {clash_id}.'
+
+
 def validate_facts(f):
     """Return (cleaned_dict, errors_dict). Pure logic — no I/O."""
     errors = {}
