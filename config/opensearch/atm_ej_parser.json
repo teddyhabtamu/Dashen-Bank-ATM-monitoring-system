@@ -213,6 +213,7 @@
       "date": {
         "field": "event_time",
         "target_field": "@timestamp",
+        "timezone": "Africa/Addis_Ababa",
         "formats": [
           "yyyy-MM-dd'T'HH:mm:ss",
           "yyyy-MM-dd HH:mm:ss",

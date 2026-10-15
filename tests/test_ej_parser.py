@@ -155,6 +155,24 @@ def test_amount_kept_only_for_money_types():
     cond = gates[0].get("if", "")
     assert "WITHDRAWAL" in cond and "TRANSFER" in cond, \
         "amount gate must allow money-moving types"
+
+
+def test_event_time_parsed_as_eat():
+    """Journal wall time is EAT: without an explicit timezone the date
+    processor reads it as UTC and the portal's +3 display double-shifts
+    every row (same instant shown as 17:35 and 20:35 on one screen)."""
+    doc = json.loads(PIPELINE.read_text())
+    dates = [p["date"] for p in doc["processors"] if "date" in p]
+    assert dates, "no date processor"
+    assert dates[0].get("timezone") == "Africa/Addis_Ababa", \
+        "event_time must be interpreted as EAT"
+
+
+def test_state_rule_precedes_txn_default():
+    """STATE categorization must win over the TXN default (ordering
+    contract — silent miscategorization otherwise)."""
+    doc = json.loads(PIPELINE.read_text())
+    procs = doc["processors"]
     sets = [(i, p["set"]) for i, p in enumerate(procs) if "set" in p]
     state_at = next(i for i, s in sets
                     if s.get("value") == "STATE" and "SST" in s.get("if", ""))
