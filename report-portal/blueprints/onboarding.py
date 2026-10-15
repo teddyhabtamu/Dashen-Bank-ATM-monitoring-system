@@ -108,6 +108,26 @@ def _page(values, errors, checks, **extra):
     return render_template('onboarding.html', **ctx)
 
 
+def _saved_values(atm_id):
+    """The ATM as stored, so steps 3-4 render the record that exists rather
+    than an empty form (which read as "my data vanished")."""
+    fields = ('atm_id', 'atm_name', 'branch', 'district', 'city', 'region',
+              'latitude', 'longitude', 'terminal_id', 'vendor', 'model',
+              'ip_address')
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT " + ", ".join(fields) + " FROM atm_locations "
+                        "WHERE atm_id = %s", (atm_id,))
+            row = cur.fetchone()
+            cur.close()
+        if row:
+            return {f: (v if v is not None else '') for f, v in zip(fields, row)}
+    except Exception as e:
+        logger.warning('onboard: could not reload %s: %s', atm_id, e)
+    return {'atm_id': atm_id}
+
+
 def _form_values():
     return {k: (request.form.get(k, '') or '') for k in
             ('atm_id', 'atm_name', 'branch', 'district', 'city', 'region',
@@ -170,8 +190,8 @@ def onboard_provision():
                               f'updated={summary.get("updated", 0)} '
                               f'skipped={summary.get("skipped", 0)} '
                               f'failed={summary.get("failed", 0)}')
-    saved = {'atm_id': atm_id}
-    return _page(saved, {}, None, saved=True, plan=plan, provision=out)
+    return _page(_saved_values(atm_id), {}, None, saved=True, plan=plan,
+                 provision=out)
 
 
 @bp.route('/onboard/verify', methods=['POST'])
@@ -185,5 +205,4 @@ def onboard_verify():
         return _page({}, {'atm_id': 'Save the ATM first.'}, None)
     # values.atm_id is the only field this step needs.
     out = verify_atm(atm_id)
-    return _page({'atm_id': atm_id}, {}, None, saved=True,
-                 verification=out)
+    return _page(_saved_values(atm_id), {}, None, saved=True, verification=out)
