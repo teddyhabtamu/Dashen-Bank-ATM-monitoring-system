@@ -288,6 +288,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
                 <div><span class="dd-lbl">IP Address</span><span>{{ d.ip_address or '—' }}</span></div>
                 <div><span class="dd-lbl">SNMP Version</span><span>{{ d.snmp_version or '—' }}</span></div>
                 <div><span class="dd-lbl">EJ Format</span><span>{{ d.ej_log_format or '—' }}</span></div>
+                <div><span class="dd-lbl">EJ Hostname</span><span>{{ d.ej_hostname or '— not set' }}</span></div>
               </div>
             </td>
           </tr>
@@ -399,7 +400,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
       <div class="modal-alert" id="formAlert"></div>
       <div class="form-grid">
         {% for name, label, typ, maxlen in fields %}
-          {% set optional = name == 'atm_name' or name in ('ip_address', 'snmp_community', 'snmp_version', 'ej_log_format') %}
+          {% set optional = name == 'atm_name' or name in ('ip_address', 'snmp_community', 'snmp_version', 'ej_log_format', 'ej_hostname') %}
           <div class="form-group" data-field="{{ name }}">
             <label>{{ label }} {% if not optional %}<span class="required">*</span>{% endif %}</label>
             {% if name == 'snmp_version' %}

@@ -558,6 +558,7 @@ FIELDS = [
     ('snmp_community', 'SNMP Community', 'password', 100),
     ('snmp_version','SNMP Version', 'select', None),
     ('ej_log_format','EJ Format',   'select', None),
+    ('ej_hostname', 'EJ Hostname',  'text',   64),
 ]
 
 
@@ -857,8 +858,8 @@ def atm_save():
                 INSERT INTO atm_locations
                     (atm_id, atm_name, branch, district, city, region, latitude, longitude,
                      terminal_id, vendor, model, install_date, status,
-                     ip_address, snmp_community, snmp_version, ej_log_format)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                     ip_address, snmp_community, snmp_version, ej_log_format, ej_hostname)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (atm_id) DO UPDATE SET
                     atm_name     = EXCLUDED.atm_name,
                     branch       = EXCLUDED.branch,
@@ -877,14 +878,18 @@ def atm_save():
                     ip_address   = COALESCE(EXCLUDED.ip_address, atm_locations.ip_address),
                     snmp_community = COALESCE(EXCLUDED.snmp_community, atm_locations.snmp_community),
                     snmp_version = COALESCE(EXCLUDED.snmp_version, atm_locations.snmp_version),
-                    ej_log_format = COALESCE(EXCLUDED.ej_log_format, atm_locations.ej_log_format)
+                    ej_log_format = COALESCE(EXCLUDED.ej_log_format, atm_locations.ej_log_format),
+                    -- Same COALESCE rule as the other network fields: a blank
+                    -- form must not wipe a hostname the pull depends on.
+                    ej_hostname   = COALESCE(EXCLUDED.ej_hostname, atm_locations.ej_hostname)
             """, (
                 data['atm_id'], data['atm_name'], data['branch'], data['district'], data['city'],
                 data['region'], data['latitude'], data['longitude'],
                 data['terminal_id'], data['vendor'], data['model'],
                 data['install_date'], data['status'],
                 data.get('ip_address'), data.get('snmp_community'),
-                data.get('snmp_version'), data.get('ej_log_format')
+                data.get('snmp_version'), data.get('ej_log_format'),
+                data.get('ej_hostname')
             ))
             # Seed initial state; inactive ATMs get a dedicated state
             if data['status'] == 'inactive':
@@ -1265,15 +1270,16 @@ def atm_csv_template():
     w.writerow(['atm_id', 'atm_name', 'branch', 'district', 'city', 'region',
                 'latitude', 'longitude', 'terminal_id', 'vendor', 'model',
                 'install_date', 'status',
-                'ip_address', 'snmp_community', 'snmp_version', 'ej_log_format'])
+                'ip_address', 'snmp_community', 'snmp_version', 'ej_log_format',
+                'ej_hostname'])
     w.writerow(['ATM-1001', 'Bole Medhanialem ATM', 'Bole Medhanialem Branch', 'Bole',
                 'Addis Ababa', 'Addis Ababa', '8.9950', '38.7896', 'TID10001',
                 'NCR', 'SelfServ 22', '2023-03-15', 'active',
-                '192.168.1.101', 'CHANGE_ME', '2', 'NCR_APTRA'])
+                '192.168.1.101', 'CHANGE_ME', '2', 'NCR_APTRA', 'BOLENATM01'])
     w.writerow(['ATM-1002', 'Piassa ATM', 'Piassa Branch', 'Arada',
                 'Addis Ababa', 'Addis Ababa', '9.0356', '38.7521', 'TID10002',
                 'GRG', 'H68N', '2022-11-02', 'active',
-                '192.168.1.102', 'CHANGE_ME', '2', 'GRG'])
+                '192.168.1.102', 'CHANGE_ME', '2', 'GRG', ''])
     log_action('EXPORT', 'ATM import template downloaded')
     return Response(
         buf.getvalue(),
@@ -1340,8 +1346,8 @@ def atm_import():
                         INSERT INTO atm_locations
                             (atm_id, atm_name, branch, district, city, region, latitude, longitude,
                              terminal_id, vendor, model, install_date, status,
-                             ip_address, snmp_community, snmp_version, ej_log_format)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                             ip_address, snmp_community, snmp_version, ej_log_format, ej_hostname)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         ON CONFLICT (atm_id) DO UPDATE SET
                             atm_name     = EXCLUDED.atm_name,
                             branch       = EXCLUDED.branch,
@@ -1358,7 +1364,8 @@ def atm_import():
                             ip_address   = COALESCE(EXCLUDED.ip_address, atm_locations.ip_address),
                             snmp_community = COALESCE(EXCLUDED.snmp_community, atm_locations.snmp_community),
                             snmp_version = COALESCE(EXCLUDED.snmp_version, atm_locations.snmp_version),
-                            ej_log_format = COALESCE(EXCLUDED.ej_log_format, atm_locations.ej_log_format)
+                            ej_log_format = COALESCE(EXCLUDED.ej_log_format, atm_locations.ej_log_format),
+                            ej_hostname   = COALESCE(EXCLUDED.ej_hostname, atm_locations.ej_hostname)
                     """, (
                         _nn(row.get('atm_id')), name, _nn(row.get('branch')), _nn(row.get('district')),
                         _nn(row.get('city')), _nn(row.get('region')), _nn(row.get('latitude')),
@@ -1366,7 +1373,8 @@ def atm_import():
                         _nn(row.get('vendor')), _nn(row.get('model')),
                         _nn(row.get('install_date')), _nn(row.get('status')),
                         _nn(row.get('ip_address')), _nn(row.get('snmp_community')),
-                        _nn(row.get('snmp_version')), _nn(row.get('ej_log_format'))
+                        _nn(row.get('snmp_version')), _nn(row.get('ej_log_format')),
+                        _nn(row.get('ej_hostname'))
                     ))
                     # Seed state like single-save does (parity: imported ATMs
                     # must appear in the in-service summary, not just UNKNOWN
@@ -1465,7 +1473,8 @@ def _validate(data):
         errors['atm_id'] = 'Letters, digits, dash and underscore only'
     maxlens = {'atm_id': 20, 'branch': 100, 'district': 100, 'city': 100,
                'region': 100, 'terminal_id': 20, 'vendor': 50, 'model': 50,
-               'ip_address': 45, 'snmp_community': 100, 'ej_log_format': 20}
+               'ip_address': 45, 'snmp_community': 100, 'ej_log_format': 20,
+               'ej_hostname': 64}
     for field, maxlen in maxlens.items():
         val = data.get(field)
         if val and len(val) > maxlen:
@@ -2029,15 +2038,15 @@ def _guide_page(data):
   <h2>What happens automatically <span class="badge-ok">&#10003; No action needed</span></h2>
   <ul>
     <li><strong>Simulation engines</strong> — the multi-tenant engines (<code>atm-sim-engine</code>, <code>atm-txn-engine</code>, <code>atm-ej-engine</code>, <code>state-manager</code>) auto-discover every ATM in <code>atm_locations</code>. No per-ATM compose service is required.</li>
-    <li><strong>Filebeat</strong> — already watches <code>ej-logs/ATM-*.log</code> with a wildcard.<br>
-        The moment a file named <code>ej-logs/{atm_id_val}.log</code> exists, Filebeat ships it to OpenSearch automatically.</li>
-    <li><strong>EJ Search</strong> — will show {atm_id_val} data as soon as logs are indexed.</li>
     <li><strong>ATM dropdown</strong> — already shows {atm_id_val} in all search filters.</li>
   </ul>
 
   <h2>Real ATM (production) <span class="badge-warn">&#9888; Action required</span></h2>
-  <p>Configure the ATM's EJ log delivery (agent, SFTP, or shared folder) to write files into <code>ej-logs/{atm_id_val}.log</code>.
-  Filebeat will detect and ship the file automatically — no further configuration needed.</p>
+  <p>NCR boxes: journals are fetched hourly from the box through the Zabbix agent
+  (<code>scripts/pull_ej_logs.sh</code>). The pull list comes from this record, so set
+  <strong>EJ Hostname</strong> to the machine name in the box's
+  <code>E:\\EJLogs\\&lt;date&gt;_&lt;HOST&gt;_EJDATA.log</code> filenames — no script editing.
+  GRG boxes: no journal pull exists; their data comes over SNMP/UDP, so nothing to do here.</p>
 
   <a href="/admin/atm" class="btn">&#8592; Back to ATM Management</a>
 </div></body></html>"""

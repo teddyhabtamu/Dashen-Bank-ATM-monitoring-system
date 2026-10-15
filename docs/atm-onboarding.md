@@ -114,10 +114,15 @@ never duplicated):
 
 ## Step 5 — Journals for disputes (NCR: same day; GRG: when SNMP lands)
 
-- [ ] Add the box to the pull list: open `scripts/pull_ej_logs.sh`,
-      extend the `ATMS=` line with `ATM-ID:IP:HOSTNAME-TAG` (the tag is
-      the middle of the journal filenames — check `E:\EJLogs` on the
-      box first), commit, push. The hourly cron picks it up untouched.
+- [ ] Nothing to edit. The pull list is data, not code: open portal →
+      ATM Registration → the new ATM → set **EJ Hostname** to the machine
+      name that appears in `E:\EJLogs` filenames on the box (the middle
+      part of `<date>_<HOST>_EJDATA.log`) and save.
+- [ ] Confirm the resolver agrees, on the pull host:
+      `python3 scripts/ej_pull_targets.py --explain`
+      → prints `ATM-ID:IP:HOSTNAME` for every eligible box plus the reason
+      any active NCR box was skipped. Skip reason `no EJ hostname recorded`
+      means step one above is not done.
 - [ ] After the next hour, open portal → EJ Search → filter the ATM:
       journal rows with masked cards must appear. Empty result with a
       working pull means the box writes no journals (check with custodian).

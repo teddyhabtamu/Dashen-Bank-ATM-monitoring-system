@@ -22,10 +22,18 @@ OUTDIR="$(dirname "$0")/../ej-logs"
 RAWDIR="$OUTDIR/raw"
 mkdir -p "$RAWDIR"
 
-# ATM_ID:AGENT_IP:HOSTNAME_TAG — hostname tag is the middle of the journal
-# filename <date>_<HOST>_EJDATA.log (per-ATM; TESTMACHINE on the test core).
-# Fleet version should source this from atm_locations + Zabbix inventory.
-ATMS="ATM-TEST-NCR:10.41.30.114:TESTMACHINE"
+# ATM_ID:AGENT_IP:HOSTNAME — resolved from atm_locations, not hardcoded.
+# Adding an ATM used to mean editing the ATMS= line below; it is now data:
+# vendor/model/IP/hostname set in ATM Registration is enough. Resolution order
+# (scripts/ej_pull_targets.py): $EJ_ATMS override > the portal database > the
+# nightly CSV snapshot from scripts/backup_db.sh. The resolver logs its source
+# and any skipped ATMs to stderr, which lands in the cron log.
+ATMS="$(python3 "$(dirname "$0")/ej_pull_targets.py")"
+if [ -z "$ATMS" ]; then
+  echo "ej: no pull targets resolved — read the resolver line above" >&2
+  echo "ej: (source + skip reasons) before assuming the fleet is empty." >&2
+  exit 1
+fi
 
 fail=0
 for spec in $ATMS; do
