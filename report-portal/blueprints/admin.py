@@ -670,131 +670,160 @@ def _row_diff(old, new, skip=()):
     return diffs
 
 
+def normalise_atm_form(raw):
+    """Form dict -> canonical ATM facts. One set of rules for every entry
+    point, so the Registration page and the onboarding wizard cannot disagree
+    about defaults, blank handling, or the branch convention."""
+    data = {}
+    for f in FIELDS:
+        v = (raw.get(f[0]) or '').strip()
+        data[f[0]] = v if v else None
+    # Name is optional in the form; default it so the Name column is never blank.
+    if not data.get('atm_name'):
+        data['atm_name'] = data.get('branch') or data.get('atm_id')
+    # Owner-branch convention (validated + stored in canonical form).
+    data['branch'] = _norm_branch(data.get('branch'))
+    return data
+
+
+def save_atm_record(data, source='registration'):
+    """THE single DB writer for ATM facts.
+
+    Validation, upsert, state seeding, sim-port assignment and the audit line
+    all live here. Both /admin/atm/save and the onboarding wizard call it, so a
+    second writer cannot drift away from the first — which is how ATM records
+    ended up half-saved in the past.
+
+    Returns {'ok', 'errors', 'audit_detail', 'atm_id', 'created'}. Never
+    raises: a database failure comes back as errors.
+    """
+    errors = _validate(data)
+    if errors:
+        return {'ok': False, 'errors': errors, 'audit_detail': '',
+                'atm_id': data.get('atm_id'), 'created': False}
+
+    created = False
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            try:
+                # Before-image for the audit trail (None = create, not update).
+                cur.execute("SELECT * FROM atm_locations WHERE atm_id = %s", (data['atm_id'],))
+                _cols = [d[0] for d in cur.description]
+                _fetched = cur.fetchone()
+                old_row = dict(zip(_cols, _fetched)) if _fetched else None
+                created = old_row is None
+                cur.execute("""
+                    INSERT INTO atm_locations
+                        (atm_id, atm_name, branch, district, city, region, latitude, longitude,
+                         terminal_id, vendor, model, install_date, status,
+                         ip_address, snmp_community, snmp_version, ej_log_format, ej_hostname)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (atm_id) DO UPDATE SET
+                        atm_name     = EXCLUDED.atm_name,
+                        branch       = EXCLUDED.branch,
+                        district     = EXCLUDED.district,
+                        city         = EXCLUDED.city,
+                        region       = EXCLUDED.region,
+                        latitude     = EXCLUDED.latitude,
+                        longitude    = EXCLUDED.longitude,
+                        terminal_id  = EXCLUDED.terminal_id,
+                        vendor       = EXCLUDED.vendor,
+                        model        = EXCLUDED.model,
+                        install_date = EXCLUDED.install_date,
+                        status       = EXCLUDED.status,
+                        -- Network fields: only overwrite when the form supplied a
+                        -- value, so editing branch/city never wipes SNMP/IP data.
+                        ip_address   = COALESCE(EXCLUDED.ip_address, atm_locations.ip_address),
+                        snmp_community = COALESCE(EXCLUDED.snmp_community, atm_locations.snmp_community),
+                        snmp_version = COALESCE(EXCLUDED.snmp_version, atm_locations.snmp_version),
+                        ej_log_format = COALESCE(EXCLUDED.ej_log_format, atm_locations.ej_log_format),
+                        -- Same COALESCE rule as the other network fields: a blank
+                        -- form must not wipe a hostname the pull depends on.
+                        ej_hostname   = COALESCE(EXCLUDED.ej_hostname, atm_locations.ej_hostname)
+                """, (
+                    data['atm_id'], data['atm_name'], data['branch'], data['district'], data['city'],
+                    data['region'], data['latitude'], data['longitude'],
+                    data['terminal_id'], data['vendor'], data['model'],
+                    data['install_date'], data['status'],
+                    data.get('ip_address'), data.get('snmp_community'),
+                    data.get('snmp_version'), data.get('ej_log_format'),
+                    data.get('ej_hostname')
+                ))
+                # Seed initial state; inactive ATMs get a dedicated state
+                if data['status'] == 'inactive':
+                    cur.execute("""
+                        INSERT INTO atm_current_state (atm_id, state, last_seen, updated_at)
+                        VALUES (%s, 'INACTIVE', NOW(), NOW())
+                        ON CONFLICT (atm_id) DO UPDATE SET state = 'INACTIVE', updated_at = NOW()
+                    """, (data['atm_id'],))
+                else:
+                    cur.execute("""
+                        INSERT INTO atm_current_state (atm_id, state, last_seen, updated_at)
+                        VALUES (%s, 'UNKNOWN', NOW(), NOW())
+                        ON CONFLICT (atm_id) DO UPDATE
+                            SET state = CASE WHEN atm_current_state.state = 'INACTIVE' THEN 'UNKNOWN' ELSE atm_current_state.state END,
+                                updated_at = NOW()
+                    """, (data['atm_id'],))
+                conn.commit()
+                # After-image: re-read the effective row (COALESCE logic means
+                # the stored row can differ from what was submitted) and diff.
+                cur.execute("SELECT * FROM atm_locations WHERE atm_id = %s", (data['atm_id'],))
+                _ncols = [d[0] for d in cur.description]
+                _nrow = cur.fetchone()
+                new_row = dict(zip(_ncols, _nrow)) if _nrow else {}
+                if old_row is None:
+                    audit_detail = (f'ATM {data["atm_id"]} created: ' +
+                                    ', '.join(f'{k}={_audit_val(new_row.get(k, v))}'
+                                              for k, v in data.items()
+                                              if k != 'snmp_community' and v) +
+                                    ('; snmp_community set' if data.get('snmp_community') else ''))
+                else:
+                    diffs = _row_diff(old_row, new_row, skip=('sim_port',))
+                    audit_detail = (f'ATM {data["atm_id"]} updated: ' + '; '.join(diffs)
+                                    if diffs else f'ATM {data["atm_id"]} saved (no changes)')
+                # Auto-allocate a simulator port so the new ATM behaves like the others
+                assign_sim_port(data['atm_id'], data['vendor'])
+            except Exception as e:
+                conn.rollback()
+                err_msg = str(e)
+                if 'duplicate key' in err_msg.lower() or 'unique' in err_msg.lower():
+                    db_err = {'atm_id': 'This ATM ID already exists'}
+                else:
+                    db_err = {'_general': f'Database error: {err_msg}'}
+                return {'ok': False, 'errors': db_err, 'audit_detail': '',
+                        'atm_id': data.get('atm_id'), 'created': False}
+            finally:
+                cur.close()
+    except Exception as e:
+        return {'ok': False, 'errors': {'_general': f'Database error: {e}'},
+                'audit_detail': '', 'atm_id': data.get('atm_id'), 'created': False}
+
+    return {'ok': True, 'errors': {}, 'audit_detail': audit_detail,
+            'atm_id': data['atm_id'], 'created': created, 'source': source}
+
+
 @bp.route('/atm/save', methods=['POST'])
 @login_required
 @role_required(ROLE_OPERATOR, ROLE_ADMIN)
 def atm_save():
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-    field_names = [f[0] for f in FIELDS]
-    data = {}
-    for f in field_names:
-        v = request.form.get(f, '').strip()
-        data[f] = v if v else None
-
-    # Name is optional in the form; default it so the Name column is never blank.
-    if not data.get('atm_name'):
-        data['atm_name'] = data.get('branch') or data.get('atm_id')
-
-    # Owner-branch convention (validated + stored in canonical form).
-    data['branch'] = _norm_branch(data.get('branch'))
-
-    errors = _validate(data)
-    if errors:
+    data = normalise_atm_form(request.form)
+    res = save_atm_record(data, source='registration')
+    if not res['ok']:
         if is_ajax:
-            return jsonify({'error': True, 'errors': errors, 'message': 'Please fix the highlighted fields.'})
-        flash('Validation failed. Please correct the highlighted fields.', 'error')
+            return jsonify({'error': True, 'errors': res['errors'],
+                            'message': 'Please fix the highlighted fields.'})
+        if '_general' in res['errors']:
+            flash(res['errors']['_general'], 'error')
+        else:
+            flash('Validation failed. Please correct the highlighted fields.', 'error')
         return redirect('/admin/atm')
 
-    with get_db() as conn:
-        cur = conn.cursor()
-        try:
-            # Before-image for the audit trail (None = create, not update).
-            cur.execute("SELECT * FROM atm_locations WHERE atm_id = %s", (data['atm_id'],))
-            _cols = [d[0] for d in cur.description]
-            _fetched = cur.fetchone()
-            old_row = dict(zip(_cols, _fetched)) if _fetched else None
-            cur.execute("""
-                INSERT INTO atm_locations
-                    (atm_id, atm_name, branch, district, city, region, latitude, longitude,
-                     terminal_id, vendor, model, install_date, status,
-                     ip_address, snmp_community, snmp_version, ej_log_format, ej_hostname)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                ON CONFLICT (atm_id) DO UPDATE SET
-                    atm_name     = EXCLUDED.atm_name,
-                    branch       = EXCLUDED.branch,
-                    district     = EXCLUDED.district,
-                    city         = EXCLUDED.city,
-                    region       = EXCLUDED.region,
-                    latitude     = EXCLUDED.latitude,
-                    longitude    = EXCLUDED.longitude,
-                    terminal_id  = EXCLUDED.terminal_id,
-                    vendor       = EXCLUDED.vendor,
-                    model        = EXCLUDED.model,
-                    install_date = EXCLUDED.install_date,
-                    status       = EXCLUDED.status,
-                    -- Network fields: only overwrite when the form supplied a
-                    -- value, so editing branch/city never wipes SNMP/IP data.
-                    ip_address   = COALESCE(EXCLUDED.ip_address, atm_locations.ip_address),
-                    snmp_community = COALESCE(EXCLUDED.snmp_community, atm_locations.snmp_community),
-                    snmp_version = COALESCE(EXCLUDED.snmp_version, atm_locations.snmp_version),
-                    ej_log_format = COALESCE(EXCLUDED.ej_log_format, atm_locations.ej_log_format),
-                    -- Same COALESCE rule as the other network fields: a blank
-                    -- form must not wipe a hostname the pull depends on.
-                    ej_hostname   = COALESCE(EXCLUDED.ej_hostname, atm_locations.ej_hostname)
-            """, (
-                data['atm_id'], data['atm_name'], data['branch'], data['district'], data['city'],
-                data['region'], data['latitude'], data['longitude'],
-                data['terminal_id'], data['vendor'], data['model'],
-                data['install_date'], data['status'],
-                data.get('ip_address'), data.get('snmp_community'),
-                data.get('snmp_version'), data.get('ej_log_format'),
-                data.get('ej_hostname')
-            ))
-            # Seed initial state; inactive ATMs get a dedicated state
-            if data['status'] == 'inactive':
-                cur.execute("""
-                    INSERT INTO atm_current_state (atm_id, state, last_seen, updated_at)
-                    VALUES (%s, 'INACTIVE', NOW(), NOW())
-                    ON CONFLICT (atm_id) DO UPDATE SET state = 'INACTIVE', updated_at = NOW()
-                """, (data['atm_id'],))
-            else:
-                cur.execute("""
-                    INSERT INTO atm_current_state (atm_id, state, last_seen, updated_at)
-                    VALUES (%s, 'UNKNOWN', NOW(), NOW())
-                    ON CONFLICT (atm_id) DO UPDATE
-                        SET state = CASE WHEN atm_current_state.state = 'INACTIVE' THEN 'UNKNOWN' ELSE atm_current_state.state END,
-                            updated_at = NOW()
-                """, (data['atm_id'],))
-            conn.commit()
-            # After-image: re-read the effective row (COALESCE logic means the
-            # stored row can differ from the submitted form) and diff it.
-            cur.execute("SELECT * FROM atm_locations WHERE atm_id = %s", (data['atm_id'],))
-            _ncols = [d[0] for d in cur.description]
-            _nrow = cur.fetchone()
-            new_row = dict(zip(_ncols, _nrow)) if _nrow else {}
-            if old_row is None:
-                audit_detail = (f'ATM {data["atm_id"]} created: ' +
-                                ', '.join(f'{k}={_audit_val(new_row.get(k, v))}'
-                                          for k, v in data.items()
-                                          if k != 'snmp_community' and v) +
-                                ('; snmp_community set' if data.get('snmp_community') else ''))
-            else:
-                diffs = _row_diff(old_row, new_row, skip=('sim_port',))
-                audit_detail = (f'ATM {data["atm_id"]} updated: ' + '; '.join(diffs)
-                                if diffs else f'ATM {data["atm_id"]} saved (no changes)')
-            # Auto-allocate a simulator port so the new ATM behaves like the others
-            assign_sim_port(data['atm_id'], data['vendor'])
-        except Exception as e:
-            conn.rollback()
-            err_msg = str(e)
-            if 'duplicate key' in err_msg.lower() or 'unique' in err_msg.lower():
-                db_err = {'atm_id': 'This ATM ID already exists'}
-            else:
-                db_err = {'_general': f'Database error: {err_msg}'}
-            if is_ajax:
-                return jsonify({'error': True, 'errors': db_err, 'message': 'Database error. Please try again.'})
-            flash(f'Database error: {err_msg}', 'error')
-            return redirect('/admin/atm')
-        finally:
-            cur.close()
-
-    if is_ajax:
-        log_action('ATM_SAVE', audit_detail)
-        threading.Thread(target=_bg_zabbix_sync, args=([dict(data)],), daemon=True).start()
-        return jsonify({'success': True, 'atm_id': data['atm_id']})
-
-    log_action('ATM_SAVE', audit_detail)
+    log_action('ATM_SAVE', res['audit_detail'])
     threading.Thread(target=_bg_zabbix_sync, args=([dict(data)],), daemon=True).start()
+    if is_ajax:
+        return jsonify({'success': True, 'atm_id': data['atm_id']})
     return _guide_page(data)
 
 

@@ -16,6 +16,7 @@
 .badge.preview{background:rgba(217,119,6,.1);color:#D97706;vertical-align:middle}
 .card-hint{font-size:11px;color:#94A3B8}
 .check-list{padding:24px}
+.card-body{padding:24px}
 .check-list .alert-card:last-child{margin-bottom:0}
 .check-fix{font-size:12px;color:#012169;margin-top:6px;font-weight:500}
 {% endblock %}
@@ -23,8 +24,8 @@
 <div class="page-header">
   <div class="page-header-icon"><i data-lucide="user-plus"></i></div>
   <div>
-    <h1 class="page-title">Onboard a new ATM <span class="badge preview">PREVIEW</span></h1>
-    <p class="page-subtitle">Fills in the ATM facts and runs read-only pre-flight checks. Nothing is created, changed, or stored on the ATM or in Zabbix.</p>
+    <h1 class="page-title">Onboard a new ATM <span class="badge preview">ADMIN</span></h1>
+    <p class="page-subtitle">Checks the facts, saves the ATM, provisions its Zabbix host, then proves it is really reporting. Nothing is sent to Zabbix until you confirm the preview.</p>
   </div>
 </div>
 
@@ -104,6 +105,95 @@
       </div>
     </div>
   {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if checks %}
+<div class="card">
+  <div class="card-header">
+    <h2>Step 3 — Save &amp; provision</h2>
+    <span class="card-hint">Saves the ATM, then previews the Zabbix change</span>
+  </div>
+  <div class="card-body">
+    {% if not saved %}
+      <p style="color:#475569;font-size:13px">The ATM is not saved yet. Saving writes one row to the portal database — the same writer ATM Registration uses.</p>
+      <form method="post" action="/admin/onboard/save">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% for k, v in values.items() %}
+          {% if v is not none %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}
+        {% endfor %}
+        <button type="submit" class="btn btn-primary"><i data-lucide="save" style="width:14px;height:14px"></i> Save ATM &amp; preview provisioning</button>
+      </form>
+    {% else %}
+      {% if plan %}
+        <p style="color:#475569;font-size:13px;margin-bottom:10px">Provisioning preview — nothing has been sent to Zabbix yet:</p>
+        {% for r in plan.results %}
+          <div class="alert-card {{ 'success' if r.action in ('create','skipped') else 'warning' if r.action == 'update' else 'error' }}">
+            <i data-lucide="{{ 'circle-check' if r.action in ('create','skipped') else 'refresh-cw' }}" class="alert-icon"></i>
+            <div class="alert-content">
+              <div class="alert-title">{{ r.atm_id }} — {{ r.action }}</div>
+              {% if r.changes %}<div class="alert-message">Will change: {{ r.changes|join(', ') }}</div>{% endif %}
+              {% if r.pending_groups %}<div class="alert-message">Host groups to create: {{ r.pending_groups|join(', ') }}</div>{% endif %}
+              {% if r.error %}<div class="check-fix">{{ r.error }}</div>{% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      {% endif %}
+      {% if provision %}
+        <p style="color:#475569;font-size:13px;margin-bottom:10px">Provisioning result:</p>
+        {% for r in provision.results %}
+          <div class="alert-card {{ 'success' if r.action in ('create','skipped') else 'error' if r.action == 'failed' else 'warning' }}">
+            <i data-lucide="{{ 'circle-check' if r.action in ('create','skipped') else 'alert-circle' }}" class="alert-icon"></i>
+            <div class="alert-content">
+              <div class="alert-title">{{ r.atm_id }} — {{ r.action }}</div>
+              {% if r.changes %}<div class="alert-message">Changed: {{ r.changes|join(', ') }}</div>{% endif %}
+              {% if r.error %}<div class="check-fix">{{ r.error }}</div>{% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      {% endif %}
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        {% if not provision %}
+        <form method="post" action="/admin/onboard/provision">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+          <button type="submit" class="btn btn-primary"><i data-lucide="zap" style="width:14px;height:14px"></i> Provision in Zabbix</button>
+        </form>
+        {% else %}
+        <form method="post" action="/admin/onboard/verify">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+          <button type="submit" class="btn btn-primary"><i data-lucide="activity" style="width:14px;height:14px"></i> Verify it is reporting</button>
+        </form>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if verification %}
+<div class="card">
+  <div class="card-header">
+    <h2>Step 4 — Is it really reporting?</h2>
+    <span class="card-hint">Read-only check of live telemetry</span>
+  </div>
+  <div class="card-body">
+    <div class="alert-card {{ 'success' if verification.ok else 'error' if verification.verdict != 'unknown' else 'warning' }}">
+      <i data-lucide="{{ 'circle-check' if verification.ok else 'alert-triangle' }}" class="alert-icon"></i>
+      <div class="alert-content">
+        <div class="alert-title">{{ verification.verdict|replace('_', ' ')|title }}</div>
+        <div class="alert-message">
+          {{ verification.facts.items_reporting }}/{{ verification.facts.items_total }} items reporting
+          ({{ verification.facts.items_internal }} internal, which never count as proof).
+        </div>
+      </div>
+    </div>
+    {% for b in verification.blockers %}
+      <div class="check-fix">→ {{ b }}</div>
+    {% endfor %}
+    <p style="color:#64748B;font-size:12px;margin-top:10px">Checked {{ verification.checked_at }}. This is the only signal allowed to call an ATM live — the Status field alone just records intent.</p>
   </div>
 </div>
 {% endif %}
