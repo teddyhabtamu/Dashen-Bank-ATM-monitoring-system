@@ -242,7 +242,17 @@ def _zbx_call(method, params, auth):
 
 
 def fetch_zabbix_metrics(atm_id):
-    """Return {item_key: lastvalue} for the ATM's Zabbix host, or None if unavailable."""
+    """{item_key: lastvalue} for the ATM's Zabbix host, or None.
+
+    Cached for a few seconds (ZABBIX_METRICS_CACHE_TTL, default 10s). Telemetry
+    itself only refreshes every 10-30s, so this costs no accuracy and removes
+    the portal's own API stampede at fleet scale - see report-portal/zbx_cache.
+    """
+    from zbx_cache import get as _cached
+    return _cached(f'metrics:{atm_id}', lambda k: _fetch_zabbix_metrics(k.split(':', 1)[1]))
+
+
+def _fetch_zabbix_metrics(atm_id):
     auth = _zbx_login()
     if not auth:
         return None
