@@ -26,6 +26,21 @@ TABLE = 'fleet_report_cache'
 DEFAULT_TTL_MINUTES = 15
 
 
+def _conn(db):
+    """Call db() and insist it returned a connection.
+
+    Passing the *function* instead of a connection produced
+    "'function' object has no attribute 'cursor'" from three different places
+    at once. This turns that into one clear message at the source.
+    """
+    conn = db()
+    if not hasattr(conn, 'cursor'):
+        raise TypeError(
+            'db must be a callable returning a DB connection, e.g. db=_db_conn '
+            f'(got {type(conn).__name__})')
+    return conn
+
+
 def is_fresh(generated_at, ttl_minutes=DEFAULT_TTL_MINUTES, now=None):
     """Pure: is this cached report still current? Tested directly.
 
@@ -72,7 +87,7 @@ def claim_run(db=None, window_minutes=RUN_WINDOW_MINUTES, now=None):
     returns True; returns False when a sweep started recently.
     """
     try:
-        conn = db()
+        conn = _conn(db)
         cur = conn.cursor()
         cur.execute(f"SELECT generated_at FROM {TABLE} WHERE id = 1")
         row = cur.fetchone()
@@ -100,7 +115,7 @@ def load_any(now=None, db=None):
     it is stale. Returns None only when nothing was ever computed.
     """
     try:
-        conn = db()
+        conn = _conn(db)
         cur = conn.cursor()
         cur.execute(f"SELECT generated_at, counts, rows, error FROM {TABLE} WHERE id = 1")
         row = cur.fetchone()
@@ -124,7 +139,7 @@ def load_any(now=None, db=None):
 def record_failure(error, db=None):
     """Store a failure so the page can show it instead of spinning forever."""
     try:
-        conn = db()
+        conn = _conn(db)
         cur = conn.cursor()
         cur.execute(f"UPDATE {TABLE} SET error = %s WHERE id = 1", (str(error)[:2000],))
         conn.commit()
@@ -136,7 +151,7 @@ def record_failure(error, db=None):
 def load(ttl_minutes=DEFAULT_TTL_MINUTES, now=None, db=None):
     """Cached report if present and fresh, else None."""
     try:
-        conn = db()
+        conn = _conn(db)
         cur = conn.cursor()
         cur.execute(f"SELECT generated_at, counts, rows FROM {TABLE} WHERE id = 1")
         row = cur.fetchone()
@@ -157,7 +172,7 @@ def save(payload, db=None):
     """Persist a report. Never raises: a failed cache write must not fail the
     report that was just computed."""
     try:
-        conn = db()
+        conn = _conn(db)
         cur = conn.cursor()
         cur.execute(
             f"INSERT INTO {TABLE} (id, generated_at, counts, rows, error) "

@@ -276,9 +276,11 @@ _FLEET_LOCK = threading.Lock()
 _FLEET_RUNNING = False
 
 
-def _db():
+def _db_conn():
+    """A pooled connection. fleet_store calls db() expecting a CONNECTION -
+    passing the function itself is what broke every claim/save on first run."""
     from db import get_db
-    return get_db
+    return get_db()
 
 
 def _compute_fleet(window_minutes=15):
@@ -297,14 +299,14 @@ def _compute_fleet(window_minutes=15):
     try:
         from verify import fleet
         out = fleet(window_minutes=window_minutes)
-        ok = save({'counts': out['counts'], 'rows': out['rows'], 'error': ''}, db=_db)
+        ok = save({'counts': out['counts'], 'rows': out['rows'], 'error': ''}, db=_db_conn)
         if ok:
             log_action('FLEET_REPORT', f'fleet verified: {out["counts"]}')
         else:
-            record_failure('Could not write the fleet report cache.', db=_db)
+            record_failure('Could not write the fleet report cache.', db=_db_conn)
     except Exception as e:
         logger.warning('fleet report failed: %s', e)
-        record_failure(f'Fleet report failed: {e}', db=_db)
+        record_failure(f'Fleet report failed: {e}', db=_db_conn)
     finally:
         with _FLEET_LOCK:
             _FLEET_RUNNING = False
@@ -319,18 +321,18 @@ def onboard_fleet():
                             ensure, load_any, record_failure)
     ttl = int(request.args.get('ttl', DEFAULT_TTL_MINUTES))
     try:
-        ensure(_db()())
+        ensure(_db_conn())
     except Exception as e:
         logger.warning('fleet cache table unavailable: %s', e)
-    cached = load_any(db=_db)
+    cached = load_any(db=_db_conn)
     # A run that claimed the sweep and then died leaves the marker set with no
     # rows. Treating that as "still computing" is how this page spun forever:
     # the error was recorded but the route rendered the spinner regardless.
     if cached and cached.get('running') and not cached.get('rows') \
             and cached.get('age_minutes', 0) > RUN_WINDOW_MINUTES:
         record_failure('The previous fleet sweep did not finish. '
-                       'Recompute, or check the portal logs.', db=_db)
-        cached = load_any(db=_db)
+                       'Recompute, or check the portal logs.', db=_db_conn)
+        cached = load_any(db=_db_conn)
     if cached and cached.get('failed'):
         # Show the failure even when there is no data to show.
         return render_template('fleet.html', cached=cached, computing=False,
@@ -340,7 +342,7 @@ def onboard_fleet():
                                q=(request.args.get('q') or '').strip())
     if not cached or not cached.get('rows'):
         # Nothing to show yet: claim the sweep (cross-process) and compute.
-        if claim_run(db=_db):
+        if claim_run(db=_db_conn):
             threading.Thread(target=_compute_fleet, args=(ttl,), daemon=True).start()
         return render_template('fleet.html', cached=None, computing=True,
                                counts={}, rows=[], ttl=ttl, failed='',
@@ -373,7 +375,7 @@ def onboard_fleet():
 def onboard_fleet_refresh():
     """Recompute now. Expensive on a large fleet, so it is a background job."""
     from fleet_store import claim_run
-    if claim_run(db=_db):
+    if claim_run(db=_db_conn):
         threading.Thread(target=_compute_fleet, daemon=True).start()
     return redirect(url_for('.onboard_fleet'))
 
@@ -384,7 +386,7 @@ def onboard_fleet_refresh():
 def onboard_fleet_csv():
     """The cached report as CSV - the rollout tracker file."""
     from fleet_store import load
-    cached = load(db=_db)
+    cached = load(db=_db_conn)
     if not cached:
         return Response('atm_id,status,needs_action,vendor,ip_address,'
                         'items_reporting,items_total,provisioning_action,'

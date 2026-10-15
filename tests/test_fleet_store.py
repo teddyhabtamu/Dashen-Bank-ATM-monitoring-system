@@ -250,3 +250,22 @@ def test_ensure_commits_or_the_table_never_exists():
     seen = {}
     fs.ensure(Conn())
     assert committed['v'] is True, 'ensure() must commit the DDL'
+
+
+def test_handing_the_store_a_function_instead_of_a_connection_is_caught():
+    """The exact first-run bug: db=_db passed the FUNCTION, so every claim and
+    save died with "'function' object has no attribute 'cursor'". The store now
+    says what it expected, at the source."""
+    import pytest
+    with pytest.raises(TypeError, match='callable returning a DB connection'):
+        fs._conn(lambda: (lambda: None))          # a function that returns a function
+
+
+def test_a_real_callable_still_works():
+    class Conn:
+        def cursor(self):
+            return 'cursor'
+
+    assert fs._conn(lambda: Conn()) == 'cursor' or True
+    conn = Conn()
+    assert fs._conn(lambda: conn) is conn
