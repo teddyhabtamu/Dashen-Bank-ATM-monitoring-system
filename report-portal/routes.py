@@ -430,8 +430,8 @@ def report_error(fmt):
                 l.branch      AS "Owner Branch",
                 t.error_code  AS "Error Code",
                 COUNT(*)      AS "Occurrences",
-                TO_CHAR(MIN(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') AS "First Seen",
-                TO_CHAR(MAX(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') AS "Last Seen"
+                TO_CHAR(MIN(t.recorded_at) AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') AS "First Seen",
+                TO_CHAR(MAX(t.recorded_at) AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') AS "Last Seen"
             FROM atm_transactions_visible t
             JOIN atm_locations l ON t.atm_id = l.atm_id
             WHERE t.status='ERROR' AND t.error_code IS NOT NULL
@@ -1009,8 +1009,8 @@ def report_full(fmt):
             cur = conn.cursor()
             sql3 = """
                 SELECT t.atm_id, l.branch, t.error_code, COUNT(*),
-                    TO_CHAR(MIN(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI'),
-                    TO_CHAR(MAX(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI')
+                    TO_CHAR(MIN(t.recorded_at) AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI'),
+                    TO_CHAR(MAX(t.recorded_at) AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI')
                 FROM atm_transactions_visible t
                 JOIN atm_locations l ON t.atm_id = l.atm_id
                 WHERE t.status='ERROR' AND t.error_code IS NOT NULL
@@ -1100,7 +1100,7 @@ def report_full(fmt):
                  [interval_str],
                  ['ATM', 'Branch', 'Total Dispensed ETB', 'Avg Withdrawal ETB', 'Withdrawal Count', 'Largest Withdrawal ETB']),
                 ('3. ERROR & INCIDENT LOG',
-                 "SELECT t.atm_id, l.branch, t.error_code, COUNT(*), TO_CHAR(MIN(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI'), TO_CHAR(MAX(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') FROM atm_transactions_visible t JOIN atm_locations l ON t.atm_id = l.atm_id WHERE t.status='ERROR' AND t.error_code IS NOT NULL AND t.recorded_at >= NOW() - INTERVAL %s AND l.status = 'active' GROUP BY t.atm_id, l.branch, t.error_code ORDER BY 4 DESC",
+                 "SELECT t.atm_id, l.branch, t.error_code, COUNT(*), TO_CHAR(MIN(t.recorded_at) AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI'), TO_CHAR(MAX(t.recorded_at) AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') FROM atm_transactions_visible t JOIN atm_locations l ON t.atm_id = l.atm_id WHERE t.status='ERROR' AND t.error_code IS NOT NULL AND t.recorded_at >= NOW() - INTERVAL %s AND l.status = 'active' GROUP BY t.atm_id, l.branch, t.error_code ORDER BY 4 DESC",
                  [interval_str],
                  ['ATM', 'Branch', 'Error Code', 'Occurrences', 'First Seen', 'Last Seen']),
             ]
@@ -1215,7 +1215,7 @@ def report_full(fmt):
                       Spacer(1, 0.8 * cm)]
 
             # 3. Error & Incident
-            s3_sql = "SELECT t.atm_id, l.branch, t.error_code, COUNT(*), TO_CHAR(MIN(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI'), TO_CHAR(MAX(t.recorded_at) AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') FROM atm_transactions_visible t JOIN atm_locations l ON t.atm_id = l.atm_id WHERE t.status='ERROR' AND t.error_code IS NOT NULL AND t.recorded_at >= NOW() - INTERVAL %s AND l.status = 'active' GROUP BY t.atm_id, l.branch, t.error_code ORDER BY 4 DESC"
+            s3_sql = "SELECT t.atm_id, l.branch, t.error_code, COUNT(*), TO_CHAR(MIN(t.recorded_at) AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI'), TO_CHAR(MAX(t.recorded_at) AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa','YYYY-MM-DD HH24:MI') FROM atm_transactions_visible t JOIN atm_locations l ON t.atm_id = l.atm_id WHERE t.status='ERROR' AND t.error_code IS NOT NULL AND t.recorded_at >= NOW() - INTERVAL %s AND l.status = 'active' GROUP BY t.atm_id, l.branch, t.error_code ORDER BY 4 DESC"
             cur.execute(s3_sql, [interval_str])
             res3 = cur.fetchall()
             if res3:

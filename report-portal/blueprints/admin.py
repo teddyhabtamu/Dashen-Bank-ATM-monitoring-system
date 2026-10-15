@@ -467,7 +467,7 @@ def atm_list():
         total_pages = max(1, (total + per_page - 1) // per_page)
         page = min(page, total_pages)
 
-        cur.execute(f"""SELECT l.*, s.state, s.last_seen AT TIME ZONE 'Africa/Addis_Ababa' as last_seen,
+        cur.execute(f"""SELECT l.*, s.state, s.last_seen AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa' as last_seen,
                                s.state_changed_at
                         FROM atm_locations l
                         LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id
@@ -540,7 +540,7 @@ def atm_detail(atm_id):
                 SELECT l.*,
                     COALESCE(s.state, 'UNKNOWN') as current_state,
                     s.state_changed_at,
-                    s.last_seen AT TIME ZONE 'Africa/Addis_Ababa' as last_seen
+                    s.last_seen AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa' as last_seen
                 FROM atm_locations l
                 LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id
                 WHERE l.atm_id = %s
@@ -594,7 +594,7 @@ def atm_detail(atm_id):
             active_faults = int(cur.fetchone()[0] or 0)
             cur.execute("""
                 SELECT
-                    TO_CHAR(t.recorded_at AT TIME ZONE 'Africa/Addis_Ababa', 'HH24:MI:SS'),
+                    TO_CHAR(t.recorded_at AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa', 'HH24:MI:SS'),
                     t.txn_type, t.card_masked, t.amount, t.status, t.auth_code,
                     COALESCE(f.display_name, t.error_code) AS error_label
                 FROM atm_transactions_visible t

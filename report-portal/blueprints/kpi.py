@@ -115,8 +115,8 @@ def _collect():
       GROUP BY COALESCE(f.display_name, t.error_code, 'Unknown')
       ORDER BY COUNT(*) DESC""")
 
-    peak = _all("""SELECT EXTRACT(HOUR FROM recorded_at AT TIME ZONE 'Africa/Addis_Ababa')::int AS h,
-        TO_CHAR(recorded_at AT TIME ZONE 'Africa/Addis_Ababa', 'Dy') AS day, COUNT(*) AS cnt
+    peak = _all("""SELECT EXTRACT(HOUR FROM recorded_at AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa')::int AS h,
+        TO_CHAR(recorded_at AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa', 'Dy') AS day, COUNT(*) AS cnt
       FROM atm_transactions_visible
       WHERE recorded_at >= NOW() - INTERVAL '7 days'
       GROUP BY 1, 2""")
