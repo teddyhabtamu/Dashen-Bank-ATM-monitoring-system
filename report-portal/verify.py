@@ -78,10 +78,14 @@ def _zabbix_facts(atm_id, client):
     newest = 0
     for it in items:
         clock = int(it.get('lastclock') or 0)
-        if str(it.get('type')) == '0':
-            # Zabbix-internal (agent.available, host.uptime, ...): these report
-            # whether Zabbix itself is alive, NOT whether the ATM is. They must
-            # never be counted as evidence that an ATM is reporting.
+        # Zabbix-internal items are identified by their KEY, not their type:
+        # internal items (zabbix[...]) are type 0, but so is every passive
+        # agent item - including atm.parts, the UserParameter master item this
+        # gate exists to require. Keying off type discarded the one item that
+        # matters and reported a live ATM as silent.
+        if str(it.get('key_') or '').lower().startswith('zabbix['):
+            # These report whether Zabbix itself is alive, NOT whether the ATM
+            # is. They must never count as evidence that an ATM is reporting.
             out['items_internal'] += 1
             continue
         if clock:

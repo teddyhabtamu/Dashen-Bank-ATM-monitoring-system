@@ -50,9 +50,10 @@ def host(name='ATM-0001', hostid='1', status='0', interfaces=None):
 
 
 def item(lastclock, state='0', key='atm.net.link', hostid=None, type='2'):
-    # type '2' = Zabbix agent / trapper (talks to the ATM).
-    # type '0' = Zabbix internal (agent.available, host.uptime) - always ticks
-    # regardless of whether the ATM exists, so it is never evidence.
+    # type '2' = Zabbix agent passive, type '0' = also passive/UserParameter,
+    # type '17' = dependent item (JSONPath parts derived from atm.parts).
+    # Internal items (zabbix[...]) are ALSO type '0' - so internal items must
+    # be recognised by their key, never by their type.
     return {'itemid': 'i', 'key_': key, 'lastclock': str(lastclock),
             'state': state, 'hostid': hostid, 'type': type}
 
@@ -74,6 +75,17 @@ def internal_item(hostid=None):
     return item(int(time.time()), key='zabbix[host,agent,available]', hostid=hostid, type='0')
 
 
+def ncr_master(age_seconds=60, hostid=None):
+    """The real shape of the WMI master item: a UserParameter, so Zabbix
+    reports type '0' - the same type internal items use."""
+    return item(int(time.time()) - age_seconds, key='atm.parts', hostid=hostid, type='0')
+
+
+def dependent_part(age_seconds=60, hostid=None, name='Card Reader'):
+    return item(int(time.time()) - age_seconds, key=f'atm.part.part_status[{name}]',
+                hostid=hostid, type='17')
+
+
 def db(vendor='NCR', ej_hostname=None, state='UNKNOWN', ip='10.0.0.1'):
     return {'row': {'atm_id': 'ATM-0001', 'vendor': vendor, 'model': 'SelfServ 34',
                     'status': 'active', 'ip_address': ip, 'ej_hostname': ej_hostname},
@@ -82,7 +94,7 @@ def db(vendor='NCR', ej_hostname=None, state='UNKNOWN', ip='10.0.0.1'):
 
 # ── the happy path ───────────────────────────────────────────────────────
 def test_fresh_items_mean_reporting():
-    z = FakeZabbix([host()], items=[ncr_item(60), item(NOW - 30, key='atm.net.link')])
+    z = FakeZabbix([host()], items=[ncr_master(60), item(NOW - 30, key='atm.net.link')])
     r = verify.verify_atm('ATM-0001', client=z, db_facts=db())
     assert r['verdict'] == 'reporting' and r['ok'] is True
     assert r['facts']['items_reporting'] == 2
@@ -90,7 +102,7 @@ def test_fresh_items_mean_reporting():
 
 
 def test_boundary_just_inside_the_window_is_ok():
-    z = FakeZabbix([host()], items=[ncr_item(14 * 60)])
+    z = FakeZabbix([host()], items=[ncr_master(14 * 60)])
     assert verify.verify_atm('ATM-0001', client=z, db_facts=db())['verdict'] == 'reporting'
 
 
@@ -111,7 +123,7 @@ def test_all_items_unsupported_names_the_agent():
 
 
 def test_reporting_but_stale_is_a_warning_not_a_pass():
-    z = FakeZabbix([host()], items=[ncr_item(3 * 3600)])
+    z = FakeZabbix([host()], items=[ncr_master(3 * 3600)])
     r = verify.verify_atm('ATM-0001', window_minutes=15, client=z, db_facts=db())
     assert r['verdict'] == 'provisioned_not_reporting'
     warn = [c for c in r['checks'] if c['name'] == 'items'][0]
@@ -133,7 +145,7 @@ def test_missing_host_is_not_provisioned():
 
 
 def test_disabled_host_blocks_even_with_fresh_data():
-    z = FakeZabbix([host(status='1')], items=[ncr_item(60)])
+    z = FakeZabbix([host(status='1')], items=[ncr_master(60)])
     r = verify.verify_atm('ATM-0001', client=z, db_facts=db())
     assert r['ok'] is False
     assert any('disabled' in b for b in r['blockers'])
@@ -142,7 +154,7 @@ def test_disabled_host_blocks_even_with_fresh_data():
 # ── NCR needs the agent interface; GRG does not ──────────────────────────
 def test_ncr_without_agent_interface_is_blocked():
     snmp_only = [{'type': '2', 'port': '161', 'ip': '10.0.0.1'}]
-    z = FakeZabbix([host(interfaces=snmp_only)], items=[ncr_item(60)])
+    z = FakeZabbix([host(interfaces=snmp_only)], items=[ncr_master(60)])
     r = verify.verify_atm('ATM-0001', client=z, db_facts=db(vendor='NCR'))
     assert r['ok'] is False
     assert any('agent interface' in b for b in r['blockers'])
@@ -153,6 +165,20 @@ def test_grg_snmp_only_is_fine():
     z = FakeZabbix([host(interfaces=snmp_only)], items=grg_core(60))
     r = verify.verify_atm('ATM-0001', client=z, db_facts=db(vendor='GRG'))
     assert r['verdict'] == 'reporting' and r['ok'] is True
+
+
+def test_a_userparameter_master_item_is_not_mistaken_for_internal():
+    """Regression #2, found on UAT: atm.parts is a UserParameter and Zabbix
+    reports it as type '0' - the same type as internal items. Classifying by
+    type threw away the one key the gate requires, and a live ATM came back
+    SILENT."""
+    z = FakeZabbix([host()], items=[ncr_master(60, hostid=None),
+                                    dependent_part(60),
+                                    internal_item()])
+    r = verify.verify_atm('ATM-0001', client=z, db_facts=db())
+    assert r['verdict'] == 'reporting', r['verdict']
+    assert r['facts']['items_internal'] == 1
+    assert r['facts']['items_reporting'] == 2, 'master + dependent both count'
 
 
 def test_internal_items_alone_are_never_reporting():
@@ -196,7 +222,7 @@ def test_ncr_grg_silence_names_the_right_cause():
 
 # ── evidence gaps must not be mistaken for good news ─────────────────────
 def test_missing_atm_record_is_reported_not_assumed():
-    z = FakeZabbix([host()], items=[ncr_item(60)])
+    z = FakeZabbix([host()], items=[ncr_master(60)])
     empty = {'row': {}, 'state': '', 'last_seen': '', 'db_error': ''}
     r = verify.verify_atm('ATM-0001', client=z, db_facts=empty)
     assert any(c['name'] == 'portal record' and c['status'] == 'fail' for c in r['checks'])
@@ -217,7 +243,7 @@ def test_zabbix_outage_is_unknown_not_healthy():
 
 
 def test_journal_check_is_informational_only():
-    z = FakeZabbix([host()], items=[ncr_item(60)])
+    z = FakeZabbix([host()], items=[ncr_master(60)])
     with_ej = verify.verify_atm('ATM-0001', client=z, db_facts=db(ej_hostname='TESTMACHINE'))
     without = verify.verify_atm('ATM-0001', client=z, db_facts=db())
     j1 = [c for c in with_ej['checks'] if c['name'] == 'journal'][0]
@@ -227,7 +253,7 @@ def test_journal_check_is_informational_only():
 
 
 def test_firing_triggers_are_surfaced():
-    z = FakeZabbix([host()], items=[ncr_item(60)],
+    z = FakeZabbix([host()], items=[ncr_master(60)],
                    triggers=[{'triggerid': 't', 'description': 'ATM is unavailable', 'priority': '4'}])
     r = verify.verify_atm('ATM-0001', client=z, db_facts=db())
     prob = [c for c in r['checks'] if c['name'] == 'problems'][0]
@@ -239,7 +265,7 @@ def test_verify_all_counts_verdicts():
         def __init__(self):
             super().__init__(hosts=[host(name='GOOD', hostid='1'),
                                     host(name='SILENT', hostid='2')],
-                             items=[ncr_item(60, hostid='1'),
+                             items=[ncr_master(60, hostid='1'),
                                       item(0, key='atm.parts', hostid='2')])
 
         def call(self, method, params):
