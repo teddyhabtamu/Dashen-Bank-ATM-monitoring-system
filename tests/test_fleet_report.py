@@ -34,7 +34,10 @@ def test_silent_atm_is_flagged_with_its_cause():
                           ['No NCR telemetry (atm.parts never collected).'])])[0]
     assert row['needs_action'] is True
     assert row['blocker'].startswith('No NCR telemetry')
-    assert 'atm.parts' in fr.recommend_next_action(row)
+    # The next action names the FIX (agent on 10050), not the diagnosis again.
+    action = fr.recommend_next_action(row)
+    assert 'Zabbix agent' in action and '10050' in action
+    assert action != row['blocker']
 
 
 def test_provisioning_failure_outranks_a_silent_host():
@@ -186,3 +189,43 @@ def test_fleet_reports_a_planner_error_instead_of_hiding_it():
 
     out = verify.fleet(atm_ids=['ATM-7'], verify_fn=fake_verify, plan_fn=plan_with_error)
     assert out['rows'][0]['status'] == 'reporting', 'verification still stands'
+
+
+# ── the next action must never invent work ──────────────────────────────
+def test_a_healthy_atm_is_never_given_a_task():
+    """Regression seen on UAT: the green ATM-TEST-NCR row said "Investigate on
+    the box with the network team". Telling someone to go and investigate a
+    healthy ATM is how a column of advice stops being read."""
+    row = fr.summarise([v('ATM-OK', 'reporting')])[0]
+    assert row['needs_action'] is False
+    assert fr.recommend_next_action(row) == 'No action needed.'
+
+
+def test_a_healthy_atm_with_queued_work_still_names_it():
+    rows = fr.summarise([v('ATM-OK', 'reporting')],
+                       [{'atm_id': 'ATM-OK', 'action': 'update',
+                         'changes': ['agent interface'], 'error': ''}])
+    assert 'agent interface' in fr.recommend_next_action(rows[0])
+
+
+def test_a_silent_atm_is_told_the_fix_not_repeated_the_diagnosis():
+    """Repeating "atm.parts never collected" in the next-action column tells
+    the operator nothing. It must name the fix and the address."""
+    grg = fr.summarise([v('ATM-G', 'provisioned_not_reporting',
+                          ['No GRG telemetry (atm.net.link never collected).'],
+                          vendor='GRG', ip='172.23.248.6')])[0]
+    ncr = fr.summarise([v('ATM-N', 'provisioned_not_reporting',
+                          ['No NCR telemetry (atm.parts never collected).'],
+                          vendor='NCR', ip='10.30.41.116')])[0]
+    for row in (grg, ncr):
+        action = fr.recommend_next_action(row)
+        assert action != row['blocker'], 'next action must not echo the blocker'
+        assert row['ip'] in action, 'the action must name the box'
+    assert 'UDP/161' in fr.recommend_next_action(grg)
+    assert '10050' in fr.recommend_next_action(ncr)
+
+
+def test_timestamps_are_labelled_in_the_timezone_they_are_shown_in():
+    assert fr.format_eat('2026-10-15T18:38:48+00:00') == '2026-10-15 21:38 EAT'
+    assert fr.format_eat(None) == ''
+    assert fr.format_eat('nonsense') == 'nonsense'

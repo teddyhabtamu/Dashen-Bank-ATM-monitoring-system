@@ -317,6 +317,7 @@ def _compute_fleet(window_minutes=15):
 @role_required(ROLE_ADMIN)
 def onboard_fleet():
     """Fleet onboarding health. Read-only; computes in the background."""
+    from fleet_report import format_eat
     from fleet_store import (DEFAULT_TTL_MINUTES, RUN_WINDOW_MINUTES, claim_run,
                             ensure, load_any, record_failure)
     ttl = int(request.args.get('ttl', DEFAULT_TTL_MINUTES))
@@ -348,6 +349,7 @@ def onboard_fleet():
                                counts={}, rows=[], ttl=ttl, failed='',
                                filter_mode=request.args.get('filter', 'action'),
                                q=(request.args.get('q') or '').strip())
+    cached['generated_label'] = format_eat(cached.get('generated_at'))
     rows = cached['rows']
     mode = request.args.get('filter', 'action')
     if mode == 'all':

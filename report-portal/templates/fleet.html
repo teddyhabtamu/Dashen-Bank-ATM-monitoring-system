@@ -2,7 +2,7 @@
 {% block title %}Fleet onboarding health — ATM Monitoring{% endblock %}
 {% block extra_style %}
 .card-body{padding:0}
-.fleet-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1px;background:#EEF1F6}
+.fleet-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:1px;background:#EEF1F6}
 .fleet-tile{background:#fff;padding:16px 20px}
 .fleet-tile .n{font-size:22px;font-weight:800;color:#012169;letter-spacing:-.5px}
 .fleet-tile .l{font-size:11px;color:#64748B;margin-top:2px}
@@ -13,6 +13,7 @@
 .filters .sp{margin-left:auto;font-size:11px;color:#94A3B8}
 .next{font-size:11px;color:#012169;font-weight:600}
 td.status{white-space:nowrap}
+td.atm{white-space:nowrap;font-weight:600}
 .empty{padding:44px 20px;text-align:center;color:#64748B}
 .spin{animation:spin 1s linear infinite}
 @media(max-width:768px){ .fleet-summary{grid-template-columns:repeat(2,1fr)} }
@@ -129,7 +130,7 @@ td.status{white-space:nowrap}
              style="padding:7px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;width:220px">
       <button type="submit" class="btn btn-outline">Filter</button>
     </form>
-    <span class="sp">Generated {{ cached.generated_at if cached else '' }} EAT · cached {{ ttl }} min</span>
+    <span class="sp">Generated {{ cached.generated_label if cached else '' }} · cached {{ ttl }} min</span>
   </div>
   {% if rows %}
   <table>
@@ -140,7 +141,7 @@ td.status{white-space:nowrap}
     <tbody>
       {% for r in rows %}
       <tr>
-        <td><a href="/admin/atm/{{ r.atm_id }}">{{ r.atm_id }}</a></td>
+        <td class="atm"><a href="/admin/atm/{{ r.atm_id }}">{{ r.atm_id }}</a></td>
         <td class="status">
           <span class="badge {{ 'active' if r.status == 'reporting' else 'inactive' if r.status in ('failed','provisioned_not_reporting') else 'TIMEOUT' }}">{{ r.status_label }}</span>
         </td>

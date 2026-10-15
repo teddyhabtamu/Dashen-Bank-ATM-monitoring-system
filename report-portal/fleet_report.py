@@ -15,6 +15,19 @@ No writes, ever: the caller decides what to do with the rows.
 SEVERITY = ('failed', 'no_ip', 'provisioned_not_reporting', 'not_provisioned',
             'review', 'unknown', 'reporting')
 
+def format_eat(iso_ts):
+    """The portal reports everything in EAT; a UTC timestamp labelled EAT is
+    a three-hour lie in a monitoring tool."""
+    from datetime import datetime, timedelta, timezone
+    try:
+        dt = datetime.fromisoformat(str(iso_ts))
+    except (TypeError, ValueError):
+        return str(iso_ts or '')
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone(timedelta(hours=3))).strftime('%Y-%m-%d %H:%M EAT')
+
+
 SEVERITY_LABEL = {
     'reporting': 'Reporting',
     'provisioned_not_reporting': 'Provisioned, not reporting',
@@ -140,17 +153,40 @@ def to_csv(rows):
 
 
 def recommend_next_action(row):
-    """The single next thing for one ATM. Used by the UI and the CLI."""
-    if row['status'] == 'not_provisioned':
-        return 'Provision it (Step 3), then verify.'
-    if row['status'] == 'failed':
+    """The single next thing for one ATM. Used by the UI and the CLI.
+
+    Two rules, both learned the hard way:
+      * a HEALTHY ATM must never be given work to do - a next action on a green
+        row trains people to ignore the column entirely;
+      * for a broken one, repeat the DIAGNOSIS ("atm.parts never collected") and
+        you have told the operator nothing. Name the fix and the address.
+    """
+    status = row['status']
+    vendor = (row.get('vendor') or '').upper()
+    ip = row.get('ip') or 'the box'
+
+    if status == 'reporting':
+        if row.get('changes'):
+            return f"Planned change is ready to apply: {', '.join(row['changes'])}"
+        return 'No action needed.'
+
+    if status == 'provisioned_not_reporting':
+        if vendor == 'GRG':
+            return (f'Open UDP/161 from the collector to {ip}, or confirm the SNMP '
+                    f'community, then recompute.')
+        if vendor == 'NCR':
+            return (f'Check the Zabbix agent on {ip} (TCP/10050) and that '
+                    f'atm-wmi-collector.ps1 is installed, then recompute.')
+        return f'Check that {ip} is reachable from the Zabbix server, then recompute.'
+
+    if status == 'not_provisioned':
+        return 'Provision it (wizard Step 3), then verify.'
+    if status == 'failed':
         return f"Fix provisioning: {row['blocker']}"
-    if row['status'] == 'review':
+    if status == 'review':
         return 'Send to engineer review (unknown vendor/model).'
-    if row['status'] == 'no_ip':
+    if status == 'no_ip':
         return 'Record the IP address in ATM Registration.'
-    if row['status'] == 'unknown':
+    if status == 'unknown':
         return 'Check Zabbix connectivity, then re-run the report.'
-    if row['status'] == 'reporting' and row.get('changes'):
-        return f"Planned change is ready to apply: {', '.join(row['changes'])}"
     return row['blocker'] or 'Investigate on the box with the network team.'
