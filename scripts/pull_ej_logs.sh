@@ -37,8 +37,10 @@ mkdir -p "$RAWDIR"
 # evidence files, and a growing pile of orphaned zabbix_get processes. flock is
 # released by the kernel when the process dies, so a crashed run cannot wedge
 # the schedule.
-LOCKFILE="${EJ_LOCK:-$(dirname "$0")/../logs/ej-pull.lock}"
-mkdir -p "$(dirname "$LOCKFILE")"
+# The lock lives beside the evidence it protects: ej-logs/ is already ignored
+# and only *.log at its top level is harvested, so a .lock file there is
+# invisible to git AND to filebeat - no .gitignore change needed.
+LOCKFILE="${EJ_LOCK:-$OUTDIR/pull.lock}"
 exec 9>"$LOCKFILE"
 if command -v flock >/dev/null 2>&1; then
   if ! flock -n 9; then
