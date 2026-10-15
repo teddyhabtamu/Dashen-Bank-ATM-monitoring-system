@@ -303,12 +303,52 @@ def verify_all(atm_ids=None, window_minutes=15, client=None):
             'results': results}
 
 
+def fleet(atm_ids=None, window_minutes=15, with_plan=True):
+    """The fleet answer: one row per ATM, worst first, with the next action.
+
+    Read-only. `with_plan` adds a provisioning DRY RUN so the report can also
+    say "these hosts would be created/repaired" without writing anything.
+    """
+    from fleet_report import counts, recommend_next_action, summarise, to_csv
+    if atm_ids is None:
+        try:
+            from db import get_db
+            with get_db() as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT atm_id FROM atm_locations ORDER BY atm_id")
+                atm_ids = [r[0] for r in cur.fetchall()]
+                cur.close()
+        except Exception:
+            atm_ids = []
+    results = [verify_atm(a, window_minutes=window_minutes) for a in atm_ids]
+    plans = None
+    if with_plan and atm_ids:
+        try:
+            from provision import provision_atms
+            _, plan_rows = provision_atms(atm_ids, dry_run=True, actor='verify')
+            plans = plan_rows
+        except Exception as e:
+            sys.stderr.write(f'verify: could not plan provisioning: {e}\n')
+    rows = summarise(results, plans)
+    for r in rows:
+        r['next_action'] = recommend_next_action(r)
+    return {'counts': counts(rows), 'rows': rows, 'csv': to_csv(rows)}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description='Verify ATM reporting (read-only).')
     ap.add_argument('atm_id', nargs='*', help='ATM IDs (default: every ATM)')
     ap.add_argument('--window', type=int, default=15, help='freshness window in minutes (default 15)')
     ap.add_argument('--json', action='store_true', help='machine-readable output')
+    ap.add_argument('--csv', action='store_true', help='fleet CSV (what is dark and why)')
+    ap.add_argument('--no-plan', action='store_true',
+                    help='skip the provisioning dry run (faster, less detail)')
     args = ap.parse_args(argv)
+
+    if args.csv:
+        print(fleet(atm_ids=args.atm_id or None, window_minutes=args.window,
+                    with_plan=not args.no_plan)['csv'])
+        return 0
 
     if args.atm_id:
         results = [verify_atm(a, window_minutes=args.window) for a in args.atm_id]
@@ -333,5 +373,35 @@ def main(argv=None):
     return 0 if all(r['ok'] for r in results) else 1
 
 
+def main_fleet(argv=None):
+    """Print the one-line-per-ATM fleet report with a next action per row."""
+    import argparse as _ap
+    ap = _ap.ArgumentParser(description='Fleet onboarding health (read-only).')
+    ap.add_argument('atm_id', nargs='*')
+    ap.add_argument('--window', type=int, default=15)
+    ap.add_argument('--csv', action='store_true')
+    args = ap.parse_args(argv)
+    out = fleet(atm_ids=args.atm_id or None, window_minutes=args.window)
+    if args.csv:
+        print(out['csv'])
+        return 0
+    for r in out['rows']:
+        mark = '  ' if r['needs_action'] else 'ok'
+        print(f"{mark}  {r['atm_id']:<18} {r['status_label']:<28} "
+              f"{r['vendor']:<4} {r['ip']:<15} {r['summary']}")
+        if r['needs_action']:
+            print(f"      next: {r['next_action']}")
+    c = out['counts']
+    print('\n' + '  '.join(f"{k}={c[k]}" for k in
+                             ('total', 'healthy', 'needs_action', 'reporting',
+                              'not_provisioned', 'failed', 'review')))
+    return 0 if c['needs_action'] == 0 else 1
+
+
 if __name__ == '__main__':
-    sys.exit(main())
+    # Default to the fleet report: for a rollout the question is never about
+    # one ATM, it is "what is dark and what do I do about it".
+    if '--single' in sys.argv:
+        sys.argv.remove('--single')
+        sys.exit(main())
+    sys.exit(main_fleet())

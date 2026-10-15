@@ -112,8 +112,11 @@ calling an ATM live.
       Widen the window when a box polls slowly: `--window 30`.
 - [ ] Whole fleet at once (bulk rollout / after a Zabbix restore):
       `docker exec report-portal python3 verify.py`
-      prints one line per ATM and counts; exit code 1 if any ATM is silent.
-      Add `--json` to feed the onboarding wizard in Phase 4.
+      prints one line per ATM — status, vendor, IP and the next action —
+      worst first, and counts at the end. Exit code 1 if anything needs a
+      human. `--csv` writes the same report as CSV for the rollout tracker.
+      This is the bulk tool: importing 1,202 ATMs is one CSV, and this report
+      tells you exactly which rows did not come up.
 - [ ] **NCR:** on UAT-01 run
       `zabbix_get -s <ATM-IP> -k "atm.parts" | python3 -m json.tool > /dev/null && echo JSON-OK`
       then open Zabbix → Monitoring → Latest data → filter the new host:

@@ -1,0 +1,130 @@
+"""Tests for report-portal/fleet_report.py — the 1,202-ATM answer.
+
+What matters here is that the report never overstates health and never buries
+the thing a human must fix: an ATM that is merely silent is a symptom, while a
+failed provisioning or an unknown vendor is the cause, and the cause sorts
+first.
+"""
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'report-portal'))
+
+import fleet_report as fr  # noqa: E402
+
+
+def v(atm_id, verdict='reporting', blockers=(), reporting=10, total=90,
+      vendor='NCR', ip='10.0.0.1'):
+    return {'atm_id': atm_id, 'verdict': verdict, 'ok': verdict == 'reporting',
+            'blockers': list(blockers),
+            'facts': {'items_reporting': reporting, 'items_total': total,
+                      'vendor': vendor, 'ip_address': ip},
+            'checks': []}
+
+
+def test_a_reporting_atm_needs_no_action():
+    row = fr.summarise([v('ATM-0001')])[0]
+    assert row['needs_action'] is False
+    assert row['status'] == 'reporting'
+    assert 'Reporting' in row['summary']
+
+
+def test_silent_atm_is_flagged_with_its_cause():
+    row = fr.summarise([v('ATM-0002', 'provisioned_not_reporting',
+                          ['No NCR telemetry (atm.parts never collected).'])])[0]
+    assert row['needs_action'] is True
+    assert row['blocker'].startswith('No NCR telemetry')
+    assert 'atm.parts' in fr.recommend_next_action(row)
+
+
+def test_provisioning_failure_outranks_a_silent_host():
+    """The failed write is the cause; 'not reporting' is only the symptom."""
+    results = [v('ATM-0003', 'provisioned_not_reporting', ['nothing arriving'])]
+    plans = [{'atm_id': 'ATM-0003', 'action': 'failed', 'changes': [],
+              'error': 'host.create rejected'}]
+    row = fr.summarise(results, plans)[0]
+    assert row['status'] == 'failed'
+    assert 'host.create rejected' in row['summary']
+
+
+def test_unknown_vendor_goes_to_review():
+    results = [v('ATM-0004', 'provisioned_not_reporting', ['nothing'])]
+    plans = [{'atm_id': 'ATM-0004', 'action': 'review', 'changes': [], 'error': ''}]
+    row = fr.summarise(results, plans)[0]
+    assert row['status'] == 'review'
+    assert 'engineer review' in fr.recommend_next_action(row)
+
+
+def test_worst_first_ordering():
+    results = [
+        v('ATM-GOOD', 'reporting'),
+        v('ATM-SILENT', 'provisioned_not_reporting', ['quiet']),
+        v('ATM-NONE', 'not_provisioned'),
+    ]
+    plans = [{'atm_id': 'ATM-BAD', 'action': 'failed', 'changes': [], 'error': 'boom'},
+             {'atm_id': 'ATM-GOOD', 'action': 'skipped', 'changes': [], 'error': ''}]
+    results.append(v('ATM-BAD', 'provisioned_not_reporting', ['quiet']))
+    order = [r['atm_id'] for r in fr.summarise(results, plans)]
+    assert order[0] == 'ATM-BAD', 'a failed write must be the first thing seen'
+    assert order[-1] == 'ATM-GOOD', 'healthy ATMs go last'
+
+
+def test_counts_split_healthy_from_actionable():
+    rows = fr.summarise([
+        v('ATM-1', 'reporting'),
+        v('ATM-2', 'provisioned_not_reporting', ['quiet']),
+        v('ATM-3', 'not_provisioned'),
+    ])
+    c = fr.counts(rows)
+    assert c['total'] == 3 and c['reporting'] == 1 and c['needs_action'] == 2
+    assert c['healthy'] == 1
+
+
+def test_an_atm_missing_from_verification_is_not_invented():
+    """Only ATMs that were actually checked may appear in the report."""
+    rows = fr.summarise([v('ATM-1', 'reporting')], [{'atm_id': 'ATM-GHOST',
+                                                     'action': 'skipped', 'changes': []}])
+    assert [r['atm_id'] for r in rows] == ['ATM-1']
+
+
+def test_plan_changes_are_surfaced_for_an_healthy_host():
+    """A host that reports fine but is missing the agent interface still has
+    work queued; the report must not hide it behind 'healthy'."""
+    rows = fr.summarise([v('ATM-5', 'reporting')],
+                        [{'atm_id': 'ATM-5', 'action': 'update',
+                          'changes': ['agent interface'], 'error': ''}])
+    row = rows[0]
+    assert row['changes'] == ['agent interface']
+    assert 'agent interface' in fr.recommend_next_action(row)
+
+
+def test_csv_carries_the_actionable_rows():
+    rows = fr.summarise([
+        v('ATM-1', 'reporting'),
+        v('ATM-2', 'provisioned_not_reporting', ['No GRG telemetry'], vendor='GRG'),
+    ])
+    csv = fr.to_csv(rows)
+    lines = csv.strip().splitlines()
+    assert lines[0].startswith('atm_id,status,needs_action')
+    assert 'ATM-2' in lines[1] and 'No GRG telemetry' in lines[1]
+    assert 'no' in [l for l in lines if l.startswith('ATM-1')][0].split(',')[2]
+
+
+def test_next_action_per_status():
+    # status -> (verify verdict, provision action, expected next-step phrase)
+    cases = {
+        'not_provisioned': ('not_provisioned', None, 'Provision it'),
+        'failed': ('provisioned_not_reporting', 'failed', 'Fix provisioning'),
+        'review': ('provisioned_not_reporting', 'review', 'engineer review'),
+        'no_ip': ('not_provisioned', 'no_ip', 'IP address'),
+        'unknown': ('unknown', None, 'Zabbix connectivity'),
+    }
+    for status, (verdict, action, expected) in cases.items():
+        atm_id = f'ATM-{status}'
+        results = [v(atm_id, verdict, ['why'])]
+        plans = ([{'atm_id': atm_id, 'action': action, 'changes': [], 'error': 'boom'}]
+                 if action else [])
+        row = fr.summarise(results, plans)[0]
+        assert row['status'] == status, f'{status} collapsed to {row["status"]}'
+        assert row['needs_action'] is True
+        assert expected in fr.recommend_next_action(row)
