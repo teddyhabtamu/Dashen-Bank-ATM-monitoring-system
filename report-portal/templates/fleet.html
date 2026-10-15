@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Fleet onboarding health — ATM Monitoring{% endblock %}
+{% block extra_style %}
+.card-body{padding:0}
+.fleet-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1px;background:#EEF1F6}
+.fleet-tile{background:#fff;padding:16px 20px}
+.fleet-tile .n{font-size:22px;font-weight:800;color:#012169;letter-spacing:-.5px}
+.fleet-tile .l{font-size:11px;color:#64748B;margin-top:2px}
+.fleet-tile.warn .n{color:#D97706}
+.fleet-tile.bad .n{color:#DC2626}
+.fleet-tile.good .n{color:#059669}
+.filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:14px 20px;border-bottom:1px solid #EEF1F6}
+.filters .sp{margin-left:auto;font-size:11px;color:#94A3B8}
+.next{font-size:11px;color:#012169;font-weight:600}
+td.status{white-space:nowrap}
+.empty{padding:44px 20px;text-align:center;color:#64748B}
+.spin{animation:spin 1s linear infinite}
+@media(max-width:768px){ .fleet-summary{grid-template-columns:repeat(2,1fr)} }
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="activity"></i></div>
+  <div>
+    <h1 class="page-title">Fleet onboarding health</h1>
+    <p class="page-subtitle">Every ATM, whether it is actually reporting, and what to do about the ones that are not. Read-only.</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-outline" href="/admin/onboard/fleet/csv"><i data-lucide="download" style="width:14px;height:14px"></i> Download CSV</a>
+    <form method="post" action="/admin/onboard/fleet/refresh">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-primary"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Recompute now</button>
+    </form>
+  </div>
+</div>
+
+<div class="page-content">
+{% if computing %}
+<div class="card">
+  <div class="card-body">
+    <div class="empty">
+      <i data-lucide="loader-2" style="width:28px;height:28px;margin-bottom:10px" class="spin"></i>
+      <div style="font-weight:600;color:#0F172A">Checking the fleet…</div>
+      <div style="font-size:12px;margin-top:6px">
+        One Zabbix sweep per ATM. On a large fleet this takes minutes, so it runs in the
+        background — reload this page shortly. It never changes anything.
+      </div>
+      <a class="btn btn-outline" style="margin-top:14px" href="/admin/onboard/fleet">Reload</a>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="fleet-summary">
+    <div class="fleet-tile"><div class="n">{{ counts.get('total', 0) }}</div><div class="l">ATMs checked</div></div>
+    <div class="fleet-tile good"><div class="n">{{ counts.get('healthy', 0) }}</div><div class="l">Healthy</div></div>
+    <div class="fleet-tile bad"><div class="n">{{ counts.get('needs_action', 0) }}</div><div class="l">Need action</div></div>
+    <div class="fleet-tile"><div class="n">{{ counts.get('reporting', 0) }}</div><div class="l">Reporting</div></div>
+    <div class="fleet-tile warn"><div class="n">{{ counts.get('not_provisioned', 0) }}</div><div class="l">Not provisioned</div></div>
+    <div class="fleet-tile bad"><div class="n">{{ counts.get('failed', 0) }}</div><div class="l">Failed</div></div>
+    <div class="fleet-tile warn"><div class="n">{{ counts.get('review', 0) }}</div><div class="l">Needs review</div></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="filters">
+    <a class="btn {{ 'btn-primary' if filter_mode == 'action' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=action">Needs action</a>
+    <a class="btn {{ 'btn-primary' if filter_mode == 'all' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=all">All</a>
+    <a class="btn {{ 'btn-primary' if filter_mode == 'healthy' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=healthy">Healthy</a>
+    <form method="get" action="/admin/onboard/fleet" style="display:flex;gap:8px;align-items:center">
+      <input type="hidden" name="filter" value="{{ filter_mode }}">
+      <input type="text" name="q" value="{{ q }}" placeholder="ATM ID, vendor or IP"
+             style="padding:7px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;width:220px">
+      <button type="submit" class="btn btn-outline">Filter</button>
+    </form>
+    <span class="sp">Generated {{ cached.generated_at if cached else '' }} EAT · cached {{ ttl }} min</span>
+  </div>
+  {% if rows %}
+  <table>
+    <thead>
+      <tr><th>ATM</th><th>Status</th><th>Vendor</th><th>IP address</th><th>Items</th>
+          <th>Provisioning</th><th>What is wrong</th><th>Next action</th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><a href="/admin/atm/{{ r.atm_id }}">{{ r.atm_id }}</a></td>
+        <td class="status">
+          <span class="badge {{ 'active' if r.status == 'reporting' else 'inactive' if r.status in ('failed','provisioned_not_reporting') else 'TIMEOUT' }}">{{ r.status_label }}</span>
+        </td>
+        <td>{{ r.vendor or '—' }}</td>
+        <td>{{ r.ip or '—' }}</td>
+        <td>{{ r.items_reporting if r.items_reporting is not none else '—' }}{% if r.items_total %} / {{ r.items_total }}{% endif %}</td>
+        <td>{{ r.plan_action or '—' }}{% if r.changes %}<br><span class="next">{{ r.changes|join(', ') }}</span>{% endif %}</td>
+        <td>{{ r.blocker or '—' }}</td>
+        <td class="next">{{ r.next_action or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">
+    <i data-lucide="circle-check" style="width:28px;height:28px;color:#059669;margin-bottom:8px"></i>
+    <div style="font-weight:600;color:#0F172A">
+      {% if filter_mode == 'action' %}Nothing needs action{% else %}No ATMs match this filter{% endif %}
+    </div>
+    <div style="font-size:12px;margin-top:6px">
+      {% if filter_mode == 'action' %}
+        Every ATM in this view is provisioned and reporting.
+      {% else %}
+        Try a different filter or clear the search.
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+</div>
+<script>
+// Refresh a computing view on its own: the operator asked a question and the
+// answer arrives when the background job finishes.
+(function(){
+  if(!document.querySelector('.empty')) return;
+  setTimeout(function(){ window.location.reload(); }, 8000);
+})();
+</script>
+{% endblock %}

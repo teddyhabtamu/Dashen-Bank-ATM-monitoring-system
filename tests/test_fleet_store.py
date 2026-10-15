@@ -1,0 +1,111 @@
+"""Tests for report-portal/fleet_store.py — the cache behind the fleet page.
+
+Freshness is the part that matters: a stale report served as if it were live
+is how an operator trusts old data during a rollout. The DB paths are thin and
+swallow their own errors on purpose, so the tests concentrate on the decision.
+"""
+import os
+import sys
+from datetime import datetime, timedelta, timezone
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'report-portal'))
+
+import fleet_store as fs  # noqa: E402
+
+NOW = datetime(2026, 10, 15, 20, 0, tzinfo=timezone.utc)
+
+
+def test_a_report_inside_the_window_is_fresh():
+    fresh = NOW - timedelta(minutes=14)
+    assert fs.is_fresh(fresh, ttl_minutes=15, now=NOW) is True
+
+
+def test_a_report_older_than_the_window_is_stale():
+    stale = NOW - timedelta(minutes=16)
+    assert fs.is_fresh(stale, ttl_minutes=15, now=NOW) is False
+
+
+def test_the_boundary_is_inclusive():
+    assert fs.is_fresh(NOW - timedelta(minutes=15), ttl_minutes=15, now=NOW) is True
+    assert fs.is_fresh(NOW - timedelta(minutes=15, seconds=1), ttl_minutes=15, now=NOW) is False
+
+
+def test_no_timestamp_is_never_fresh():
+    assert fs.is_fresh(None, now=NOW) is False
+
+
+def test_naive_timestamps_are_treated_as_utc():
+    """Postgres can hand back a naive datetime depending on the driver; treating
+    it as local time would silently mark every report fresh (or stale)."""
+    naive = (NOW - timedelta(minutes=5)).replace(tzinfo=None)
+    assert fs.is_fresh(naive, ttl_minutes=15, now=NOW) is True
+    old_naive = (NOW - timedelta(hours=3)).replace(tzinfo=None)
+    assert fs.is_fresh(old_naive, ttl_minutes=15, now=NOW) is False
+
+
+def test_a_broken_database_yields_no_cache_rather_than_an_error():
+    def broken_db():
+        raise RuntimeError('db down')
+    assert fs.load(db=broken_db) is None
+    assert fs.save({'rows': [], 'counts': {}}, db=broken_db) is False
+    fs.clear(db=broken_db)   # must not raise
+
+
+def test_cache_round_trip_with_a_fake_connection():
+    class Cur:
+        def __init__(self, store):
+            self.store = store
+            self.row = None
+
+        def execute(self, sql, args=None):
+            self.store['sql'] = sql
+            if 'SELECT' in sql:
+                self.row = self.store.get('row')
+            self.store['args'] = args
+
+        def fetchone(self):
+            return self.row
+
+        def close(self):
+            pass
+
+    class Conn:
+        def __init__(self):
+            self.store = {}
+            self.committed = False
+
+        def cursor(self):
+            return Cur(self.store)
+
+        def commit(self):
+            self.committed = True
+
+    conn = Conn()
+    recent = NOW - timedelta(minutes=1)
+
+    conn.store['row'] = (recent, {'total': 3}, [{'atm_id': 'A'}])
+    got = fs.load(ttl_minutes=15, now=NOW, db=lambda: conn)
+    assert got['counts']['total'] == 3
+    assert got['rows'] == [{'atm_id': 'A'}]
+
+    conn.store['row'] = (NOW - timedelta(hours=1), {'total': 3}, [{'atm_id': 'A'}])
+    assert fs.load(ttl_minutes=15, now=NOW, db=lambda: conn) is None, 'stale is not served'
+
+    assert fs.save({'counts': {'total': 1}, 'rows': [], 'error': 'x' * 5000}, db=lambda: conn) is True
+    assert conn.committed is True
+    assert len(conn.store['args'][2]) <= 2000, 'errors are truncated, not dropped'
+
+
+def test_ensure_creates_the_table_without_a_migration():
+    seen = {}
+
+    class Cur:
+        def execute(self, sql, args=None):
+            seen['sql'] = sql
+
+    class Conn:
+        def cursor(self):
+            return Cur()
+
+    fs.ensure(Conn())
+    assert 'CREATE TABLE IF NOT EXISTS fleet_report_cache' in seen['sql']

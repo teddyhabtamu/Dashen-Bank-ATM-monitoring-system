@@ -401,7 +401,11 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
       <span>ATM Registration</span>
     </a>
     {% if session.get('role') == 'admin' %}
-    <a href="/admin/onboard" class="nav-item {% if request.path.startswith('/admin/onboard') %}active{% endif %}">
+    <a href="/admin/onboard/fleet" class="nav-item {% if request.path.startswith('/admin/onboard/fleet') %}active{% endif %}">
+      <i data-lucide="activity"></i>
+      <span>Fleet health</span>
+    </a>
+    <a href="/admin/onboard" class="nav-item {% if request.path.startswith('/admin/onboard') and not request.path.startswith('/admin/onboard/fleet') %}active{% endif %}">
       <i data-lucide="plus-circle"></i>
       <span>Onboard ATM</span>
     </a>

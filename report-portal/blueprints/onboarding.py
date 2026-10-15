@@ -17,8 +17,10 @@ roles are still NOT here (docs/onboarding-wizard-spec.md).
 """
 import logging
 import socket
+import threading
 
-from flask import Blueprint, render_template, request
+from flask import (Blueprint, Response, render_template, request,
+                   redirect, url_for)
 from blueprints.auth import login_required, role_required, ROLE_ADMIN
 from audit import log_action
 from db import get_db
@@ -261,3 +263,108 @@ def onboard_stage():
         verification = verify_atm(atm_id)
     return _page(values, {}, checks, stage=stage, saved=bool(atm_id), plan=plan,
                  provision=provision, verification=verification)
+
+
+# ── Phase 4c: fleet page ─────────────────────────────────────────────────
+# Verifying 1,202 ATMs is a Zabbix sweep per ATM. That cannot run inside a
+# request, so it is computed in the background and served from a shared cache
+# (fleet_store) that every gunicorn worker can read.
+_FLEET_LOCK = threading.Lock()
+_FLEET_RUNNING = False
+
+
+def _db():
+    from db import get_db
+    return get_db
+
+
+def _compute_fleet(force=False, window_minutes=15):
+    """Background worker: build the report and cache it. Never raises."""
+    global _FLEET_RUNNING
+    from fleet_store import ensure, save
+    try:
+        with _FLEET_LOCK:
+            if _FLEET_RUNNING and not force:
+                return
+            _FLEET_RUNNING = True
+    except Exception:
+        pass
+    try:
+        from verify import fleet
+        out = fleet(window_minutes=window_minutes)
+        conn = _db()()
+        ensure(conn)
+        save({'counts': out['counts'], 'rows': out['rows'], 'error': ''}, db=_db)
+        log_action('FLEET_REPORT', f'fleet verified: {out["counts"]}')
+    except Exception as e:
+        logger.warning('fleet report failed: %s', e)
+    finally:
+        with _FLEET_LOCK:
+            _FLEET_RUNNING = False
+
+
+@bp.route('/onboard/fleet', methods=['GET'])
+@login_required
+@role_required(ROLE_ADMIN)
+def onboard_fleet():
+    """Fleet onboarding health. Read-only; computes in the background."""
+    from fleet_store import DEFAULT_TTL_MINUTES, ensure, load
+    ttl = int(request.args.get('ttl', DEFAULT_TTL_MINUTES))
+    try:
+        ensure(_db()())
+    except Exception as e:
+        logger.warning('fleet cache table unavailable: %s', e)
+    cached = load(ttl_minutes=ttl, db=_db)
+    if cached is None:
+        threading.Thread(target=_compute_fleet, args=(True, ttl), daemon=True).start()
+        return render_template('fleet.html', cached=None, computing=True,
+                               counts={}, rows=[], ttl=ttl,
+                               filter_mode=request.args.get('filter', 'action'),
+                               q=(request.args.get('q') or '').strip())
+    rows = cached['rows']
+    mode = request.args.get('filter', 'action')
+    if mode == 'all':
+        rows = list(rows)
+    elif mode == 'healthy':
+        rows = [r for r in rows if not r.get('needs_action')]
+    else:
+        rows = [r for r in rows if r.get('needs_action')]
+    q = (request.args.get('q') or '').strip().lower()
+    if q:
+        rows = [r for r in rows
+                if q in str(r.get('atm_id', '')).lower() or q in str(r.get('ip', '')).lower()
+                or q in str(r.get('vendor', '')).lower()]
+    return render_template('fleet.html', cached=cached, computing=False,
+                           counts=cached['counts'], rows=rows, ttl=ttl,
+                           filter_mode=mode, q=(request.args.get('q') or '').strip())
+
+
+@bp.route('/onboard/fleet/refresh', methods=['POST'])
+@login_required
+@role_required(ROLE_ADMIN)
+def onboard_fleet_refresh():
+    """Recompute now. Expensive on a large fleet, so it is a background job."""
+    from fleet_store import clear
+    clear(db=_db)
+    threading.Thread(target=_compute_fleet, args=(True,), daemon=True).start()
+    return redirect(url_for('.onboard_fleet'))
+
+
+@bp.route('/onboard/fleet/csv', methods=['GET'])
+@login_required
+@role_required(ROLE_ADMIN)
+def onboard_fleet_csv():
+    """The cached report as CSV - the rollout tracker file."""
+    from fleet_store import load
+    cached = load(db=_db)
+    if not cached:
+        return Response('atm_id,status,needs_action,vendor,ip_address,'
+                        'items_reporting,items_total,provisioning_action,'
+                        'planned_changes,blocker\n',
+                        mimetype='text/csv',
+                        headers={'Content-Disposition':
+                                 'attachment; filename=fleet_report.csv'})
+    from fleet_report import to_csv
+    return Response(to_csv(cached['rows']), mimetype='text/csv',
+                    headers={'Content-Disposition':
+                             'attachment; filename=fleet_report.csv'})
