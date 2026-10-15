@@ -65,11 +65,13 @@ details.wstep.pending>summary{opacity:.55}
 
 <div class="page-content">
 {% set facts_done = checks or saved or plan or provision or verification %}
+{% set provisioned = provision or (verification and verification.verdict != 'not_provisioned') %}
+{% set verified_ok = verification and verification.ok %}
 <div class="stepper">
   <div class="step {{ 'done' if stage != 'facts' else 'current' }}"><span class="n">1</span> ATM facts</div>
   <div class="step {{ 'current' if stage == 'checks' else 'done' if facts_done else 'pending' }}"><span class="n">2</span> Pre-flight</div>
-  <div class="step {{ 'current' if stage == 'provision' else 'done' if provision else 'pending' if not saved }}"><span class="n">3</span> Provision</div>
-  <div class="step {{ 'current' if stage == 'verify' else 'done' if verification and verification.ok else 'pending' if not provision }}"><span class="n">4</span> Verify</div>
+  <div class="step {{ 'current' if stage == 'provision' else 'done' if provisioned else 'pending' if not saved }}"><span class="n">3</span> Provision</div>
+  <div class="step {{ 'current' if stage == 'verify' else 'done' if verified_ok else 'pending' if not provisioned }}"><span class="n">4</span> Verify</div>
 </div>
 
 <!-- ── Step 1 · ATM facts ─────────────────────────────────────────── -->
@@ -146,7 +148,7 @@ details.wstep.pending>summary{opacity:.55}
   <summary>
     <i data-lucide="chevron-right" class="chev"></i>
     <span class="step-title">2 · Pre-flight checks</span>
-    <span class="step-sum">{% if checks %}Read-only — nothing was created{% else %}Runs when you submit the facts{% endif %}</span>
+    <span class="step-sum">{% if checks %}Read-only — nothing was created{% else %}Read-only checks — safe to re-run any time{% endif %}</span>
     {% if values.atm_id and stage != 'checks' %}
       <form method="post" action="/admin/onboard/stage" style="margin-left:auto">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -190,8 +192,9 @@ details.wstep.pending>summary{opacity:.55}
     <i data-lucide="chevron-right" class="chev"></i>
     <span class="step-title">3 · Provision in Zabbix</span>
     <span class="step-sum">
-      {% if provision %}Host {{ provision.results[0].action if provision.results else 'done' }}
-      {% elif plan %}{{ plan.results[0].action if plan.results else 'ready' }} (preview only)
+      {% if provision %}Host {{ provision.results[0].action if provision.results else 'created' }} in Zabbix
+      {% elif provisioned %}Host exists in Zabbix
+      {% elif plan %}{{ plan.results[0].action if plan.results else 'ready' }} — preview only
       {% elif saved %}Saved — preview not generated
       {% else %}Waiting for the checks{% endif %}
     </span>
@@ -266,12 +269,14 @@ details.wstep.pending>summary{opacity:.55}
 </details>
 
 <!-- ── Step 4 · Verify ───────────────────────────────────────────── -->
-<details class="card wstep {% if not provision %}pending{% endif %}" id="step4" {% if stage == 'verify' %}open{% endif %}>
+<details class="card wstep {% if not provisioned %}pending{% endif %}" id="step4" {% if stage == 'verify' %}open{% endif %}>
   <summary>
     <i data-lucide="chevron-right" class="chev"></i>
     <span class="step-title">4 · Verify it is reporting</span>
     <span class="step-sum">
-      {% if verification %}{{ verification.verdict|replace('_',' ') }}{% elif provision %}Ready — run the check{% else %}Available after provisioning{% endif %}
+      {% if verification %}{{ verification.verdict|replace('_',' ') }}
+      {% elif provisioned %}Ready — run the check
+      {% else %}Available once the host is provisioned{% endif %}
     </span>
   </summary>
   <div class="step-body">
@@ -296,7 +301,7 @@ details.wstep.pending>summary{opacity:.55}
         </form>
         <a class="btn btn-outline" href="/admin/atm/{{ values.atm_id }}"><i data-lucide="external-link" style="width:14px;height:14px"></i> Open ATM page</a>
       </div>
-    {% elif provision %}
+    {% elif provisioned %}
       <p class="step-note">Proving it reports is the only thing allowed to call an ATM live. This is read-only.</p>
       <div class="wiz-actions">
         <form method="post" action="/admin/onboard/verify">
