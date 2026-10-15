@@ -16,6 +16,10 @@
 #   20 * * * * cd /data/atm-monitoring && ZBX_USER=... ZBX_PASS=... ./scripts/pull_ej_logs.sh 3 >> logs/ej-pull.log 2>&1
 #   (Seal credentials as usual: export from .env via grep-cut, never in chat.)
 set -u
+# cron runs with a minimal PATH (/usr/bin:/bin). Prepend the standard sbin/bin
+# directories so python3, docker (used to read atm_locations) and zabbix_get
+# resolve the same way they do in an interactive shell.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
 DAYS="${1:-3}"
 ZBX_URL="${ZBX_URL:-http://172.22.10.45:8080/api_jsonrpc.php}"
 OUTDIR="$(dirname "$0")/../ej-logs"

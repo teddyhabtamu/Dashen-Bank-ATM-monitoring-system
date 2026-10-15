@@ -123,3 +123,17 @@ def test_empty_but_reachable_db_falls_through_to_csv(monkeypatch, tmp_path):
     monkeypatch.setattr(ept.subprocess, 'run', _fake_psql(''))
     targets, source, _ = ept.resolve(csv_path=str(csv_file))
     assert source == 'CSV snapshot' and targets[0][0] == 'ATM-0008'
+
+def test_docker_bin_is_configurable_for_cron(monkeypatch):
+    """A cron PATH without docker must be fixable without editing code."""
+    monkeypatch.setenv('EJ_DOCKER_BIN', '/usr/bin/docker')
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen['cmd'] = cmd
+        return subprocess.CompletedProcess(cmd, 0, 'ATM-0001|1.2.3.4|BOX\n', '')
+
+    monkeypatch.setattr(ept.subprocess, 'run', fake_run)
+    targets, source, _ = ept.resolve()
+    assert source == 'database'
+    assert seen['cmd'][0] == '/usr/bin/docker'

@@ -43,6 +43,14 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CSV_PATH = os.path.join(REPO, 'config', 'postgres', 'atm_locations.csv')
 DB_CONTAINER = os.environ.get('EJ_DB_CONTAINER', 'zabbix-db')
+# Cron runs with a minimal PATH, and docker is not always in it. An absolute
+# path here removes the last way this resolver can silently degrade.
+DOCKER_DEFAULT = 'docker'
+
+
+def _docker_bin(explicit=None):
+    """Read at call time, not import time, so the env var always wins."""
+    return explicit or os.environ.get('EJ_DOCKER_BIN') or DOCKER_DEFAULT
 DB_USER = os.environ.get('DB_USER', 'zabbix')
 DB_NAME = os.environ.get('DB_NAME', 'zabbix')
 
@@ -131,14 +139,14 @@ DB_QUERY = (
 )
 
 
-def from_db(docker_bin='docker'):
+def from_db(docker_bin=None):
     """Read targets via the repo's established DB access pattern.
 
     Returns None (not []) when the DB could not be read — the caller must then
     fall back rather than conclude there are no ATMs to pull.
     """
-    cmd = [docker_bin, 'exec', DB_CONTAINER, 'psql', '-U', DB_USER, '-d', DB_NAME,
-           '-tAF|', '-c', DB_QUERY]
+    cmd = [_docker_bin(explicit=docker_bin), 'exec', DB_CONTAINER, 'psql',
+           '-U', DB_USER, '-d', DB_NAME, '-tAF|', '-c', DB_QUERY]
     try:
         out = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError) as e:
@@ -173,14 +181,15 @@ def from_csv(path=CSV_PATH):
     return targets_from_rows(rows)
 
 
-def resolve(explain=False, csv_path=CSV_PATH, docker_bin='docker'):
+def resolve(explain=False, csv_path=CSV_PATH, docker_bin=None):
     """Returns (targets, source_name, skips). Never raises."""
+    db_bin = _docker_bin(explicit=docker_bin)
     override = os.environ.get('EJ_ATMS')
     if override and override.strip():
         targets, _ = from_override(override)
         return targets, 'EJ_ATMS override', []
 
-    for name, getter in (('database', lambda: from_db(docker_bin)),
+    for name, getter in (('database', lambda: from_db(db_bin)),
                          ('CSV snapshot', lambda: from_csv(csv_path))):
         result = getter()
         if result is None:
