@@ -22,7 +22,8 @@ from flask import Blueprint, render_template, request
 from blueprints.auth import login_required, role_required, ROLE_ADMIN
 from audit import log_action
 from db import get_db
-from onboard_rules import VENDORS, DISTRICTS, PROBE_PORT, validate_facts
+from onboard_rules import (VENDORS, DISTRICTS, PROBE_PORT, validate_facts,
+                            to_atm_data)
 from provision import provision_atms
 from verify import verify_atm
 
@@ -101,7 +102,8 @@ def _page(values, errors, checks, **extra):
     a value and silently blank the form."""
     ctx = {'vendors': VENDORS, 'districts': DISTRICTS, 'values': values,
            'errors': errors, 'checks': checks,
-           'saved': False, 'plan': None, 'provision': None, 'verification': None}
+           'saved': False, 'plan': None, 'provision': None, 'verification': None,
+           'save_errors': {}}
     ctx.update(extra)
     return render_template('onboarding.html', **ctx)
 
@@ -138,12 +140,15 @@ def onboard_save():
     cleaned, errors = validate_facts(values)
     if errors:
         return _page(values, errors, None)
-    data = normalise_atm_form(values)
+    # to_atm_data fills the columns the writer requires but this page never
+    # collects (status), so a save cannot fail on an invisible field.
+    data = normalise_atm_form(to_atm_data(values))
     # ej_hostname is optional in the wizard; keep whatever is already stored.
     data['ej_hostname'] = (request.form.get('ej_hostname') or '').strip() or None
     res = save_atm_record(data, source='onboarding-wizard')
     if not res['ok']:
-        return _page(cleaned, res['errors'], _preflight(cleaned))
+        return _page(cleaned, res['errors'], _preflight(cleaned),
+                     saved=False, save_errors=res['errors'])
     log_action('ATM_SAVE', res['audit_detail'])
     plan = provision_atms([data['atm_id']], dry_run=True, actor='onboarding-wizard')
     return _page(cleaned, {}, _preflight(cleaned), saved=True, plan=plan)
@@ -178,6 +183,7 @@ def onboard_verify():
     atm_id = (request.form.get('atm_id') or '').strip()
     if not atm_id:
         return _page({}, {'atm_id': 'Save the ATM first.'}, None)
+    # values.atm_id is the only field this step needs.
     out = verify_atm(atm_id)
     return _page({'atm_id': atm_id}, {}, None, saved=True,
                  verification=out)

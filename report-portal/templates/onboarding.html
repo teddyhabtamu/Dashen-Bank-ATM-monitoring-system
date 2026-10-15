@@ -110,12 +110,25 @@
 {% endif %}
 
 {% if checks %}
-<div class="card">
+<div class="card" id="step3">
   <div class="card-header">
     <h2>Step 3 — Save &amp; provision</h2>
     <span class="card-hint">Saves the ATM, then previews the Zabbix change</span>
   </div>
   <div class="card-body">
+    {% if save_errors %}
+      <div class="alert-card error" style="margin-bottom:16px">
+        <i data-lucide="alert-circle" class="alert-icon"></i>
+        <div class="alert-content">
+          <div class="alert-title">The ATM was not saved</div>
+          <div class="alert-message">
+            {% for field, msg in save_errors.items() %}
+              <div>{{ field }}: {{ msg }}</div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    {% endif %}
     {% if not saved %}
       <p style="color:#475569;font-size:13px">The ATM is not saved yet. Saving writes one row to the portal database — the same writer ATM Registration uses.</p>
       <form method="post" action="/admin/onboard/save">
@@ -174,7 +187,7 @@
 {% endif %}
 
 {% if verification %}
-<div class="card">
+<div class="card" id="step4">
   <div class="card-header">
     <h2>Step 4 — Is it really reporting?</h2>
     <span class="card-hint">Read-only check of live telemetry</span>
@@ -198,6 +211,15 @@
 </div>
 {% endif %}
 </div>
+<script>
+// After a step completes, bring the next card into view: a result the user has
+// to scroll to discover is a result most users never see.
+(function(){
+  if(!document.getElementById('step3')) return;
+  var target = document.getElementById('step4') || document.getElementById('step3');
+  target.scrollIntoView({behavior:'smooth', block:'start'});
+})();
+</script>
 <script>
 var MODELS = {{ vendors|tojson }};
 var vsel = document.getElementById('vendorSel'), msel = document.getElementById('modelSel');

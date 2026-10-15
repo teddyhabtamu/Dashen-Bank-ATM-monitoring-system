@@ -32,6 +32,33 @@ _FACT_FIELDS = ('atm_id', 'atm_name', 'branch', 'district', 'city', 'region',
                 'ip_address')
 
 
+# Columns the shared writer (blueprints.admin.save_atm_record) requires but the
+# wizard never asks for. A newly onboarded ATM is active by definition - this
+# is the same default the DB column carries. Without it the wizard's save was
+# rejected with an error on a field the page cannot display: a silent failure.
+WRITER_DEFAULTS = {'status': 'active'}
+
+
+def to_atm_data(values):
+    """Wizard facts -> the dict shape the shared writer expects.
+
+    Pure, stdlib, unit-tested. It exists because the wizard collects 12 fields
+    while the writer's contract covers every ATM column: anything the writer
+    requires but the wizard does not collect must be defaulted HERE, visibly,
+    rather than discovered as an invisible validation error on UAT.
+    """
+    data = {}
+    for k in _FACT_FIELDS:
+        v = (values.get(k) or '').strip()
+        data[k] = v if v else None
+    # Fields the wizard deliberately does not collect. An explicit value from
+    # the caller (bulk path, tests) still wins over the default.
+    for k, v in WRITER_DEFAULTS.items():
+        given = (values.get(k) or '').strip()
+        data[k] = given or v
+    return data
+
+
 def validate_facts(f):
     """Return (cleaned_dict, errors_dict). Pure logic — no I/O."""
     errors = {}
