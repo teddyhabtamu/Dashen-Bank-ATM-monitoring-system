@@ -114,9 +114,139 @@ def test_ensure_creates_the_table_without_a_migration():
         def execute(self, sql, args=None):
             seen['sql'] = sql
 
+        def close(self):
+            pass
+
     class Conn:
         def cursor(self):
             return Cur()
 
+        def commit(self):
+            pass
+
     fs.ensure(Conn())
     assert 'CREATE TABLE IF NOT EXISTS fleet_report_cache' in seen['sql']
+
+
+# ── cross-process run claim + stale serving ─────────────────────────────
+def test_a_second_page_load_cannot_start_a_second_sweep():
+    """gunicorn has 3 workers, so the "is a sweep running" question must be
+    answered by the database, not by a boolean in one process."""
+    class Cur:
+        def __init__(self, c):
+            self.c = c
+            self.row = None
+
+        def execute(self, sql, args=None):
+            self.c['sql'] = sql
+            self.c['args'] = args
+            self.row = self.c.get('row')
+
+        def fetchone(self):
+            return self.row
+
+        def close(self):
+            pass
+
+    class Conn:
+        def __init__(self, row=None):
+            self.store = {'row': row}
+            self.committed = False
+
+        def cursor(self):
+            return Cur(self.store)
+
+        def commit(self):
+            self.committed = True
+
+    started = (NOW - timedelta(seconds=5),)
+    conn = Conn(row=started)
+    assert fs.claim_run(db=lambda: conn, now=NOW) is False, 'a recent run blocks a second'
+
+    idle = Conn(row=(NOW - timedelta(minutes=30),))
+    assert fs.claim_run(db=lambda: idle, now=NOW) is True
+    assert idle.committed is True
+
+
+def test_claim_fails_open_so_a_stuck_lock_cannot_freeze_the_page():
+    def broken_db():
+        raise RuntimeError('db down')
+    assert fs.claim_run(db=broken_db, now=NOW) is True
+
+
+def test_stale_rows_are_served_with_their_age_not_hidden():
+    class Cur:
+        def execute(self, sql, args=None):
+            self.row = (NOW - timedelta(minutes=40), {'total': 3},
+                        [{'atm_id': 'A'}], '')
+            self.sql = sql
+
+        def fetchone(self):
+            return self.row
+
+        def close(self):
+            pass
+
+    class Conn:
+        def cursor(self):
+            return Cur()
+
+    got = fs.load_any(now=NOW, db=lambda: Conn())
+    assert got['fresh'] is False
+    assert 39 < got['age_minutes'] < 41
+    assert got['rows'] == [{'atm_id': 'A'}], 'old truth beats an empty spinner'
+
+
+def test_in_flight_and_failed_states_are_distinguishable():
+    """The page must tell "still computing" apart from "it broke" - they look
+    identical otherwise, and only one of them is worth retrying."""
+    def fake_db(error):
+        class Cur:
+            def execute(self, sql, args=None):
+                self.row = (NOW - timedelta(seconds=5), {'total': 1},
+                            [{'atm_id': 'A'}], error)
+
+            def fetchone(self):
+                return self.row
+
+            def close(self):
+                pass
+
+        class Conn:
+            def cursor(self):
+                return Cur()
+
+        return Conn()
+
+    # the store calls db() with no arguments, so wrap the factory
+    running = fs.load_any(now=NOW, db=lambda: fake_db(fs.IN_FLIGHT))
+    failed = fs.load_any(now=NOW, db=lambda: fake_db('Zabbix login failed'))
+    ok = fs.load_any(now=NOW, db=lambda: fake_db(''))
+    assert running['running'] is True and running['failed'] is False
+    assert failed['failed'] is True and failed['running'] is False
+    assert ok['running'] is False and ok['failed'] is False
+
+
+def test_ensure_commits_or_the_table_never_exists():
+    """DDL is transactional in Postgres: an uncommitted CREATE TABLE is rolled
+    back when the connection returns to the pool, and every save then fails with
+    'relation does not exist'. This is the bug that made the page spin forever."""
+    committed = {'v': False}
+
+    class Cur:
+        def execute(self, sql, args=None):
+            seen['sql'] = sql
+
+        def close(self):
+            pass
+
+    class Conn:
+        def cursor(self):
+            return Cur()
+
+        def commit(self):
+            committed['v'] = True
+
+    seen = {}
+    fs.ensure(Conn())
+    assert committed['v'] is True, 'ensure() must commit the DDL'

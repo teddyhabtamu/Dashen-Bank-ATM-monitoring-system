@@ -34,6 +34,25 @@ td.status{white-space:nowrap}
 </div>
 
 <div class="page-content">
+{% if failed %}
+<div class="card" style="margin-bottom:20px">
+  <div class="card-body">
+    <div class="alert-card error" style="margin:0">
+      <i data-lucide="alert-circle" class="alert-icon"></i>
+      <div class="alert-content">
+        <div class="alert-title">The fleet report could not be produced</div>
+        <div class="alert-message">{{ failed }}</div>
+        <div class="alert-action">
+          <form method="post" action="/admin/onboard/fleet/refresh">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Try again</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% if computing %}
 <div class="card">
   <div class="card-body">
@@ -49,6 +68,27 @@ td.status{white-space:nowrap}
   </div>
 </div>
 {% else %}
+{% if cached and not cached.fresh and not cached.running %}
+<div class="alert-card warning" style="margin-bottom:20px">
+  <i data-lucide="clock" class="alert-icon"></i>
+  <div class="alert-content">
+    <div class="alert-title">This report is {{ '%.0f'|format(cached.age_minutes) }} minutes old</div>
+    <div class="alert-message">
+      Showing the last known result. Use &ldquo;Recompute now&rdquo; for current truth —
+      an old report that looks current is worse than a slow one.
+    </div>
+  </div>
+</div>
+{% endif %}
+{% if cached and cached.running %}
+<div class="alert-card info" style="margin-bottom:20px">
+  <i data-lucide="loader-2" class="alert-icon spin"></i>
+  <div class="alert-content">
+    <div class="alert-title">Recomputing in the background</div>
+    <div class="alert-message">The table below is the last known result until the sweep finishes.</div>
+  </div>
+</div>
+{% endif %}
 <div class="card">
   <div class="fleet-summary">
     <div class="fleet-tile"><div class="n">{{ counts.get('total', 0) }}</div><div class="l">ATMs checked</div></div>

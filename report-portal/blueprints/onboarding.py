@@ -269,6 +269,9 @@ def onboard_stage():
 # Verifying 1,202 ATMs is a Zabbix sweep per ATM. That cannot run inside a
 # request, so it is computed in the background and served from a shared cache
 # (fleet_store) that every gunicorn worker can read.
+# Cross-process coordination lives in fleet_store (a DB claim), because
+# gunicorn runs 3 workers and an in-memory flag would let two of them sweep the
+# fleet at once. This lock only protects threads inside one process.
 _FLEET_LOCK = threading.Lock()
 _FLEET_RUNNING = False
 
@@ -278,26 +281,30 @@ def _db():
     return get_db
 
 
-def _compute_fleet(force=False, window_minutes=15):
-    """Background worker: build the report and cache it. Never raises."""
+def _compute_fleet(window_minutes=15):
+    """Background worker: build the report and cache it.
+
+    The caller has already claimed the run (fleet_store.claim_run), so this
+    never starts a duplicate sweep. Failures are recorded so the page can show
+    them instead of spinning.
+    """
     global _FLEET_RUNNING
-    from fleet_store import ensure, save
-    try:
-        with _FLEET_LOCK:
-            if _FLEET_RUNNING and not force:
-                return
-            _FLEET_RUNNING = True
-    except Exception:
-        pass
+    from fleet_store import record_failure, save
+    with _FLEET_LOCK:
+        if _FLEET_RUNNING:
+            return
+        _FLEET_RUNNING = True
     try:
         from verify import fleet
         out = fleet(window_minutes=window_minutes)
-        conn = _db()()
-        ensure(conn)
-        save({'counts': out['counts'], 'rows': out['rows'], 'error': ''}, db=_db)
-        log_action('FLEET_REPORT', f'fleet verified: {out["counts"]}')
+        ok = save({'counts': out['counts'], 'rows': out['rows'], 'error': ''}, db=_db)
+        if ok:
+            log_action('FLEET_REPORT', f'fleet verified: {out["counts"]}')
+        else:
+            record_failure('Could not write the fleet report cache.', db=_db)
     except Exception as e:
         logger.warning('fleet report failed: %s', e)
+        record_failure(f'Fleet report failed: {e}', db=_db)
     finally:
         with _FLEET_LOCK:
             _FLEET_RUNNING = False
@@ -308,17 +315,19 @@ def _compute_fleet(force=False, window_minutes=15):
 @role_required(ROLE_ADMIN)
 def onboard_fleet():
     """Fleet onboarding health. Read-only; computes in the background."""
-    from fleet_store import DEFAULT_TTL_MINUTES, ensure, load
+    from fleet_store import (DEFAULT_TTL_MINUTES, claim_run, ensure, load_any)
     ttl = int(request.args.get('ttl', DEFAULT_TTL_MINUTES))
     try:
         ensure(_db()())
     except Exception as e:
         logger.warning('fleet cache table unavailable: %s', e)
-    cached = load(ttl_minutes=ttl, db=_db)
-    if cached is None:
-        threading.Thread(target=_compute_fleet, args=(True, ttl), daemon=True).start()
+    cached = load_any(db=_db)
+    if not cached or not cached.get('rows'):
+        # Nothing to show yet: claim the sweep (cross-process) and compute.
+        if claim_run(db=_db):
+            threading.Thread(target=_compute_fleet, args=(ttl,), daemon=True).start()
         return render_template('fleet.html', cached=None, computing=True,
-                               counts={}, rows=[], ttl=ttl,
+                               counts={}, rows=[], ttl=ttl, failed='',
                                filter_mode=request.args.get('filter', 'action'),
                                q=(request.args.get('q') or '').strip())
     rows = cached['rows']
@@ -334,9 +343,12 @@ def onboard_fleet():
         rows = [r for r in rows
                 if q in str(r.get('atm_id', '')).lower() or q in str(r.get('ip', '')).lower()
                 or q in str(r.get('vendor', '')).lower()]
-    return render_template('fleet.html', cached=cached, computing=False,
+    return render_template('fleet.html', cached=cached,
+                           computing=bool(cached.get('running')),
                            counts=cached['counts'], rows=rows, ttl=ttl,
-                           filter_mode=mode, q=(request.args.get('q') or '').strip())
+                           failed=(cached.get('error') if cached.get('failed') else ''),
+                           filter_mode=mode,
+                           q=(request.args.get('q') or '').strip())
 
 
 @bp.route('/onboard/fleet/refresh', methods=['POST'])
@@ -344,9 +356,9 @@ def onboard_fleet():
 @role_required(ROLE_ADMIN)
 def onboard_fleet_refresh():
     """Recompute now. Expensive on a large fleet, so it is a background job."""
-    from fleet_store import clear
-    clear(db=_db)
-    threading.Thread(target=_compute_fleet, args=(True,), daemon=True).start()
+    from fleet_store import claim_run
+    if claim_run(db=_db):
+        threading.Thread(target=_compute_fleet, daemon=True).start()
     return redirect(url_for('.onboard_fleet'))
 
 
