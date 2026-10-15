@@ -605,17 +605,12 @@ function onVendorChange(sel){
   }
 }
 function syncCustomSelects(){
+  // Called after openModal() fills the form programmatically. The shared
+  // enhancer owns label + selection painting now (refreshCustomSelect), so
+  // this page does not keep a second copy of that logic — the duplicate was
+  // the same crash-prone pattern the enhancer had.
   document.querySelectorAll('select').forEach(function(sel){
-    var wrap = sel.closest('.cust-select');
-    if(!wrap) return;
-    var trig = wrap.querySelector('.cust-trigger');
-    var drop = wrap.querySelector('.cust-drop');
-    if(trig) trig.textContent = sel.options[sel.selectedIndex].text;
-    if(drop){
-      drop.querySelectorAll('.cust-opt').forEach(function(o, i){
-        o.classList.toggle('sel', i === sel.selectedIndex);
-      });
-    }
+    if(sel._cust && window.refreshCustomSelect) refreshCustomSelect(sel);
   });
 }
 function editATM(btn){
