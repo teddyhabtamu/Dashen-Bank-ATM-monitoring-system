@@ -97,11 +97,16 @@ def _preflight(cleaned):
     return out
 
 
-def _page(values, errors, checks, **extra):
+# The four steps of the flow, in order. `stage` is which one is open: it is
+# what turns a growing page into a wizard where exactly one thing is in view.
+STAGES = ('facts', 'checks', 'provision', 'verify')
+
+
+def _page(values, errors, checks, stage='facts', **extra):
     """Every render passes the same context, so a wizard step can never forget
     a value and silently blank the form."""
     ctx = {'vendors': VENDORS, 'districts': DISTRICTS, 'values': values,
-           'errors': errors, 'checks': checks,
+           'errors': errors, 'checks': checks, 'stage': stage,
            'saved': False, 'plan': None, 'provision': None, 'verification': None,
            'save_errors': {}}
     ctx.update(extra)
@@ -141,12 +146,12 @@ def _form_values():
 def onboard():
     """Step 1 (facts) + Step 2 (pre-flight). Still zero writes."""
     if request.method == 'GET':
-        return _page({}, {}, None)
+        return _page({}, {}, None, stage='facts')
     values = _form_values()
     cleaned, errors = validate_facts(values)
     if errors:
-        return _page(values, errors, None)
-    return _page(cleaned, {}, _preflight(cleaned))
+        return _page(values, errors, None, stage='facts')
+    return _page(cleaned, {}, _preflight(cleaned), stage='checks')
 
 
 @bp.route('/onboard/save', methods=['POST'])
@@ -159,7 +164,7 @@ def onboard_save():
     values = _form_values()
     cleaned, errors = validate_facts(values)
     if errors:
-        return _page(values, errors, None)
+        return _page(values, errors, None, stage='facts')
     # to_atm_data fills the columns the writer requires but this page never
     # collects (status), so a save cannot fail on an invisible field.
     data = normalise_atm_form(to_atm_data(values))
@@ -167,11 +172,12 @@ def onboard_save():
     data['ej_hostname'] = (request.form.get('ej_hostname') or '').strip() or None
     res = save_atm_record(data, source='onboarding-wizard')
     if not res['ok']:
-        return _page(cleaned, res['errors'], _preflight(cleaned),
+        return _page(cleaned, res['errors'], _preflight(cleaned), stage='provision',
                      saved=False, save_errors=res['errors'])
     log_action('ATM_SAVE', res['audit_detail'])
     plan = provision_atms([data['atm_id']], dry_run=True, actor='onboarding-wizard')
-    return _page(cleaned, {}, _preflight(cleaned), saved=True, plan=plan)
+    return _page(cleaned, {}, _preflight(cleaned), stage='provision',
+                 saved=True, plan=plan)
 
 
 @bp.route('/onboard/provision', methods=['POST'])
@@ -182,7 +188,8 @@ def onboard_provision():
     (the single provisioning writer Registration also uses)."""
     atm_id = (request.form.get('atm_id') or '').strip()
     if not atm_id:
-        return _page(_form_values(), {'atm_id': 'ATM ID is required.'}, None)
+        return _page(_form_values(), {'atm_id': 'ATM ID is required.'}, None,
+                     stage='provision')
     plan = provision_atms([atm_id], dry_run=True, actor='onboarding-wizard')
     out = provision_atms([atm_id], dry_run=False, actor='onboarding-wizard')
     summary = out.get('summary') or {}
@@ -190,8 +197,8 @@ def onboard_provision():
                               f'updated={summary.get("updated", 0)} '
                               f'skipped={summary.get("skipped", 0)} '
                               f'failed={summary.get("failed", 0)}')
-    return _page(_saved_values(atm_id), {}, None, saved=True, plan=plan,
-                 provision=out)
+    return _page(_saved_values(atm_id), {}, None, stage='provision', saved=True,
+                 plan=plan, provision=out)
 
 
 @bp.route('/onboard/verify', methods=['POST'])
@@ -202,7 +209,37 @@ def onboard_verify():
     to say an ATM is live."""
     atm_id = (request.form.get('atm_id') or '').strip()
     if not atm_id:
-        return _page({}, {'atm_id': 'Save the ATM first.'}, None)
+        return _page({}, {'atm_id': 'Save the ATM first.'}, None, stage='provision')
     # values.atm_id is the only field this step needs.
     out = verify_atm(atm_id)
-    return _page(_saved_values(atm_id), {}, None, saved=True, verification=out)
+    return _page(_saved_values(atm_id), {}, None, stage='verify', saved=True,
+                 verification=out)
+
+
+@bp.route('/onboard/stage', methods=['POST'])
+@login_required
+@role_required(ROLE_ADMIN)
+def onboard_stage():
+    """Open a specific step (the collapsed summaries link here).
+
+    Recomputes exactly what that step needs, so a step opened later shows the
+    CURRENT truth rather than a stale result from when it first ran.
+    """
+    stage = (request.form.get('stage') or 'facts').strip()
+    atm_id = (request.form.get('atm_id') or '').strip()
+    if stage not in STAGES:
+        stage = 'facts'
+    values = _saved_values(atm_id) if atm_id else {}
+    checks = plan = provision = verification = None
+    if stage == 'checks' and values.get('atm_id'):
+        try:
+            cleaned, errs = validate_facts(values)
+            checks = _preflight(cleaned) if not errs else None
+        except Exception as e:
+            logger.warning('onboard stage checks failed: %s', e)
+    elif stage == 'provision' and atm_id:
+        plan = provision_atms([atm_id], dry_run=True, actor='onboarding-wizard')
+    elif stage == 'verify' and atm_id:
+        verification = verify_atm(atm_id)
+    return _page(values, {}, checks, stage=stage, saved=bool(atm_id), plan=plan,
+                 provision=provision, verification=verification)
