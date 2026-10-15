@@ -104,9 +104,28 @@ pull_one() {
     fi
     if zabbix_get -s "$ip" -k "vfs.file.contents[E:\\EJLogs\\$f]" > "$RAWDIR/$f" 2>/dev/null; then
       if grep -q . "$RAWDIR/$f" 2>/dev/null && ! grep -qiE 'ZBX_NOTSUPPORTED|Timeout' "$RAWDIR/$f"; then
-        tr '\r' '\n' < "$RAWDIR/$f" > "$OUTDIR/$f"
+        # Append-only on disk. filebeat tails ej-logs/ (bind-mounted as
+        # /var/log/atm-ej) and treats a shrinking file as a truncation, so the
+        # old "tr > out" rewrote the file from zero and made filebeat re-read
+        # and re-index every line - visible as duplicate EJ rows. So: identical
+        # content is left completely untouched, growth is appended (filebeat
+        # reads only the delta), and only a genuine upstream rewrite replaces.
+        norm="$RAWDIR/$f.norm"
+        tr '\r' '\n' < "$RAWDIR/$f" > "$norm"
+        old=0
+        [ -s "$OUTDIR/$f" ] && old="$(wc -c < "$OUTDIR/$f")"
+        if [ "$old" -gt 0 ] && cmp -s "$norm" "$OUTDIR/$f"; then
+          rm -f "$norm"
+          echo "  $atm_id $f unchanged ($old bytes, not re-written)"
+        elif [ "$old" -gt 0 ] && head -c "$old" "$norm" | cmp -s - "$OUTDIR/$f"; then
+          tail -c "+$((old + 1))" "$norm" >> "$OUTDIR/$f"
+          rm -f "$norm"
+          echo "  $atm_id $f +$(( $(wc -c < "$OUTDIR/$f") - old )) bytes (appended, now $(wc -c < "$OUTDIR/$f"))"
+        else
+          mv "$norm" "$OUTDIR/$f"
+          echo "  $atm_id $f replaced ($old -> $(wc -c < "$OUTDIR/$f") bytes, upstream rewrite)"
+        fi
         rm -f "$STAMPDIR/$tag-$f.stamp"
-        echo "  $atm_id $f $(wc -c < "$OUTDIR/$f") bytes"
       else
         rm -f "$RAWDIR/$f"; touch "$STAMPDIR/$tag-$f.stamp"
         echo "  $atm_id $f absent-on-box (skipped)"
