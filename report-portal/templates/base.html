@@ -658,79 +658,115 @@ function showToast(msg, type, duration) {
 })();
 
 // ── CUSTOM SELECTS ──
+// The <select> is hidden (.cust-select select{display:none}) and a trigger +
+// option list are painted from it. Everything the enhancer builds lives in
+// sel._cust so a page can REBUILD it after the options change — without that,
+// dependent (cascading) selects froze on whatever they held at page load.
+function custApplyFilter(sel){
+  var c = sel && sel._cust;
+  if(!c || !c.search) return;
+  var q = (c.search.value || '').trim().toLowerCase();
+  var visible = 0;
+  c.drop.querySelectorAll('.cust-opt').forEach(function(o){
+    var match = o.textContent.toLowerCase().indexOf(q) > -1;
+    o.style.display = match ? '' : 'none';
+    if(match) visible++;
+  });
+  c.empty.style.display = visible ? 'none' : 'block';
+}
+function refreshCustomSelect(sel){
+  var c = sel && sel._cust;
+  if(!c) return false;                       // not enhanced (or data-native)
+  c.drop.querySelectorAll('.cust-opt').forEach(function(n){ n.remove(); });
+  // Empty select (options filled later by the page) must not throw — that used
+  // to abort the whole loop and leave later selects half-wrapped and blank.
+  c.trig.textContent = sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : '—';
+  for(var i = 0; i < sel.length; i++){
+    (function(idx){
+      var o = document.createElement('div');
+      o.className = 'cust-opt' + (idx === sel.selectedIndex ? ' sel' : '');
+      o.textContent = sel.options[idx].text;
+      o.addEventListener('click', function(){
+        sel.selectedIndex = idx;
+        c.trig.textContent = sel.options[idx].text;
+        c.drop.querySelectorAll('.cust-opt').forEach(function(x){ x.classList.remove('sel'); });
+        o.classList.add('sel');
+        c.trig.classList.remove('open');
+        c.drop.classList.remove('show');
+        sel.dispatchEvent(new Event('change'));
+      });
+      c.drop.appendChild(o);
+    })(i);
+  }
+  custApplyFilter(sel);
+  return true;
+}
+window.refreshCustomSelect = refreshCustomSelect;
+
 function initCustomSelects(){
   document.querySelectorAll('select').forEach(function(sel){
     if(sel.closest('.cust-select'))return;
-    if(sel.hasAttribute('data-native'))return; // OS popup: immune to clipping/paint-order bugs
-    var wrap=document.createElement('div');
-    wrap.className='cust-select';
-    sel.parentNode.insertBefore(wrap,sel);
-    wrap.appendChild(sel);
-    var trig=document.createElement('div');
-    trig.className='cust-trigger';
-    trig.textContent=sel.options[sel.selectedIndex].text;
-    wrap.appendChild(trig);
-    var drop=document.createElement('div');
-    drop.className='cust-drop';
-    wrap.appendChild(drop);
-    if(sel.length>6){
-      drop.classList.add('has-search');
-      var searchWrap=document.createElement('div');
-      searchWrap.className='cust-search';
-      var searchInput=document.createElement('input');
-      searchInput.type='text';
-      searchInput.placeholder='Search…';
-      searchInput.setAttribute('autocomplete','off');
-      searchWrap.appendChild(searchInput);
-      drop.appendChild(searchWrap);
-      var emptyMsg=document.createElement('div');
-      emptyMsg.className='cust-empty';
-      emptyMsg.textContent='No matches';
-      drop.appendChild(emptyMsg);
-      searchInput.addEventListener('click',function(e){e.stopPropagation();});
-      searchInput.addEventListener('input',function(){
-        var q=this.value.trim().toLowerCase();
-        var visible=0;
-        drop.querySelectorAll('.cust-opt').forEach(function(o){
-          var match=o.textContent.toLowerCase().indexOf(q)>-1;
-          o.style.display=match?'':'none';
-          if(match)visible++;
+    if(sel.hasAttribute('data-native'))return; // OS popup: explicit opt-out
+    try{
+      var wrap=document.createElement('div');
+      wrap.className='cust-select';
+      sel.parentNode.insertBefore(wrap,sel);
+      wrap.appendChild(sel);
+      var trig=document.createElement('div');
+      trig.className='cust-trigger';
+      trig.tabIndex=0;
+      trig.setAttribute('role','combobox');
+      wrap.appendChild(trig);
+      var drop=document.createElement('div');
+      drop.className='cust-drop';
+      wrap.appendChild(drop);
+      var c = {wrap:wrap, trig:trig, drop:drop, search:null, empty:null};
+      sel._cust = c;
+      if(sel.length>6){
+        drop.classList.add('has-search');
+        var searchWrap=document.createElement('div');
+        searchWrap.className='cust-search';
+        var searchInput=document.createElement('input');
+        searchInput.type='text';
+        searchInput.placeholder='Search…';
+        searchInput.setAttribute('autocomplete','off');
+        searchWrap.appendChild(searchInput);
+        drop.appendChild(searchWrap);
+        var emptyMsg=document.createElement('div');
+        emptyMsg.className='cust-empty';
+        emptyMsg.textContent='No matches';
+        drop.appendChild(emptyMsg);
+        c.search = searchInput;
+        c.empty = emptyMsg;
+        searchInput.addEventListener('click',function(e){e.stopPropagation();});
+        searchInput.addEventListener('input',function(){custApplyFilter(sel)});
+        trig.addEventListener('click',function(){
+          setTimeout(function(){ searchInput.value=''; custApplyFilter(sel); searchInput.focus(); }, 0);
         });
-        emptyMsg.style.display=visible?'none':'block';
-      });
-      trig.addEventListener('click',function(){
-        setTimeout(function(){ searchInput.value=''; searchInput.dispatchEvent(new Event('input')); searchInput.focus(); }, 0);
-      });
-    }
-    for(var i=0;i<sel.length;i++){
-      (function(idx){
-        var o=document.createElement('div');
-        o.className='cust-opt'+(idx===sel.selectedIndex?' sel':'');
-        o.textContent=sel.options[idx].text;
-        o.addEventListener('click',function(){
-          sel.selectedIndex=idx;
-          trig.textContent=sel.options[idx].text;
-          drop.querySelectorAll('.cust-opt').forEach(function(c){c.classList.remove('sel')});
-          o.classList.add('sel');
-          trig.classList.remove('open');
-          drop.classList.remove('show');
-          sel.dispatchEvent(new Event('change'));
-        });
-        drop.appendChild(o);
-      })(i);
-    }
-    trig.addEventListener('click',function(e){
-      e.stopPropagation();
-      var already=drop.classList.contains('show');
-      document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});
-      document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')});
-      if(!already){
-        var rect=trig.getBoundingClientRect();
-        if(window.innerHeight-rect.bottom<180){drop.classList.add('up');trig.classList.add('up')}
-        else{drop.classList.remove('up');trig.classList.remove('up')}
-        drop.classList.add('show');trig.classList.add('open');
       }
-    });
+      refreshCustomSelect(sel);
+      trig.addEventListener('click',function(e){
+        e.stopPropagation();
+        var already=drop.classList.contains('show');
+        document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});
+        document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')});
+        if(!already){
+          var rect=trig.getBoundingClientRect();
+          if(window.innerHeight-rect.bottom<180){drop.classList.add('up');trig.classList.add('up')}
+          else{drop.classList.remove('up');trig.classList.remove('up')}
+          drop.classList.add('show'); trig.classList.add('open');
+        }
+      });
+      trig.addEventListener('keydown',function(e){
+        if(e.key==='Enter'||e.key===' '){e.preventDefault();trig.click();}
+        else if(e.key==='Escape'){drop.classList.remove('show');trig.classList.remove('open');trig.focus();}
+      });
+    }catch(err){
+      // Never let one bad select break the rest of the page: drop the
+      // half-built wrapper and let the native <select> render as-is.
+      if(sel._cust && sel._cust.wrap) sel._cust.wrap.replaceWith(sel);
+      if(window.console) console.error('custom select skipped:', sel, err);
+    }
   });
   document.addEventListener('click',function(){
     document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});
