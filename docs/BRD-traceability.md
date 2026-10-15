@@ -58,7 +58,7 @@ dependency.
 | # | Requirement | Status | Evidence |
 |---|---|---|---|
 | 7.1 | Availability | PARTIAL | Portal restart-tested; no HA/DR story documented |
-| 7.2 | Performance | PARTIAL | Fine at 3 ATMs; **fleet-size page loads need the background job (done) + measurement at 1,202** |
+| 7.2 | Monitoring data updates within **5 seconds** of an event | GAP — see the latency budget below |
 | 7.3 | Security | PARTIAL | Roles, CSRF, password hashing; credential escrow **GAP** |
 | 7.4 | Scalability: expansion of ATM network | MET | Onboarding Phases 1–4: data-driven EJ list, single provisioning writer, verification gate, fleet report |
 
@@ -106,3 +106,71 @@ wrong by default:
 - healthy means "no action", never "investigate" (fleet report)
 - a failing step shows its error instead of a spinner
 - timestamps are shown in EAT, the timezone the portal reports in
+
+## BRD 7.2 latency budget — measured vs required
+
+BRD 7.2 says monitoring data should update within **5 seconds**. Measured on
+UAT (3 ATMs, templates in `config/zabbix/`):
+
+| Data | How it arrives today | Measured | 5s met? |
+|---|---|---|---|
+| WMI parts/devices | Zabbix polls the agent (port 10050) | **10–30s** (5 items @10s, 26 @30s) | No |
+| ATM offline / link | poll (agent / ping) | **10–60s** | No |
+| EJ transactions | hourly `pull_ej_logs.sh`, then filebeat → OpenSearch | **up to 60 min** | No — ~700x over |
+| Portal page render | Zabbix API + Postgres per request | ~0.3s at 3 ATMs, **uncached** | n/a |
+
+**5 seconds is not achievable by polling, for any data type.** It requires the
+event source to push. So the requirement has to be split by data type, with a
+budget each can actually meet:
+
+| Data | Target | Why that number |
+|---|---|---|
+| Transaction events | **≤5s** | Only via switch push (BRD 8.1). This is the one that genuinely needs 5s, because a cash-out or a fraud pattern is time-critical. |
+| Device / hardware state | **≤30s** (10s for ping, link, status) | Polling physics. 1,300 hosts x ~90 items at 5s ≈ 23k collections/sec — beyond a single Zabbix server's sane operating point; values queue and arrive late, which is worse than a documented 30s. |
+| ATM offline | **≤30s** | Active probing interval *is* the detection latency. 5s pings across 1,300 hosts is affordable but rarely worth the WAN and server load. |
+| Dashboard render | **≤2s** | Portal-side: serve from a short-TTL cache instead of calling Zabbix per request. |
+
+### What 5s forces architecturally (and what it does not)
+
+To hit 5s for transactions: switch → HTTPS webhook / AMQP → **queue** →
+idempotent, ordered ingest → Postgres + OpenSearch → portal. The request path
+must never do the write synchronously; a burst at payday must not block on it.
+This is BRD 8.1 and it also unblocks 2.6 (fraud rules).
+
+It does **not** require: proxies (deferred, and `docs/proxy-topology.md` gives
+the >3s trigger), or faster hardware for the portal (the portal stores
+transactions and state, never telemetry history — Zabbix owns that).
+
+### Scaling risks at 1,300 ATMs that are not latency
+
+1. **Portal fan-out.** Every detail-page render calls the Zabbix API. At fleet
+   scale that is self-inflicted load and the first thing to break. Needs a
+   5–10s TTL cache. The fleet report is already backgrounded.
+2. **EJ volume.** ~390k transaction rows/day (~142M/year). Postgres is for
+   recent data and state; OpenSearch already serves search; year-scale reports
+   must not query Postgres.
+3. **Telemetry volume.** ~337M item values/day. These belong in Zabbix's own
+   history store only — never copied into the portal DB.
+4. **Alert storms.** A flapping host can flood every channel. Maintenance
+   windows, suppression and hysteresis must be configured before go-live, not
+   after the first storm.
+5. **Verification freshness.** `verify.py` uses a 15-minute window, which is
+   aligned with 10–30s polling, not with a 5s target. If the bank signs up to
+   5s for transactions, the freshness window should tighten once push exists.
+
+### Recommended next steps for 7.2
+
+1. Put this budget in front of the bank and get the per-data-type targets
+   agreed — claiming "5 seconds" for polled hardware is not deliverable.
+2. **Cheap, measurable win now:** EJ pull cadence hourly → every minute. The
+   Zabbix agent is already installed on the boxes, so this is a crontab change
+   with no ATM-side work, and it moves transaction visibility from ~60 min to
+   ~1–2 min.
+3. **Cheap, measurable win now:** 5–10s TTL cache for Zabbix reads in the
+   portal, so pages render from cache instead of hammering the API.
+4. **Cash input for NCR (blocks 5.3 forecast).** The WMI collector returns
+   cassette **health**, not **note counts** — physical cash is not available
+   for NCR at all, which is why the vault shows "No data". Realistic source is
+   *book cash* = loads minus withdrawals, labelled as an estimate. Worth
+   building rather than leaving the forecast empty.
+5. Design the push ingest (8.1) when the switch project is ready.
