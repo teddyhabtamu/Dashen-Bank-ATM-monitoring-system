@@ -315,13 +315,29 @@ def _compute_fleet(window_minutes=15):
 @role_required(ROLE_ADMIN)
 def onboard_fleet():
     """Fleet onboarding health. Read-only; computes in the background."""
-    from fleet_store import (DEFAULT_TTL_MINUTES, claim_run, ensure, load_any)
+    from fleet_store import (DEFAULT_TTL_MINUTES, RUN_WINDOW_MINUTES, claim_run,
+                            ensure, load_any, record_failure)
     ttl = int(request.args.get('ttl', DEFAULT_TTL_MINUTES))
     try:
         ensure(_db()())
     except Exception as e:
         logger.warning('fleet cache table unavailable: %s', e)
     cached = load_any(db=_db)
+    # A run that claimed the sweep and then died leaves the marker set with no
+    # rows. Treating that as "still computing" is how this page spun forever:
+    # the error was recorded but the route rendered the spinner regardless.
+    if cached and cached.get('running') and not cached.get('rows') \
+            and cached.get('age_minutes', 0) > RUN_WINDOW_MINUTES:
+        record_failure('The previous fleet sweep did not finish. '
+                       'Recompute, or check the portal logs.', db=_db)
+        cached = load_any(db=_db)
+    if cached and cached.get('failed'):
+        # Show the failure even when there is no data to show.
+        return render_template('fleet.html', cached=cached, computing=False,
+                               counts=cached.get('counts') or {}, rows=[],
+                               ttl=ttl, failed=cached.get('error'),
+                               filter_mode=request.args.get('filter', 'action'),
+                               q=(request.args.get('q') or '').strip())
     if not cached or not cached.get('rows'):
         # Nothing to show yet: claim the sweep (cross-process) and compute.
         if claim_run(db=_db):

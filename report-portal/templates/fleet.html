@@ -34,8 +34,24 @@ td.status{white-space:nowrap}
 </div>
 
 <div class="page-content">
-{% if failed %}
-<div class="card" style="margin-bottom:20px">
+{% if failed and rows %}
+<div class="alert-card error" style="margin-bottom:20px">
+  <i data-lucide="alert-circle" class="alert-icon"></i>
+  <div class="alert-content">
+    <div class="alert-title">Recomputing failed — showing the last known result</div>
+    <div class="alert-message">{{ failed }}</div>
+    <div class="alert-action">
+      <form method="post" action="/admin/onboard/fleet/refresh">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Try again</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% if failed and not rows %}
+<div class="card">
+  <div class="card-body">
   <div class="card-body">
     <div class="alert-card error" style="margin:0">
       <i data-lucide="alert-circle" class="alert-icon"></i>
@@ -45,8 +61,9 @@ td.status{white-space:nowrap}
         <div class="alert-action">
           <form method="post" action="/admin/onboard/fleet/refresh">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-outline"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Try again</button>
+            <button type="submit" class="btn btn-primary"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Recompute now</button>
           </form>
+          <a class="btn btn-outline" href="/admin/onboard">Back to the wizard</a>
         </div>
       </div>
     </div>
