@@ -44,6 +44,17 @@ STATE_WORDS = (b'on-line', b'online', b'off-line', b'offline', b'sst', b'heartbe
 AMOUNT_RE = re.compile(rb'(?<![\d.])(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+\.\d{2})(?![\d])')
 LONG_DIGITS_RE = re.compile(rb'\d{6,}')
 
+# A new NDC record starts ONLY at a full marker carrying a date. This mirrors
+# filebeat.yml's multiline rule exactly (same pattern, same reasoning), so the
+# profiler measures the same units the index is built from.
+#
+# Without this, a single withdrawal spanning four lines is counted as four
+# unknown lines and a transaction share comes out far too low - which is exactly
+# the number we are trying to measure.
+RECORD_START_RE = re.compile(rb'\[020t\s*\*[^*]*\*\d{2}/\d{2}/\d{4}\*')
+# A pipe-delimited line is its own record (the legacy single-line format).
+PIPE_RECORD_RE = re.compile(rb'\|\s*[A-Z0-9_]+\s*\|')
+
 
 def mask(line):
     """Mask digit runs so the output can be shared safely.
@@ -83,6 +94,35 @@ def classify(line):
     return 'other'
 
 
+def group_records(raw_lines):
+    """Group raw lines into EJ records.
+
+    A line starting a full NDC marker begins a new record; every other line
+    belongs to the record above it. A pipe-delimited line stands alone.
+    Preamble before the first marker is kept as its own record, because boot
+    banners and firmware lines legitimately appear before any marker.
+    """
+    records, current = [], []
+    for raw in raw_lines:
+        line = raw.strip()
+        if not line:
+            continue
+        if RECORD_START_RE.search(line):
+            if current:
+                records.append(current)
+            current = [line]
+        elif PIPE_RECORD_RE.search(line):
+            if current:
+                records.append(current)
+            records.append([line])
+            current = []
+        else:
+            current.append(line)
+    if current:
+        records.append(current)
+    return records
+
+
 def profile(path, min_count=1):
     shapes = collections.Counter()
     classes = collections.Counter()
@@ -110,13 +150,27 @@ def profile(path, min_count=1):
             for m in AMOUNT_RE.finditer(line):
                 amounts[m.group(1).decode('ascii', 'replace')] += 1
 
+    # Record-level view: the number that actually answers "can a parser see
+    # transactions?", because a transaction can span many lines.
+    rec_classes = collections.Counter()
+    n_records = 0
+    with open(path, 'rb') as fh:
+        raw = fh.readlines()
+    for rec in group_records(raw):
+        n_records += 1
+        rec_classes[classify(b' '.join(rec))] += 1
+
     total = sum(classes.values()) or 1
     kept = [(s, c) for s, c in shapes.most_common() if c >= min_count]
     return {
         'file': os.path.basename(path),
         'path': path,
         'lines': n_lines,
+        'records': n_records,
         'bytes': n_bytes,
+        'record_classes': {k: {'count': v,
+                               'pct': round(100.0 * v / n_records, 1) if n_records else 0.0}
+                           for k, v in rec_classes.items()},
         'classes': {k: {'count': v, 'pct': round(100.0 * v / total, 1)}
                     for k, v in classes.items()},
         'shapes': [{'shape': s.decode('utf-8', 'replace'), 'count': c,
@@ -146,9 +200,15 @@ def main():
         return 1
 
     reports = []
+    rgrand = collections.Counter()
+    rgrand_total = 0
     for p in paths:
         try:
-            reports.append(profile(p, args.min_count))
+            rep = profile(p, args.min_count)
+            reports.append(rep)
+            for k, v in rep['record_classes'].items():
+                rgrand[k] += v['count']
+            rgrand_total += rep['records']
         except Exception as e:
             print('skip %s: %s' % (p, e), file=sys.stderr)
 
@@ -177,9 +237,16 @@ def main():
             print('    ... and %d more shape(s)' % (len(r['shapes']) - 12))
     total = sum(grand.values()) or 1
     print('=' * 78)
-    print('OVERALL: %s' % ', '.join('%s %.1f%%' % (k, 100.0 * v / total)
-                                    for k, v in sorted(grand.items())))
-    print('The txn-ish share is the ceiling on what a parser could ever extract.')
+    print('LINE level  : %s' % ', '.join('%s %.1f%%' % (k, 100.0 * v / total)
+                                         for k, v in sorted(grand.items())))
+    gtot = sum(rgrand.values()) or 1
+    print('RECORD level: %s' % ', '.join('%s %.1f%%' % (k, 100.0 * v / gtot)
+                                         for k, v in sorted(rgrand.items())))
+    print()
+    print('  %d records from %d lines. A transaction often spans several lines,'
+          % (rgrand_total, sum(r['lines'] for r in reports)))
+    print('  so RECORD level is the honest figure; LINE level is a lower bound.')
+    print('  The txn-ish share is the ceiling on what any parser could extract.')
     return 0
 
 

@@ -68,9 +68,8 @@ def test_shape_collapse_groups_similar_lines(tmp_path):
     body = b''.join(b'[020t*%03d*10/14/2026*19:20:%02d*ISO8583 WITHDRAWAL AMT=%d.00\n'
                     % (i, i % 60, 100 + i) for i in range(20))
     out = run(tmp_path, body, '--min-count', '2')
-    assert 'OVERALL' in out
-    txn = out.split('OVERALL')[1]
-    assert 'txn-ish' in txn
+    assert 'LINE level' in out and 'RECORD level' in out
+    assert 'txn-ish' in out.split('LINE level')[1].split('RECORD level')[0]
 
 
 def test_json_output_is_machine_readable(tmp_path):
@@ -83,7 +82,8 @@ def test_json_output_is_machine_readable(tmp_path):
 
 def test_empty_input_is_reported_not_crashed(tmp_path):
     out = run(tmp_path, b'\n\n\n')
-    assert 'OVERALL' in out
+    assert 'LINE level' in out and 'RECORD level' in out
+    assert 'Traceback' not in out
 
 
 def test_missing_file_exits_with_guidance(tmp_path):
@@ -120,3 +120,52 @@ def test_profiler_finds_journals_relative_to_the_repo():
     # No journals on a dev box is a clean exit with guidance, not a crash.
     assert out.returncode in (0, 1)
     assert 'Traceback' not in out.stderr
+
+
+def test_records_are_grouped_like_filebeat_does(tmp_path):
+    """A transaction spanning four lines is one record, not four unknown lines.
+
+    The rule must match filebeat.yml's multiline pattern, because the index is
+    built from records and a line-level share would understate transactions.
+    """
+    body = (b'POWER-UP/RESET\n'
+            b'SST ON-LINE\n'
+            b'[020t*709*10/14/2026*10:59*ISO8583 DEBIT WITHDRAWAL AMT=2000.00\n'
+            b' *711*10/14/2026*11:00*AC\n'
+            b' *712*10/14/2026*15:06*ATE: NO ARPC\n'
+            b'[020t*713*10/14/2026*16:30*ISO8583 BALANCE INQUIRY\n')
+    import json
+    data = json.loads(run(tmp_path, body, '--json'))
+    rec = data[0]['records']
+    recs = data[0]['record_classes']
+    assert rec == 3, f'expected 3 records (preamble + 2 NDC), got {rec}'
+    # The two multi-line withdrawals count as transactions, not as noise.
+    assert recs['txn-ish']['count'] == 2
+    # And the line-level view is visibly lower, which is why it is a lower bound.
+    assert recs['txn-ish']['pct'] > data[0]['classes']['txn-ish']['pct']
+
+
+def test_partial_marker_is_not_a_new_record(tmp_path):
+    """[020t CARD ... carries no date and must glue onto the running record."""
+    body = (b'[020t*900*10/14/2026*19:00*ISO8583 WITHDRAWAL AMT=500.00\n'
+            b'[020t CARD INSERTED\n'
+            b' *901*10/14/2026*19:01*CC\n')
+    import json
+    data = json.loads(run(tmp_path, body, '--json'))
+    assert data[0]['records'] == 1, 'a dateless marker must not split the record'
+
+
+def test_pipe_delimited_line_is_its_own_record(tmp_path):
+    import json
+    body = (b'SST ON-LINE\n'
+            b'2026-10-14 19:00:00 | ATM-TEST-NCR | TID-TEST | TXN | WITHDRAWAL | SEQ=7\n'
+            b'SST OFF-LINE\n')
+    data = json.loads(run(tmp_path, body, '--json'))
+    assert data[0]['records'] == 3
+
+
+def test_record_and_line_levels_are_both_reported(tmp_path):
+    out = run(tmp_path, b'SST ON-LINE\nISO8583 WITHDRAWAL AMT=100.00\n')
+    assert 'LINE level' in out
+    assert 'RECORD level' in out
+    assert 'lower bound' in out
