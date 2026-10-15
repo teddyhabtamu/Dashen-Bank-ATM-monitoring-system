@@ -20,6 +20,8 @@ from onboard_rules import VENDORS, DISTRICTS, PROBE_PORT, validate_facts
 
 logger = logging.getLogger(__name__)
 
+bp = Blueprint('onboarding', __name__, url_prefix='/admin')
+
 
 def _tcp_probe(ip, port, timeout=3):
     """True if TCP connects, False otherwise. Read-only network probe."""
