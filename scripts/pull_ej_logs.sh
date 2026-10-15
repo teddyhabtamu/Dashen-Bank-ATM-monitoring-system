@@ -83,6 +83,13 @@ pull_one() {
   # never re-fetched the one that was growing.
   local live
   live="$(ls -t "$OUTDIR"/*_"$tag"_EJDATA.log 2>/dev/null | head -1)"
+  if [ -z "$live" ]; then
+    # Defensive: if we hold files but cannot pick the newest (odd tag, glob
+    # quirk), fall back to probing today. Otherwise every existing file would be
+    # classed "closed" and the growing journal would go unrefreshed - silent
+    # staleness that looks exactly like a healthy run.
+    live="$OUTDIR/$(date -u +%F 2>/dev/null || date -u +%F)_${tag}_EJDATA.log"
+  fi
   for i in $(seq 0 $((DAYS - 1))); do
     day="$(date -u -d "$i days ago" +%F 2>/dev/null || date -u -v-"$i"d +%F)"
     f="${day}_${tag}_EJDATA.log"
