@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Onboard ATM (Preview) — ATM Monitoring{% endblock %}
+{% block body %}
+<div class="page-content">
+  <div class="card" style="max-width:860px">
+    <div class="card-header"><h2>Onboard a new ATM <span style="font-size:11px;color:#B45309;background:#FFFBEB;border-radius:8px;padding:2px 8px;margin-left:8px">PREVIEW — checks only, provisions nothing</span></h2></div>
+    <div class="card-body">
+      <form method="post" action="/admin/onboard">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% macro fld(name, label, ph='') %}
+        <div style="margin-bottom:12px">
+          <label style="display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px">{{ label }}{% if name in ['atm_id','branch','district','city','terminal_id','ip_address'] %} *{% endif %}</label>
+          <input name="{{ name }}" value="{{ values.get(name,'')|e }}" placeholder="{{ ph }}" style="width:100%;max-width:420px;padding:8px 10px;border:1px solid {% if errors.get(name) %}#DC2626{% else %}#E2E8F0{% endif %};border-radius:8px;font-size:13px">
+          {% if errors.get(name) %}<div style="color:#DC2626;font-size:12px;margin-top:4px">{{ errors.get(name) }}</div>{% endif %}
+        </div>
+        {% endmacro %}
+        {{ fld('atm_id', 'ATM ID', 'ATM-0107') }}
+        {{ fld('atm_name', 'ATM name (optional)', '4 Kilo Branch ATM 3') }}
+        {{ fld('branch', 'Branch', '4 Kilo Building BRANCH') }}
+        <div style="margin-bottom:12px">
+          <label style="display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px">District *</label>
+          <select name="district" style="max-width:420px;width:100%;padding:8px 10px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px">
+            <option value="">— choose —</option>
+            {% for d in districts %}<option value="{{ d }}" {% if values.get('district')==d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+          </select>
+          {% if errors.get('district') %}<div style="color:#DC2626;font-size:12px;margin-top:4px">{{ errors.get('district') }}</div>{% endif %}
+        </div>
+        {{ fld('city', 'City', 'Addis Ababa') }}
+        {{ fld('region', 'Region', 'Addis Ababa') }}
+        {{ fld('latitude', 'Latitude', '9.0050') }}
+        {{ fld('longitude', 'Longitude', '38.7896') }}
+        {{ fld('terminal_id', 'Terminal ID (must match switch records)', 'TID-UAT-107') }}
+        <div style="margin-bottom:12px">
+          <label style="display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px">Vendor *</label>
+          <select name="vendor" id="vendorSel" style="max-width:420px;width:100%;padding:8px 10px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px">
+            <option value="">— choose —</option>
+            {% for v in vendors %}<option value="{{ v }}" {% if values.get('vendor')==v %}selected{% endif %}>{{ v }}</option>{% endfor %}
+          </select>
+          {% if errors.get('vendor') %}<div style="color:#DC2626;font-size:12px;margin-top:4px">{{ errors.get('vendor') }}</div>{% endif %}
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px">Model * (unknown models stop here and go to engineer review)</label>
+          <select name="model" id="modelSel" style="max-width:420px;width:100%;padding:8px 10px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px"></select>
+          {% if errors.get('model') %}<div style="color:#DC2626;font-size:12px;margin-top:4px">{{ errors.get('model') }}</div>{% endif %}
+        </div>
+        {{ fld('ip_address', 'IP address', '172.23.0.101') }}
+        <button type="submit" style="background:#012169;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:13px;font-weight:600;cursor:pointer">Run pre-flight checks</button>
+      </form>
+      {% if checks %}
+      <div style="margin-top:22px;border-top:1px solid #E2E8F0;padding-top:16px">
+        <h3 style="font-size:14px;color:#012169;margin-bottom:10px">Pre-flight results (nothing was created)</h3>
+        {% for label, ok, detail, fixer in checks %}
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border-radius:8px;margin-bottom:8px;background:{% if ok is true %}#F0FDF4{% elif ok is false %}#FEF2F2{% else %}#F8FAFC{% endif %}">
+          <span style="font-size:15px">{% if ok is true %}✅{% elif ok is false %}❌{% else %}➖{% endif %}</span>
+          <div>
+            <div style="font-weight:700;font-size:13px">{{ label }}</div>
+            <div style="font-size:12px;color:#475569">{{ detail }}</div>
+            {% if fixer and fixer != '—' %}<div style="font-size:12px;color:#012169">→ {{ fixer }}</div>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+<script>
+var MODELS = {{ vendors|tojson }};
+var vsel = document.getElementById('vendorSel'), msel = document.getElementById('modelSel');
+var cur = {{ values.get('model','')|tojson }};
+function fillModels(){ var v = vsel.value; msel.innerHTML = '<option value="">— choose —</option>'; (MODELS[v]||[]).forEach(function(m){ var o=document.createElement('option'); o.value=m; o.textContent=m; if(m===cur) o.selected=true; msel.appendChild(o); }); }
+vsel.addEventListener('change', function(){ cur=''; fillModels(); });
+fillModels();
+</script>
+{% endblock %}
