@@ -508,8 +508,8 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
 </div>
 
 <div class="main-content">
-{% if sim_banner %}
-<div style="background:#FFFBEB;border-bottom:1px solid #FDD79A;color:#92400E;font-size:12px;font-weight:600;padding:8px 36px">SIMULATED TRANSACTIONS — synthetic feed until switch integration. Hardware states are live.</div>
+{% if txn_note %}
+<div style="background:{% if txn_level == 'demo' %}#FEF2F2;border-bottom:2px solid #DC2626;color:#991B1B{% else %}#FFFBEB;border-bottom:1px solid #FDD79A;color:#92400E{% endif %};font-size:12px;font-weight:600;padding:8px 36px">{{ txn_note }}</div>
 {% endif %}
 {% if error %}
 <div class="page-content">

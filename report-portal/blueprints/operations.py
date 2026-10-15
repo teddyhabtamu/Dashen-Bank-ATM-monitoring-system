@@ -167,13 +167,13 @@ def _collect():
     # EAT day boundary: CURRENT_DATE is DB (UTC) midnight = 03:00 EAT, which
     # misattributes the 00:00–03:00 window. EAT midnight as a UTC instant is
     # what "today" means everywhere else in the UI.
-    cash = _one("""SELECT COALESCE(SUM(amount), 0) FROM atm_transactions
+    cash = _one("""SELECT COALESCE(SUM(amount), 0) FROM atm_transactions_visible
                    WHERE status = 'APPROVED' AND txn_type = 'WITHDRAWAL'
                    AND recorded_at >= date_trunc('day', NOW() AT TIME ZONE 'Africa/Addis_Ababa') AT TIME ZONE 'Africa/Addis_Ababa'""")
     cash_today = float(cash[0]) if cash and cash[0] is not None else 0.0
 
     rate = _one("""SELECT ROUND(100.0 * SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END)
-                   / NULLIF(COUNT(*), 0), 2) FROM atm_transactions
+                   / NULLIF(COUNT(*), 0), 2) FROM atm_transactions_visible
                    WHERE recorded_at >= NOW() - INTERVAL '1 hour'""")
     success_rate = float(rate[0]) if rate and rate[0] is not None else None
 
@@ -201,7 +201,7 @@ def _collect():
                           / NULLIF(COUNT(*), 0), 1) AS success_rate,
                         SUM(CASE WHEN status = 'APPROVED' AND txn_type = 'WITHDRAWAL'
                           THEN amount ELSE 0 END) AS cash_dispensed
-                      FROM atm_transactions
+                      FROM atm_transactions_visible
                       WHERE recorded_at >= NOW() - INTERVAL '1 hour'
                       GROUP BY atm_id) t ON t.atm_id = l.atm_id
                     LEFT JOIN atm_current_state s ON s.atm_id = l.atm_id
@@ -209,13 +209,13 @@ def _collect():
 
     # ── Live feed + 24h summary ──
     feed = _all("""SELECT recorded_at, atm_id, branch, txn_type, card_masked,
-                          amount, status FROM atm_transactions
+                          amount, status FROM atm_transactions_visible
                    ORDER BY recorded_at DESC LIMIT 50""")
     summary = _all("""SELECT atm_id, COUNT(*) AS total,
                         SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) AS approved,
                         SUM(CASE WHEN status = 'DECLINED' THEN 1 ELSE 0 END) AS declined,
                         SUM(CASE WHEN status = 'ERROR' THEN 1 ELSE 0 END) AS errors
-                      FROM atm_transactions
+                      FROM atm_transactions_visible
                       WHERE recorded_at >= NOW() - INTERVAL '24 hours'
                       GROUP BY atm_id ORDER BY atm_id""")
 
@@ -227,7 +227,7 @@ def _collect():
     hourly = _all("""SELECT date_trunc('hour', recorded_at AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa') AS h,
                         SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) AS approved,
                         SUM(CASE WHEN status != 'APPROVED' THEN 1 ELSE 0 END) AS failed
-                     FROM atm_transactions
+                     FROM atm_transactions_visible
                      WHERE recorded_at >= NOW() - INTERVAL '12 hours'
                      GROUP BY 1 ORDER BY 1""")
     chart = {

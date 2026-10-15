@@ -579,7 +579,7 @@ def atm_detail(atm_id):
                         / NULLIF(COUNT(*), 0), 1),
                     COALESCE(SUM(CASE WHEN status='APPROVED' AND txn_type='WITHDRAWAL'
                         THEN amount ELSE 0 END), 0)
-                FROM atm_transactions
+                FROM atm_transactions_visible
                 WHERE atm_id = %s AND recorded_at >= NOW() - INTERVAL '24 hours'
             """, (atm_id,))
             q = cur.fetchone()
@@ -587,7 +587,7 @@ def atm_detail(atm_id):
             success_rate = float(q[1] or 0)
             cash_today = float(q[2] or 0)
             cur.execute("""
-                SELECT COUNT(*) FROM atm_transactions
+                SELECT COUNT(*) FROM atm_transactions_visible
                 WHERE atm_id = %s AND status = 'ERROR'
                 AND recorded_at >= NOW() - INTERVAL '24 hours'
             """, (atm_id,))
@@ -597,7 +597,7 @@ def atm_detail(atm_id):
                     TO_CHAR(t.recorded_at AT TIME ZONE 'Africa/Addis_Ababa', 'HH24:MI:SS'),
                     t.txn_type, t.card_masked, t.amount, t.status, t.auth_code,
                     COALESCE(f.display_name, t.error_code) AS error_label
-                FROM atm_transactions t
+                FROM atm_transactions_visible t
                 LEFT JOIN atm_locations l ON t.atm_id = l.atm_id
                 LEFT JOIN fault_type_map f ON t.error_code = f.raw_fault_code AND f.vendor = l.vendor
                 WHERE t.atm_id = %s
@@ -871,7 +871,7 @@ def _archive_atm(cur, atm_id, deleted_by):
         cash = [dict(zip(cash_cols, r)) for r in cur.fetchall()]
         counts = {}
         cur.execute("SAVEPOINT _arch")
-        for key, tbl in (('txn', 'atm_transactions'), ('anom', 'atm_anomalies'),
+        for key, tbl in (('txn', 'atm_transactions_visible'), ('anom', 'atm_anomalies'),
                          ('hist', 'atm_state_history')):
             try:
                 cur.execute(f"SELECT COUNT(*) FROM {tbl} WHERE atm_id = %s", (atm_id,))

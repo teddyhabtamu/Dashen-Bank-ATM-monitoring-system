@@ -18,7 +18,7 @@ dependency.
 | # | Objective | Status | Evidence |
 |---|---|---|---|
 | 2.1 | High availability, detect issues instantly | MET | Zabbix triggers + GLPI tickets; `verify.py` gate |
-| 2.2 | Real-time transaction monitoring | PARTIAL | Live from EJ journals; **synthetic feed until switch integration** |
+| 2.2 | Real-time transaction monitoring | PARTIAL | Real EJ journals (see 5.2). ~70s end to end, not 5s |
 | 2.3 | Track cash levels, prevent cash-out | PARTIAL | Forecast MET; **physical cash levels are unavailable for NCR** (see 5.3) |
 | 2.4 | Operational + management reports | MET | `ATM Performance`, `Transaction Summary`, cash reports |
 | 2.5 | Improve incident response time | PARTIAL | Incident module + `state_duration_minutes`; resolution-time report partial (6.4) |
@@ -37,7 +37,7 @@ dependency.
 | # | Requirement | Status | Evidence |
 |---|---|---|---|
 | 5.1 | Real-time online/offline, location/branch/district/terminal ID, alerts for low cash, offline, unstable link, device failure | MET | ATM detail page; hardware chips; Zabbix triggers. Onboarding Phases 1–4 make the status trustworthy rather than assumed |
-| 5.2 | Real-time transaction monitoring | PARTIAL | EJ Search + categories; synthetic feed until switch integration |
+| 5.2 | Real-time transaction monitoring | PARTIAL | EJ journals are the transaction source: real, searchable, dispute-grade. **Gap:** field-extraction coverage on real NCR lines is not yet measured, and EJ reports what the terminal *did*, not what the bank authorised |
 | 5.3 | Cassette levels in real time; low/out-of-cash alerts; depletion forecast from withdrawal patterns | PARTIAL | Forecast MET and it refuses to invent a date. **Cash levels GAP:** the WMI collector returns cassette *health*, not note counts, and NCR SNMP OIDs are unmapped, so the vault is empty for real NCR ATMs. Forecast falls back to a labelled book estimate (loads − withdrawals) until a real cash source exists |
 | 5.4 | ATM error monitoring | MET | WMI parts/devices, 35+14 per NCR host, triggers → GLPI |
 | 5.5 | Alerts via email, SMS, dashboard; triggers for offline / cash out / hardware error / suspicious pattern | PARTIAL | Dashboard alerts MET; Email + Africa's Talking SMS media types exist as **templates with placeholders** — not proven end to end |
@@ -89,7 +89,14 @@ dependency.
 
 1. **5.5 / 8.4 alert channels** — email and SMS are templates. "Shall send"
    is unproven until one test alert lands through each.
-2. **8.1 switch integration** — blocked externally; the synthetic feed must not
+2. **8.1 switch integration** — deferred by decision. Transaction monitoring
+   moves to the EJ journals instead (they are the system of record for what the
+   terminal did, which is what dispute and cash work needs). The ISO 8583
+   gateway in `camel/` is kept and remains the path for 5.4 reconciliation and
+   for true 5s latency. Simulator data is now **quarantined in the database**:
+   every transaction read goes through `atm_transactions_visible`, which only
+   exposes sources an operator has marked trusted (`txn_source_policy`), and
+   `tests/test_txn_sources.py` fails if any query bypasses it. The switch feed must not
    become permanent without a decision.
 3. **7.3 credential escrow** — SNMP community is still typed by hand.
 4. **2.6 fraud rules** — anomaly detection exists but "suspicious transaction

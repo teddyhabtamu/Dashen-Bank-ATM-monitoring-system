@@ -99,7 +99,7 @@ def _collect():
         ROUND(100.0 * SUM(CASE WHEN t.status = 'APPROVED' THEN 1 ELSE 0 END) / COUNT(*), 1) AS success,
         COALESCE(SUM(CASE WHEN t.status = 'APPROVED' AND t.txn_type = 'WITHDRAWAL'
           THEN t.amount ELSE 0 END), 0) AS cash
-      FROM atm_transactions t
+      FROM atm_transactions_visible t
       JOIN atm_locations l ON t.atm_id = l.atm_id
       WHERE t.recorded_at >= NOW() - INTERVAL '7 days'
       GROUP BY t.atm_id, t.branch ORDER BY total DESC""")
@@ -107,7 +107,7 @@ def _collect():
     errors = _all("""SELECT COALESCE(f.display_name, t.error_code, 'Unknown') AS label,
         COUNT(*) AS cnt,
         ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS pct
-      FROM atm_transactions t
+      FROM atm_transactions_visible t
       LEFT JOIN atm_locations l ON t.atm_id = l.atm_id
       LEFT JOIN fault_type_map f ON t.error_code = f.raw_fault_code AND f.vendor = l.vendor
       WHERE t.status = 'ERROR' AND t.error_code IS NOT NULL
@@ -117,7 +117,7 @@ def _collect():
 
     peak = _all("""SELECT EXTRACT(HOUR FROM recorded_at AT TIME ZONE 'Africa/Addis_Ababa')::int AS h,
         TO_CHAR(recorded_at AT TIME ZONE 'Africa/Addis_Ababa', 'Dy') AS day, COUNT(*) AS cnt
-      FROM atm_transactions
+      FROM atm_transactions_visible
       WHERE recorded_at >= NOW() - INTERVAL '7 days'
       GROUP BY 1, 2""")
     days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -130,7 +130,7 @@ def _collect():
 
     faults = _all("""SELECT l.atm_name AS name, l.branch AS branch, l.atm_id AS atm,
         COALESCE(f.display_name, t.error_code) AS fault, COUNT(*) AS cnt
-      FROM atm_transactions t
+      FROM atm_transactions_visible t
       JOIN atm_locations l ON t.atm_id = l.atm_id
       LEFT JOIN fault_type_map f ON t.error_code = f.raw_fault_code AND f.vendor = l.vendor
       WHERE t.status = 'ERROR' AND t.recorded_at >= NOW() - INTERVAL '7 days'

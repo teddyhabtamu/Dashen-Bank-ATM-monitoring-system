@@ -96,31 +96,4 @@ def get_db():
     return conn
 
 
-_sim_cache = {'at': 0.0, 'active': False}
 
-
-def sim_feed_active(ttl=300):
-    """True if simulator-labeled transactions arrived in the last hour.
-
-    Drives the SIMULATED-DATA banner (proven 2026-10-12: 4,289 ISO8583_SIM
-    rows/day rendered as live KPIs with no label). TTL-cached so every page
-    costs no query; fail-closed (False) so a DB hiccup never crashes pages.
-    Vanishes on its own at switch integration when real sources take over.
-    """
-    now = time.time()
-    if now - _sim_cache['at'] < ttl:
-        return _sim_cache['active']
-    active = False
-    try:
-        with get_db() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT 1 FROM atm_transactions "
-                "WHERE recorded_at > NOW() - INTERVAL '1 hour' "
-                "AND source IN ('SIMULATOR','ISO8583_SIM') LIMIT 1")
-            active = cur.fetchone() is not None
-            cur.close()
-    except Exception as e:
-        logger.warning('sim_feed_active check failed: %s', e)
-    _sim_cache.update(at=now, active=active)
-    return active

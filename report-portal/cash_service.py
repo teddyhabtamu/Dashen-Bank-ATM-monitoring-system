@@ -5,7 +5,7 @@ probe and Flask-shaped decision here, where it can be read once.
 
 Sources:
   cassette levels  Zabbix latest data (the only live source of notes in a cassette)
-  withdrawals      atm_transactions - successful cash movements only
+  withdrawals      atm_transactions_visible - successful cash movements only
   loads            cash_replenishments - the CIT visits that refilled it
 
 If a source cannot be read the forecast says so. A cash team acting on a
@@ -73,7 +73,7 @@ def _withdrawals(atm_id, window_days):
         with _db()() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT recorded_at, amount, status FROM atm_transactions "
+                "SELECT recorded_at, amount, status FROM atm_transactions_visible "
                 "WHERE atm_id = %s AND recorded_at >= NOW() - (%s || ' days')::interval "
                 "ORDER BY recorded_at",
                 (atm_id, str(int(window_days))))
