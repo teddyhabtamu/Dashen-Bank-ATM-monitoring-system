@@ -1,170 +1,163 @@
-# Real ATM Onboarding Checklist
+# Onboarding a New ATM — Complete Step-by-Step Guide
+(plain language;ity tick every box in order)
 
-> Short, repeatable checklist for connecting one new real ATM to the
-> monitoring system. This assumes the production server is already
-> deployed and at least one real ATM has been onboarded before (i.e.
-> the SNMP template, ISO 8583 gateway, and EJ pipeline already exist).
->
-> For the full explanation behind each step — including how to
-> discover SNMP OIDs, handle different EJ formats, and configure
-> auto-discovery for the first time — see the **Production Migration
-> Guide** (Sections 3–7). This document is the short version for
-> repeat use.
-
----
-
-## Before You Start — Information Needed
-
-Get this from the ATM Hardware Team / Branch Network before beginning:
-
-- [ ] ATM ID (e.g. `ATM-006`)
-- [ ] Branch name, district, city, region
-- [ ] GPS coordinates (latitude, longitude)
-- [ ] IP address on the ATM network
-- [ ] Terminal ID (matches ATM switch records)
-- [ ] Vendor and model (e.g. NCR SelfServ 84)
-- [ ] SNMP community string (or v3 credentials)
-- [ ] Confirmation the ATM is powered on, networked, and processing transactions
+> This is the repeat-use checklist for connecting ONE new real ATM.
+> Two vendor paths exist because the machines talk differently:
+> **NCR = Zabbix agent + WMI collector** (proven live), **GRG = SNMP**
+> (needs its firewall rule first). Everything below was proven on the
+> 4 Kilo test ATMs — follow it exactly and the new box behaves the same.
+> Words used here: *UAT-01* = our monitoring server, *ATM* = the cash
+> machine, *Zabbix* = the monitoring dashboard, *portal* = the bank's
+> ATM web pages, *GLPI* = the ticket system.
 
 ---
 
-## Path A — If Zabbix Auto-Discovery Is Already Configured
+## Before You Start — collect these (ask the ATM/hardware team)
 
-If the discovery rule and auto-registration action exist (see
-Production Migration Guide Section 7), most of this happens
-automatically:
-
-- [ ] Confirm the ATM responds to the discovery rule's SNMP check —
-      wait up to one scan cycle (default: 1 hour)
-- [ ] Check **Configuration → Hosts** — the new ATM should appear
-      automatically with the SNMP template linked
-- [ ] If it hasn't appeared after one scan cycle, manually trigger a
-      check: **Configuration → Discovery → [rule name] → Execute now**
-      (or troubleshoot per `docs/troubleshooting.md`)
-- [ ] Once it appears, rename the host to match your naming
-      convention if auto-discovery only assigned an IP-based name
-- [ ] Continue to **"Common Steps for Both Paths"** below
+- [ ] ATM ID (example: `ATM-0107`) — short, unique, never reused
+- [ ] ATM name, branch, district **code** (example: `Kirkos` today;
+      fleet uses zone codes like NAD/SAD — confirm which list applies),
+      city, region
+- [ ] GPS coordinates (latitude, longitude) — for the map
+- [ ] IP address of the ATM on the bank network
+- [ ] Terminal ID / TID (must match the switch records exactly)
+- [ ] Vendor and model (example: NCR SelfServ 34, GRG AD2600)
+- [ ] For GRG only: SNMP community string (or v3 user/passwords)
+- [ ] For NCR only: RDP access + the branch custodian present
+- [ ] Confirm the machine is powered on, networked, and serving customers
 
 ---
 
-## Path B — Manual Host Creation (No Auto-Discovery Yet)
+## Step 0 — Network permission (do FIRST, takes the longest)
 
-- [ ] **Configuration → Hosts → Create host**
-- [ ] Host name: `ATM-0XX | <Vendor> | <Branch Name>`
-- [ ] Host group: `Dashen Bank ATMs`
-- [ ] Interfaces → Add → Type: `SNMP`, Port: `161`
-- [ ] Set SNMP version and community string (or v3 credentials)
-- [ ] Templates → Link template: `Dashen Bank ATM Hardware — SNMP (Real)`
-- [ ] Click **Add**
-- [ ] **Monitoring → Latest data** → filter by the new host → confirm
-      values are populating within one polling interval
-- [ ] If items show "Not supported" — check firewall (UDP 161) and
-      community string; see `docs/troubleshooting.md`
+Nothing below works without packets. Ask the network team for the
+forwarding rules to the new ATM's IP (same treatment the test ATMs got):
+
+- [ ] **NCR needs:** TCP 10050 (monitoring) and TCP 3389 (remote desktop).
+      TCP 445 later, only when journal collection starts for this box.
+- [ ] **GRG needs:** UDP 161 (monitoring). Nothing else yet.
+- [ ] Confirm each rule with the matching check in Step 3/4 — a "done"
+      email is not proof; a live value is.
 
 ---
 
-## Common Steps for Both Paths
+## Step 1 — Write the ATM into the inventory (UAT-01)
 
-### 1. ATM Location Data
+The database row drives everything downstream (monitoring hosts,
+portal pages, maps, reports). Preferred method — the portal form:
 
-- [ ] **Preferred:** fill in the form at `/admin/atm` in the Report
-      Portal (or bulk-import a CSV — see `sample_atm_import.csv`). The
-      **Name** field is optional and defaults to the branch if left
-      blank; **Vendor** is a dropdown (NCR / GRG, plus any existing
-      vendors) with a "+ Add new vendor…" option. The form also captures
-      **IP Address**, **SNMP Community / Version**, and **EJ Format** —
-      no manual SQL patch needed. A free `sim_port`
-      is assigned automatically so the simulator picks the ATM up
-      without a manual restart. When editing, blank network fields keep
-      their existing values (they only overwrite when filled).
-- [ ] If inserting manually, always name the columns (the table has
-      grown past the old positional layout):
-  ```bash
-  docker exec zabbix-db psql -U zabbix -d zabbix << 'SQL'
-  INSERT INTO atm_locations
-    (atm_id, atm_name, branch, district, city, region,
-     latitude, longitude, terminal_id, vendor, model,
-     install_date, status,
-     ip_address, snmp_community, snmp_version, ej_log_format)
-  VALUES
-    ('ATM-0XX','<Name (optional)>','<Branch Name>',
-     '<District>','<City>','<Region>',
-     <latitude>,<longitude>,'<Terminal ID>','<Vendor>','<Model>',
-     '<install_date>','active',
-     '<IP>','<community>',2,'<NCR_APTRA|GRG>')
-  ON CONFLICT (atm_id) DO NOTHING;
-  SQL
-  ```
-  > A manual `INSERT` does not assign `sim_port`. Prefer the admin
-  > form/CSV import so port allocation stays automatic.
-- [ ] Confirm the ATM appears correctly positioned on the Grafana
-      geo-map
-- [ ] Confirm it appears in the ATM Fleet Overview table with correct
-      branch/district info
-
-### 2. Electronic Journal (EJ) Logs
-
-- [ ] Confirm the EJ collection method for this ATM (agent on ATM,
-      shared folder, or SFTP push — see Production Migration Guide
-      Section 4)
-- [ ] If using an existing shipping method already configured,
-      confirm new log files for this ATM land in the expected
-      directory automatically
-- [ ] If a new shipping path is needed, add it to `filebeat.yml` and
-      restart Filebeat:
-  ```bash
-  sudo chown root:root filebeat.yml && sudo chmod 644 filebeat.yml
-  docker compose up -d filebeat
-  ```
-- [ ] Search for the ATM's Terminal ID or branch name in OpenSearch Dashboards
-      Discover — confirm entries appear with masked card numbers
-
-### 3. Transactions (ISO 8583)
-
-- [ ] No per-ATM gateway configuration is needed — the
-      `iso8583-gateway` is switch-wide
-- [ ] Confirm transactions for this Terminal ID begin appearing:
-  ```sql
-  SELECT * FROM atm_transactions
-  WHERE terminal_id = '<Terminal ID>'
-  ORDER BY recorded_at DESC LIMIT 10;
-  ```
-- [ ] Spot-check a few transactions (amount, status, timestamp)
-      against the switch's own records if available
-
-### 4. Alerts and Tickets
-
-- [ ] Confirm triggers are active for the new host (inherited from
-      the linked template — no per-host action needed)
-- [ ] Test one alert path end-to-end: simulate or wait for a real
-      threshold breach (e.g. low cash) and confirm:
-  - [ ] Problem appears in **Monitoring → Problems**
-  - [ ] Email notification received
-  - [ ] SMS notification received (if severity is Disaster/High)
-  - [ ] GLPI ticket auto-created with correct ATM/branch details
-
-### 5. Dashboards
-
-- [ ] Open the ATM Operations Centre dashboard in Grafana — confirm
-      the new ATM appears in the Fleet Overview table and geo-map
-- [ ] Open the drill-down dashboard, select the new ATM from the
-      variable dropdown, confirm panels populate
-
-### 6. Reports
-
-- [ ] Generate a Transaction Summary report (any format) from the
-      Report Portal, filtered to include the new ATM — confirm it
-      appears with correct data
+- [ ] Open the portal → **ATM Registration → Add New ATM**, fill every
+      field from the Before-You-Start list, **Vendor** spelled exactly
+      `NCR` or `GRG`, status **active**, Save.
+- [ ] If the form is unreachable, the same row can be added with SQL
+      (ask the team — never invent column names; the table has grown).
+- [ ] Record the row: `SELECT atm_id, vendor, ip_address, district FROM
+      atm_locations WHERE atm_id = '<ATM-ID>';` must show your values.
 
 ---
+
+## Step 2A — NCR boxes only: install the collector (on the ATM)
+
+Do this over RDP with the custodian watching. It only READS — no
+changes to cash, software, or settings.
+
+- [ ] On UAT-01, confirm you have the newest script:
+      `git pull origin uat-prep` (in `/data/atm-monitoring`).
+- [ ] Copy `scripts/atm-wmi-collector.ps1` to the ATM as
+      `C:\monitor\atm-wmi-collector.ps1` (overwrite if present).
+- [ ] On the ATM, open `C:\Program Files\Zabbix Agent\zabbix_agentd.conf`
+      and confirm it contains exactly one line starting with
+      `UserParameter=atm.parts,` pointing at that path. If the Zabbix
+      agent is not installed at all, install it first, then add the
+      config snippet from `config/zabbix/atm-agent-userparams.conf`,
+      then restart the *Zabbix agent service* (services.msc) — nothing else.
+- [ ] Prove the file on disk is the new one (open it, check for the
+      word `device_instance`) — a stale copy is the #1 onboarding
+      failure; this 10-second check prevents an hour of debugging.
+
+## Step 2B — GRG boxes only: SNMP credentials (on UAT-01)
+
+- [ ] No ATM visit needed. Confirm the community string matches what
+      the box expects (ask the GRG/hardware team which community the
+      device serves).
+- [ ] Nothing to install on the box for monitoring phase 1.
+
+---
+
+## Step 3 — Create the monitoring host (UAT-01, one command)
+
+Registering is automatic and safe to repeat (existing hosts are skipped,
+never duplicated):
+
+- [ ] Run, no passwords to type (they come from the server config):
+      `python3 scripts/sync_atms_to_zabbix.py --apply`
+- [ ] Expected last line: `Done: 1 created, N skipped, 0 without IP`
+      (the `1 created` is your box; reruns print `0 created` — healthy).
+- [ ] What it wires for you: NCR gets the SNMP template + the WMI Parts
+      template + both network interfaces; GRG gets its SNMP template.
+      You do not link anything by hand.
+
+## Step 4 — Prove data flows (Zabbix UI + one command)
+
+- [ ] **NCR:** on UAT-01 run
+      `zabbix_get -s <ATM-IP> -k "atm.parts" | python3 -m json.tool > /dev/null && echo JSON-OK`
+      then open Zabbix → Monitoring → Latest data → filter the new host:
+      ~58 rows (35 parts + 14 devices + master) with fresh check times.
+- [ ] **GRG:** open Latest data → filter the new host: 24 SNMP rows
+      filling within 2–3 polls. Empty rows with red marks mean the
+      firewall/community from Step 0/2B is not right yet — fix there,
+      not here.
+- [ ] Open Monitoring → Problems filtered to the host: a brand-new
+      healthy box shows nothing (correct — silence means healthy);
+      any ERROR/UNAVAILABLE row names a real fault — call the custodian,
+      not the monitoring team.
+
+## Step 5 — Journals for disputes (NCR: same day; GRG: when SNMP lands)
+
+- [ ] Add the box to the pull list: open `scripts/pull_ej_logs.sh`,
+      extend the `ATMS=` line with `ATM-ID:IP:HOSTNAME-TAG` (the tag is
+      the middle of the journal filenames — check `E:\EJLogs` on the
+      box first), commit, push. The hourly cron picks it up untouched.
+- [ ] After the next hour, open portal → EJ Search → filter the ATM:
+      journal rows with masked cards must appear. Empty result with a
+      working pull means the box writes no journals (check with custodian).
+
+## Step 6 — Portal, dashboards, reports (click-through)
+
+- [ ] Portal → ATM Registration: the new row shows a live state
+      (IN_SERVICE green, HARDWARE_FAULT red with cause — never grey
+      unless the box is truly silent).
+- [ ] Open its detail page: hardware lights green/amber, parts list
+      faults-first, cassette panel honest about missing counts.
+- [ ] Grafana → ATM Operations Centre: row + map pin for the new box.
+- [ ] Reports → run one Transaction Summary filtered to the ATM.
+
+## Step 7 — Tickets (prove once per vendor, not per box)
+
+- [ ] The Zabbix→GLPI chain is fleet-wide (proven on the test hosts) —
+      no per-box test needed. Exception: a brand-new *vendor/model*
+      gets one supervised fault drill with the custodian to prove its
+      codes page the right people, exactly like the test NCR did.
+
+---
+
+## Troubleshooting (symptom → cause, in order)
+
+- `parts: 33` (or missing new keys) after copying the script → the ATM
+  runs the old file; verify content on disk, re-copy, re-check.
+- `JSON-BAD` / control-character errors → output framing broken in
+  transit; capture `zabbix_get ... > /tmp/x.json` and validate locally.
+- Login rejected by scripts → wait 60s (temporary blocks), never loop
+  the command; credentials come from server config, not typing.
+- All SNMP rows empty on GRG → firewall/community (Step 0/2B), always.
+- Portal shows stale/wrong states → restart `report-portal`, wait 60s,
+  reload; states derive from live values every poll.
 
 ## Sign-Off
 
-- [ ] All sections above completed
-- [ ] ATM ID and onboarding date recorded in the ATM inventory
-      tracking sheet
-- [ ] Any issues encountered during onboarding documented (helps
-      speed up the next one)
+- [ ] All sections above completed (Steps 0–7)
+- [ ] ATM ID and onboarding date recorded in the inventory tracking sheet
+- [ ] Issues encountered documented (helps speed up the next one)
 
 **Date onboarded:** ____________________
 **Onboarded by:** ____________________
@@ -174,9 +167,7 @@ automatically:
 
 ## See Also
 
-- **Production Migration Guide** — full explanation of SNMP OID
-  discovery, EJ format handling, ISO 8583 parser adjustments, and
-  auto-discovery setup (read once, before the first real ATM)
 - `docs/architecture.md` — what each part of the system does
-- `docs/troubleshooting.md` — fixes if any step above doesn't work
-  as expected
+- `docs/troubleshooting.md` — deeper fixes
+- `docs/UAT_Phase0_Runbook.md` — calibrated code tables, root-cause log
+- `docs/vendor-data-requests.md` — pending vendor answers affecting fleet
