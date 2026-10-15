@@ -18,6 +18,14 @@ logger = logging.getLogger(__name__)
 
 TEMPLATE_NCR_NAME = "Dashen Bank ATM Hardware"
 TEMPLATE_GRG_NAME = "Dashen Bank ATM Hardware - GRG"
+# NCR hardware facts come from WMI through the Zabbix agent, not from SNMP:
+# the NCR SNMP OIDs are unmapped simulator-era roots (see admin.build_hardware).
+# So an NCR host needs this template AND an agent interface, or its parts items
+# sit unsupported forever — proven on the pilot host, which needed the agent
+# row added by hand before Latest data flowed. GRG stays SNMP-only.
+TEMPLATE_WMI_NAME = "Dashen Bank ATM WMI Parts"
+AGENT_PORT = "10050"
+SNMP_PORT = "161"
 
 TIMEOUT = int(os.environ.get("ZABBIX_SYNC_TIMEOUT", "8"))
 MAX_BATCH = int(os.environ.get("ZABBIX_SYNC_MAX_BATCH", "200"))
@@ -75,7 +83,7 @@ class _Client:
 
 def _template_ids(z):
     out = {}
-    for name in (TEMPLATE_NCR_NAME, TEMPLATE_GRG_NAME):
+    for name in (TEMPLATE_NCR_NAME, TEMPLATE_GRG_NAME, TEMPLATE_WMI_NAME):
         res = z.call("template.get", {"output": ["templateid"], "filter": {"name": [name]}})
         out[name] = res[0]["templateid"] if res else None
     return out
@@ -102,7 +110,10 @@ def _group_id(z, name, cache, create=True):
 def _host_state(z, host):
     """Current Zabbix state of one host, or None when it does not exist."""
     res = z.call("host.get", {"output": ["hostid", "status", "name"],
-                              "selectInterfaces": ["interfaceid", "ip", "details"],
+                              # type/port/main are needed to tell an SNMP
+                              # interface from an agent one when reconciling.
+                              "selectInterfaces": ["interfaceid", "ip", "dns", "useip",
+                                                   "port", "type", "main", "details"],
                               "selectMacros": ["macro", "value"],
                               "selectParentTemplates": ["templateid"],
                               "selectGroups": ["groupid"],
@@ -118,12 +129,39 @@ def _new_summary():
 def _host_state(z, host):
     """Current Zabbix state of one host, or None when it does not exist."""
     res = z.call("host.get", {"output": ["hostid", "status", "name"],
-                              "selectInterfaces": ["interfaceid", "ip", "details"],
+                              # type/port/main are needed to tell an SNMP
+                              # interface from an agent one when reconciling.
+                              "selectInterfaces": ["interfaceid", "ip", "dns", "useip",
+                                                   "port", "type", "main", "details"],
                               "selectMacros": ["macro", "value"],
                               "selectParentTemplates": ["templateid"],
                               "selectGroups": ["groupid"],
                               "filter": {"host": [host]}})
     return res[0] if res else None
+
+
+def _agent_interface(ip):
+    """Zabbix agent interface. WMI items are agent items: without this they
+    never collect, which is what made the pilot host need a hand-added row."""
+    return {"type": 1, "main": 1, "useip": 1, "ip": ip, "dns": "",
+            "port": AGENT_PORT}
+
+
+def _snmp_interface(ip, community, version):
+    return {"type": 2, "main": 1, "useip": 1, "ip": ip, "dns": "",
+            "port": SNMP_PORT,
+            "details": {"version": version, "bulk": 0, "community": community}}
+
+
+def _templates_for(vendor, tids):
+    """Template ids an ATM of this vendor must be linked to. NCR carries the
+    WMI Parts template too; GRG is SNMP-only."""
+    names = [TEMPLATE_NCR_NAME] if vendor == "NCR" else \
+            [TEMPLATE_GRG_NAME] if vendor == "GRG" else []
+    ids = [tids.get(n) for n in names]
+    if vendor == "NCR" and tids.get(TEMPLATE_WMI_NAME):
+        ids.append(tids.get(TEMPLATE_WMI_NAME))
+    return [i for i in ids if i]
 
 
 def _plan_update(a, cur, tids, groups, create_groups):
@@ -132,6 +170,7 @@ def _plan_update(a, cur, tids, groups, create_groups):
     may have added. Returns (params_or_None, changed_labels)."""
     upd = {"hostid": cur["hostid"]}
     changed = []
+    vendor = (a.get("vendor") or "").strip()
     if str(cur.get("status")) == "1":
         upd["status"] = 0
         changed.append("re-enabled")
@@ -145,29 +184,51 @@ def _plan_update(a, cur, tids, groups, create_groups):
     except (ValueError, TypeError):
         want_version = 2
     ifaces = cur.get("interfaces") or []
-    if ifaces:
-        det = ifaces[0].get("details") or {}
-        if (ifaces[0].get("ip") != (a.get("ip_address") or "").strip()
+    snmp = next((i for i in ifaces if str(i.get("type")) == "2"), None)
+    has_agent = any(str(i.get("type")) == "1" for i in ifaces)
+    if vendor == "NCR" and not has_agent:
+        # Additive: keep every existing interface exactly as it is and append
+        # the agent row, so we never rewrite a field a human tuned by hand.
+        upd["interfaces"] = [{"interfaceid": i["interfaceid"], "type": i.get("type", "2"),
+                              "main": i.get("main", "1"), "useip": i.get("useip", "1"),
+                              "ip": i.get("ip"), "dns": i.get("dns", ""),
+                              "port": i.get("port", SNMP_PORT),
+                              **({"details": i.get("details")} if i.get("details") else {})}
+                             for i in ifaces if i.get("interfaceid")] + \
+                            [_agent_interface((a.get("ip_address") or "").strip())]
+        changed.append("agent interface")
+    if snmp:
+        det = snmp.get("details") or {}
+        if (snmp.get("ip") != (a.get("ip_address") or "").strip()
                 or det.get("community") != want_community
                 or str(det.get("version")) != str(want_version)):
-            upd["interfaces"] = [{
-                "interfaceid": ifaces[0]["interfaceid"],
-                "ip": (a.get("ip_address") or "").strip(),
-                "details": {"version": want_version, "bulk": 0,
-                            "community": want_community}}]
+            if "interfaces" not in upd:   # do not clobber an agent-interface append
+                # Always an array: Zabbix documents interfaces as a list, and
+                # now that agent rows can be appended the two branches would
+                # otherwise disagree on the payload shape.
+                upd["interfaces"] = [{
+                    "interfaceid": snmp["interfaceid"],
+                    "ip": (a.get("ip_address") or "").strip(),
+                    "details": {"version": want_version, "bulk": 0,
+                                "community": want_community}}]
+            else:
+                for i in upd["interfaces"]:
+                    if i.get("interfaceid") == snmp["interfaceid"]:
+                        i["ip"] = (a.get("ip_address") or "").strip()
+                        i["details"] = {"version": want_version, "bulk": 0,
+                                        "community": want_community}
             changed.append("interface/community")
     have_macros = {m.get("macro"): m.get("value") for m in (cur.get("macros") or [])}
-    vendor = (a.get("vendor") or "").strip()
     if have_macros.get("{$ATM_VENDOR}") != vendor:
         upd["macros"] = [{"macro": "{$ATM_VENDOR}", "value": vendor}]
         changed.append("vendor macro")
-    want_tid = (tids.get(TEMPLATE_NCR_NAME) if vendor == "NCR"
-                else tids.get(TEMPLATE_GRG_NAME) if vendor == "GRG" else None)
     have_tids = {t.get("templateid")
                  for t in (cur.get("parentTemplates") or []) if t.get("templateid")}
-    if want_tid and want_tid not in have_tids:
-        upd["templates"] = [{"templateid": want_tid}]
-        changed.append("vendor template")
+    missing_tids = [t for t in _templates_for(vendor, tids) if t not in have_tids]
+    if missing_tids:
+        upd["templates"] = [{"templateid": t} for t in missing_tids]
+        changed.append("vendor template" if len(missing_tids) == 1
+                       else "vendor + WMI templates")
     district = (a.get("district") or "").strip() or "UNKNOWN"
     dgroup = _group_id(_CLIENT[0], f"ATM-{district}", groups, create=create_groups)
     want_groups = {g for g in [groups.get("ATMs"),
@@ -189,9 +250,8 @@ def _create_params(a, tids, groups, create_groups=True):
     host = (a.get("atm_id") or "").strip()
     ip = (a.get("ip_address") or "").strip()
     vendor = (a.get("vendor") or "").strip()
-    want_tid = (tids.get(TEMPLATE_NCR_NAME) if vendor == "NCR"
-                else tids.get(TEMPLATE_GRG_NAME) if vendor == "GRG" else None)
-    if not want_tid:
+    want_tids = _templates_for(vendor, tids)
+    if not want_tids:
         return None, f"skipped: unknown vendor '{vendor}'", []
     district = (a.get("district") or "").strip() or "UNKNOWN"
     pending = []
@@ -206,16 +266,15 @@ def _create_params(a, tids, groups, create_groups=True):
     params = {
         "host": host,
         "name": (a.get("atm_name") or "").strip() or host,
-        "templates": [{"templateid": want_tid}],
+        "templates": [{"templateid": tid} for tid in want_tids],
         "groups": [{"groupid": g} for g in
                    [groups.get("ATMs"),
                     groups.get("ATM-NCR") if vendor == "NCR" else groups.get("ATM-GRG"),
                     dgroup] if g],
-        "interfaces": [{
-            "type": 2, "main": 1, "useip": 1, "ip": ip,
-            "dns": "", "port": "161",
-            "details": {"version": version, "bulk": 0, "community": community},
-        }],
+        # NCR carries an SNMP interface AND an agent interface: the WMI parts
+        # items ride the agent (10050), the legacy SNMP items ride 161.
+        "interfaces": ([_snmp_interface(ip, community, version)]
+                       + ([_agent_interface(ip)] if vendor == "NCR" else [])),
         "macros": [{"macro": "{$ATM_VENDOR}", "value": vendor}],
         "status": 0,
     }
