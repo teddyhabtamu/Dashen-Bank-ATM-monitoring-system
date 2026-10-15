@@ -170,3 +170,100 @@ def test_human_readout_is_sane():
     assert cf._human(0.4) == 'under a day'
     assert cf._human(1.4) == 'about a day'
     assert cf._human(9.6) == 'about 10 days'
+
+
+# ── BRD 5.3 for NCR: physical cash does not exist, the ledger does ───────
+def test_book_cash_is_loads_minus_withdrawals():
+    loads = [{'cassette': 1, 'notes_added': 500000,
+              'recorded_at': '2026-10-10 08:00:00'}]
+    hist = steady_history(n=100, amount=10000, span_days=5)   # 200,000/day -> 1,000,000
+    book = cf.book_cash(loads, hist, NOW)
+    assert book['loaded'] == 500000
+    assert book['withdrawn'] == 1000000
+    assert book['notes'] == 0                      # clamped for arithmetic
+    # ...but the overspend itself is a finding the cash team must see.
+    assert book['negative'] is True
+
+
+def test_book_cash_balanced_is_not_negative():
+    # steady_history() = 200 x 20,000 over 10 days = 400,000/day -> 4,000,000 out.
+    loads = [{'cassette': 1, 'notes_added': 6000000, 'recorded_at': '2026-10-01 08:00:00'}]
+    book = cf.book_cash(loads, steady_history(), NOW)
+    assert book['withdrawn'] == 4000000
+    assert book['notes'] == 2000000
+    assert book['negative'] is False
+
+
+def test_an_overspent_ledger_is_flagged_in_the_forecast():
+    # 400,000/day out, only 100,000 ever loaded -> empty AND the ledger is wrong.
+    loads = [{'cassette': 1, 'notes_added': 100000,
+              'recorded_at': (NOW - timedelta(days=2)).strftime('%Y-%m-%d %H:%M:%S')}]
+    out = cf.forecast([], steady_history(), NOW, loads=loads)
+    assert out['status'] == 'ok', 'an empty machine with a bad ledger is a finding'
+    assert out['runway_days'] == 0.0
+    assert any('loads are missing' in a for a in out['actions'])
+
+
+def test_book_cash_needs_a_ledger():
+    assert cf.book_cash([], steady_history(), NOW)['notes'] is None
+    assert cf.book_cash(None, None, NOW)['notes'] is None
+
+
+def test_forecast_falls_back_to_the_ledger_and_says_so():
+    """NCR exposes cassette health, not notes, so the vault is empty. The
+    forecast must still answer - and must label itself an estimate."""
+    # 400,000/day out. Loaded 3,000,000 in total and 1,000,000 of it inside the
+    # window, so the ledger balance is 3,000,000 - 4,000,000 < 0 -> empty.
+    hist = steady_history(n=200, amount=20000, span_days=10)
+    loads = [{'cassette': 1, 'notes_added': 3000000,
+              'recorded_at': '2026-09-20 08:00:00'},
+             {'cassette': 2, 'notes_added': 1000000,
+              'recorded_at': (NOW - timedelta(days=2)).strftime('%Y-%m-%d %H:%M:%S')}]
+    out = cf.forecast([], hist, NOW, loads=loads)               # no cassette levels
+    assert out['status'] == 'ok'
+    assert out['source'].startswith('book estimate')
+    assert out['total_notes'] == 0
+    assert out['runway_days'] == 0.0, 'an empty ledger balance means zero runway'
+    # This ledger balances exactly to zero, so nothing is missing from it -
+    # the separate overspent test covers that case.
+    assert any('schedule a load now' in a for a in out['actions'])
+    assert not any('loads are missing' in a for a in out['actions'])
+
+
+def test_the_book_estimate_never_counts_the_same_load_twice():
+    """Regression: the book path subtracted lifetime withdrawals and then the
+    existing 'add recent loads' correction added the loads again, so the card
+    could read '0 notes' and '2.5 days runway' at the same time."""
+    hist = steady_history(n=200, amount=20000, span_days=10)      # 400,000/day
+    loads = [{'cassette': 1, 'notes_added': 5000000, 'recorded_at': '2026-09-01 08:00:00'}]
+    out = cf.forecast([], hist, NOW, loads=loads)
+    assert out['total_notes'] == 5000000 - 4000000
+    assert abs(out['runway_days'] - (1000000 / 400000)) < 0.01
+    assert not any('Includes' in a for a in out['actions']), 'no second load credit'
+    assert any('cash ledger' in a for a in out['actions'])
+    assert any('estimate' in a.lower() for a in out['actions'])
+
+
+def test_measured_levels_win_over_the_ledger():
+    loads = [{'cassette': 1, 'notes_added': 9999999,
+              'recorded_at': NOW.strftime('%Y-%m-%d %H:%M:%S'), }]
+    hist = steady_history()
+    out = cf.forecast([{'cassette': 1, 'notes': 4000000}], hist, NOW, loads=loads)
+    assert out['source'] == 'measured cassette levels'
+    assert out['total_notes'] == 4000000
+
+
+def test_no_levels_and_no_ledger_is_unknown_not_a_date():
+    out = cf.forecast([], steady_history(), NOW, loads=None)
+    assert out['status'] == 'unknown'
+    assert out['depletes_at'] is None
+    assert out['source'] == 'none'
+
+
+def test_per_cassette_rows_are_absent_when_the_numbers_are_from_the_ledger():
+    """Splitting an estimate across cassettes would invent a precision the
+    ledger does not have."""
+    loads = [{'cassette': 1, 'notes_added': 500000,
+              'recorded_at': (NOW - timedelta(days=2)).strftime('%Y-%m-%d %H:%M:%S')}]
+    out = cf.forecast([], steady_history(), NOW, loads=loads)
+    assert out['per_cassette'] == []

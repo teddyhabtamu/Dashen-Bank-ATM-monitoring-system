@@ -83,6 +83,45 @@ def _parse(value):
     return None
 
 
+def book_cash(loads, withdrawals, now, window_days=DEFAULT_WINDOW_DAYS):
+    """Cash the machine SHOULD hold, from the CIT record.
+
+    NCR exposes cassette HEALTH through WMI, not note counts, and the legacy
+    SNMP OIDs are unmapped on real hardware - so physical cash is not available
+    for NCR at all. The ledger is what we do have:
+
+        book cash = everything ever loaded - everything ever withdrawn
+
+    This is an ESTIMATE and is returned as such. It is wrong when a load was not
+    logged, when counting drifted, or when cash was moved between cassettes. It
+    is still far better than "no forecast" for deciding whether to schedule a
+    CIT visit, provided the caller says so on screen.
+
+    Returns {'notes', 'loaded', 'withdrawn', 'since', 'basis'}; notes is None
+    when there is no ledger to work from.
+    """
+    loaded = sum(int(l.get('notes_added') or 0) for l in (loads or []))
+    spent = 0.0
+    first = None
+    for t in withdrawals or []:
+        if not _is_withdrawal(t):
+            continue
+        when = _parse(t.get('recorded_at'))
+        if when:
+            first = when if first is None else min(first, when)
+        spent += float(t['amount'])
+    if loaded <= 0:
+        return {'notes': None, 'loaded': 0, 'withdrawn': round(spent, 2),
+                'since': None, 'basis': 'no cash has been logged as loaded'}
+    notes = int(round(loaded - spent))
+    basis = f'{loaded:,} loaded - {spent:,.0f} withdrawn'
+    if first:
+        basis += f' (since {first.strftime("%Y-%m-%d")})'
+    return {'notes': max(notes, 0), 'loaded': loaded, 'withdrawn': round(spent, 2),
+            'since': first.strftime('%Y-%m-%d') if first else None, 'basis': basis,
+            'negative': notes < 0}
+
+
 def forecast(cassettes, withdrawals, now, loads=None, window_days=DEFAULT_WINDOW_DAYS):
     """Runway per cassette and for the ATM as a whole.
 
@@ -108,9 +147,31 @@ def forecast(cassettes, withdrawals, now, loads=None, window_days=DEFAULT_WINDOW
             'total_notes': total_notes, 'runway_days': None, 'depletes_at': None,
             'depletes_in': None, 'per_cassette': [], 'actions': []}
 
+    source = 'measured cassette levels'
     if total_notes <= 0:
-        return dict(base, status='unknown', reason='No cassette levels are being reported.',
-                    per_day=rate['per_day'])
+        # No telemetry: fall back to the ledger, clearly labelled.
+        book = book_cash(loads, withdrawals, now, window_days)
+        if book['notes'] is None:
+            return dict(base, status='unknown', source='none',
+                        reason='No cassette levels are being reported and no cash '
+                               'has been logged as loaded, so there is nothing to '
+                               'forecast from.',
+                        per_day=rate['per_day'])
+        # A ledger that is short (more withdrawn than loaded) is a FINDING, not
+        # missing data: the machine is empty and the ledger is wrong. Reporting
+        # "unknown" there would hide both facts behind one vague word.
+        total_notes = book['notes']
+        source = 'book estimate (loads minus withdrawals)'
+        level_detail = (f"Cassette levels are not collected for this ATM, so this "
+                        f"uses the cash ledger instead: {book['basis']}.")
+        if book.get('negative'):
+            # More cash left the machine than the ledger says was ever loaded.
+            # That is not a forecast problem, it is a missing-load problem, and
+            # a cash team needs to hear it rather than see a tidy zero.
+            level_detail += (' More was withdrawn than the ledger records as '
+                             'loaded, so loads are missing or the ledger is wrong.')
+    else:
+        level_detail = '' 
     if not rate['per_day']:
         return dict(base, status='not_enough_data',
                     reason=f'No successful withdrawals in the last {window_days} days, '
@@ -118,10 +179,15 @@ def forecast(cassettes, withdrawals, now, loads=None, window_days=DEFAULT_WINDOW
                     confidence='none')
 
     # A load inside the window means the cash that burned was topped up: add it
-    # back, otherwise the runway reflects a machine we already emptied.
-    added = sum(int(l.get('notes_added') or 0) for l in (loads or [])
-                if _parse(l.get('recorded_at')) and
-                _parse(l.get('recorded_at')) >= now - timedelta(days=window_days))
+    # back, otherwise a measured balance reflects a machine we already emptied.
+    # This correction applies ONLY to measured levels. The book estimate is
+    # already "loads minus withdrawals" - adding the loads again counted them
+    # twice and produced "0 notes" next to "2.5 days runway".
+    added = 0
+    if not level_detail:
+        added = sum(int(l.get('notes_added') or 0) for l in (loads or [])
+                    if _parse(l.get('recorded_at')) and
+                    _parse(l.get('recorded_at')) >= now - timedelta(days=window_days))
 
     effective = total_notes + added
     runway = effective / rate['per_day']
@@ -129,6 +195,7 @@ def forecast(cassettes, withdrawals, now, loads=None, window_days=DEFAULT_WINDOW
 
     per_cassette = []
     for cassette, notes in sorted(notes_by_cassette.items()):
+        # (empty when the numbers came from the ledger, not from cassettes)
         share = (notes / effective) if effective else 0
         c_runway = runway * share if share else 0.0
         per_cassette.append({'cassette': cassette, 'notes': notes,
@@ -145,13 +212,22 @@ def forecast(cassettes, withdrawals, now, loads=None, window_days=DEFAULT_WINDOW
         actions.append(f'About {runway:.0f} days of cash left at the current rate.')
     if added:
         actions.append(f'Includes {added:,} notes loaded in the last {window_days} days.')
+    if not level_detail and not total_notes:
+        actions.append('The ledger says this ATM is already empty — check it on '
+                       'the next CIT visit.')
     if rate['confidence'] == 'low':
         actions.append(f'Low confidence: only {rate["samples"]} withdrawals — '
                        'treat this as an indication, not a schedule.')
 
-    return dict(base, status='ok', reason='', per_day=rate['per_day'],
+    if level_detail:
+        actions.insert(0, level_detail)
+        if source.startswith('book'):
+            actions.append('This is an estimate from the cash ledger, not a '
+                           'measured level: uncounted loads or drift would move it.')
+    return dict(base, status='ok', reason='', source=source, per_day=rate['per_day'],
                 runway_days=round(runway, 1), depletes_at=depletes_at.isoformat(),
-                depletes_in=_human(runway), per_cassette=per_cassette, actions=actions)
+                depletes_in=_human(runway), per_cassette=per_cassette, actions=actions,
+                total_notes=total_notes)
 
 
 def _human(days):
