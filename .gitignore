@@ -34,3 +34,6 @@ config/backups/
 snmpwalk_output.txt
 snmpwalk_*.txt
 *:Zone.Identifier
+
+# runtime artefacts from the EJ pull (cron log + flock file)
+logs/
