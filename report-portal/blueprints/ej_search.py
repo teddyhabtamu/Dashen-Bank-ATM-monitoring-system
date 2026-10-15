@@ -8,6 +8,7 @@ from flask import Blueprint, render_template, request, Response
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from db import get_db
 from audit import log_action
+from ej_text import humanize_ndc_text
 from datetime import datetime, date, timedelta, timezone
 
 logger = logging.getLogger(__name__)
@@ -357,7 +358,7 @@ def ej_search():
                             'status':      src.get('status', ''),
                             'amount':      src.get('amount', ''),
                             'message':     src.get('message', ''),
-                            'terminal_id': src.get('terminal_id', ''),
+                            'human':       humanize_ndc_text(src.get('message', '')),                            'terminal_id': src.get('terminal_id', ''),
                             'auth_code':   src.get('auth_code', ''),
                             'error_code':  src.get('error_code', ''),
                             'cassette_id': src.get('cassette_id', ''),

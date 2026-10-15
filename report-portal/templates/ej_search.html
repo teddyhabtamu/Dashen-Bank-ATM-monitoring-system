@@ -305,7 +305,7 @@ td { font-variant-numeric: tabular-nums; }
                   <div class="detail-inner">
                     <div class="detail-header"><i data-lucide="terminal"></i> LOG DETAILS</div>
                     <div class="detail-body">
-                      <div class="detail-message">{{ r.message }}</div>
+                      <div class="detail-message">{{ r.human or r.message }}</div>
                       <div class="detail-grid">
                         <div class="detail-field"><div class="detail-field-label">Terminal ID</div><div class="detail-field-value">{{ r.terminal_id or '—' }}</div></div>
                         <div class="detail-field"><div class="detail-field-label">Event Type</div><div class="detail-field-value">{{ r.event_type or '—' }}</div></div>
@@ -348,7 +348,7 @@ td { font-variant-numeric: tabular-nums; }
               <i data-lucide="chevron-right" class="ej-card-chevron" style="width:16px;height:16px;color:#CBD5E1;flex-shrink:0;transition:transform .2s"></i>
             </div>
             <div class="ej-card-detail-wrap">
-              <div class="ej-card-detail-message">{{ r.message }}</div>
+              <div class="ej-card-detail-message">{{ r.human or r.message }}</div>
               <div class="ej-card-detail-grid">
                 <div class="ej-card-detail-field">
                   <div class="ej-card-detail-label">Terminal ID</div>
