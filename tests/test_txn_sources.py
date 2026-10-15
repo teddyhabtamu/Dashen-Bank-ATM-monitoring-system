@@ -293,3 +293,41 @@ def test_justified_entries_still_exist():
     for rel, frag, _ in JUSTIFIED:
         assert frag in (REPO / rel).read_text(), (
             '%s no longer contains %r - drop the stale JUSTIFIED entry' % (rel, frag))
+
+
+def test_cli_bootstrap_works_without_a_file_path():
+    """scripts/ is not in the container and the host has no venv, so the only way
+    to run a DB-dependent script is `docker exec -i report-portal python3 - < file`.
+
+    Under `python3 -` there is no __file__, so a bootstrap that derives the path
+    from __file__ breaks exactly where it is needed.
+    """
+    src = (REPO / 'scripts' / 'set_txn_sources.py').read_text()
+    fn = src[src.index('def _find_portal_dir'):]
+    assert "'__file__' in globals()" in fn, (
+        'must tolerate being run with no __file__ (python3 -)')
+    assert '/app' in fn, 'must know the in-container path'
+    assert 'PORTAL_DIR' in fn, 'must allow an explicit override'
+    assert 'db.py' in fn, 'must verify it found the portal, not just any directory'
+
+
+def test_cli_explains_itself_when_psycopg2_is_unavailable(tmp_path):
+    """Run where the DB driver cannot be imported, the operator must be told to
+    use the container instead of being shown a psycopg2 traceback.
+
+    This is the real UAT situation: the host has no venv, and the container that
+    has psycopg2 has no scripts/.
+    """
+    import subprocess
+    stub = tmp_path / 'stub'
+    stub.mkdir()
+    (stub / 'psycopg2.py').write_text('raise ImportError("psycopg2 blocked for test")\n')
+    env = {'PATH': '/usr/bin:/bin', 'PYTHONPATH': str(stub),
+           'PORTAL_DIR': str(REPO / 'report-portal')}
+    out = subprocess.run([sys.executable, str(REPO / 'scripts' / 'set_txn_sources.py')],
+                         capture_output=True, text=True, env=env, timeout=60)
+    assert out.returncode != 0
+    text = out.stdout + out.stderr
+    assert 'docker exec -i report-portal python3 -' in text, (
+        'must give the working invocation, not just an import error')
+    assert 'Traceback' not in text

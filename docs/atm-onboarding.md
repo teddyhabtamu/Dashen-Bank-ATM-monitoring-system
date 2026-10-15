@@ -186,13 +186,26 @@ To apply a migration by hand instead (e.g. during a maintenance window):
 docker exec -i zabbix-db psql -U zabbix -d zabbix < scripts/migrate_txn_sources.sql
 ```
 
-**Scripts live on the host, not in the container.** `./report-portal` is mounted
-at `/app`, so `scripts/` is not there. Run them with the repo virtualenv:
+**Where the scripts run.** `./report-portal` is mounted at `/app` in the
+container, so `scripts/` is only on the host — and the host has no `venv/`
+(`venv/bin/python` does not exist there, which is also why the 06:00
+`reconcile_zabbix_glpi.py` cron job fails; see Troubleshooting).
+
+Stdlib-only scripts run directly on the host with system python3:
 
 ```bash
-venv/bin/python scripts/set_txn_sources.py     # which transaction sources are visible
-venv/bin/python scripts/ej_profile.py          # what the EJ journals actually contain
+python3 scripts/ej_profile.py          # what the EJ journals actually contain
 ```
+
+Scripts that need the database run inside the container, which has psycopg2:
+
+```bash
+docker exec -i report-portal python3 - < scripts/set_txn_sources.py
+docker exec -i report-portal python3 - < scripts/set_txn_sources.py --hide-demo
+```
+
+Do **not** `docker exec report-portal python3 scripts/...` — `scripts/` is not
+mounted there, and it will always say "No such file or directory".
 
 ## Troubleshooting (symptom → cause, in order)
 

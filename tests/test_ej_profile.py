@@ -91,3 +91,32 @@ def test_missing_file_exits_with_guidance(tmp_path):
                          capture_output=True, text=True, timeout=60)
     assert out.returncode == 1
     assert 'pull_ej_logs' in out.stdout + out.stderr
+
+
+def test_ej_profile_runs_without_a_venv():
+    """The UAT host has no venv, and the profiler must still run there.
+
+    It is deliberately stdlib-only: this test fails the moment someone reaches
+    for psycopg2 or requests in it, which is the behaviour we want.
+    """
+    import ast
+    tree = ast.parse(SCRIPT.read_text())
+    imported = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(a.name.split('.')[0] for a in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module.split('.')[0])
+    allowed = {'argparse', 'collections', 'datetime', 'glob', 'json', 'os', 're', 'sys'}
+    assert imported <= allowed, f'profiler must stay stdlib-only, added: {imported - allowed}'
+
+
+def test_profiler_finds_journals_relative_to_the_repo():
+    """Run from an unrelated cwd with no arguments, it must still resolve
+    ej-logs/ inside the repo rather than looking at the caller's directory."""
+    import subprocess
+    out = subprocess.run([sys.executable, str(SCRIPT)],
+                         capture_output=True, text=True, cwd='/tmp', timeout=60)
+    # No journals on a dev box is a clean exit with guidance, not a crash.
+    assert out.returncode in (0, 1)
+    assert 'Traceback' not in out.stderr

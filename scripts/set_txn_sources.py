@@ -25,10 +25,38 @@ import argparse
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'report-portal'))
 
-from db import get_db  # noqa: E402
-from txn_sources import TRUSTED_SOURCES  # noqa: E402
+def _find_portal_dir():
+    """Locate report-portal/ so this script runs from anywhere.
+
+    The host has no venv and the container has no scripts/, so the only way to
+    run a DB-dependent script is `docker exec -i report-portal python3 - < this
+    file`. Under `python3 -` there is no __file__ at all, and the portal lives at
+    /app inside the container but at ../report-portal on the host.
+    """
+    here = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else ''
+    for cand in (os.environ.get('PORTAL_DIR'), '/app',
+                 os.path.join(here, '..', 'report-portal'),
+                 os.path.join(os.getcwd(), 'report-portal'), here):
+        if cand and os.path.isfile(os.path.join(cand, 'db.py')):
+            return cand
+    sys.exit('Could not find report-portal/. Set PORTAL_DIR to its path.')
+
+
+sys.path.insert(0, _find_portal_dir())
+
+try:
+    from db import get_db  # noqa: E402
+    from txn_sources import TRUSTED_SOURCES  # noqa: E402
+except ImportError as e:
+    # Almost always "psycopg2 is missing", which means this ran somewhere it
+    # cannot reach the database: the UAT host has no venv, and the container
+    # that does have psycopg2 has no scripts/. Say so instead of dumping a
+    # traceback about a module the operator does not know they need.
+    sys.exit("Cannot import the portal database driver (%s).\n"
+             "Run this inside the portal container:\n"
+             "  docker exec -i report-portal python3 - < scripts/%s"
+             % (e, os.path.basename(__file__)))
 
 DEMO = ('SIMULATOR', 'ISO8583_SIM', 'ISO8583_REAL')
 
