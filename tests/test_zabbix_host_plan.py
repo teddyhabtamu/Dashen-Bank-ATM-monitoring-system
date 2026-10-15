@@ -62,6 +62,15 @@ class FakeZabbix:
                                               'name': params['name'], 'interfaces': params['interfaces'],
                                               'macros': params['macros'], 'parentTemplates': params['templates'],
                                               'groups': params['groups']}
+            else:
+                # Zabbix replaces the given sets wholesale - templates,
+                # interfaces, groups - it does not merge them. Emulating that
+                # is what catches a payload that would unlink a template.
+                cur = self.hosts.get(next(iter(self.hosts)), {})
+                for key in ('templates', 'interfaces', 'groups'):
+                    if key in params:
+                        cur['parentTemplates' if key == 'templates' else key] = params[key]
+                self.hosts[params.get('host') or next(iter(self.hosts))] = cur
             return {'hostids': ['1']}
         return None
 
@@ -214,7 +223,9 @@ def test_agent_interface_is_added_to_an_snpm_only_host(monkeypatch):
     assert len(ifaces) == 2
     assert ifaces[0]['interfaceid'] == '9' and ifaces[0]['type'] == '2', 'SNMP row preserved'
     assert str(ifaces[1]['type']) == '1' and str(ifaces[1]['port']) == '10050'
-    assert plans[0]['params']['templates'] == [{'templateid': TWMI}]
+    # The WMI template is ADDED, not swapped in: host.update replaces the
+    # template set, so the existing vendor template must be sent back too.
+    assert plans[0]['params']['templates'] == [{'templateid': TCR}, {'templateid': TWMI}]
     assert 'agent interface' in plans[0]['changes']
 
 
@@ -232,6 +243,31 @@ def test_ncr_without_the_wmi_template_in_zabbix_still_creates(monkeypatch):
     assert plans[0]['action'] == 'create'
     assert plans[0]['params']['templates'] == [{'templateid': TCR}]
     assert len(plans[0]['params']['interfaces']) == 2, 'agent interface still added'
+
+
+def test_a_human_added_template_survives_a_repair(monkeypatch):
+    """Regression: host.update REPLACES templates. Sending only the missing
+    one unlinked Dashen Bank ATM Hardware on UAT and dropped the host to a
+    single template. Existing ids must always ride along."""
+    cur = existing(interfaces=[snmp_if()], parentTemplates=[{'templateid': TCR},
+                                                           {'templateid': '4242'}])
+    install(monkeypatch, FakeZabbix(hosts={'ATM-0001': cur}))
+    _, plans = zs.plan_hosts([row()])
+    sent = [t['templateid'] for t in plans[0]['params']['templates']]
+    assert '4242' in sent, 'human-linked template must not be unlinked'
+    assert TWMI in sent and TCR in sent
+
+
+def test_applying_a_repair_keeps_both_templates(monkeypatch):
+    """End-to-end through the fake, whose host.update now replaces sets."""
+    fake = install(monkeypatch, FakeZabbix(hosts={'ATM-0001': existing(
+        interfaces=[snmp_if()], parentTemplates=[{'templateid': TCR}])}))
+    out = zs.sync_hosts([row()])
+    assert out['updated'] == 1
+    stored = fake.hosts['ATM-0001']['parentTemplates']
+    ids = {t['templateid'] for t in stored}
+    assert ids == {TCR, TWMI}, f'templates after repair: {stored}'
+    assert zs.sync_hosts([row()])['skipped'] == 1, 'then idempotent'
 
 
 def test_reconciliation_is_additive_only(monkeypatch):

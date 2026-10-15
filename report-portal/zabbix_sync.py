@@ -226,7 +226,12 @@ def _plan_update(a, cur, tids, groups, create_groups):
                  for t in (cur.get("parentTemplates") or []) if t.get("templateid")}
     missing_tids = [t for t in _templates_for(vendor, tids) if t not in have_tids]
     if missing_tids:
-        upd["templates"] = [{"templateid": t} for t in missing_tids]
+        # host.update REPLACES the template set — proven on UAT: sending only
+        # the missing WMI template silently unlinked "Dashen Bank ATM Hardware".
+        # Send the union so templates a human linked are preserved. (Groups
+        # already do this; interfaces echo their rows back for the same reason.)
+        ordered = [t for t in (list(have_tids) + missing_tids)]
+        upd["templates"] = [{"templateid": t} for t in ordered]
         changed.append("vendor template" if len(missing_tids) == 1
                        else "vendor + WMI templates")
     district = (a.get("district") or "").strip() or "UNKNOWN"
