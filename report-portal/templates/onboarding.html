@@ -19,7 +19,7 @@
         {{ fld('branch', 'Branch', '4 Kilo Building BRANCH') }}
         <div style="margin-bottom:12px">
           <label style="display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px">District *</label>
-          <select name="district" style="max-width:420px;width:100%;padding:8px 10px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px">
+          <select name="district" style="width:420px;max-width:100%;padding:8px 10px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px">
             <option value="">— choose —</option>
             {% for d in districts %}<option value="{{ d }}" {% if values.get('district')==d %}selected{% endif %}>{{ d }}</option>{% endfor %}
           </select>
@@ -32,7 +32,7 @@
         {{ fld('terminal_id', 'Terminal ID (must match switch records)', 'TID-UAT-107') }}
         <div style="margin-bottom:12px">
           <label style="display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px">Vendor *</label>
-          <select name="vendor" id="vendorSel" style="max-width:420px;width:100%;padding:8px 10px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px">
+          <select name="vendor" id="vendorSel" style="width:420px;max-width:100%;padding:8px 10px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px">
             <option value="">— choose —</option>
             {% for v in vendors %}<option value="{{ v }}" {% if values.get('vendor')==v %}selected{% endif %}>{{ v }}</option>{% endfor %}
           </select>
@@ -40,7 +40,7 @@
         </div>
         <div style="margin-bottom:12px">
           <label style="display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px">Model * (unknown models stop here and go to engineer review)</label>
-          <select name="model" id="modelSel" style="max-width:420px;width:100%;padding:8px 10px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px"></select>
+          <select name="model" id="modelSel" style="width:420px;max-width:100%;padding:8px 10px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px"></select>
           {% if errors.get('model') %}<div style="color:#DC2626;font-size:12px;margin-top:4px">{{ errors.get('model') }}</div>{% endif %}
         </div>
         {{ fld('ip_address', 'IP address', '172.23.0.101') }}

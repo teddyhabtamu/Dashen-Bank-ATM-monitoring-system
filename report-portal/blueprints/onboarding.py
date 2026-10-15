@@ -50,7 +50,7 @@ def _preflight(cleaned):
         if clash:
             out.append(('Not already registered', False,
                         f'Conflicts with existing row {clash[0]}.',
-                        'You fix: pick an unused ATM ID / IP.'))
+                        'Your fix: pick an unused ATM ID / IP.'))
         else:
             out.append(('Not already registered', True,
                         'ATM ID and IP are unused.', '—'))
