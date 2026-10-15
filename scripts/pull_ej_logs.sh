@@ -41,6 +41,14 @@ mkdir -p "$RAWDIR"
 # and only *.log at its top level is harvested, so a .lock file there is
 # invisible to git AND to filebeat - no .gitignore change needed.
 LOCKFILE="${EJ_LOCK:-$OUTDIR/pull.lock}"
+
+# Stamps remember "we already looked for this file and the box did not have it",
+# so a per-minute cron stops re-asking for a journal that does not exist yet.
+# They expire (EJ_ABSENT_RETRY_MIN) so a file that appears later is still picked
+# up within minutes instead of being ignored for the rest of the day.
+STAMPDIR="$OUTDIR/.absent"
+EJ_ABSENT_RETRY_MIN="${EJ_ABSENT_RETRY_MIN:-10}"
+mkdir -p "$STAMPDIR"
 exec 9>"$LOCKFILE"
 if command -v flock >/dev/null 2>&1; then
   if ! flock -n 9; then
@@ -68,20 +76,33 @@ pull_one() {
   atm_id="${spec%%:*}"; rest="${spec#*:}"
   ip="${rest%%:*}"; tag="${rest##*:}"
   local rc=0
+  # Which journal is actually being appended to? Assumed to be the newest file
+  # we hold for this box, NOT "today's": NCR names the live journal by its own
+  # bank date, which on this fleet trails the server date by a day. Assuming
+  # today meant every fast run re-fetched a file the box does not have yet and
+  # never re-fetched the one that was growing.
+  local live
+  live="$(ls -t "$OUTDIR"/*_"$tag"_EJDATA.log 2>/dev/null | head -1)"
   for i in $(seq 0 $((DAYS - 1))); do
     day="$(date -u -d "$i days ago" +%F 2>/dev/null || date -u -v-"$i"d +%F)"
     f="${day}_${tag}_EJDATA.log"
-    # Fast cadence: yesterday's journal is final once seen, so re-fetching it
-    # every minute is pure load and yields no new data.
-    if [ "$EJ_FAST" = "1" ] && [ "$i" -gt 0 ] && [ -s "$OUTDIR/$f" ]; then
-      continue
+    if [ "$EJ_FAST" = "1" ]; then
+      if [ -n "$live" ] && [ "$live" = "$OUTDIR/$f" ]; then
+        : # the live journal: always re-fetch, it grows between runs
+      elif [ -s "$OUTDIR/$f" ]; then
+        continue # a closed journal we already have: pure load, no new data
+      elif find "$STAMPDIR/$tag-$f.stamp" -mmin -"$EJ_ABSENT_RETRY_MIN" -print -quit 2>/dev/null | grep -q .; then
+        continue # recently confirmed absent; retried every EJ_ABSENT_RETRY_MIN
+      fi
     fi
     if zabbix_get -s "$ip" -k "vfs.file.contents[E:\\EJLogs\\$f]" > "$RAWDIR/$f" 2>/dev/null; then
       if grep -q . "$RAWDIR/$f" 2>/dev/null && ! grep -qiE 'ZBX_NOTSUPPORTED|Timeout' "$RAWDIR/$f"; then
         tr '\r' '\n' < "$RAWDIR/$f" > "$OUTDIR/$f"
+        rm -f "$STAMPDIR/$tag-$f.stamp"
         echo "  $atm_id $f $(wc -c < "$OUTDIR/$f") bytes"
       else
-        rm -f "$RAWDIR/$f"; echo "  $atm_id $f absent-on-box (skipped)"
+        rm -f "$RAWDIR/$f"; touch "$STAMPDIR/$tag-$f.stamp"
+        echo "  $atm_id $f absent-on-box (skipped)"
       fi
     else
       rm -f "$RAWDIR/$f"; echo "  $atm_id $f fetch-failed"
