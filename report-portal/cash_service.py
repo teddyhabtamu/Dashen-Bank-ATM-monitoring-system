@@ -122,8 +122,11 @@ def forecast_atm(atm_id, now=None, window_days=DEFAULT_WINDOW_DAYS):
     out['atm_id'] = atm_id
     out['window_days'] = window_days
     out['checked_at'] = now.strftime('%Y-%m-%d %H:%M')
+    # Every unreadable source, in one sentence. Two fields saying the same
+    # thing in different words is how an operator stops trusting the card.
     if problems:
-        out['sources_unavailable'] = problems
+        out['reason'] = (out.get('reason') or '') + (
+            (' ' if out.get('reason') else '') + ' '.join(problems)).strip()
     return out
 
 

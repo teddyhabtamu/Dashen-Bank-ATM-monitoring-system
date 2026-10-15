@@ -180,7 +180,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
       <div class="card">
         <div class="card-header">
           <h2>Cash outlook</h2>
-          <span class="card-hint">BRD 5.3 · from the last {{ cash_outlook.window_days }} days of withdrawals</span>
+          <span class="card-hint">{% if cash_outlook.status == 'ok' %}Based on the last {{ cash_outlook.window_days }} days of withdrawals{% else %}Needs cassette levels and withdrawal history{% endif %}</span>
         </div>
         <div class="card-body">
           {% if cash_outlook.status == 'ok' %}
@@ -210,11 +210,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
               </div>
             </div>
           {% endif %}
-          {% if cash_outlook.sources_unavailable %}
-            {% for p in cash_outlook.sources_unavailable %}
-              <div class="check-fix">→ {{ p }}</div>
-            {% endfor %}
-          {% endif %}
+
         </div>
       </div>
       {% endif %}
