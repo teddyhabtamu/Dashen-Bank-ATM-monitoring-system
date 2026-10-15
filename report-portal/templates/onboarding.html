@@ -1,68 +1,112 @@
 {% extends "base.html" %}
 {% block title %}Onboard ATM (Preview) — ATM Monitoring{% endblock %}
+{% block extra_style %}
+/* Canonical admin form rhythm — identical values to Cash Load / Schedules /
+   Users so this page shares the portal's spacing instead of inventing its own. */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;padding:24px}
+.form-grid .full{grid-column:1/-1}
+.form-actions{padding:0 24px 24px;display:flex;gap:10px;justify-content:flex-end}
+.form-actions .btn{padding:10px 20px}
+/* Server-rendered field errors: same contract as the ATM edit modal. */
+.form-group.error input,.form-group.error select{border-color:#DC2626;background:#FEF2F2}
+.field-error{display:none;color:#DC2626;font-size:11px;margin-top:3px;font-weight:500}
+.form-group.error .field-error{display:block}
+.required{color:#DC2626}
+.field-help{font-size:10px;color:#94A3B8;margin-top:2px;line-height:1.5}
+.badge.preview{background:rgba(217,119,6,.1);color:#D97706;vertical-align:middle}
+.card-hint{font-size:11px;color:#94A3B8}
+.check-list{padding:24px}
+.check-list .alert-card:last-child{margin-bottom:0}
+.check-fix{font-size:12px;color:#012169;margin-top:6px;font-weight:500}
+{% endblock %}
 {% block body %}
-<div class="page-content">
-  <div class="card" style="max-width:860px">
-    <div class="card-header"><h2>Onboard a new ATM <span style="font-size:11px;color:#B45309;background:#FFFBEB;border-radius:8px;padding:2px 8px;margin-left:8px">PREVIEW — checks only, provisions nothing</span></h2></div>
-    <div class="card-body">
-      <form method="post" action="/admin/onboard">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        {% macro fld(name, label, ph='') %}
-        <div style="margin-bottom:12px">
-          <label style="display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px">{{ label }}{% if name in ['atm_id','branch','district','city','terminal_id','ip_address'] %} *{% endif %}</label>
-          <input name="{{ name }}" value="{{ values.get(name,'')|e }}" placeholder="{{ ph }}" style="width:100%;max-width:420px;padding:8px 10px;border:1px solid {% if errors.get(name) %}#DC2626{% else %}#E2E8F0{% endif %};border-radius:8px;font-size:13px">
-          {% if errors.get(name) %}<div style="color:#DC2626;font-size:12px;margin-top:4px">{{ errors.get(name) }}</div>{% endif %}
-        </div>
-        {% endmacro %}
-        {{ fld('atm_id', 'ATM ID', 'ATM-0107') }}
-        {{ fld('atm_name', 'ATM name (optional)', '4 Kilo Branch ATM 3') }}
-        {{ fld('branch', 'Branch', '4 Kilo Building BRANCH') }}
-        <div style="margin-bottom:12px">
-          <label style="display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px">District *</label>
-          <select data-native name="district" style="width:420px;max-width:100%;padding:8px 10px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px">
-            <option value="">— choose —</option>
-            {% for d in districts %}<option value="{{ d }}" {% if values.get('district')==d %}selected{% endif %}>{{ d }}</option>{% endfor %}
-          </select>
-          {% if errors.get('district') %}<div style="color:#DC2626;font-size:12px;margin-top:4px">{{ errors.get('district') }}</div>{% endif %}
-        </div>
-        {{ fld('city', 'City', 'Addis Ababa') }}
-        {{ fld('region', 'Region', 'Addis Ababa') }}
-        {{ fld('latitude', 'Latitude', '9.0050') }}
-        {{ fld('longitude', 'Longitude', '38.7896') }}
-        {{ fld('terminal_id', 'Terminal ID (must match switch records)', 'TID-UAT-107') }}
-        <div style="margin-bottom:12px">
-          <label style="display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px">Vendor *</label>
-          <select data-native name="vendor" id="vendorSel" style="width:420px;max-width:100%;padding:8px 10px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px">
-            <option value="">— choose —</option>
-            {% for v in vendors %}<option value="{{ v }}" {% if values.get('vendor')==v %}selected{% endif %}>{{ v }}</option>{% endfor %}
-          </select>
-          {% if errors.get('vendor') %}<div style="color:#DC2626;font-size:12px;margin-top:4px">{{ errors.get('vendor') }}</div>{% endif %}
-        </div>
-        <div style="margin-bottom:12px">
-          <label style="display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px">Model * (unknown models stop here and go to engineer review)</label>
-          <select data-native name="model" id="modelSel" style="width:420px;max-width:100%;padding:8px 10px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px"></select>
-          {% if errors.get('model') %}<div style="color:#DC2626;font-size:12px;margin-top:4px">{{ errors.get('model') }}</div>{% endif %}
-        </div>
-        {{ fld('ip_address', 'IP address', '172.23.0.101') }}
-        <button type="submit" style="background:#012169;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:13px;font-weight:600;cursor:pointer">Run pre-flight checks</button>
-      </form>
-      {% if checks %}
-      <div style="margin-top:22px;border-top:1px solid #E2E8F0;padding-top:16px">
-        <h3 style="font-size:14px;color:#012169;margin-bottom:10px">Pre-flight results (nothing was created)</h3>
-        {% for label, ok, detail, fixer in checks %}
-        <div style="display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border-radius:8px;margin-bottom:8px;background:{% if ok is true %}#F0FDF4{% elif ok is false %}#FEF2F2{% else %}#F8FAFC{% endif %}">
-          <span style="font-size:15px">{% if ok is true %}✅{% elif ok is false %}❌{% else %}➖{% endif %}</span>
-          <div>
-            <div style="font-weight:700;font-size:13px">{{ label }}</div>
-            <div style="font-size:12px;color:#475569">{{ detail }}</div>
-            {% if fixer and fixer != '—' %}<div style="font-size:12px;color:#012169">→ {{ fixer }}</div>{% endif %}
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
-    </div>
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="user-plus"></i></div>
+  <div>
+    <h1 class="page-title">Onboard a new ATM <span class="badge preview">PREVIEW</span></h1>
+    <p class="page-subtitle">Fills in the ATM facts and runs read-only pre-flight checks. Nothing is created, changed, or stored on the ATM or in Zabbix.</p>
   </div>
+</div>
+
+<div class="page-content">
+<div class="card">
+  <div class="card-header">
+    <h2>ATM facts</h2>
+    <span class="card-hint">Fields marked <span class="required">*</span> are required</span>
+  </div>
+  <form method="post" action="/admin/onboard" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% macro fld(name, label, ph='', required=False, help='') %}
+    <div class="form-group{% if errors.get(name) %} error{% endif %}">
+      <label>{{ label }}{% if required %} <span class="required">*</span>{% endif %}</label>
+      <input name="{{ name }}" value="{{ values.get(name,'')|e }}" placeholder="{{ ph }}"
+             {% if required %}required{% endif %}>
+      {% if help %}<div class="field-help">{{ help }}</div>{% endif %}
+      <span class="field-error">{{ errors.get(name, '') }}</span>
+    </div>
+    {% endmacro %}
+    <div class="form-grid">
+    {{ fld('atm_id', 'ATM ID', 'ATM-0107', True) }}
+    {{ fld('atm_name', 'ATM name (optional)', '4 Kilo Branch ATM 3') }}
+    {{ fld('branch', 'Branch', '4 Kilo Building BRANCH', True) }}
+    <div class="form-group{% if errors.get('district') %} error{% endif %}">
+      <label>District <span class="required">*</span></label>
+      <select data-native name="district">
+        <option value="">— choose —</option>
+        {% for d in districts %}<option value="{{ d }}" {% if values.get('district')==d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+      </select>
+      <span class="field-error">{{ errors.get('district', '') }}</span>
+    </div>
+    {{ fld('city', 'City', 'Addis Ababa', True) }}
+    {{ fld('region', 'Region', 'Addis Ababa') }}
+    {{ fld('latitude', 'Latitude (optional)', '9.0050') }}
+    {{ fld('longitude', 'Longitude (optional)', '38.7896') }}
+    {{ fld('terminal_id', 'Terminal ID', 'TID-UAT-107', True, 'Must match the switch record for this ATM.') }}
+    <div class="form-group{% if errors.get('vendor') %} error{% endif %}">
+      <label>Vendor <span class="required">*</span></label>
+      <select data-native name="vendor" id="vendorSel">
+        <option value="">— choose —</option>
+        {% for v in vendors %}<option value="{{ v }}" {% if values.get('vendor')==v %}selected{% endif %}>{{ v }}</option>{% endfor %}
+      </select>
+      <span class="field-error">{{ errors.get('vendor', '') }}</span>
+    </div>
+    <div class="form-group{% if errors.get('model') %} error{% endif %}">
+      <label>Model <span class="required">*</span></label>
+      <select data-native name="model" id="modelSel"></select>
+      <div class="field-help">Only models already in the approved list can pass. Anything else stops here and goes to engineer review.</div>
+      <span class="field-error">{{ errors.get('model', '') }}</span>
+    </div>
+    {{ fld('ip_address', 'IP address', '172.23.0.101', True) }}
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary"><i data-lucide="shield-check" style="width:14px;height:14px"></i> Run pre-flight checks</button>
+    </div>
+  </form>
+</div>
+
+{% if checks %}
+<div class="card">
+  <div class="card-header">
+    <h2>Pre-flight results</h2>
+    <span class="card-hint">Read-only — nothing was created</span>
+  </div>
+  <div class="check-list">
+  {% for label, ok, detail, fixer in checks %}
+    {% if ok is true %}{% set tone = 'success' %}{% set icon = 'circle-check' %}
+    {% elif ok is false %}{% set tone = 'error' %}{% set icon = 'circle-x' %}
+    {% else %}{% set tone = 'info' %}{% set icon = 'circle-minus' %}{% endif %}
+    <div class="alert-card {{ tone }}">
+      <i data-lucide="{{ icon }}" class="alert-icon"></i>
+      <div class="alert-content">
+        <div class="alert-title">{{ label }}</div>
+        <div class="alert-message">{{ detail }}</div>
+        {% if fixer and fixer != '—' %}<div class="check-fix">→ {{ fixer }}</div>{% endif %}
+      </div>
+    </div>
+  {% endfor %}
+  </div>
+</div>
+{% endif %}
 </div>
 <script>
 var MODELS = {{ vendors|tojson }};
