@@ -34,12 +34,25 @@ from datetime import datetime, timezone, timedelta
 
 EAT = timezone(timedelta(hours=3))  # the system reports everything in EAT
 
+# An ATM is only reporting when ITS OWN telemetry arrives. Counting "at least
+# one fresh item" is not enough: Zabbix-internal items (agent.available,
+# host.uptime) always tick, so a dead host still looks alive - which is exactly
+# how this gate reported a dead ATM as OK on its first UAT run.
+# These key sets mirror zabbix_modules/status_rules.py:
+#   NCR  -> WMI master item (atm.parts), the authoritative hardware feed
+#   GRG  -> the three core SNMP keys interpret_state() itself relies on
+AUTHORITATIVE_KEYS = {
+    'NCR': ['atm.parts'],
+    'GRG': ['atm.status', 'atm.net.link', 'atm.cash.cassette1'],
+}
+
 
 # ── evidence: Zabbix ──────────────────────────────────────────────────────
 def _zabbix_facts(atm_id, client):
     """Read-only Zabbix evidence. Returns a dict; never raises."""
     out = {'host': None, 'items_total': 0, 'items_reporting': 0,
-           'items_unsupported': 0, 'newest_data_age_seconds': None,
+           'items_unsupported': 0, 'items_internal': 0, 'keys_reporting': 0,
+           'newest_data_age_seconds': None, 'key_clocks': {},
            'problems': [], 'agent_interface': False, 'interfaces': [],
            'error': ''}
     hosts = client.call('host.get', {'output': ['hostid', 'status'],
@@ -57,17 +70,28 @@ def _zabbix_facts(atm_id, client):
     out['status_enabled'] = str(host.get('status')) == '0'
 
     items = client.call('item.get', {'hostids': [host['hostid']],
-                                     'output': ['itemid', 'key_', 'lastclock', 'state'],
+                                     'output': ['itemid', 'key_', 'lastclock', 'state', 'type'],
                                      'filter': {'status': 0}}) or []
     out['items_total'] = len(items)
+    out['items_internal'] = 0
+    out['keys_reporting'] = 0
     newest = 0
     for it in items:
         clock = int(it.get('lastclock') or 0)
+        if str(it.get('type')) == '0':
+            # Zabbix-internal (agent.available, host.uptime, ...): these report
+            # whether Zabbix itself is alive, NOT whether the ATM is. They must
+            # never be counted as evidence that an ATM is reporting.
+            out['items_internal'] += 1
+            continue
         if clock:
             out['items_reporting'] += 1
+            out['keys_reporting'] += 1
             newest = max(newest, clock)
         if str(it.get('state')) == '1':
             out['items_unsupported'] += 1
+        if clock and it.get('key_'):
+            out['key_clocks'][it['key_']] = clock
     if newest:
         out['newest_data_age_seconds'] = int(time.time()) - newest
 
@@ -175,6 +199,28 @@ def verify_atm(atm_id, window_minutes=15, client=None, db_facts=None):
     age = z['newest_data_age_seconds']
     age_txt = f'{age // 60} min' if age is not None else 'never'
 
+    # The decisive check: the vendor's own keys must be arriving.
+    wanted = AUTHORITATIVE_KEYS.get(vendor) or AUTHORITATIVE_KEYS['NCR']
+    seen = [k for k in wanted if z['key_clocks'].get(k)]
+    auth_ok = len(seen) == len(wanted)
+    if z['items_internal'] and not z['items_reporting']:
+        checks.append(_check('internal items', 'fail',
+                             f"Only Zabbix-internal items are reporting ({z['items_internal']}). "
+                             'They track Zabbix itself, not the ATM, so they prove nothing here.'))
+    if auth_ok:
+        age_auth = max(int(time.time()) - z['key_clocks'][k] for k in seen)
+        checks.append(_check('telemetry', 'pass',
+                             f"Vendor telemetry arriving ({', '.join(seen)}), newest {age_auth // 60} min ago."))
+    else:
+        missing = [k for k in wanted if k not in z['key_clocks']]
+        checks.append(_check('telemetry', 'fail',
+                             f"Vendor telemetry never arrived: {', '.join(missing)}. "
+                             + ('NCR: the Zabbix agent on the box is not answering on 10050, '
+                                'or atm-wmi-collector.ps1 is not installed.'
+                                if vendor == 'NCR' else
+                                'GRG: no SNMP data — check the UDP/161 firewall and community.')))
+        blockers.append(f"No {vendor} telemetry ({', '.join(missing)} never collected).")
+
     if total == 0:
         checks.append(_check('items', 'fail', 'Host has no enabled items — is a template linked?'))
         blockers.append('No items: the vendor template is not linked to this host.')
@@ -205,7 +251,8 @@ def verify_atm(atm_id, window_minutes=15, client=None, db_facts=None):
         checks.append(_check('problems', 'info',
                              f"{len(z['problems'])} firing trigger(s): " + '; '.join(z['problems'][:3])))
 
-    fresh = reporting and age is not None and age <= window_minutes * 60
+    fresh = (auth_ok and reporting > 0
+             and age is not None and age <= window_minutes * 60)
     # Fresh data alone is not "live": a disabled host or an NCR host with no
     # agent interface cannot report hardware no matter what its items say.
     if fresh and not blockers:
@@ -223,6 +270,7 @@ def _result(atm_id, verdict, ok, checks, blockers, z, db, window_minutes):
         'checks': checks, 'blockers': blockers,
         'facts': {'items_total': z['items_total'],
                   'items_reporting': z['items_reporting'],
+                  'items_internal': z['items_internal'],
                   'items_unsupported': z['items_unsupported'],
                   'newest_data_age_seconds': z['newest_data_age_seconds'],
                   'interfaces': z['interfaces'],
