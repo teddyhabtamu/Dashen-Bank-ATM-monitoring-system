@@ -96,6 +96,17 @@ def test_cache_round_trip_with_a_fake_connection():
     assert len(conn.store['args'][2]) <= 2000, 'errors are truncated, not dropped'
 
 
+def test_computing_view_has_its_own_marker():
+    """The auto-reload keys off this id. `.empty` is shared with the
+    "nothing matches this filter" view, so keying on that class reloaded the
+    page forever on a legitimately empty result."""
+    tpl = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            'report-portal', 'templates', 'fleet.html')).read()
+    assert 'id="fleet-computing"' in tpl
+    assert "getElementById('fleet-computing')" in tpl
+    assert "querySelector('.empty')" not in tpl
+
+
 def test_ensure_creates_the_table_without_a_migration():
     seen = {}
 

@@ -37,7 +37,7 @@ td.status{white-space:nowrap}
 {% if computing %}
 <div class="card">
   <div class="card-body">
-    <div class="empty">
+    <div class="empty" id="fleet-computing">
       <i data-lucide="loader-2" style="width:28px;height:28px;margin-bottom:10px" class="spin"></i>
       <div style="font-weight:600;color:#0F172A">Checking the fleet…</div>
       <div style="font-size:12px;margin-top:6px">
@@ -119,7 +119,9 @@ td.status{white-space:nowrap}
 // Refresh a computing view on its own: the operator asked a question and the
 // answer arrives when the background job finishes.
 (function(){
-  if(!document.querySelector('.empty')) return;
+  // Only the COMPUTING view reloads. The "nothing matches this filter" view
+  // shares .empty and must not loop.
+  if(!document.getElementById('fleet-computing')) return;
   setTimeout(function(){ window.location.reload(); }, 8000);
 })();
 </script>
