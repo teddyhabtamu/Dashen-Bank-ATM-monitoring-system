@@ -19,7 +19,7 @@ dependency.
 |---|---|---|---|
 | 2.1 | High availability, detect issues instantly | MET | Zabbix triggers + GLPI tickets; `verify.py` gate |
 | 2.2 | Real-time transaction monitoring | PARTIAL | Live from EJ journals; **synthetic feed until switch integration** |
-| 2.3 | Track cash levels, prevent cash-out | MET | Levels + depletion forecast (BRD 5.3) on the ATM detail page |
+| 2.3 | Track cash levels, prevent cash-out | PARTIAL | Forecast MET; **physical cash levels are unavailable for NCR** (see 5.3) |
 | 2.4 | Operational + management reports | MET | `ATM Performance`, `Transaction Summary`, cash reports |
 | 2.5 | Improve incident response time | PARTIAL | Incident module + `state_duration_minutes`; resolution-time report partial (6.4) |
 | 2.6 | Fraud monitoring and security oversight | PARTIAL | Anomaly module; "suspicious transaction pattern" alert not tuned to bank rules |
@@ -38,7 +38,7 @@ dependency.
 |---|---|---|---|
 | 5.1 | Real-time online/offline, location/branch/district/terminal ID, alerts for low cash, offline, unstable link, device failure | MET | ATM detail page; hardware chips; Zabbix triggers. Onboarding Phases 1–4 make the status trustworthy rather than assumed |
 | 5.2 | Real-time transaction monitoring | PARTIAL | EJ Search + categories; synthetic feed until switch integration |
-| 5.3 | Cassette levels in real time; low/out-of-cash alerts; depletion forecast from withdrawal patterns | MET | `cash_forecast.py` + "Cash outlook" card; refuses to forecast without real withdrawal history |
+| 5.3 | Cassette levels in real time; low/out-of-cash alerts; depletion forecast from withdrawal patterns | PARTIAL | Forecast MET and it refuses to invent a date. **Cash levels GAP:** the WMI collector returns cassette *health*, not note counts, and NCR SNMP OIDs are unmapped, so the vault is empty for real NCR ATMs. Forecast falls back to a labelled book estimate (loads − withdrawals) until a real cash source exists |
 | 5.4 | ATM error monitoring | MET | WMI parts/devices, 35+14 per NCR host, triggers → GLPI |
 | 5.5 | Alerts via email, SMS, dashboard; triggers for offline / cash out / hardware error / suspicious pattern | PARTIAL | Dashboard alerts MET; Email + Africa's Talking SMS media types exist as **templates with placeholders** — not proven end to end |
 | 5.6 | Real-time dashboard | MET | Grafana + portal |
@@ -168,9 +168,10 @@ transactions and state, never telemetry history — Zabbix owns that).
    ~1–2 min.
 3. **Cheap, measurable win now:** 5–10s TTL cache for Zabbix reads in the
    portal, so pages render from cache instead of hammering the API.
-4. **Cash input for NCR (blocks 5.3 forecast).** The WMI collector returns
-   cassette **health**, not **note counts** — physical cash is not available
-   for NCR at all, which is why the vault shows "No data". Realistic source is
-   *book cash* = loads minus withdrawals, labelled as an estimate. Worth
-   building rather than leaving the forecast empty.
+4. ~~Cash input for NCR~~ **DONE (estimate only).** The WMI collector returns
+   cassette **health**, not note counts, so physical cash is unavailable for NCR.
+   The forecast now falls back to *book cash* (loads − withdrawals) labelled as
+   an estimate, and flags a ledger that is short. A **measured** source still
+   needs the vendor's OIDs or a CIT-verified snapshot; until then 5.3 is
+   PARTIAL, not MET.
 5. Design the push ingest (8.1) when the switch project is ready.
