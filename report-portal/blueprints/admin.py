@@ -597,6 +597,16 @@ def atm_detail(atm_id):
             txns = cur.fetchall()
             cur.close()
 
+        # BRD 5.3 depletion forecast. Best-effort: the page must render even
+        # if the forecast cannot be computed - the card then says why.
+        cash_outlook = None
+        try:
+            from cash_service import forecast_atm
+            cash_outlook = forecast_atm(atm_id)
+        except Exception as e:
+            import logging as _logging
+            _logging.getLogger(__name__).warning('cash forecast unavailable: %s', e)
+
         return render_template('admin_atm_detail.html',
                                atm=atm, vendor=vendor, cassettes=cassettes,
                                hardware=hw, hw_source=hw_source,
@@ -604,7 +614,7 @@ def atm_detail(atm_id):
                                metrics_online=metrics is not None,
                                total_txns=total_txns, success_rate=success_rate,
                                cash_today=cash_today, active_faults=active_faults,
-                               txns=txns)
+                               txns=txns, cash_outlook=cash_outlook)
     except Exception as e:
         import logging
         logging.getLogger(__name__).error('ATM detail error: %s', e, exc_info=True)

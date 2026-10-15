@@ -19,7 +19,7 @@ dependency.
 |---|---|---|---|
 | 2.1 | High availability, detect issues instantly | MET | Zabbix triggers + GLPI tickets; `verify.py` gate |
 | 2.2 | Real-time transaction monitoring | PARTIAL | Live from EJ journals; **synthetic feed until switch integration** |
-| 2.3 | Track cash levels, prevent cash-out | PARTIAL | Levels MET; **depletion forecast GAP (5.3)** |
+| 2.3 | Track cash levels, prevent cash-out | MET | Levels + depletion forecast (BRD 5.3) on the ATM detail page |
 | 2.4 | Operational + management reports | MET | `ATM Performance`, `Transaction Summary`, cash reports |
 | 2.5 | Improve incident response time | PARTIAL | Incident module + `state_duration_minutes`; resolution-time report partial (6.4) |
 | 2.6 | Fraud monitoring and security oversight | PARTIAL | Anomaly module; "suspicious transaction pattern" alert not tuned to bank rules |
@@ -38,7 +38,7 @@ dependency.
 |---|---|---|---|
 | 5.1 | Real-time online/offline, location/branch/district/terminal ID, alerts for low cash, offline, unstable link, device failure | MET | ATM detail page; hardware chips; Zabbix triggers. Onboarding Phases 1–4 make the status trustworthy rather than assumed |
 | 5.2 | Real-time transaction monitoring | PARTIAL | EJ Search + categories; synthetic feed until switch integration |
-| 5.3 | Cassette levels in real time; low/out-of-cash alerts; **depletion forecast from withdrawal patterns** | PARTIAL | **Forecast GAP** |
+| 5.3 | Cassette levels in real time; low/out-of-cash alerts; depletion forecast from withdrawal patterns | MET | `cash_forecast.py` + "Cash outlook" card; refuses to forecast without real withdrawal history |
 | 5.4 | ATM error monitoring | MET | WMI parts/devices, 35+14 per NCR host, triggers → GLPI |
 | 5.5 | Alerts via email, SMS, dashboard; triggers for offline / cash out / hardware error / suspicious pattern | PARTIAL | Dashboard alerts MET; Email + Africa's Talking SMS media types exist as **templates with placeholders** — not proven end to end |
 | 5.6 | Real-time dashboard | MET | Grafana + portal |
@@ -87,15 +87,12 @@ dependency.
 
 ## Open gaps, ordered by BRD obligation
 
-1. **5.3 cash depletion forecast** — the only clause where every input exists
-   (cassette levels, transaction history, replenishment log) and no output is
-   produced. The schema comment on `cash_replenishments` already anticipates it.
-2. **5.5 / 8.4 alert channels** — email and SMS are templates. "Shall send"
+1. **5.5 / 8.4 alert channels** — email and SMS are templates. "Shall send"
    is unproven until one test alert lands through each.
-3. **8.1 switch integration** — blocked externally; the synthetic feed must not
+2. **8.1 switch integration** — blocked externally; the synthetic feed must not
    become permanent without a decision.
-4. **7.3 credential escrow** — SNMP community is still typed by hand.
-5. **2.6 fraud rules** — anomaly detection exists but "suspicious transaction
+3. **7.3 credential escrow** — SNMP community is still typed by hand.
+4. **2.6 fraud rules** — anomaly detection exists but "suspicious transaction
    pattern" is not yet tuned to the bank's rules.
 
 ## House rule for new work

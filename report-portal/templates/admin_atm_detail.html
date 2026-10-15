@@ -176,6 +176,49 @@ table.txn tbody tr:hover{background:#EEF2FF}
         </div>
       </div>
 
+      {% if cash_outlook %}
+      <div class="card">
+        <div class="card-header">
+          <h2>Cash outlook</h2>
+          <span class="card-hint">BRD 5.3 · from the last {{ cash_outlook.window_days }} days of withdrawals</span>
+        </div>
+        <div class="card-body">
+          {% if cash_outlook.status == 'ok' %}
+            {% set tone = 'error' if cash_outlook.runway_days <= 1 else 'warning' if cash_outlook.runway_days <= 3 else 'success' %}
+            <div class="alert-card {{ tone }}" style="margin-bottom:14px">
+              <i data-lucide="{{ 'alert-triangle' if tone != 'success' else 'circle-check' }}" class="alert-icon"></i>
+              <div class="alert-content">
+                <div class="alert-title">{{ cash_outlook.total_notes|int }} notes · empty in {{ cash_outlook.depletes_in }}</div>
+                <div class="alert-message">
+                  Burn rate {{ cash_outlook.per_day|round|int }} notes/day
+                  ({{ cash_outlook.samples }} withdrawals,
+                  confidence {{ cash_outlook.confidence }}).
+                </div>
+              </div>
+            </div>
+            {% for c in cash_outlook.per_cassette %}
+              <div class="kv"><span class="k">Cass {{ c.cassette }}</span><span class="v">{{ c.notes }} notes ·
+                {% if c.runway_days > 0 %}{{ c.runway_days }} days{% else %}empty{% endif %}</span></div>
+            {% endfor %}
+            {% for a in cash_outlook.actions %}<div class="check-fix">→ {{ a }}</div>{% endfor %}
+          {% else %}
+            <div class="alert-card info" style="margin-bottom:0">
+              <i data-lucide="help-circle" class="alert-icon"></i>
+              <div class="alert-content">
+                <div class="alert-title">No forecast yet</div>
+                <div class="alert-message">{{ cash_outlook.reason }}</div>
+              </div>
+            </div>
+          {% endif %}
+          {% if cash_outlook.sources_unavailable %}
+            {% for p in cash_outlook.sources_unavailable %}
+              <div class="check-fix">→ {{ p }}</div>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
       <div class="card">
         <div class="card-header"><h2>Hardware Status</h2></div>
         <div class="card-body">
