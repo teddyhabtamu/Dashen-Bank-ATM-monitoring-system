@@ -89,6 +89,16 @@ dependency.
 
 1. **5.5 / 8.4 alert channels** — email and SMS are templates. "Shall send"
    is unproven until one test alert lands through each.
+**EJ transport — recorded in `docs/adr-ej-transport.md`.** Asked whether the
+agents should push journals instead of the server pulling them. Decision: **do
+not build it.** The premise was wrong — `zabbix_get -s <ip>` is a direct agent
+connection, not a Zabbix passive check, so there is no mode to change; EJ is
+under 1% of polling traffic; and pushing EJ into Zabbix would put unmasked card
+data in the value table (PCI), lose full-text search, explode the item count and
+mismatch retention. Revisit only if Network confirms a branch cannot be reached
+on TCP/10050 — then metrics take a proxy/active agent and EJ takes a file-POST
+receiver that writes into the directory filebeat already watches.
+
 **KPI page audit (2026-10-16).** Asked where Error Distribution's data comes
 from; it and Fault Distribution were the *same query* (`chart['fault_*']` was
 assigned from the `errors` rows), so the page showed two panels with identical
