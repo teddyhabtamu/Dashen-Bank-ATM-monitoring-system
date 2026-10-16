@@ -92,6 +92,10 @@ def create_app():
     def start_timer():
         g.start = time.time()
 
+    from helpers import state_tone, state_colour
+    app.jinja_env.filters['state_tone'] = state_tone
+    app.jinja_env.filters['state_colour'] = state_colour
+
     @app.context_processor
     def external_links():
         """UI links for the sidebar/header — configurable per environment

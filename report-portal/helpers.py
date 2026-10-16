@@ -325,3 +325,39 @@ def mktable(headers, rows):
         ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
     ]))
     return t
+
+
+# How loud a state should look. Two tiers of "not healthy" were previously
+# indistinguishable: an ATM that is genuinely down, and one we simply cannot
+# read yet. Painting both red is how a monitoring tool trains people to ignore
+# red.
+STATE_TONES = {
+    'IN_SERVICE': 'good',
+    'IN_SUPERVISOR': 'warn',
+    'OUT_OF_CASH': 'warn',
+    'OUT_OF_SERVICE': 'bad',
+    'OFFLINE': 'bad',
+    'HARDWARE_FAULT': 'bad',
+    'UNREACHABLE': 'bad',
+    # "We do not know" is not an alarm. Not provisioned is a setup gap, not an
+    # outage; a demo or an overnight install should not look like a failure.
+    'UNKNOWN': 'muted',
+    'NOT_PROVISIONED': 'muted',
+    'INACTIVE': 'muted',
+}
+
+TONE_COLOURS = {
+    'good': '#059669',
+    'warn': '#D97706',
+    'bad': '#DC2626',
+    'muted': '#64748B',
+}
+
+
+def state_tone(state):
+    """good / warn / bad / muted for an ATM state string."""
+    return STATE_TONES.get(str(state or '').upper(), 'muted')
+
+
+def state_colour(state):
+    return TONE_COLOURS[state_tone(state)]

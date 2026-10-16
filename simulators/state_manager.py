@@ -76,15 +76,37 @@ def _fresh_values(items):
             for it in items}
 
 
+# Sentinel: the Zabbix API could not answer. Distinct from "no data" and from
+# "host absent". Without this, an API hiccup was indistinguishable from a dead
+# ATM and every machine in the fleet was written as UNREACHABLE - a monitoring
+# tool crying wolf about itself, which is worse than reporting nothing.
+FETCH_FAILED = object()
+
+
 def fetch_host_metrics(auth, host):
-    hosts = zbx_call('host.get', {'output': ['hostid'], 'filter': {'host': [host]}}, auth)
+    """Return a metrics dict, None if the host is not in Zabbix, or FETCH_FAILED.
+
+    Also returns the agent interface availability Zabbix reports for the host, so
+    reachability comes from positive evidence rather than from the absence of
+    telemetry. interface.available: 1 available, 2 unavailable, 0 unknown.
+    """
+    hosts = zbx_call('host.get',
+                     {'output': ['hostid'], 'selectInterfaces': ['available'],
+                      'filter': {'host': [host]}}, auth)
+    if hosts is None:
+        return FETCH_FAILED, None
     if not hosts:
-        return None
+        return None, None
+    avail = None
+    for iface in hosts[0].get('interfaces') or []:
+        if iface.get('available') is not None:
+            avail = int(iface['available'])
+            break
     hostid = hosts[0]['hostid']
     items = zbx_call('item.get', {'output': ['key_', 'lastvalue', 'lastclock'], 'hostids': [hostid],
                                   'filter': {'key_': STATE_KEYS}}, auth)
     if items is None:
-        return {}
+        return FETCH_FAILED, avail
     merged = _fresh_values(items)
     # WMI (NCR agent) path: master + per-part dependents. `search` is
     # substring-based — 'atm.part.' matches dependents, never 'atm.parts'.
@@ -93,10 +115,21 @@ def fetch_host_metrics(auth, host):
     deps = zbx_call('item.get', {'output': ['key_', 'lastvalue', 'lastclock'], 'hostids': [hostid],
                                  'search': {'key_': 'atm.part.'}}, auth) or []
     merged.update(_fresh_values(wmi + deps))
-    return merged
+    return merged, avail
 
 
-def determine_state(m, vendor='NCR'):
+def determine_state(m, vendor='NCR', availability=None):
+    """State for a host Zabbix knows about.
+
+    availability is Zabbix's own agent-interface verdict. Only value 2
+    (unavailable) is treated as proof the machine is down. When Zabbix says the
+    agent is fine but no usable telemetry has arrived, the honest answer is
+    UNKNOWN - the collector may simply not be installed yet - not UNREACHABLE.
+    """
+    if availability == 2:
+        return 'UNREACHABLE'
+    if availability == 1 and not m:
+        return 'UNKNOWN'
     return interpret_state(vendor, m)
 
 
@@ -112,8 +145,19 @@ def update_states(auth):
 
     results = []
     for atm_id, vendor in atms:
-        m = fetch_host_metrics(auth, atm_id)
-        state = determine_state(m, vendor) if m is not None else 'UNREACHABLE'
+        m, avail = fetch_host_metrics(auth, atm_id)
+        if m is FETCH_FAILED:
+            # Our monitoring path is broken, not the ATM. Leave the last known
+            # state untouched rather than overwrite a healthy machine with an
+            # outage we invented.
+            print(f"[WARN] Zabbix did not answer for {atm_id}; "
+                  f"leaving its state unchanged")
+            continue
+        if m is None:
+            # Registered here, absent in Zabbix: a provisioning gap, not an outage.
+            state = 'NOT_PROVISIONED'
+        else:
+            state = determine_state(m, vendor, avail)
         results.append((atm_id, vendor or 'NCR', state))
 
     conn = get_db()

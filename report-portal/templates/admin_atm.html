@@ -258,7 +258,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
               <span class="retired-tag" title="Retired — excluded from the monitored fleet">Retired</span>
               {% else %}
               {% set live = d.state or 'UNKNOWN' %}
-              <span style="color:{{ 'green' if live=='IN_SERVICE' else 'red' }};font-weight:600">{{ live }}</span>
+              <span style="color:{{ live | state_colour }};font-weight:600">{{ live }}</span>
               {% if d.live %}<span title="State verified just now via live check (it can still be UNREACHABLE — this badge means fresh, not healthy)" style="margin-left:4px;font-size:9px;color:green;border:1px solid green;border-radius:8px;padding:1px 5px;vertical-align:middle">LIVE</span>{% endif %}
               {% endif %}
             </td>
@@ -317,7 +317,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
           <span class="retired-tag" title="Retired — excluded from the monitored fleet">Retired</span>
           {% else %}
           {% set live = d.state or 'UNKNOWN' %}
-          <span style="color:{{ 'green' if live=='IN_SERVICE' else 'red' }};font-weight:600;font-size:12px">{{ live }}</span>
+          <span style="color:{{ live | state_colour }};font-weight:600;font-size:12px">{{ live }}</span>
           {% endif %}
         </div>
         <div class="atm-card-info">

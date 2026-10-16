@@ -94,9 +94,15 @@ dependency.
   no expiry, so forgetting it would show invented cash as real. Now every
   simulated source carries a `demo_expires_at`; simulated data with no window is
   invisible, and `--show-demo` refuses to run without `--until`.
-- *`state_manager.py` reports UNREACHABLE when its own Zabbix query fails.*
-  "Cannot verify" and "ATM is dead" are different states and the portal conflates
-  them, so a monitoring tool cries wolf about itself.
+- ~~`state_manager.py` reports UNREACHABLE when its own Zabbix query fails.~~
+  **DONE.** `fetch_host_metrics` now returns a `FETCH_FAILED` sentinel when
+  Zabbix does not answer, and the ATM's state is left untouched rather than
+  overwritten with an outage we invented. Reachability now comes from Zabbix's
+  own agent-interface verdict rather than from missing telemetry; an absent host
+  is `NOT_PROVISIONED` (a setup gap) and an agent that is reachable but has
+  collected nothing is `UNKNOWN`. Both render muted, not red — `state_tone()` in
+  helpers.py replaced the `green if IN_SERVICE else red` ternary, which had been
+  painting "we cannot tell" the same as "the machine is broken".
 - *Operators can edit `snmp_community`* through `/atm/save`, so a credential is
   editable below the tier that manages users.
 - *Three-hour timezone error at 13 query sites* — see 7.2; naive-UTC columns
