@@ -45,7 +45,7 @@ class CountingClient:
                          'interfaces': (by_id[hid]['interfaces'] if wants_ifaces and hid in by_id else [])}
                         for hid in wanted_ids]
             wanted = (params.get('filter') or {}).get('host') or []
-            return [h for h in self.hosts if h['name'] in wanted]
+            return [h for h in self.hosts if h['host'] in wanted]
         if method == 'item.get':
             out = []
             for hid in params['hostids']:
@@ -62,7 +62,18 @@ class CountingClient:
 
 
 def _hosts(n):
-    return [{'hostid': str(i), 'name': 'ATM-%04d' % i, 'status': '0',
+    """Model the REAL host shape.
+
+    zabbix_sync sets host=<atm_id> and name=<atm_name>, and those differ on
+    every real machine: host 'ATM-TEST-NCR', name '4 Kilo Test NCR'. The first
+    version of this fake set name == atm_id, which is why a lookup keyed on the
+    wrong field passed here and then reported the entire fleet as not
+    provisioned in production.
+    """
+    return [{'hostid': str(i),
+             'host': 'ATM-%04d' % i,
+             'name': 'Branch %d Test ATM' % i,
+             'status': '0',
              'interfaces': [{'interfaceid': 'i', 'type': '1', 'port': '10050',
                              'ip': '10.0.0.%d' % (i % 250 + 1)}]}
             for i in range(1, n + 1)]
@@ -199,3 +210,55 @@ def test_fleet_falls_back_rather_than_failing_the_page():
     assert 'falling back per ATM' in body
     assert 'results = None' in body, 'must be able to abandon the batched path'
     assert body.count('results = [verify_fn(') == 1, 'exactly one fallback path'
+
+# ── the regression that shipped in eb2fee6 ─────────────────────────────────
+
+def test_snapshot_matches_on_the_technical_host_name_not_the_visible_name():
+    """Shipped bug: the batched host.get matched on Zabbix's 'name' (the ATM's
+    display name, e.g. '4 Kilo Test NCR') and reported every real ATM as not
+    provisioned. The provisioner sets host=<atm_id> and name=<atm_name>."""
+    hosts = _hosts(2)
+    snap = verify._zabbix_snapshot(CountingClient(hosts), _ids(2))
+    assert snap['ATM-0001']['host'] is not None, (
+        'host.get must be matched on the technical name')
+    assert snap['ATM-0002']['host'] is not None
+
+
+def test_visible_name_never_counts_as_an_atm_id():
+    """If a visible name were used as a key, a host called 'Branch 1 Test ATM'
+    would be reported against an ATM that does not exist."""
+    hosts = _hosts(2)
+    snap = verify._zabbix_snapshot(CountingClient(hosts), _ids(2))
+    assert 'Branch 1 Test ATM' not in snap
+    assert set(snap) == set(_ids(2)), 'the map is keyed by atm_id and nothing else'
+
+
+def test_batch_requests_the_technical_name_field():
+    """Asking for 'name' alone is what broke it; the field must be requested and
+    matched explicitly."""
+    client = CountingClient(_hosts(1))
+    verify._zabbix_snapshot(client, _ids(1))
+    host_get = next(p for m, p in client.calls if m == 'host.get')
+    assert 'host' in host_get['output'], (
+        "output must include the technical name 'host'")
+
+
+def test_every_host_lookup_in_the_snapshot_uses_the_technical_name():
+    """I fixed the first occurrence of `out.get(h.get('name'))` and missed the
+    second, so hosts were assigned but their items never attached - the report
+    said "not provisioned" for some machines and "0 items" for the rest. A
+    partial fix of a repeated pattern needs a test that counts occurrences
+    rather than trusting a search-and-replace to have hit all of them."""
+    import ast
+    src = (REPO / 'report-portal' / 'verify.py').read_text()
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == '_zabbix_snapshot')
+    body = ast.get_source_segment(src, fn)
+    bare = body.count("out.get(h.get('name'))")
+    correct = body.count("out.get(h.get('host') or h.get('name'))")
+    assert bare == 0, (
+        'found %d lookup(s) keyed on the visible name only' % bare)
+    assert correct == 2, (
+        'expected both the host assignment and the item loop to use the '
+        'technical name; found %d' % correct)

@@ -92,7 +92,14 @@ def _zabbix_snapshot(client, atm_ids):
     hosts, failed = [], False
     for i in range(0, len(atm_ids), ZABBIX_CHUNK):
         part = client.call('host.get', {
-            'output': ['hostid', 'name', 'status'],
+            # 'host' is the TECHNICAL name - the one that equals atm_id, and the
+            # one the filter below matches on. 'name' is the visible name and is
+            # the ATM's display name ("4 Kilo Test NCR"), NOT its id.
+            #
+            # Matching on 'name' reported every real ATM as "not provisioned":
+            # nothing in the fleet is called ATM-TEST-NCR by that field. It only
+            # looked right in tests because the fake hosts had name == id.
+            'output': ['hostid', 'host', 'status'],
             'selectInterfaces': ['interfaceid', 'type', 'port', 'ip'],
             'filter': {'host': list(atm_ids[i:i + ZABBIX_CHUNK])}})
         if part is None:
@@ -105,10 +112,8 @@ def _zabbix_snapshot(client, atm_ids):
             f['error'] = err
         return out
 
-    by_name = {}
     for h in hosts:
-        by_name[h.get('name')] = h
-        f = out.get(h.get('name'))
+        f = out.get(h.get('host') or h.get('name'))
         if f is None:
             continue
         f['host'] = h
@@ -136,7 +141,7 @@ def _zabbix_snapshot(client, atm_ids):
         for h in hosts:
             if h['hostid'] not in chunk:
                 continue
-            f = out.get(h.get('name'))
+            f = out.get(h.get('host') or h.get('name'))
             if f is None:
                 continue
             newest = 0
