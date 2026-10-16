@@ -8,6 +8,7 @@ The distinction this module exists to protect: EJ and the ATM switch are real
 bank data. The simulator is not, and the only thing that used to separate them
 was a banner - which stops being a control the moment anyone exports a CSV.
 """
+import datetime
 import logging
 import time
 
@@ -20,6 +21,9 @@ logger = logging.getLogger(__name__)
 TRUSTED_SOURCES = ('EJ', 'ISO8583')
 
 DEMO_SOURCES = ('SIMULATOR', 'ISO8583_SIM', 'ISO8583_REAL')
+
+# Fixed +3, so the banner can print an expiry in the wall clock the demo audience reads.
+EAT = datetime.timezone(datetime.timedelta(hours=3), 'EAT')
 
 
 def _rows(conn, sql, args=None):
@@ -45,17 +49,24 @@ def _rows(conn, sql, args=None):
             pass
 
 
+def _demo_live(row_expires, now):
+    """Mirror of the view's demo predicate. Both must agree or the banner lies."""
+    return row_expires is not None and row_expires > now
+
+
 def load(conn):
     """Return (visible, hidden, using_fallback) as lists of (source, label)."""
-    rows = _rows(conn, "SELECT source, label, trusted, enabled "
+    rows = _rows(conn, "SELECT source, label, trusted, enabled, demo_expires_at "
                        "FROM txn_source_policy ORDER BY source")
     if rows is None:
         visible = [(s, 'EJ journal' if s == 'EJ' else 'ATM switch') for s in TRUSTED_SOURCES]
         hidden = [(s, 'Simulated / test data') for s in DEMO_SOURCES]
         return visible, hidden, True
-    return ([(r[0], r[1]) for r in rows if r[3]],
-            [(r[0], r[1]) for r in rows if not r[3]],
-            False)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    visible = [(r[0], r[1]) for r in rows
+               if r[3] and (r[2] or _demo_live(r[4], now))]
+    hidden = [(r[0], r[1]) for r in rows if (r[0], r[1]) not in visible]
+    return visible, hidden, False
 
 
 def status(conn):
@@ -71,9 +82,15 @@ def status(conn):
     demo_on = [src for src, _ in visible if src not in TRUSTED_SOURCES]
     if demo_on:
         shown = ', '.join(src for src, _ in visible)
-        return ('DEMONSTRATION DATA IS SHOWN (%s) alongside %s. These are not real '
+        until = _rows(conn, "SELECT min(demo_expires_at) FROM txn_source_policy "
+                            "WHERE NOT trusted AND enabled AND demo_expires_at > NOW()")
+        expires = ''
+        if until and until[0][0]:
+            e = until[0][0].astimezone(EAT)
+            expires = ' until %s EAT' % e.strftime('%H:%M')
+        return ('DEMONSTRATION DATA IS SHOWN (%s%s) alongside %s. These are not real '
                 'transactions and must not drive a cash or fraud decision.'
-                % (', '.join(demo_on), shown), 'demo')
+                % (', '.join(demo_on), expires, shown), 'demo')
     if not visible:
         return ('No transaction source is enabled, so every transaction view is '
                 'empty by policy.', 'info')
@@ -100,7 +117,16 @@ def status(conn):
 # make the audit log a lie. ON CONFLICT DO NOTHING seeds only new sources.
 POLICY_LOCK = 999888778
 
+# Bumped whenever POLICY_DDL changes meaning. Checked-then-skipped schema work is
+# only safe with a version marker: without it, an already-existing view would
+# never pick up a corrected definition, which is precisely how the three-hour
+# timezone bug and the missing view both survived.
+SCHEMA_VERSION = 2
+
 POLICY_DDL = [
+    """CREATE TABLE IF NOT EXISTS portal_schema_version (
+        version integer NOT NULL
+    )""",
     """CREATE TABLE IF NOT EXISTS txn_source_policy (
         source  varchar(20) PRIMARY KEY,
         label   varchar(60) NOT NULL,
@@ -108,6 +134,10 @@ POLICY_DDL = [
         enabled boolean NOT NULL DEFAULT false,
         note    text
     )""",
+    # Demo data carries an expiry. NULL means "no demo window", so a simulated
+    # source cannot become visible without a deliberate end time - the failure
+    # mode of a demo that outlives itself.
+    "ALTER TABLE txn_source_policy ADD COLUMN IF NOT EXISTS demo_expires_at timestamptz",
     """INSERT INTO txn_source_policy (source, label, trusted, enabled, note) VALUES
         ('EJ',           'EJ journal (real ATM)',  true,  true,
          'System of record for what the terminal did.'),
@@ -120,9 +150,18 @@ POLICY_DDL = [
         ('ISO8583_REAL', 'Switch test generator',  false, false,
          'Fabricated despite the name.')
        ON CONFLICT (source) DO NOTHING""",
+    # Trusted sources show when enabled. Untrusted ones show only while their
+    # demo window is open. --no-expiry stores a far-future timestamp rather than
+    # NULL, so NULL unambiguously means "not visible as demo data".
     """CREATE OR REPLACE VIEW atm_transactions_visible AS
         SELECT t.* FROM atm_transactions t
-         WHERE t.source IN (SELECT p.source FROM txn_source_policy p WHERE p.enabled)""",
+         WHERE t.source IN (
+               SELECT p.source FROM txn_source_policy p
+                WHERE p.enabled
+                  AND (p.trusted
+                       OR (p.demo_expires_at IS NOT NULL AND p.demo_expires_at > NOW())))""",
+    "DELETE FROM portal_schema_version",
+    "INSERT INTO portal_schema_version (version) VALUES (2)",
 ]
 
 
@@ -145,9 +184,13 @@ def ensure_schema_best_effort():
             try:
                 cur.execute("SELECT pg_advisory_xact_lock(%s)", (POLICY_LOCK,))
                 cur.execute("SELECT to_regclass('public.atm_transactions_visible')")
+                have_view = cur.fetchone()[0] is not None
+                cur.execute("SELECT to_regclass('public.portal_schema_version')")
                 if cur.fetchone()[0]:
-                    conn.commit()
-                    return True
+                    cur.execute("SELECT max(version) FROM portal_schema_version")
+                    if (cur.fetchone()[0] or 0) >= SCHEMA_VERSION and have_view:
+                        conn.commit()
+                        return True
                 for stmt in POLICY_DDL:
                     cur.execute(stmt)
                 conn.commit()

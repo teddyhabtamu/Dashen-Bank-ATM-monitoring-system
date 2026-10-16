@@ -22,6 +22,7 @@ Run it inside the portal container, which already has the DB credentials:
     docker exec report-portal python3 scripts/set_txn_sources.py --hide-demo
 """
 import argparse
+import datetime
 import os
 import sys
 
@@ -85,7 +86,32 @@ def show(conn):
     return 0
 
 
-def set_enabled(conn, sources, enabled, actor, ack):
+# Far future rather than NULL. NULL means "no demo window", i.e. invisible, so
+# a demo can only be made permanent by being explicit about it.
+NEVER_EXPIRES = datetime.datetime(2099, 1, 1, tzinfo=datetime.timezone.utc)
+
+
+def _parse_until(value):
+    """Accept a duration (4h, 90m) or a wall clock time today (16:30)."""
+    if value == 'never':
+        return NEVER_EXPIRES
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if value.endswith(('h', 'm')) and value[:-1].isdigit():
+        delta = datetime.timedelta(hours=int(value[:-1])) if value.endswith('h') \
+            else datetime.timedelta(minutes=int(value[:-1]))
+        return now + delta
+    try:
+        hh, _, mm = value.partition(':')
+        when = now.astimezone(datetime.timezone(datetime.timedelta(hours=3)))
+        target = when.replace(hour=int(hh), minute=int(mm), second=0, microsecond=0)
+        if target <= when:
+            target += datetime.timedelta(days=1)
+        return target.astimezone(datetime.timezone.utc)
+    except Exception:
+        raise SystemExit('--until must look like 4h, 90m, 16:30 or never')
+
+
+def set_enabled(conn, sources, enabled, actor, ack, until=None):
     with conn.cursor() as cur:
         cur.execute("SELECT source, label, trusted FROM txn_source_policy WHERE source = ANY(%s)",
                     (list(sources),))
@@ -99,12 +125,17 @@ def set_enabled(conn, sources, enabled, actor, ack):
         print('Refusing to show simulated data without --i-know-this-is-demo.')
         print('Sources that are not real bank data: %s' % ', '.join(untrusted))
         return 1
+    expires = until if enabled else None
     with conn.cursor() as cur:
-        cur.execute("UPDATE txn_source_policy SET enabled = %s WHERE source = ANY(%s)",
-                    (enabled, list(sources)))
+        cur.execute("UPDATE txn_source_policy SET enabled = %s, demo_expires_at = %s "
+                    "WHERE source = ANY(%s)",
+                    (enabled, expires, list(sources)))
     conn.commit()
     detail = '%s %s by %s' % ('enabled' if enabled else 'disabled',
                               ','.join(sorted(sources)), actor)
+    if enabled and expires:
+        detail += ' (demo window ends %s)' % expires.astimezone(
+            datetime.timezone(datetime.timedelta(hours=3))).strftime('%Y-%m-%d %H:%M EAT')
     try:
         from audit import log_action
         log_action('TXN_SOURCES', detail)
@@ -123,6 +154,10 @@ def main():
                     help='enable these sources (normally a simulated one)')
     ap.add_argument('--i-know-this-is-demo', action='store_true',
                     help='required to enable a source that is not real bank data')
+    ap.add_argument('--until', metavar='WHEN',
+                    help='how long the demo window stays open: 4h, 90m, 16:30, or '
+                         'never. Required with --show-demo for simulated sources, so '
+                         'a demo cannot outlive itself.')
     ap.add_argument('--actor', default=os.environ.get('USER', 'cli'),
                     help='who is making the change (recorded in the audit log)')
     args = ap.parse_args()
@@ -134,7 +169,14 @@ def main():
         if args.hide_demo:
             return set_enabled(conn, DEMO, False, args.actor, True)
         if args.show_demo:
-            return set_enabled(conn, args.show_demo, True, args.actor, args.i_know_this_is_demo)
+            untrusted_demo = any(s in DEMO for s in args.show_demo)
+            if untrusted_demo and not args.until:
+                ap.error('--show-demo of simulated data needs --until (e.g. 3h or '
+                         '16:30), so demo mode cannot outlive the demo. Pass '
+                         '--until never if you truly want it permanent.')
+            return set_enabled(conn, args.show_demo, True, args.actor,
+                               args.i_know_this_is_demo,
+                               _parse_until(args.until) if args.until else None)
         return show(conn)
 
 

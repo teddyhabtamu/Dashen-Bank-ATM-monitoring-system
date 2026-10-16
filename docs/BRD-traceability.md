@@ -89,6 +89,20 @@ dependency.
 
 1. **5.5 / 8.4 alert channels** — email and SMS are templates. "Shall send"
    is unproven until one test alert lands through each.
+**Gaps found in review (2026-10-15), by severity:**
+- *Demo mode can outlive the demo.* Simulated data was hidden by a toggle with
+  no expiry, so forgetting it would show invented cash as real. Now every
+  simulated source carries a `demo_expires_at`; simulated data with no window is
+  invisible, and `--show-demo` refuses to run without `--until`.
+- *`state_manager.py` reports UNREACHABLE when its own Zabbix query fails.*
+  "Cannot verify" and "ATM is dead" are different states and the portal conflates
+  them, so a monitoring tool cries wolf about itself.
+- *Operators can edit `snmp_community`* through `/atm/save`, so a credential is
+  editable below the tier that manages users.
+- *Three-hour timezone error at 13 query sites* — see 7.2; naive-UTC columns
+  rendered as EAT with a single `AT TIME ZONE`, shifting every displayed
+  timestamp and the Peak Transaction Hours chart three hours into the past.
+
 2. **8.1 switch integration** — deferred by decision. Transaction monitoring
    moves to the EJ journals instead (they are the system of record for what the
    terminal did, which is what dispute and cash work needs). The ISO 8583

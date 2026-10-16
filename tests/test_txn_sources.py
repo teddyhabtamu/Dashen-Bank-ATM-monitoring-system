@@ -15,6 +15,7 @@ the health check must keep using the real table, or the portal could not clean u
 after itself.
 """
 import ast
+import datetime
 import pathlib
 import sys
 
@@ -41,7 +42,9 @@ class FakeCursor:
     def execute(self, sql, args=None):
         if self.conn.fail:
             raise Exception('relation "txn_source_policy" does not exist')
-        if 'FROM txn_source_policy' in sql and 'NOT EXISTS' not in sql:
+        if 'min(demo_expires_at)' in sql:
+            self._rows = [(self.conn.demo_until,)]
+        elif 'FROM txn_source_policy' in sql and 'NOT EXISTS' not in sql:
             self._rows = list(self.conn.policy)
         elif 'NOT EXISTS' in sql:
             self._rows = [(self.conn.hidden_rows,)]
@@ -56,14 +59,15 @@ class FakeCursor:
 
 
 class FakeConn:
-    def __init__(self, policy=None, fail=False, hidden_rows=0):
+    def __init__(self, policy=None, fail=False, hidden_rows=0, demo_until=None):
         self.policy = policy if policy is not None else [
-            ('EJ', 'EJ journal (real ATM)', True, True),
-            ('ISO8583', 'ATM switch (ISO 8583)', True, True),
-            ('SIMULATOR', 'Transaction simulator', False, False),
-            ('ISO8583_SIM', 'Switch simulator', False, False),
-            ('ISO8583_REAL', 'Switch test generator', False, False),
+            ('EJ', 'EJ journal (real ATM)', True, True, None),
+            ('ISO8583', 'ATM switch (ISO 8583)', True, True, None),
+            ('SIMULATOR', 'Transaction simulator', False, False, None),
+            ('ISO8583_SIM', 'Switch simulator', False, False, None),
+            ('ISO8583_REAL', 'Switch test generator', False, False, None),
         ]
+        self.demo_until = demo_until
         self.fail = fail
         self.hidden_rows = hidden_rows
         self.rolled_back = False
@@ -90,10 +94,11 @@ def test_status_reports_hidden_rows():
 
 
 def test_demo_source_escalates_to_loud_banner():
+    future = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)
     conn = FakeConn(policy=[
-        ('EJ', 'EJ journal', True, True),
-        ('SIMULATOR', 'Transaction simulator', False, True),
-    ])
+        ('EJ', 'EJ journal', True, True, None),
+        ('SIMULATOR', 'Transaction simulator', False, True, future),
+    ], demo_until=future)
     note, level = txn_sources.status(conn)
     assert level == 'demo'
     assert 'DEMONSTRATION DATA IS SHOWN' in note
@@ -101,7 +106,7 @@ def test_demo_source_escalates_to_loud_banner():
 
 
 def test_no_enabled_source_is_stated_not_hidden():
-    note, level = txn_sources.status(FakeConn(policy=[('EJ', 'EJ', True, False)]))
+    note, level = txn_sources.status(FakeConn(policy=[('EJ', 'EJ', True, False, None)]))
     assert level == 'info'
     assert 'empty by policy' in note
 
@@ -331,3 +336,96 @@ def test_cli_explains_itself_when_psycopg2_is_unavailable(tmp_path):
     assert 'docker exec -i report-portal python3 -' in text, (
         'must give the working invocation, not just an import error')
     assert 'Traceback' not in text
+
+
+# ── expiring demo mode ──────────────────────────────────────────────────────
+#
+# A demo that cannot switch itself off is the one thing guaranteed to end up
+# showing invented cash to someone who believes it. So simulated data carries an
+# expiry, and simulated data with NO expiry is invisible.
+
+def _utc(hours=0):
+    return datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=hours)
+
+
+def test_simulated_data_without_an_expiry_is_hidden():
+    """The safe default: no window means no demo data, even if enabled."""
+    conn = FakeConn(policy=[
+        ('EJ', 'EJ journal', True, True, None),
+        ('SIMULATOR', 'Simulator', False, True, None),
+    ])
+    visible, hidden, _ = txn_sources.load(conn)
+    assert [s for s, _ in visible] == ['EJ']
+    assert 'SIMULATOR' in [s for s, _ in hidden]
+
+
+def test_simulated_data_inside_its_window_is_visible():
+    conn = FakeConn(policy=[
+        ('EJ', 'EJ journal', True, True, None),
+        ('ISO8583_SIM', 'Simulator', False, True, _utc(3)),
+    ], demo_until=_utc(3))
+    visible, _, _ = txn_sources.load(conn)
+    assert [s for s, _ in visible] == ['EJ', 'ISO8583_SIM']
+
+
+def test_expired_demo_window_disappears_on_its_own():
+    """Nobody has to remember to switch it off."""
+    conn = FakeConn(policy=[
+        ('EJ', 'EJ journal', True, True, None),
+        ('ISO8583_SIM', 'Simulator', False, True, _utc(-1)),
+    ], demo_until=_utc(-1))
+    visible, hidden, _ = txn_sources.load(conn)
+    assert [s for s, _ in visible] == ['EJ']
+    note, level = txn_sources.status(conn)
+    assert level != 'demo', 'an expired demo must not keep the red banner up'
+
+
+def test_banner_states_when_the_demo_ends():
+    """The audience can see the safety net, not just the operator."""
+    until = _utc(4)
+    conn = FakeConn(policy=[
+        ('EJ', 'EJ journal', True, True, None),
+        ('ISO8583_SIM', 'Simulator', False, True, until),
+    ], demo_until=until)
+    note, level = txn_sources.status(conn)
+    assert level == 'demo'
+    assert 'EAT' in note and 'DEMONSTRATION DATA IS SHOWN' in note
+
+
+def test_view_sql_and_python_agree_on_the_demo_predicate():
+    """The banner and the data must not disagree.
+
+    The view filters in SQL; status() filters in Python. If they drift, the page
+    says "real data only" while invented rows are on screen - the exact failure
+    the quarantine exists to prevent.
+    """
+    view = [q for q in _startup_ddl() if 'CREATE OR REPLACE VIEW' in q][0]
+    assert 'p.trusted' in view
+    assert 'p.demo_expires_at IS NOT NULL AND p.demo_expires_at > NOW()' in view
+    now = datetime.datetime.now(datetime.timezone.utc)
+    assert txn_sources._demo_live(now + datetime.timedelta(hours=1), now) is True
+    assert txn_sources._demo_live(now - datetime.timedelta(hours=1), now) is False
+    assert txn_sources._demo_live(None, now) is False
+
+
+def test_schema_version_exists_because_skipping_is_not_free():
+    """ensure_schema_best_effort skips DDL when things look present.
+
+    Without a version marker a corrected view definition would never be applied
+    to an already-deployed host - which is how the missing view, and then the
+    stale three-hour timezone view, both persisted.
+    """
+    ddl = '\n'.join(_startup_ddl())
+    assert 'portal_schema_version' in ddl
+    src = (REPO / 'report-portal' / 'txn_sources.py').read_text()
+    assert 'SCHEMA_VERSION = 2' in src
+    fn = src[src.index('def ensure_schema_best_effort'):]
+    assert 'portal_schema_version' in fn, 'the version check must gate the DDL'
+
+
+def test_demo_sources_cannot_be_enabled_without_an_expiry():
+    """The CLI must make the duration an explicit decision."""
+    src = (REPO / 'scripts' / 'set_txn_sources.py').read_text()
+    assert '--until' in src
+    assert 'cannot outlive the demo' in src
+    assert 'demo_expires_at' in src
