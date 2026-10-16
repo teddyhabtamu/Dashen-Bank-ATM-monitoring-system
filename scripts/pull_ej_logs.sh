@@ -48,6 +48,9 @@ LOCKFILE="${EJ_LOCK:-$OUTDIR/pull.lock}"
 # up within minutes instead of being ignored for the rest of the day.
 STAMPDIR="$OUTDIR/.absent"
 EJ_ABSENT_RETRY_MIN="${EJ_ABSENT_RETRY_MIN:-10}"
+# How far back to look the FIRST time we see a box, to discover how its journal
+# is dated. Steady-state runs only need DAYS plus the live day.
+DISCOVER_DAYS="${EJ_DISCOVER_DAYS:-7}"
 mkdir -p "$STAMPDIR"
 exec 9>"$LOCKFILE"
 if command -v flock >/dev/null 2>&1; then
@@ -90,8 +93,37 @@ pull_one() {
     # staleness that looks exactly like a healthy run.
     live="$OUTDIR/$(date -u +%F 2>/dev/null || date -u +%F)_${tag}_EJDATA.log"
   fi
-  for i in $(seq 0 $((DAYS - 1))); do
-    day="$(date -u -d "$i days ago" +%F 2>/dev/null || date -u -v-"$i"d +%F)"
+  # Days to consider: the last DAYS by SERVER date, plus the day the live
+  # journal is actually named after - even when that falls outside the window.
+  #
+  # This matters because the two clocks disagree. NCR names the journal by the
+  # box's bank date, which on this fleet trails the server date. The cron runs
+  # DAYS=2, so once the gap exceeded two days the live journal fell outside the
+  # window entirely and the puller stopped collecting from it - silently, with
+  # no error and a log line that looked like success. It surfaced only as "the
+  # EJ count is not moving".
+  # Cold start: we hold no journal for this box, so we do not yet know how its
+  # bank date relates to ours. Probe a wider window ONCE to discover it, then
+  # fall back to the narrow window plus the known live day. Without this a box
+  # whose journal runs three days behind is never found at all - the puller only
+  # ever asks for the last DAYS names.
+  local span="$DAYS"
+  if ! ls "$OUTDIR"/*_"$tag"_EJDATA.log >/dev/null 2>&1; then
+    span="$DISCOVER_DAYS"
+  fi
+  day_list=""
+  for i in $(seq 0 $((span - 1))); do
+    day_list="$day_list $(date -u -d "$i days ago" +%F 2>/dev/null || date -u -v-"$i"d +%F)"
+  done
+  if [ -n "$live" ] && [ -f "$live" ]; then
+    live_day="$(basename "$live")"
+    live_day="${live_day%%_*}"
+    case " $day_list " in
+      *" $live_day "*) : ;;
+      *) day_list="$day_list $live_day" ;;
+    esac
+  fi
+  for day in $day_list; do
     f="${day}_${tag}_EJDATA.log"
     if [ "$EJ_FAST" = "1" ]; then
       if [ -n "$live" ] && [ "$live" = "$OUTDIR/$f" ]; then
