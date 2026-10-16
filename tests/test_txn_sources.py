@@ -471,3 +471,69 @@ def test_sidebar_scrollbar_is_slim_and_the_menu_is_tighter():
     assert '.sidebar-nav::-webkit-scrollbar{width:6px}' in css
     nav = css[css.index('.nav-item{'):css.index('.nav-item.active{')]
     assert 'min-height:34px' in nav, 'menu rows must be tighter to fit'
+
+
+# ── fleet counts must count the fleet ───────────────────────────────────────
+
+def test_status_donut_joins_the_fleet():
+    """Reported live: the donut showed UNREACHABLE (4) while ATM Registration
+    listed 3 machines - one of them a HARDWARE_FAULT.
+
+    The chart counted rows in atm_current_state, which UAT has no foreign key to
+    atm_locations, so every deleted ATM left a row behind that still counted.
+    """
+    routes = (REPO / 'report-portal' / 'routes.py').read_text()
+    block = routes[routes.index('STATUS = """'):routes.index('VENDOR = """')]
+    assert 'JOIN atm_locations' in block, (
+        'the status chart must join the fleet, or deleted ATMs keep being counted')
+    assert 'atm_current_state s' in block
+    assert "COALESCE(l.status, 'active')" in block, 'inactive ATMs are not fleet'
+
+
+def _chart_sql(name):
+    """Extract exactly one named chart query.
+
+    Slicing to the next query assignment swallowed the comment block that
+    follows, so an assertion failed on a comment instead of on SQL. This slices
+    between the first pair of triple-quote delimiters only.
+    """
+    routes = (REPO / 'report-portal' / 'routes.py').read_text()
+    opener = routes.index('%s = """' % name) + len('%s = ' % name) + 3
+    closer = routes.index('"""', opener)
+    return routes[opener:closer]
+
+
+def test_machine_counting_charts_join_the_fleet():
+    """STATUS counts MACHINES, so it must count exactly the fleet ATM
+    Registration lists. That is the chart that disagreed (4 vs 3).
+
+    The transaction charts are deliberately exempt: they measure money over time,
+    not machines, and cash genuinely dispensed by an ATM that has since been
+    deleted still happened. Filtering those by the current roster would silently
+    restate history.
+    """
+    status = _chart_sql('STATUS')
+    assert 'atm_locations' in status, (
+        'the status distribution must join atm_locations')
+    for name in ('TXN_VOL', 'CASH'):
+        assert 'atm_current_state' not in _chart_sql(name)
+
+
+def test_fleet_scoped_charts_filter_to_active_atms():
+    """A chart counting machines must not count retired ones as if they were
+    live - the same class of mistake as counting deleted ones."""
+    # Only the charts that already join the fleet need filtering; SR measures
+    # success rate over time and does not count machines.
+    for name in ('STATUS', 'VENDOR'):
+        sql = _chart_sql(name)
+        assert 'atm_locations' in sql, '%s should be fleet-scoped' % name
+        assert "COALESCE(l.status, 'active')" in sql or "status = 'active'" in sql, \
+            '%s joins the fleet but does not filter it' % name
+
+
+def test_state_fk_migration_exists_and_is_cascade():
+    """The FK is what stops orphans recurring, so the migration is not optional."""
+    sql = (REPO / 'scripts' / 'migrate_state_fk.sql').read_text()
+    assert 'fk_acs_atm_id' in sql
+    assert 'ON DELETE CASCADE' in sql
+    assert 'DELETE FROM atm_current_state' in sql, 'orphans must be cleared first'

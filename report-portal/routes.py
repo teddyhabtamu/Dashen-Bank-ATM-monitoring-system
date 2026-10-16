@@ -176,10 +176,17 @@ def api_charts():
             GROUP BY DATE(recorded_at)
             ORDER BY day
         """
+        # Joined to atm_locations on purpose. This counted rows in
+        # atm_current_state directly, so an ATM deleted from atm_locations kept
+        # its state row (UAT has no foreign key on that table) and the dashboard
+        # reported 4 unreachable while the ATM list showed 3 machines. A fleet
+        # chart must count the fleet, so it joins the fleet.
         STATUS = """
-            SELECT COALESCE(state, 'UNKNOWN') as state, COUNT(*) as cnt
-            FROM atm_current_state
-            GROUP BY state
+            SELECT COALESCE(s.state, 'UNKNOWN') as state, COUNT(*) as cnt
+            FROM atm_current_state s
+            JOIN atm_locations l ON l.atm_id = s.atm_id
+            WHERE LOWER(COALESCE(l.status, 'active')) = 'active'
+            GROUP BY s.state
             ORDER BY cnt DESC
         """
         VENDOR = """
