@@ -27,10 +27,13 @@ Usage (inside the portal container):
 """
 import argparse
 import json
+import logging
 import os
 import sys
 import time
 from datetime import datetime, timezone, timedelta
+
+logger = logging.getLogger(__name__)
 
 EAT = timezone(timedelta(hours=3))  # the system reports everything in EAT
 
@@ -45,6 +48,150 @@ AUTHORITATIVE_KEYS = {
     'NCR': ['atm.parts'],
     'GRG': ['atm.status', 'atm.net.link', 'atm.cash.cassette1'],
 }
+
+
+# Chunk size for the batched sweep. 1,300 hosts x ~90 items is ~117k item rows
+# in a single item.get response - tens of megabytes of JSON in one gunicorn
+# worker. Chunking keeps each payload sane while still collapsing ~3,900 API
+# calls into a couple of dozen.
+ZABBIX_CHUNK = int(os.environ.get('FLEET_ZABBIX_CHUNK', '250'))
+
+ITEM_OUT = ['itemid', 'hostid', 'key_', 'lastclock', 'state', 'type']
+
+
+def _blank_facts():
+    return {'host': None, 'items_total': 0, 'items_reporting': 0,
+            'items_unsupported': 0, 'items_internal': 0, 'keys_reporting': 0,
+            'newest_data_age_seconds': None, 'key_clocks': {},
+            'problems': [], 'agent_interface': False, 'interfaces': [],
+            'error': ''}
+
+
+def _zabbix_snapshot(client, atm_ids):
+    """Whole-fleet Zabbix evidence in a handful of calls, not three per ATM.
+
+    verify_atm() asked Zabbix the same three questions once per machine:
+    host.get, item.get, trigger.get - plus a FOURTH host.get that re-selected
+    interfaces the first call had already returned. At 1,300 ATMs that is ~3,900
+    serial HTTP round-trips and 1,300 separate logins, because verify_atm is
+    called with client=None and builds a fresh _Client each time.
+
+    Zabbix's API is a batch API: item.get and trigger.get both accept an ARRAY
+    of hostids. This fetches the fleet in chunks and hands each ATM its slice,
+    so the per-ATM logic is unchanged and the call count stops scaling.
+
+    Returns {atm_id: facts}. Never raises: a failure marks every ATM as
+    'could not read Zabbix' rather than inventing a verdict.
+    """
+    out = {a: _blank_facts() for a in atm_ids}
+    if not atm_ids:
+        return out
+
+    # Chunked for the same reason as item.get: the cap has to hold for every
+    # call, or the fleet size quietly reappears inside one request.
+    hosts, failed = [], False
+    for i in range(0, len(atm_ids), ZABBIX_CHUNK):
+        part = client.call('host.get', {
+            'output': ['hostid', 'name', 'status'],
+            'selectInterfaces': ['interfaceid', 'type', 'port', 'ip'],
+            'filter': {'host': list(atm_ids[i:i + ZABBIX_CHUNK])}})
+        if part is None:
+            failed = True
+            break
+        hosts.extend(part)
+    if failed:
+        err = getattr(client, 'last_error', '') or 'Zabbix API returned no result'
+        for f in out.values():
+            f['error'] = err
+        return out
+
+    by_name = {}
+    for h in hosts:
+        by_name[h.get('name')] = h
+        f = out.get(h.get('name'))
+        if f is None:
+            continue
+        f['host'] = h
+        f['status_enabled'] = str(h.get('status')) == '0'
+        for i in (h.get('interfaces') or []):
+            f['interfaces'].append("%s:%s" % (i.get('type'), i.get('port')))
+            if str(i.get('type')) == '1':
+                f['agent_interface'] = True
+
+    hostids = [h['hostid'] for h in hosts]
+    now = int(time.time())
+    for i in range(0, len(hostids), ZABBIX_CHUNK):
+        chunk = hostids[i:i + ZABBIX_CHUNK]
+        items = client.call('item.get', {'hostids': chunk, 'output': ITEM_OUT,
+                                         'filter': {'status': 0}}) or []
+        probs = client.call('trigger.get', {'hostids': chunk,
+                                            'output': ['triggerid', 'hostid', 'description', 'priority'],
+                                            'filter': {'value': 1, 'status': 0}}) or []
+        items_by_host = {}
+        for it in items:
+            items_by_host.setdefault(it.get('hostid'), []).append(it)
+        probs_by_host = {}
+        for pr in probs:
+            probs_by_host.setdefault(pr.get('hostid'), []).append(pr.get('description'))
+        for h in hosts:
+            if h['hostid'] not in chunk:
+                continue
+            f = out.get(h.get('name'))
+            if f is None:
+                continue
+            newest = 0
+            for it in items_by_host.get(h['hostid'], []):
+                clock = int(it.get('lastclock') or 0)
+                key = str(it.get('key_') or '')
+                # Zabbix-internal items are identified by their KEY, not their
+                # type: internal items (zabbix[...]) are type 0, but so is every
+                # passive agent item - including atm.parts, the UserParameter
+                # master item this gate exists to require.
+                if key.lower().startswith('zabbix['):
+                    f['items_internal'] += 1
+                    continue
+                if clock:
+                    f['items_reporting'] += 1
+                    f['keys_reporting'] += 1
+                    newest = max(newest, clock)
+                if str(it.get('state')) == '1':
+                    f['items_unsupported'] += 1
+                if clock and key:
+                    f['key_clocks'][key] = clock
+            f['items_total'] = f['items_reporting'] + f['items_unsupported'] + f['items_internal']
+            if newest:
+                f['newest_data_age_seconds'] = now - newest
+            f['problems'] = [d for d in probs_by_host.get(h['hostid'], []) if d]
+    return out
+
+
+def _db_snapshot(atm_ids):
+    """Portal evidence for the whole fleet in two queries instead of two per ATM."""
+    out = {a: {'row': {}, 'state': '', 'last_seen': '', 'db_error': ''} for a in atm_ids}
+    if not atm_ids:
+        return out
+    try:
+        from db import get_db
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT atm_id, vendor, model, status, ip_address, ej_hostname "
+                        "FROM atm_locations WHERE atm_id = ANY(%s)", (list(atm_ids),))
+            for r in cur.fetchall():
+                if r[0] in out:
+                    out[r[0]]['row'] = {'atm_id': r[0], 'vendor': r[1], 'model': r[2],
+                                        'status': r[3], 'ip_address': r[4],
+                                        'ej_hostname': r[5]}
+            cur.execute("SELECT atm_id, state, last_seen FROM atm_current_state "
+                        "WHERE atm_id = ANY(%s)", (list(atm_ids),))
+            for r in cur.fetchall():
+                if r[0] in out:
+                    out[r[0]]['state'] = r[1] or ''
+                    out[r[0]]['last_seen'] = r[2].isoformat() if r[2] else ''
+            cur.close()
+    except Exception as e:
+        for f in out.values():
+            f['db_error'] = str(e)
+    return out
 
 
 # ── evidence: Zabbix ──────────────────────────────────────────────────────
@@ -146,23 +293,32 @@ def _check(name, status, detail):
     return {'name': name, 'status': status, 'detail': detail}
 
 
-def verify_atm(atm_id, window_minutes=15, client=None, db_facts=None):
-    """Decide whether an ATM is genuinely reporting. Read-only; never raises."""
+def verify_atm(atm_id, window_minutes=15, client=None, db_facts=None,
+               zabbix_facts=None):
+    """Decide whether an ATM is genuinely reporting. Read-only; never raises.
+
+    zabbix_facts / db_facts / client are injection points. The fleet sweep hands
+    this function a slice of one batched snapshot; the onboarding wizard hands it
+    nothing, so the single-ATM path is unchanged.
+    """
     checks, blockers = [], []
     vendor = 'NCR'
-    z = {'host': None, 'items_total': 0, 'items_reporting': 0, 'items_unsupported': 0,
-         'newest_data_age_seconds': None, 'problems': [], 'agent_interface': False,
-         'interfaces': [], 'error': ''}
-
-    try:
-        if client is None:
-            from zabbix_sync import _Client
-            client = _Client()
-            client.login()
-        z = _zabbix_facts(atm_id, client)
-    except Exception as e:
-        z['error'] = str(e)
-        checks.append(_check('zabbix', 'fail', f'Could not read Zabbix: {e}'))
+    if zabbix_facts is not None:
+        z = zabbix_facts
+        if z.get('error') and not z.get('host'):
+            checks.append(_check('zabbix', 'fail',
+                                f"Could not read Zabbix: {z['error']}"))
+    else:
+        z = _blank_facts()
+        try:
+            if client is None:
+                from zabbix_sync import _Client
+                client = _Client()
+                client.login()
+            z = _zabbix_facts(atm_id, client)
+        except Exception as e:
+            z['error'] = str(e)
+            checks.append(_check('zabbix', 'fail', f'Could not read Zabbix: {e}'))
 
     db = db_facts if db_facts is not None else _db_facts(atm_id)
     if db.get('row'):
@@ -325,7 +481,30 @@ def fleet(atm_ids=None, window_minutes=15, with_plan=True,
         except Exception:
             atm_ids = []
     verify_fn = verify_fn or verify_atm
-    results = [verify_fn(a, window_minutes=window_minutes) for a in atm_ids]
+
+    # One Zabbix login and one batched sweep for the whole fleet, instead of a
+    # fresh client (and login) plus three API calls per ATM. At 1,300 ATMs the
+    # old path was ~3,900 serial round-trips - this is a couple of dozen, and
+    # the cost no longer scales with the fleet.
+    results = None
+    if verify_fn is verify_atm and atm_ids:
+        try:
+            from zabbix_sync import _Client
+            client = _Client()
+            client.login()
+            zsnap = _zabbix_snapshot(client, atm_ids)
+            dsnap = _db_snapshot(atm_ids)
+            results = [verify_atm(a, window_minutes=window_minutes, client=client,
+                                  zabbix_facts=zsnap.get(a), db_facts=dsnap.get(a))
+                       for a in atm_ids]
+        except Exception:
+            # Fall back to the per-ATM path, which reports the failure honestly
+            # per ATM rather than leaving the page spinning.
+            logger.warning('fleet: batched sweep unavailable, falling back per ATM',
+                           exc_info=True)
+            results = None
+    if results is None:
+        results = [verify_fn(a, window_minutes=window_minutes) for a in atm_ids]
     plans = None
     if with_plan and atm_ids:
         try:
