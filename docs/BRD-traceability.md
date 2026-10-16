@@ -89,6 +89,21 @@ dependency.
 
 1. **5.5 / 8.4 alert channels** — email and SMS are templates. "Shall send"
    is unproven until one test alert lands through each.
+**ATM camera images — recorded in `docs/adr-atm-images.md`.** Fraud monitoring
+(2.6) and dispute work would benefit from the per-transaction image each ATM
+captures. Probed on TESTMACHINE 2026-10-16: the commonly cited NCR image path
+does not exist, the WMI device sweep lists no camera, and the journal carries no
+image reference (`CAM 03.00.00` is a firmware component banner, not a
+transaction pointer). The cheap design — "image available, ref XYZ", no image
+movement — is therefore unavailable, and image-to-transaction association would
+have to be time-based, which fails exactly when transactions cluster in one
+second. Mechanism is understood (dedicated collector + receiver, not Zabbix:
+binary payloads exceed the ~64 KB text limit) and the receiver scales to 1,300,
+but **the data is unconfirmed**. Blocked on five vendor questions, the decisive
+one being whether the image filename encodes the transaction sequence, and on
+compliance (lawful basis, retention, access audit, PCI). No commitment to build
+until both are answered.
+
 **EJ transport — recorded in `docs/adr-ej-transport.md`.** Asked whether the
 agents should push journals instead of the server pulling them. Decision: **do
 not build it.** The premise was wrong — `zabbix_get -s <ip>` is a direct agent
