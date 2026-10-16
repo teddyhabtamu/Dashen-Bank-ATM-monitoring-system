@@ -20,6 +20,8 @@ weeks. Comments do not prevent this; tests do.
 import pathlib
 import re
 
+from conftest import chart_sql
+
 REPO = pathlib.Path(__file__).resolve().parent.parent
 
 # Columns stored as naive UTC. Converted incorrectly, each of these reads three
@@ -111,3 +113,46 @@ def test_peak_hour_chart_buckets_in_eat_not_utc():
     assert "recorded_at AT TIME ZONE 'Africa/Addis_Ababa'" not in kpi
     assert kpi.count("AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa'") >= 2, (
         'both the hour and the weekday must be converted')
+
+# ── date bucketing, which has no AT TIME ZONE to catch it ───────────────────
+
+BARE_DATE_RE = re.compile(r"DATE\(\s*recorded_at\s*\)")
+
+
+def test_no_chart_buckets_a_day_by_utc_date():
+    """Reported live: the Overview cash card read 1.5M while the Cash Dispensed
+    Trend tooltip read 1,028,100 for the same day.
+
+    The card counted from 00:00 EAT; the chart grouped by DATE(recorded_at),
+    which is the UTC date and therefore starts at 03:00 EAT. The card was right
+    and the chart was wrong - it silently dropped the first three hours of every
+    day, which is exactly the window a bank opens at.
+    """
+    routes = (REPO / 'report-portal' / 'routes.py').read_text()
+    offenders = [ln.strip() for ln in routes.split('\n') if BARE_DATE_RE.search(ln)]
+    assert not offenders, (
+        'these bucket days by UTC date instead of EAT:\n  ' + '\n  '.join(offenders))
+
+
+def test_daily_charts_convert_both_in_select_and_group_by():
+    """Converting only the SELECT would leave GROUP BY on the UTC date and split
+    each day across two buckets."""
+    routes = (REPO / 'report-portal' / 'routes.py').read_text()
+    for name in ('TXN_VOL', 'SR', 'CASH'):
+        sql = chart_sql(name)
+        converted = sql.count("AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa'")
+        assert converted >= 2, (
+            '%s must convert in both SELECT and GROUP BY (found %d)' % (name, converted))
+
+
+def test_live_transaction_feed_is_converted():
+    """The Operations feed rendered recorded_at raw, so it showed 06:31 UTC next
+    to a clock reading 09:31 EAT."""
+    ops = (REPO / 'report-portal' / 'blueprints' / 'operations.py').read_text()
+    feed = ops[ops.index('feed = _all('):ops.index('summary = _all(')]
+    assert 'recorded_at_eat' in feed, 'the feed must return an EAT value'
+    assert "AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa'" in feed
+    assert 'ORDER BY recorded_at DESC' in feed, (
+        'ordering must still use the stored value, not the formatted string')
+    tpl = (REPO / 'report-portal' / 'templates' / 'operations.html').read_text()
+    assert 'recorded_at_eat' in tpl, 'both the table and the JS row builder must use it'

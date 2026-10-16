@@ -162,18 +162,18 @@ def _fetch_query(sql, params=None):
 def api_charts():
     try:
         TXN_VOL = """
-            SELECT DATE(recorded_at) as day, COUNT(*) as cnt
+            SELECT DATE(recorded_at AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa') as day, COUNT(*) as cnt
             FROM atm_transactions_visible
             WHERE recorded_at >= NOW() - INTERVAL '7 days'
-            GROUP BY DATE(recorded_at)
+            GROUP BY DATE(recorded_at AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa')
             ORDER BY day
         """
         SR = """
-            SELECT DATE(recorded_at) as day,
+            SELECT DATE(recorded_at AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa') as day,
                 ROUND(100.0*SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),1) as rate
             FROM atm_transactions_visible
             WHERE recorded_at >= NOW() - INTERVAL '7 days'
-            GROUP BY DATE(recorded_at)
+            GROUP BY DATE(recorded_at AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa')
             ORDER BY day
         """
         # Joined to atm_locations on purpose. This counted rows in
@@ -200,11 +200,11 @@ def api_charts():
             ORDER BY 2 DESC
         """
         CASH = """
-            SELECT DATE(recorded_at) as day,
+            SELECT DATE(recorded_at AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa') as day,
                 COALESCE(SUM(CASE WHEN status='APPROVED' AND txn_type='WITHDRAWAL' THEN amount ELSE 0 END),0) as cash
             FROM atm_transactions_visible
             WHERE recorded_at >= NOW() - INTERVAL '7 days'
-            GROUP BY DATE(recorded_at)
+            GROUP BY DATE(recorded_at AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa')
             ORDER BY day
         """
 

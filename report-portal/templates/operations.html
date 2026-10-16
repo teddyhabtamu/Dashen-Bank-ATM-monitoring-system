@@ -136,7 +136,7 @@
         <tbody id="feedBody">
           {% for r in feed %}
           <tr>
-            <td style="white-space:nowrap">{{ r.recorded_at }}</td>
+            <td style="white-space:nowrap">{{ r.recorded_at_eat or r.recorded_at }}</td>
             <td style="font-family:monospace">{{ r.atm_id }}</td>
             <td>{{ r.branch or '—' }}</td><td>{{ r.txn_type or '—' }}</td>
             <td style="font-family:monospace">{{ r.card_masked or '—' }}</td>
@@ -333,7 +333,7 @@
       var eb = document.getElementById('feedBody');
       if(eb){
         eb.innerHTML = (d.feed || []).map(function(x){
-          return '<tr><td style="white-space:nowrap">' + esc(x.recorded_at) + '</td>' +
+          return '<tr><td style="white-space:nowrap">' + esc(x.recorded_at_eat || x.recorded_at) + '</td>' +
             '<td style="font-family:monospace">' + esc(x.atm_id) + '</td><td>' + esc(x.branch) +
             '</td><td>' + esc(x.txn_type) + '</td><td style="font-family:monospace">' + esc(x.card_masked) +
             '</td><td>' + (x.amount == null ? '—' : esc(x.amount)) + '</td>' +

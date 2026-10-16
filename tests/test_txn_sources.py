@@ -26,6 +26,8 @@ sys.path.insert(0, str(REPO / 'report-portal'))
 
 import txn_sources  # noqa: E402
 
+from conftest import chart_sql  # noqa: E402
+
 
 class FakeCursor:
     """Minimal psycopg2 cursor stand-in.
@@ -490,19 +492,6 @@ def test_status_donut_joins_the_fleet():
     assert "COALESCE(l.status, 'active')" in block, 'inactive ATMs are not fleet'
 
 
-def _chart_sql(name):
-    """Extract exactly one named chart query.
-
-    Slicing to the next query assignment swallowed the comment block that
-    follows, so an assertion failed on a comment instead of on SQL. This slices
-    between the first pair of triple-quote delimiters only.
-    """
-    routes = (REPO / 'report-portal' / 'routes.py').read_text()
-    opener = routes.index('%s = """' % name) + len('%s = ' % name) + 3
-    closer = routes.index('"""', opener)
-    return routes[opener:closer]
-
-
 def test_machine_counting_charts_join_the_fleet():
     """STATUS counts MACHINES, so it must count exactly the fleet ATM
     Registration lists. That is the chart that disagreed (4 vs 3).
@@ -512,11 +501,11 @@ def test_machine_counting_charts_join_the_fleet():
     deleted still happened. Filtering those by the current roster would silently
     restate history.
     """
-    status = _chart_sql('STATUS')
+    status = chart_sql('STATUS')
     assert 'atm_locations' in status, (
         'the status distribution must join atm_locations')
     for name in ('TXN_VOL', 'CASH'):
-        assert 'atm_current_state' not in _chart_sql(name)
+        assert 'atm_current_state' not in chart_sql(name)
 
 
 def test_fleet_scoped_charts_filter_to_active_atms():
@@ -525,7 +514,7 @@ def test_fleet_scoped_charts_filter_to_active_atms():
     # Only the charts that already join the fleet need filtering; SR measures
     # success rate over time and does not count machines.
     for name in ('STATUS', 'VENDOR'):
-        sql = _chart_sql(name)
+        sql = chart_sql(name)
         assert 'atm_locations' in sql, '%s should be fleet-scoped' % name
         assert "COALESCE(l.status, 'active')" in sql or "status = 'active'" in sql, \
             '%s joins the fleet but does not filter it' % name

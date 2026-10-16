@@ -208,7 +208,12 @@ def _collect():
                     ORDER BY l.atm_id""")
 
     # ── Live feed + 24h summary ──
-    feed = _all("""SELECT recorded_at, atm_id, branch, txn_type, card_masked,
+    # Converted here, in SQL, because recorded_at is naive UTC and the feed
+    # rendered it raw - the Operations page showed 06:31 UTC while every other
+    # page in the portal is Ethiopian time. Ordering still uses the stored value.
+    feed = _all("""SELECT to_char(recorded_at AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa',
+                              'YYYY-MM-DD HH24:MI:SS') AS recorded_at_eat,
+                          atm_id, branch, txn_type, card_masked,
                           amount, status FROM atm_transactions_visible
                    ORDER BY recorded_at DESC LIMIT 50""")
     summary = _all("""SELECT atm_id, COUNT(*) AS total,
