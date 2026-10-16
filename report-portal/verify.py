@@ -460,7 +460,7 @@ def verify_all(atm_ids=None, window_minutes=15, client=None):
 
 
 def fleet(atm_ids=None, window_minutes=15, with_plan=True,
-          verify_fn=None, plan_fn=None):
+          verify_fn=None, plan_fn=None, heartbeat=None):
     """The fleet answer: one row per ATM, worst first, with the next action.
 
     Read-only. `with_plan` adds a provisioning DRY RUN so the report can also
@@ -468,6 +468,11 @@ def fleet(atm_ids=None, window_minutes=15, with_plan=True,
 
     verify_fn / plan_fn exist for tests: they pin the return-shape contract of
     the two workers, which is exactly where this function went wrong once.
+
+    heartbeat is called at each phase boundary. A sweep can legitimately outlast
+    the claim window on a large fleet or a slow Zabbix server, and without a
+    liveness signal another page load would see an expired claim and start a
+    SECOND sweep over the same cache row.
     """
     from fleet_report import counts, recommend_next_action, summarise, to_csv
     if atm_ids is None:
@@ -486,6 +491,13 @@ def fleet(atm_ids=None, window_minutes=15, with_plan=True,
     # fresh client (and login) plus three API calls per ATM. At 1,300 ATMs the
     # old path was ~3,900 serial round-trips - this is a couple of dozen, and
     # the cost no longer scales with the fleet.
+    def beat():
+        if heartbeat:
+            try:
+                heartbeat()
+            except Exception as e:
+                logger.warning('fleet heartbeat callback failed: %s', e)
+
     results = None
     if verify_fn is verify_atm and atm_ids:
         try:
@@ -494,9 +506,11 @@ def fleet(atm_ids=None, window_minutes=15, with_plan=True,
             client.login()
             zsnap = _zabbix_snapshot(client, atm_ids)
             dsnap = _db_snapshot(atm_ids)
+            beat()
             results = [verify_atm(a, window_minutes=window_minutes, client=client,
                                   zabbix_facts=zsnap.get(a), db_facts=dsnap.get(a))
                        for a in atm_ids]
+            beat()
         except Exception:
             # Fall back to the per-ATM path, which reports the failure honestly
             # per ATM rather than leaving the page spinning.
@@ -514,6 +528,7 @@ def fleet(atm_ids=None, window_minutes=15, with_plan=True,
             # provision_atms() returns a DICT: {ok, summary, results, review,
             # error, ...}. The rows the report needs live under 'results'.
             planned = plan_fn(atm_ids, dry_run=True, actor='verify')
+            beat()
             plans = (planned or {}).get('results') or []
             if (planned or {}).get('error'):
                 sys.stderr.write(f"verify: provisioning plan unavailable: "

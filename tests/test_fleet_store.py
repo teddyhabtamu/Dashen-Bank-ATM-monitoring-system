@@ -112,6 +112,7 @@ def test_ensure_creates_the_table_without_a_migration():
 
     class Cur:
         def execute(self, sql, args=None):
+            seen.setdefault('sqls', []).append(sql)
             seen['sql'] = sql
 
         def close(self):
@@ -125,7 +126,11 @@ def test_ensure_creates_the_table_without_a_migration():
             pass
 
     fs.ensure(Conn())
-    assert 'CREATE TABLE IF NOT EXISTS fleet_report_cache' in seen['sql']
+    # ensure() runs CREATE TABLE and then ALTER (adding the heartbeat column to
+    # deployments that already have the table), so every statement is recorded.
+    assert any(q.startswith('CREATE TABLE IF NOT EXISTS fleet_report_cache')
+               for q in seen['sqls']), seen
+    assert any('ADD COLUMN IF NOT EXISTS heartbeat_at' in q for q in seen['sqls']), seen
 
 
 # ── cross-process run claim + stale serving ─────────────────────────────
@@ -140,7 +145,11 @@ def test_a_second_page_load_cannot_start_a_second_sweep():
         def execute(self, sql, args=None):
             self.c['sql'] = sql
             self.c['args'] = args
-            self.row = self.c.get('row')
+            row = self.c.get('row')
+            # The table has three columns now. The tests pass the old 1-tuple
+            # shape, and claim_run tolerates it - that tolerance is the point,
+            # because a shape mismatch used to fail the claim open.
+            self.row = row if row is None or len(row) == 3 else (row[0], fs.IN_FLIGHT, None)
 
         def fetchone(self):
             return self.row

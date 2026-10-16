@@ -291,14 +291,18 @@ def _compute_fleet(window_minutes=15):
     them instead of spinning.
     """
     global _FLEET_RUNNING
-    from fleet_store import record_failure, save
+    from fleet_store import record_failure, save, touch_heartbeat
     with _FLEET_LOCK:
         if _FLEET_RUNNING:
             return
         _FLEET_RUNNING = True
     try:
         from verify import fleet
-        out = fleet(window_minutes=window_minutes)
+        # heartbeat=lambda: touch_heartbeat(db=_db_conn) keeps the claim alive
+        # for as long as this worker is genuinely working. Without it a sweep
+        # longer than RUN_WINDOW_MINUTES looks dead and a second one starts.
+        out = fleet(window_minutes=window_minutes,
+                    heartbeat=lambda: touch_heartbeat(db=_db_conn))
         ok = save({'counts': out['counts'], 'rows': out['rows'], 'error': ''}, db=_db_conn)
         if ok:
             log_action('FLEET_REPORT', f'fleet verified: {out["counts"]}')

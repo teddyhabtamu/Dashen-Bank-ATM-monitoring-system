@@ -16,6 +16,7 @@ downtime, and safe to run from several processes at once.
 
 import json
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
@@ -69,13 +70,45 @@ def ensure(conn):
         "counts JSONB NOT NULL DEFAULT '{}'::jsonb,"
         "rows JSONB NOT NULL DEFAULT '[]'::jsonb,"
         "error TEXT DEFAULT '')")
+    # Added by ALTER rather than only to the CREATE: existing deployments already
+    # have the table, and CREATE TABLE IF NOT EXISTS would never add it.
+    cur.execute(f"ALTER TABLE {TABLE} ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ")
     cur.close()
     conn.commit()
     return conn
 
 
 IN_FLIGHT = '__running__'
-RUN_WINDOW_MINUTES = 3
+# Sized against the measured sweep, not the old implementation. Before the
+# batched rewrite a fleet sweep took minutes, so 3 minutes of exclusivity was
+# about right. It now completes in seconds, which makes a 3-minute window two
+# problems at once:
+#
+#   * a worker recycled mid-sweep leaves the page saying "checking" for 3 minutes
+#     for a job that normally takes 2 seconds;
+#   * and if a sweep ever legitimately runs longer than the window (a slow
+#     Zabbix server, a large fleet), a page load sees the claim as expired and
+#     starts a SECOND sweep over the same cache row.
+#
+# The heartbeat below fixes the second one properly; this value only governs how
+# long we wait before declaring a run dead. Tunable for a slower environment
+# without a redeploy.
+RUN_WINDOW_MINUTES = int(os.environ.get('FLEET_RUN_WINDOW_MINUTES', '1'))
+
+
+def touch_heartbeat(db=None):
+    """Mark the in-flight sweep as alive. Cheap; safe to call often."""
+    try:
+        conn = _conn(db)
+        cur = conn.cursor()
+        cur.execute(f"UPDATE {TABLE} SET heartbeat_at = NOW() WHERE id = 1 AND error = %s",
+                    (IN_FLIGHT,))
+        conn.commit()
+        cur.close()
+        return True
+    except Exception as e:
+        logger.warning('fleet heartbeat failed: %s', e)
+        return False
 
 
 def claim_run(db=None, window_minutes=RUN_WINDOW_MINUTES, now=None):
@@ -89,15 +122,30 @@ def claim_run(db=None, window_minutes=RUN_WINDOW_MINUTES, now=None):
     try:
         conn = _conn(db)
         cur = conn.cursor()
-        cur.execute(f"SELECT generated_at FROM {TABLE} WHERE id = 1")
+        cur.execute(f"SELECT generated_at, error, heartbeat_at FROM {TABLE} WHERE id = 1")
         row = cur.fetchone()
-        if row and is_fresh(row[0], window_minutes, now):
-            cur.close()
-            return False
+        if row:
+            # Tolerate a row that predates the heartbeat column rather than
+            # unpacking blindly. A shape mismatch here would raise, be swallowed
+            # by the except below, and return True - i.e. fail OPEN and let a
+            # second sweep start. Duplicating a fleet sweep is far worse than
+            # serving a slightly stale report.
+            generated_at = row[0]
+            error = row[1] if len(row) > 1 else IN_FLIGHT
+            heartbeat_at = row[2] if len(row) > 2 else None
+            # A run still marked in flight is only genuinely running if its
+            # heartbeat is recent. Liveness is a heartbeat question, not a
+            # start-time question: a slow sweep must not be declared dead
+            # because it began more than a minute ago.
+            last_seen = heartbeat_at or generated_at
+            if error == IN_FLIGHT and is_fresh(last_seen, window_minutes, now):
+                cur.close()
+                return False
         cur.execute(
-            f"INSERT INTO {TABLE} (id, generated_at, counts, rows, error) "
-            f"VALUES (1, NOW(), '{{}}'::jsonb, '[]'::jsonb, %s) "
-            "ON CONFLICT (id) DO UPDATE SET generated_at = NOW(), error = EXCLUDED.error",
+            f"INSERT INTO {TABLE} (id, generated_at, counts, rows, error, heartbeat_at) "
+            f"VALUES (1, NOW(), '{{}}'::jsonb, '[]'::jsonb, %s, NOW()) "
+            "ON CONFLICT (id) DO UPDATE SET generated_at = NOW(), "
+            "error = EXCLUDED.error, heartbeat_at = NOW()",
             (IN_FLIGHT,))
         conn.commit()
         cur.close()
