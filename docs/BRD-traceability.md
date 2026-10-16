@@ -89,6 +89,19 @@ dependency.
 
 1. **5.5 / 8.4 alert channels** — email and SMS are templates. "Shall send"
    is unproven until one test alert lands through each.
+**KPI page audit (2026-10-16).** Asked where Error Distribution's data comes
+from; it and Fault Distribution were the *same query* (`chart['fault_*']` was
+assigned from the `errors` rows), so the page showed two panels with identical
+counts under different names - which reads as two measurements agreeing. The
+duplicate panel is removed; there is no second measurement to show.
+
+Also found: the ATM ranking grouped by `t.branch` (denormalised onto the
+transaction and free to drift) and so listed one machine twice; it now groups by
+the registered branch. And availability counts time in `IN_SERVICE` only, so a
+single faulted peripheral - the NCR box's receipt printer - reads as a fully
+unavailable machine. That last one is a policy question for the bank, not a
+defect: uptime should arguably be "reachable and able to dispense".
+
 **Gaps found in review (2026-10-15), by severity:**
 - *Demo mode can outlive the demo.* Simulated data was hidden by a toggle with
   no expiry, so forgetting it would show invented cash as real. Now every

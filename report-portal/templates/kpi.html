@@ -59,10 +59,6 @@
       <div class="card-header"><h2>Error Distribution — Last 7 Days</h2></div>
       <div style="padding:16px 18px"><div class="chart-wrap"><canvas id="errChart"></canvas></div></div>
     </div>
-    <div class="card">
-      <div class="card-header"><h2>Fault Distribution</h2></div>
-      <div style="padding:16px 18px"><div class="chart-wrap"><canvas id="faultChart"></canvas></div></div>
-    </div>
   </div>
 
   <div class="card" style="margin-bottom:16px">
@@ -121,10 +117,6 @@
     data:{labels:{{ chart.err_labels|tojson }}, datasets:[{data:{{ chart.err_data|tojson }},
       backgroundColor:['#012169','#D97706','#DC2626','#2563EB','#059669','#7C3AED','#DB2777']}]},
     options:Object.assign({}, base, {scales:{x:{display:false}, y:{display:false}}})});
-  var el3 = document.getElementById('faultChart');
-  if(el3) window.faultChart = new Chart(el3, {type:'bar',
-    data:{labels:{{ chart.fault_labels|tojson }}, datasets:[{label:'Count', data:{{ chart.fault_data|tojson }},
-      backgroundColor:'#012169'}]}, options:Object.assign({}, base, {scales:{y:{beginAtZero:true, ticks:{precision:0}}}, plugins:{legend:{display:false}}})});
 })();
 </script>
 <script>
@@ -197,7 +189,6 @@
       var c = d.chart || {};
       setChart(window.availChart, c.avail_labels, c.avail);
       setChart(window.errChart, c.err_labels, c.err_data);
-      setChart(window.faultChart, c.fault_labels, c.fault_data);
       fails = 0; stamp(true);
     }catch(e){ fails++; stamp(false, e); }
     busy = false;

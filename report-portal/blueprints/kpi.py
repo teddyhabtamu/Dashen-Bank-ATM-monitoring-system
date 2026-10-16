@@ -76,8 +76,6 @@ def api_live():
             'avail': d['chart']['avail'],
             'err_labels': d['chart']['err_labels'],
             'err_data': d['chart']['err_data'],
-            'fault_labels': d['chart']['fault_labels'],
-            'fault_data': d['chart']['fault_data'],
         },
     })
 
@@ -95,14 +93,14 @@ def _collect():
         AND (s.ended_at IS NULL OR s.ended_at > d.day)
       GROUP BY d.day ORDER BY d.day""")
 
-    ranking = _all("""SELECT t.atm_id, t.branch, COUNT(*) AS total,
+    ranking = _all("""SELECT t.atm_id, l.branch AS branch, COUNT(*) AS total,
         ROUND(100.0 * SUM(CASE WHEN t.status = 'APPROVED' THEN 1 ELSE 0 END) / COUNT(*), 1) AS success,
         COALESCE(SUM(CASE WHEN t.status = 'APPROVED' AND t.txn_type = 'WITHDRAWAL'
           THEN t.amount ELSE 0 END), 0) AS cash
       FROM atm_transactions_visible t
       JOIN atm_locations l ON t.atm_id = l.atm_id
       WHERE t.recorded_at >= NOW() - INTERVAL '7 days'
-      GROUP BY t.atm_id, t.branch ORDER BY total DESC""")
+      GROUP BY t.atm_id, l.branch ORDER BY total DESC""")
 
     errors = _all("""SELECT COALESCE(f.display_name, t.error_code, 'Unknown') AS label,
         COUNT(*) AS cnt,
@@ -142,8 +140,6 @@ def _collect():
         'avail': [float(r['pct']) if r['pct'] is not None else 0.0 for r in availability],
         'err_labels': [r['label'] for r in errors],
         'err_data': [int(r['cnt']) for r in errors],
-        'fault_labels': [r['label'] for r in errors],
-        'fault_data': [int(r['cnt']) for r in errors],
     }
 
     return {'availability': availability, 'ranking': ranking,
