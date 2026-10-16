@@ -30,20 +30,24 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .sidebar-brand-text .name{font-size:13px;font-weight:700;color:#fff;letter-spacing:-.1px;line-height:1.3}
 .sidebar-brand-text .sub{font-size:9px;color:rgba(255,255,255,.4);font-weight:500;letter-spacing:.4px;margin-top:-1px}
 
-.sidebar-nav{flex:1;padding:12px 8px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.sidebar-nav{flex:1;padding:10px 8px;display:flex;flex-direction:column;gap:1px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}
+.sidebar-nav::-webkit-scrollbar{width:6px}
+.sidebar-nav::-webkit-scrollbar-track{background:transparent}
+.sidebar-nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:3px}
+.sidebar-nav::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.3)}
+.sidebar-nav{margin-right:-2px;padding-right:10px}
 .sidebar.collapsed .sidebar-nav{padding:12px 4px}
-.nav-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:8px;color:rgba(255,255,255,.55);text-decoration:none;font-size:13px;font-weight:500;transition:all .2s ease;position:relative;white-space:nowrap;overflow:hidden;min-height:38px}
-.sidebar.collapsed .nav-item{justify-content:center;padding:10px 0;gap:0;color:rgba(255,255,255,.8)}
+.nav-item{display:flex;align-items:center;gap:11px;padding:8px 12px;border-radius:8px;color:rgba(255,255,255,.55);text-decoration:none;font-size:13px;font-weight:500;transition:all .2s ease;position:relative;white-space:nowrap;overflow:hidden;min-height:34px}
+.sidebar.collapsed .nav-item{justify-content:center;padding:8px 0;gap:0;color:rgba(255,255,255,.8)}
 .nav-item:hover{background:rgba(255,255,255,.08);color:rgba(255,255,255,.85)}
 .nav-item svg{width:16px;height:16px;flex-shrink:0;color:rgba(255,255,255,.7);transition:opacity .2s}
 .nav-item:hover svg{color:#fff}
 .sidebar.collapsed .nav-item svg{color:rgba(255,255,255,.7)}
-.nav-item.active{background:rgba(255,255,255,.12);color:#fff;font-weight:600}
-.nav-item.active::before{content:'';position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:0 3px 3px 0;background:#FDD79A}
+.nav-item.active{background:rgba(255,255,255,.14);color:#fff;font-weight:600}
 .nav-item.active svg{color:#fff}
 .nav-item span{opacity:1;transition:opacity .2s ease .15s}
 .sidebar.collapsed .nav-item span{opacity:0;width:0;margin:0;padding:0;pointer-events:none}
-.nav-section-label{padding:16px 12px 6px;font-size:9px;font-weight:600;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.8px;overflow:hidden;white-space:nowrap;transition:opacity .2s ease}
+.nav-section-label{padding:13px 12px 5px;font-size:9px;font-weight:600;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.8px;overflow:hidden;white-space:nowrap;transition:opacity .2s ease}
 :root {
   --dashen-navy: #012169;
   --dashen-blue: #273274;
@@ -73,7 +77,7 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .nav-group-header{width:100%;background:none;border:none;cursor:pointer;font-family:inherit}
 .nav-group-header .chev{margin-left:auto;transition:transform .2s ease}
 .nav-group.open .nav-group-header .chev{transform:rotate(180deg)}
-.nav-group-items .nav-item{min-height:34px;font-size:12px}
+.nav-group-items .nav-item{min-height:31px;font-size:12px}
 .sidebar.collapsed .nav-group-items{display:none}
 .sidebar.collapsed .nav-group-header .chev{display:none}
 .sidebar.collapsed .nav-section-label{opacity:0;height:0;padding:0 12px;margin:0;overflow:hidden;pointer-events:none}
@@ -509,7 +513,14 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
 
 <div class="main-content">
 {% if txn_note %}
-<div style="background:{% if txn_level == 'demo' %}#FEF2F2;border-bottom:2px solid #DC2626;color:#991B1B{% else %}#FFFBEB;border-bottom:1px solid #FDD79A;color:#92400E{% endif %};font-size:12px;font-weight:600;padding:8px 36px">{{ txn_note }}</div>
+{% if txn_level == 'demo' %}
+<div style="display:flex;align-items:center;gap:10px;background:#F7F9FC;border-bottom:1px solid #E2E8F0;padding:9px 36px">
+  <span style="flex-shrink:0;background:#B45309;color:#fff;font-size:10px;font-weight:700;letter-spacing:.6px;padding:3px 8px;border-radius:4px">DEMO DATA</span>
+  <span style="font-size:12.5px;color:#475569;line-height:1.5">{{ txn_note }}</span>
+</div>
+{% else %}
+<div style="background:#F7F9FC;border-bottom:1px solid #E2E8F0;color:#64748B;font-size:12px;padding:7px 36px">{{ txn_note }}</div>
+{% endif %}
 {% endif %}
 {% if error %}
 <div class="page-content">

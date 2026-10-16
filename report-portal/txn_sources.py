@@ -88,9 +88,11 @@ def status(conn):
         if until and until[0][0]:
             e = until[0][0].astimezone(EAT)
             expires = ' until %s EAT' % e.strftime('%H:%M')
-        return ('DEMONSTRATION DATA IS SHOWN (%s%s) alongside %s. These are not real '
-                'transactions and must not drive a cash or fraud decision.'
-                % (', '.join(demo_on), expires, shown), 'demo')
+        real = [src for src, _ in visible if src in TRUSTED_SOURCES]
+        real_note = ' Real data on screen: %s.' % ', '.join(real) if real else ''
+        return ('Demo data (%s%s) is on screen.%s Not real transactions - do not use '
+                'it for cash or fraud decisions.'
+                % (', '.join(demo_on), expires, real_note), 'demo')
     if not visible:
         return ('No transaction source is enabled, so every transaction view is '
                 'empty by policy.', 'info')

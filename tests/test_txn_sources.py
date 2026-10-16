@@ -101,7 +101,7 @@ def test_demo_source_escalates_to_loud_banner():
     ], demo_until=future)
     note, level = txn_sources.status(conn)
     assert level == 'demo'
-    assert 'DEMONSTRATION DATA IS SHOWN' in note
+    assert 'Demo data' in note
     assert 'SIMULATOR' in note
 
 
@@ -389,7 +389,8 @@ def test_banner_states_when_the_demo_ends():
     ], demo_until=until)
     note, level = txn_sources.status(conn)
     assert level == 'demo'
-    assert 'EAT' in note and 'DEMONSTRATION DATA IS SHOWN' in note
+    assert 'EAT' in note and 'Demo data' in note
+    assert 'not use it for cash or fraud' in note.lower()
 
 
 def test_view_sql_and_python_agree_on_the_demo_predicate():
@@ -429,3 +430,44 @@ def test_demo_sources_cannot_be_enabled_without_an_expiry():
     assert '--until' in src
     assert 'cannot outlive the demo' in src
     assert 'demo_expires_at' in src
+
+
+def test_demo_banner_does_not_repeat_the_demo_source():
+    """A real bug: the demo source was named once as demo data and again inside
+    the list of everything on screen, so it read "ISO8583_SIM ... alongside
+    EJ, ISO8583, ISO8583_SIM"."""
+    until = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2)
+    conn = FakeConn(policy=[
+        ('EJ', 'EJ journal', True, True, None),
+        ('ISO8583', 'ATM switch', True, True, None),
+        ('ISO8583_SIM', 'Simulator', False, True, until),
+    ], demo_until=until)
+    note, _ = txn_sources.status(conn)
+    assert note.count('ISO8583_SIM') == 1, note
+    assert 'Real data on screen: EJ, ISO8583' in note
+
+
+def test_banner_does_not_alarm():
+    """The audience reads this. It must be unmistakable without looking like a
+    failure, or a demo spends its time explaining an error that is not there."""
+    note, level = txn_sources.status(FakeConn())
+    assert level != 'demo'
+    assert 'DEMONSTRATION DATA IS SHOWN' not in note
+
+
+def test_active_nav_has_no_gold_stripe():
+    """The 3px gold bar on the active sidebar item read as generic template
+    styling; the tinted background and weight already mark the row."""
+    css = (REPO / 'report-portal' / 'templates' / 'base.html').read_text()
+    assert '.nav-item.active::before' not in css
+    assert '.nav-item.active{' in css, 'the active state must still be visible'
+
+
+def test_sidebar_scrollbar_is_slim_and_the_menu_is_tighter():
+    """A 17-row menu overflowed, and the default scrollbar with its arrows is
+    what made the layout look broken beside the page scrollbar."""
+    css = (REPO / 'report-portal' / 'templates' / 'base.html').read_text()
+    assert 'scrollbar-width:thin' in css
+    assert '.sidebar-nav::-webkit-scrollbar{width:6px}' in css
+    nav = css[css.index('.nav-item{'):css.index('.nav-item.active{')]
+    assert 'min-height:34px' in nav, 'menu rows must be tighter to fit'
