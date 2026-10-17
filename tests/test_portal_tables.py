@@ -620,9 +620,14 @@ def test_the_restore_can_be_inspected_without_destroying_anything():
     backup and validates it, then stops."""
     src = (REPO / 'scripts' / 'restore_db.sh').read_text()
     assert '--dry-run' in src, 'a dry-run mode is required to check this safely'
-    dry = src[src.index('if [ "$DRY_RUN" -eq 1 ]'):]
-    dry = dry[:dry.index('fi') + 2]
-    assert 'DROP DATABASE' not in dry, 'the dry-run branch must not drop anything'
-    assert 'exit 0' in dry, 'the dry-run must stop before the destructive work'
-    # it must report the target, because "which database" is the whole question
-    assert 'would restore database' in dry
+    # Assert ordering rather than slicing out the branch: an earlier version of
+    # this test cut the block at the first "fi" and so stopped at the nested
+    # --also-zabbix conditional, then failed for the wrong reason - exactly the
+    # kind of test that lies about what it checked.
+    start = src.index('if [ "$DRY_RUN" -eq 1 ]; then')
+    stop = src.index('exit 0', start)
+    drop = src.index('DROP DATABASE IF EXISTS', start)
+    assert stop < drop, 'the dry-run must exit before anything is dropped'
+    assert 'would restore database' in src[start:stop], \
+        'the dry-run must report which database it would touch - that is the ' \
+        'question it exists to answer'
