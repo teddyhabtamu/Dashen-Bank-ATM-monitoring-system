@@ -890,3 +890,48 @@ def test_every_sidebar_item_has_a_tooltip():
     assert len(titled) == len(items), (
         'every sidebar item needs a title for the collapsed rail: %d of %d have one'
         % (len(titled), len(items)))
+
+
+def test_collapsing_the_sidebar_hides_no_destination():
+    """A rule from an earlier design - when the Dashboard group was the only
+    one - hid every item inside a group while collapsed, on the theory that
+    clicking the group icon would expand the sidebar and reveal them.
+
+    Once every destination moved into a group, that rule hid the entire menu.
+    The collapsed rail rendered with a toggle button and nothing else, and
+    nothing in the test suite or the Jinja render noticed: the HTML was perfect,
+    the CSS simply made it invisible.
+
+    Found by looking at a screenshot, which is the argument for looking."""
+    tpl = (REPO / 'report-portal' / 'templates' / 'base.html').read_text()
+    hiding = re.findall(
+        r'\.sidebar\.collapsed[^{]*\.nav-(?:group-)?items[^{]*\{[^}]*display\s*:\s*none',
+        tpl)
+    assert not hiding, (
+        'these rules hide navigation items while the sidebar is collapsed, which '
+        'leaves the rail empty:\n  %s' % '\n  '.join(hiding))
+
+    # And the same for the items themselves. The selector must END at .nav-item:
+    # a looser pattern also matched ".nav-item .ext{display:none}", which hides
+    # the external-link glyph in the 60px rail and is exactly right.
+    hiding_items = re.findall(
+        r'\.sidebar\.collapsed\s+\.nav-item\s*(?:,[^{]*?)?\{[^}]*display\s*:\s*none',
+        tpl)
+    assert not hiding_items, (
+        'nav items must remain visible when collapsed: %s' % hiding_items)
+
+
+def test_the_collapsed_rail_keeps_a_mark_and_a_divider_per_group():
+    """Two defects visible only in the collapsed state: the brand rendered as an
+    empty box (logo display:none plus text collapsed to width:0), and the
+    section headers had nowhere to go."""
+    tpl = (REPO / 'report-portal' / 'templates' / 'base.html').read_text()
+    assert '.sidebar.collapsed .sidebar-logo{display:none}' not in tpl, \
+        'the brand mark must survive the collapse - an empty box reads as a fault'
+    assert '.sidebar.collapsed .nav-section-head{' in tpl, \
+        'the section header needs a collapsed presentation'
+    # A 1px divider must not be a 1px click target.
+    collapsed_head = tpl[tpl.index('.sidebar.collapsed .nav-section-head{'):]
+    collapsed_head = collapsed_head[:collapsed_head.index('}')]
+    assert 'pointer-events:none' in collapsed_head, \
+        'a hairline divider must not be interactive'

@@ -57,7 +57,7 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .nav-section-head:focus-visible{outline:2px solid #7dd3fc;outline-offset:-2px;border-radius:6px}
 # Collapsed: the label cannot fit, so the header becomes a hairline divider.
 # Grouping survives without words, which is the point of grouping.
-.sidebar.collapsed .nav-section-head{padding:0;margin:9px 14px;height:1px;background:rgba(255,255,255,.12);border-radius:1px;display:block}
+.sidebar.collapsed .nav-section-head{padding:0;margin:9px 14px;height:1px;background:rgba(255,255,255,.12);border-radius:1px;display:block;pointer-events:none}
 .sidebar.collapsed .nav-section-head .chev,.sidebar.collapsed .nav-section-head .nav-section-label{display:none}
 :root {
   --dashen-navy: #012169;
@@ -89,7 +89,11 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .nav-group-header .chev{margin-left:auto;transition:transform .2s ease}
 .nav-group.open .nav-group-header .chev{transform:rotate(180deg)}
 .nav-group-items .nav-item{min-height:31px;font-size:12px}
-.sidebar.collapsed .nav-group-items{display:none}
+/* The collapsed rail shows EVERY item as an icon, grouped by the hairline
+   dividers above. This rule used to hide group items, which was correct when
+   the Dashboard group was the only one and clicking its icon expanded the
+   sidebar to reveal them. Once every destination moved into a group, it hid the
+   entire menu: the rail rendered with a toggle button and nothing else. */
 .sidebar.collapsed .nav-group-header .chev{display:none}
 .sidebar.collapsed .nav-section-label{opacity:0;height:0;padding:0 12px;margin:0;overflow:hidden;pointer-events:none}
 
