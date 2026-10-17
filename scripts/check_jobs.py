@@ -43,19 +43,27 @@ import time
 # fire on real outages, not on a slow machine.
 # Paths are relative to ROOT unless they start with $HOME, ~ or /.
 #
-# backup_db and backup_configs write to $HOME/atm-backup.log - NOT to the repo.
+# backup_db and backup_configs write outside the repo, under $HOME.
 # The first version of this file assumed a repo-relative path and reported both
 # as NEVER_RAN on a host where the backups were running perfectly. A monitor
 # that cries wolf is worse than none, so paths are overridable per job:
 #
 #     CHECK_JOBS_LOG_backup_db=/root/atm-backup.log python3 scripts/check_jobs.py
 #
+# Each job gets its OWN log. They used to share $HOME/atm-backup.log, which
+# meant a failed database backup at 02:00 could be buried by a successful config
+# backup at 02:30 - the log ends looking fine, and the failure is invisible
+# until someone needs the data. backup_db.sh is the only thing covering the
+# portal database since the split, so this is the one job whose failure must
+# never be masked. Separate paths turn that from a warning into a visible
+# "never ran" if the crontab has not been updated to match.
+#
 JOBS = (
     # name,             log path,                     schedule seconds,   grace x
     ('ej_pull',         'logs/ej-pull.log',            60,                 6),
     ('reconcile_glpi',  'logs/reconcile.log',          86400,              2),
-    ('backup_db',       '$HOME/atm-backup.log',        86400,              2),
-    ('backup_configs',  '$HOME/atm-backup.log',        86400,              2),
+    ('backup_db',       '$HOME/atm-backup_db.log',     86400,              2),
+    ('backup_configs',  '$HOME/atm-backup_configs.log', 86400,             2),
 )
 
 # Resolved from this script's own location, not the cwd: cron runs from the
@@ -107,9 +115,15 @@ def shared_logs():
     as long as its neighbour succeeds. That is a false NEGATIVE - it hides a
     fault - which is more dangerous than the false positive above.
     """
+    # Keyed on the RESOLVED path, not the configured one. The per-job override
+    # exists precisely to correct a path, and an operator who corrects both
+    # jobs onto the same file - an easy mistake, since it looks tidier - would
+    # otherwise get no warning at all. Reading the configured value instead
+    # meant the detector could only ever see the defaults, so it was blind to
+    # exactly the case the override makes possible.
     seen = {}
     for name, rel, _, _ in JOBS:
-        seen.setdefault(os.path.basename(rel), []).append(name)
+        seen.setdefault(os.path.basename(resolve(rel, name)), []).append(name)
     return {k: v for k, v in seen.items() if len(v) > 1}
 
 
@@ -128,7 +142,7 @@ def evaluate(now=None):
                           'succeeds; check the crontab path and the user it runs as)'
                           % path,
                 'overdue_by_s': None, 'limit_s': limit,
-                'shared_with': [n for n in shared.get(os.path.basename(rel), [])
+                'shared_with': [n for n in shared.get(os.path.basename(path), [])
                                 if n != name],
             })
             continue
@@ -163,7 +177,7 @@ def evaluate(now=None):
                     break
         except OSError:
             pass
-        others = [n for n in shared.get(os.path.basename(rel), []) if n != name]
+        others = [n for n in shared.get(os.path.basename(path), []) if n != name]
         if others:
             detail = ("%s; SHARED LOG with %s - a failure in one is invisible "
                       "while the other succeeds. Give each job its own log."

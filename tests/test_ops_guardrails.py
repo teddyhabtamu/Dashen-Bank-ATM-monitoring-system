@@ -75,7 +75,8 @@ def test_stale_log_is_overdue(tmp_path):
     _make_repo(tmp_path, {
         'logs/ej-pull.log': 5400,       # 90 min old, limit is 60 min x 6
         'logs/reconcile.log': 300,
-        '$HOME/atm-backup.log': 300,
+        '$HOME/atm-backup_db.log': 300,
+        '$HOME/atm-backup_configs.log': 300,
     })
     data = run_check(tmp_path)
     overdue = [p for p in data['problems'] if p['state'] == 'OVERDUE']
@@ -94,7 +95,8 @@ def test_the_reconcile_failure_we_actually_had_is_detected(tmp_path):
     """
     _make_repo(tmp_path, {
         'logs/ej-pull.log': 30,
-        '$HOME/atm-backup.log': 30,
+        '$HOME/atm-backup_db.log': 30,
+        '$HOME/atm-backup_configs.log': 30,
     })
     (tmp_path / 'logs').mkdir(parents=True, exist_ok=True)
     (tmp_path / 'logs' / 'reconcile.log').write_text(
@@ -114,7 +116,8 @@ def test_healthy_repo_reports_nothing_and_exits_zero(tmp_path):
     _make_repo(tmp_path, {
         'logs/ej-pull.log': 30,
         'logs/reconcile.log': 600,
-        '$HOME/atm-backup.log': 600,
+        '$HOME/atm-backup_db.log': 600,
+        '$HOME/atm-backup_configs.log': 600,
     })
     env = _env(tmp_path)
     out = subprocess.run([sys.executable, str(CHECK_JOBS), '--json'],
@@ -129,7 +132,8 @@ def test_missing_table_in_a_log_is_reported(tmp_path):
     _make_repo(tmp_path, {
         'logs/ej-pull.log': 30,
         'logs/reconcile.log': 600,
-        '$HOME/atm-backup.log': 600,
+        '$HOME/atm-backup_db.log': 600,
+        '$HOME/atm-backup_configs.log': 600,
     })
     p = tmp_path / 'logs' / 'reconcile.log'
     p.write_text('psycopg2.errors.UndefinedTable: relation "atm_x" does not exist\n')
@@ -260,12 +264,13 @@ def test_home_paths_are_expanded_not_taken_literally(tmp_path):
     so it reported NEVER_RAN on a host where the backups were running fine. A
     monitor that cries wolf gets ignored, which is worse than no monitor.
     """
-    _make_repo(tmp_path, {'$HOME/atm-backup.log': 600})
+    _make_repo(tmp_path, {'$HOME/atm-backup_db.log': 600,
+                         '$HOME/atm-backup_configs.log': 600})
     data = run_check(tmp_path)
     problems = {p['job']: p for p in data['problems']}
     assert 'backup_db' not in problems, (
         problems.get('backup_db', {}).get('log', ''))
-    assert 'atm-backup.log' in json.dumps(data)
+    assert 'atm-backup_db.log' in json.dumps(data)
 
 
 def test_log_path_can_be_overridden_per_job(tmp_path):
@@ -276,19 +281,49 @@ def test_log_path_can_be_overridden_per_job(tmp_path):
     now = time.time()
     os.utime(log, (now, now))
     _make_repo(tmp_path, {'logs/ej-pull.log': 30, 'logs/reconcile.log': 600,
-                          '$HOME/atm-backup.log': 600})
+                          '$HOME/atm-backup_db.log': 600,
+                          '$HOME/atm-backup_configs.log': 600})
     data = run_check(tmp_path, CHECK_JOBS_LOG_backup_db=str(log))
     problems = {p['job'] for p in data['problems']}
     assert 'backup_db' not in problems, 'the override must be honoured'
 
 
-def test_a_shared_log_is_flagged_as_a_known_blind_spot(tmp_path):
-    """Two jobs, one log file: if one fails nightly and the other succeeds, the
-    log still updates and the failing job looks healthy. That is a false
-    NEGATIVE - it hides a fault - so it must be stated, not just tolerated."""
+def test_the_shipped_config_has_no_shared_log(tmp_path):
+    """backup_db and backup_configs used to append to the same
+    $HOME/atm-backup.log, running at 02:00 and 02:30. A failed database backup
+    followed by a successful config backup left the log ending in success, so the
+    failure was invisible until someone needed the data - a false NEGATIVE, the
+    one kind that hides a fault rather than raising it.
+
+    Since the split, backup_db.sh is the only thing covering the portal
+    database, which makes it exactly the job whose failure must not be masked by
+    an unrelated job succeeding afterwards. Separate log paths are now the
+    shipped default."""
     _make_repo(tmp_path, {'logs/ej-pull.log': 30, 'logs/reconcile.log': 600,
-                          '$HOME/atm-backup.log': 600})
+                          '$HOME/atm-backup_db.log': 600,
+                          '$HOME/atm-backup_configs.log': 600})
     data = run_check(tmp_path)
+    jobs = {r['job']: r for r in data['results']}
+    for name, r in jobs.items():
+        assert r['shared_with'] == [], (
+            '%s still shares a log with %s; a failure there can be hidden'
+            % (name, r['shared_with']))
+        assert 'SHARED LOG' not in r['detail']
+
+
+def test_a_shared_log_is_still_detected_when_one_is_injected(tmp_path):
+    """The detector must keep working even though the shipped config no longer
+    trips it. An operator who reverts the crontab to one shared log should be
+    told, not left with a monitor that has quietly stopped looking.
+
+    Both jobs are pointed at one file through the documented per-job override,
+    which is how a real regression would present."""
+    _make_repo(tmp_path, {'logs/ej-pull.log': 30, 'logs/reconcile.log': 600,
+                          '$HOME/shared.log': 600})
+    shared = str(tmp_path / 'home' / 'shared.log')
+    data = run_check(tmp_path,
+                     CHECK_JOBS_LOG_backup_db=shared,
+                     CHECK_JOBS_LOG_backup_configs=shared)
     jobs = {r['job']: r for r in data['results']}
     assert set(jobs['backup_db']['shared_with']) == {'backup_configs'}
     assert 'SHARED LOG' in jobs['backup_db']['detail']

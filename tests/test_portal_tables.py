@@ -509,3 +509,33 @@ def test_the_kpi_tile_labels_match_the_windows_they_query():
         'the tile says Transactions (%d%s) but the query counts %d hours - the '
         'label would be lying about the number underneath it'
         % (amount, unit, hours))
+
+
+def test_no_two_tracked_jobs_share_a_log_file():
+    """A shared log lets one job's success hide another's failure.
+
+    backup_db and backup_configs both appended to $HOME/atm-backup.log, running
+    at 02:00 and 02:30. A failed database backup followed by a successful config
+    backup leaves the log ending in success, so the failure is invisible until
+    the data is needed. Since the split, backup_db.sh is the only thing covering
+    the portal database - it is precisely the job whose failure must not be
+    masked by an unrelated one succeeding afterwards.
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        'check_jobs', str(REPO / 'scripts' / 'check_jobs.py'))
+    mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(mod)
+    except SystemExit:
+        pytest.skip('check_jobs.py runs on import')
+    jobs = getattr(mod, 'JOBS', None)
+    if not jobs:
+        pytest.skip('check_jobs.py exposes no JOBS table to inspect')
+    seen = {}
+    for entry in jobs:
+        name, log = entry[0], entry[1]
+        assert log not in seen, (
+            '%s and %s both write to %s - a failure in the first is hidden by '
+            'the second succeeding afterwards' % (seen[log], name, log))
+        seen[log] = name
