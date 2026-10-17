@@ -224,7 +224,9 @@ and issues no DDL on a normal restart.
 To apply a migration by hand instead (e.g. during a maintenance window):
 
 ```bash
-docker exec -i zabbix-db psql -U zabbix -d zabbix < scripts/migrate_txn_sources.sql
+# The portal's tables live in the portal database, not zabbix. See
+# docs/portal-db-split.md for which is which on a given host.
+docker exec -i zabbix-db psql -U zabbix -d portal < scripts/migrate_txn_sources.sql
 ```
 
 **Where the scripts run.** `./report-portal` is mounted at `/app` in the

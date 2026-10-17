@@ -245,6 +245,37 @@ table matched the live database except `atm_transactions`, which was 17 rows
 behind because the gateway kept writing during the restore. That direction is
 correct for a point-in-time dump.
 
+## Scripts that still name the `zabbix` database
+
+The split moved data; it did not rewrite every script that referenced it. These
+were found on 2026-10-17 and are **not** demo-blocking, but they are wrong for
+a switched host and are worth triaging before production.
+
+| Script | Verdict |
+|---|---|
+| `backup_db.sh` | fixed — detects where the tables live |
+| `split_portal_db.sh` | correct — `zabbix` is its source by definition |
+| `probe_portal_db.py` | correct — takes `DB_NAME` from the environment |
+| `add_perf_indexes.py` | **wrong** — defaults `DB_NAME` to `zabbix`; would add indexes to the old copy |
+| `ej_pull_targets.py` | **wrong** — same default; would resolve EJ hosts from a stale copy |
+| `sync_atms_to_zabbix.py` | **wrong** — same default |
+| `uat_preflight.sh` | **wrong** — checks `atm_locations` in `zabbix` |
+| `restore_db.sh` | **worst** — restores only `zabbix`, so a restore would silently omit portal data |
+| `setup_new_machine.sh` | builds the pre-split layout |
+| `update_host_visible_names.py` | correct — writes Zabbix's own `hosts` table |
+
+The pattern to fix is `os.environ.get('DB_NAME', 'zabbix')`: the fallback is
+now the wrong default for anything touching portal tables. Defaulting to
+`portal` would be worse on a host that has not switched, so the honest fix is
+to fail loudly when `DB_NAME` is unset rather than guess, the same reasoning
+`backup_db.sh` uses for detection.
+
+`restore_db.sh` deserves attention first. A restore that quietly omits the
+portal is the same failure class as the backup that omitted it: the command
+succeeds, the data is gone, and nobody finds out until it is needed.
+
+---
+
 ## What this does not fix
 
 The split separates the portal's *storage* from Zabbix's. It does not address
