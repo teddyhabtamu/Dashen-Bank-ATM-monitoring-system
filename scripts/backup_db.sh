@@ -131,7 +131,7 @@ echo "  $BACKUP_DIR/atm_custom_tables.sql"
 echo ""
 echo "Verifying backup counts..."
 # atm_delete_archive is created lazily on first delete — ensure it exists
-# so the verification (and future dumps) sees all 15 tables.
+# so the verification (and future dumps) sees every table in the list.
 docker exec zabbix-db psql -U zabbix -d "$PORTAL_DB" \
   -c "CREATE TABLE IF NOT EXISTS atm_delete_archive (id SERIAL PRIMARY KEY, atm_id VARCHAR(20) NOT NULL, deleted_at TIMESTAMP DEFAULT NOW(), deleted_by VARCHAR(100) DEFAULT '', location JSONB, cash_loads JSONB, txn_count INT DEFAULT 0, anomaly_count INT DEFAULT 0, state_history_count INT DEFAULT 0)"
 docker exec -i zabbix-db psql -U zabbix -d "$PORTAL_DB" << 'SQLEOF'

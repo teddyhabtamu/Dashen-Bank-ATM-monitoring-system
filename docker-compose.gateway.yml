@@ -53,7 +53,12 @@ services:
       SWITCH_HOST: "${SWITCH_HOST:-0.0.0.0}"
       SWITCH_PORT: "${SWITCH_PORT:-9876}"
       DB_HOST: "${APPS_VM_IP}"
-      DB_NAME: "zabbix"
+      # Portal database. Defaults to "zabbix", the pre-split layout where
+      # portal tables shared a database with Zabbix's own configuration. Set
+      # PORTAL_DB_NAME=portal in .env to use the split database. This service
+      # writes atm_transactions, so it has to move with the rest or simulator
+      # transactions land in a database the portal no longer reads.
+      DB_NAME: "${PORTAL_DB_NAME:-zabbix}"
       DB_USER: "zabbix"
       DB_PASS: "${DB_PASS}"
       INTERVAL: "10"
