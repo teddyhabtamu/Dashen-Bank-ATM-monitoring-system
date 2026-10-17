@@ -372,3 +372,31 @@ def test_flag_expansion_actually_produces_flags():
     assert count == len(listed_tables()), (
         'flag expansion produced %d flags for %d tables' % (count, len(listed_tables())))
     assert count >= 15, 'a near-empty flag list means the dump silently widened'
+
+def test_the_stage3_probe_covers_every_relation():
+    """The probe is the read-only proof that the copy is usable, so a relation
+    missing from it is a relation nobody checked before switching anything over.
+
+    The manifest is exempt: it belongs to the split tooling, not to the portal.
+    """
+    probe = (REPO / 'scripts' / 'probe_portal_db.py').read_text()
+    relations = [t for t in listed_tables() if t != 'portal_split_manifest']
+    missing = [t for t in relations if t not in probe]
+    assert not missing, (
+        'these relations are copied but the probe never reads them, so nothing '
+        'has exercised them against the new database:\n  %s'
+        % '\n  '.join(missing))
+
+
+def test_the_stage3_probe_is_read_only():
+    """A probe that writes would perturb the copy and make the next --verify
+    report a MISMATCH against the manifest, with no obvious culprit. It also
+    has to prove the read-only claim rather than assume it."""
+    probe = (REPO / 'scripts' / 'probe_portal_db.py').read_text()
+    assert 'set_session(readonly=True' in probe, 'the connection must be read-only'
+    assert 'transaction is read-only' in probe, (
+        'the probe must attempt a write and confirm it is rejected')
+    # It must not be able to fall back to the old database unnoticed.
+    assert 'current_database()' in probe, (
+        'the probe must report which database it actually reached')
+    assert 'DB_NAME' in probe
