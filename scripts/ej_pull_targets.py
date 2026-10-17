@@ -241,7 +241,14 @@ def resolve(explain=False, csv_path=CSV_PATH, docker_bin=None):
         targets, _ = from_override(override)
         return targets, 'EJ_ATMS override', []
 
-    for name, getter in (('database', lambda: from_db(db_bin)),
+    # Name the database in the source label. "1 target(s) from database" tells
+    # an operator that the DB was used and nothing about which one - so after the
+    # split, reading the pre-split database looked identical to reading the
+    # right one. The whole point of detecting it is lost if the log cannot show
+    # the result.
+    for name, getter in (
+            ('database ' + (os.environ.get('DB_NAME') or _resolve_db_name(db_bin) or '?'),
+             lambda: from_db(db_bin)),
                          ('CSV snapshot', lambda: from_csv(csv_path))):
         result = getter()
         if result is None:

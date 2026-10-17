@@ -96,7 +96,7 @@ def test_db_source_parses_pipe_separated_rows(monkeypatch):
     monkeypatch.setattr(ept.subprocess, 'run',
                         _fake_psql('ATM-0001|10.41.30.114|TESTMACHINE\nATM-0002|10.41.30.115|BOX2\n'))
     targets, source, _ = ept.resolve()
-    assert source == 'database'
+    assert source.startswith('database'), source
     assert targets == [('ATM-0001', '10.41.30.114', 'TESTMACHINE'),
                        ('ATM-0002', '10.41.30.115', 'BOX2')]
 
@@ -140,7 +140,7 @@ def test_docker_bin_is_configurable_for_cron(monkeypatch):
 
     monkeypatch.setattr(ept.subprocess, 'run', fake_run)
     targets, source, _ = ept.resolve()
-    assert source == 'database'
+    assert source.startswith('database'), source
     assert seen['cmd'][0] == '/usr/bin/docker'
 
 
@@ -165,7 +165,7 @@ def test_the_database_is_detected_when_db_name_is_not_set(monkeypatch):
     monkeypatch.setattr(ept.subprocess, 'run', fake_run)
 
     targets, source, _ = ept.resolve()
-    assert source == 'database'
+    assert source.startswith('database'), source
     assert targets == [('ATM-0001', '10.41.30.114', 'TESTMACHINE')]
     probed = [c for c in calls if 'portal_schema_version' in str(c)]
     assert probed, 'detection must actually probe for the marker'
@@ -173,3 +173,6 @@ def test_the_database_is_detected_when_db_name_is_not_set(monkeypatch):
     data_calls = [c for c in calls if 'portal_schema_version' not in str(c)]
     assert any('-d' in c and c[c.index('-d') + 1] == 'portal' for c in data_calls), (
         'the read must use the detected database')
+    assert 'portal' in source, (
+        'the log must name the database, not just say "database" - reading the '
+        'pre-split one has to be visible: %s' % source)
