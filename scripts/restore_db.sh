@@ -249,7 +249,7 @@ if [ "$ALSO_ZABBIX" -eq 1 ]; then
         echo "ERROR: no zabbix_full_*.sql.gz found. Nothing done."
         exit 1
     fi
-    ZPRE="pre_restore_zabbix_$(date +%Y%m%d_%H%M%S).sql.gz"
+    ZPRE="pre_restore_zabbix_$(date +%Y%m%d_%H%M%S).sql"
     echo "Pre-restore dump of zabbix to $BACKUP_DIR/$ZPRE.gz"
     if ! docker exec zabbix-db pg_dump -U zabbix zabbix --no-owner --no-acl \
             | gzip > "$BACKUP_DIR/$ZPRE.gz"; then

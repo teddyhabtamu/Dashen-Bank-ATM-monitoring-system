@@ -631,3 +631,74 @@ def test_the_restore_can_be_inspected_without_destroying_anything():
     assert 'would restore database' in src[start:stop], \
         'the dry-run must report which database it would touch - that is the ' \
         'question it exists to answer'
+
+
+def test_no_database_artefact_is_tracked_by_git():
+    """A dump in a public repository is a data breach, not a large file.
+
+    .gitignore listed two specific filenames - zabbix_full_*.sql.gz and
+    atm_custom_tables.sql - while backup_db.sh writes seven things to the same
+    directory. The portal database dump, the GLPI ticket dump, all three CSV
+    exports and restore_db.sh's pre-restore dump were all untracked *and*
+    unignored, so the next `git add -A` on a live host would have published the
+    ATM registry, the transaction history and every ticket.
+
+    One already was committed: a pre_restore dump picked up by `git add -A`
+    during a restore rehearsal. It contained only synthetic fixture rows, which
+    was luck rather than design.
+    """
+    tracked = subprocess.run(['git', 'ls-files', 'config/postgres/'],
+                             capture_output=True, text=True, cwd=str(REPO),
+                             timeout=60).stdout.split()
+    offenders = [f for f in tracked
+                 if f.endswith(('.sql', '.sql.gz', '.gz', '.csv', '.dump'))]
+    offenders = [f for f in offenders
+                 if f not in ('config/postgres/seed_uat_atms.sql',
+                              'config/postgres/uat_tables.sql')]
+    assert not offenders, (
+        'these database artefacts are tracked in git and would be published:\n  %s\n'
+        'Untrack them and extend .gitignore.' % '\n  '.join(offenders))
+
+
+def test_every_artefact_the_backup_and_restore_write_is_ignored():
+    """Derived from the scripts rather than from a list someone remembered to
+    update. Adding a new dump output without a matching ignore rule fails here
+    instead of on a live host at the worst possible moment."""
+    ignore = subprocess.run(['git', 'check-ignore', '-q', '--stdin'],
+                            input='', capture_output=True, text=True,
+                            cwd=str(REPO), timeout=60)
+    del ignore   # only used to confirm git is usable in this environment
+
+    written = set()
+    for name in ('backup_db.sh', 'restore_db.sh'):
+        src = (REPO / 'scripts' / name).read_text()
+        # Resolve the simple NAME="literal" assignments each script makes, so a
+        # path built as "$BACKUP_DIR/$PRE.gz" is checked under the name it
+        # actually produces rather than skipped for containing a dollar sign.
+        # Leaving them unexpanded meant the pre_restore dumps - which is what
+        # got committed by accident - were never actually tested.
+        fixed = src.replace('$(date +%Y%m%d_%H%M%S)', '20260101_000000')
+        consts = dict(re.findall(r'^\s*([A-Z_]+)="([^"]*)"', fixed, re.M))
+        for m in re.finditer(r'BACKUP_DIR/([A-Za-z0-9_.$]+)', fixed):
+            token = m.group(1)
+            for var, value in consts.items():
+                token = token.replace('$' + var, value)
+            written.add(token)
+
+    expanded = set(written)
+    # .sql.gz must be in this list explicitly. The first version checked only
+    # .sql/.csv/.dump, so every gzipped dump - the entire portal database, every
+    # GLPI ticket - was skipped, and removing the .sql.gz ignore rule entirely
+    # left the suite green. A guard that skips the case it exists for is not a
+    # guard; a mutation test is what caught it.
+    unignored = []
+    for w in sorted(expanded):
+        if w.endswith(('.sql', '.sql.gz', '.gz', '.csv', '.dump')):
+            r = subprocess.run(
+                ['git', 'check-ignore', '-q', 'config/postgres/' + w],
+                cwd=str(REPO), timeout=60)
+            if r.returncode != 0:
+                unignored.append(w)
+    assert not unignored, (
+        'these outputs of backup_db.sh / restore_db.sh are not gitignored and '
+        'would be committed by `git add -A`:\n  %s' % '\n  '.join(unignored))

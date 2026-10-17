@@ -20,9 +20,20 @@ glpi_backup/
 !config/snmp/oid_mapping.csv.example
 .DS_Store
 
-# Full Zabbix DB dumps (too large for git — regenerate locally)
-zabbix_full_*.sql.gz
-config/postgres/atm_custom_tables.sql
+# ── Database artefacts: never commit these ───────────────────────────────────
+# These contain real data - the ATM registry, transaction history, every GLPI
+# ticket - and this repository may be public. backup_db.sh writes all of them
+# here, so ignoring two specific filenames was not enough: portal_full_*.sql.gz,
+# glpi_*.sql.gz, the three CSV exports and restore_db.sh's pre_restore_*.sql.gz
+# were all untracked-but-unignored, waiting for the next `git add -A`.
+#
+# Only schema and seed files belong in git under config/postgres/.
+config/postgres/*.sql.gz
+config/postgres/*.csv   # redundant with the global *.csv above; kept so this block stands alone
+config/postgres/*.sql
+config/postgres/*.dump
+!config/postgres/seed_uat_atms.sql
+!config/postgres/uat_tables.sql
 
 # Zabbix template backups created by scripts/generate_zabbix_templates.py
 config/zabbix/*.simulator.bak
