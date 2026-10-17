@@ -113,3 +113,47 @@ def test_no_service_still_pins_the_database_name():
             assert 'PORTAL_DB_NAME' in value, (
                 'a service still pins DB_NAME to %r and would ignore '
                 'PORTAL_DB_NAME' % value)
+
+
+def test_grafana_reads_the_database_the_portal_actually_uses():
+    """A reader left behind is quieter than a writer left behind.
+
+    The six writers were inventoried service by service, and every one of them
+    was moved. Grafana was not in that list, because it is not a service with a
+    DB_NAME - it is a datasource in a provisioning file. It queries six portal
+    tables directly, and while it pointed at the old database every dashboard
+    rendered frozen data with no error and no visual sign of anything wrong.
+    A dashboard is how you notice that data has stopped moving, so a stale
+    dashboard removes the very signal you would use to detect the problem.
+    """
+    uat = (REPO / 'config' / 'grafana' / 'datasources-uat.yml').read_text()
+    assert 'database: portal' in uat, (
+        'the UAT Grafana datasource must read the portal database; on zabbix it '
+        'renders stale data silently')
+    assert 'database: zabbix' not in uat, (
+        'a datasource still pointing at zabbix will keep showing frozen data')
+
+    prod = (REPO / 'config' / 'grafana' / 'datasources.yml').read_text()
+    assert 'database: zabbix' in prod, (
+        'the production template must stay on zabbix - production has not '
+        'switched, and pointing it at a database that does not exist there '
+        'would break every dashboard')
+
+
+def test_the_dashboards_actually_query_portal_tables():
+    """Ties the datasource change to something real: if the dashboards never
+    queried portal tables, the previous fix would have been unnecessary, and if
+    they start querying new ones later this test should be revisited rather than
+    quietly left to rot."""
+    import json
+    import re
+    tables = set()
+    for f in (REPO / 'config' / 'grafana' / 'dashboards').glob('*.json'):
+        text = f.read_text()
+        for m in re.finditer(r'(?i)from\s+([a-z_]+)', text):
+            name = m.group(1).lower()
+            if name.startswith(('atm_', 'app_', 'audit_', 'ticket_', 'txn_',
+                                'cash_', 'fleet_')):
+                tables.add(name)
+    assert tables, 'expected the dashboards to query portal tables'
+    assert 'atm_transactions' in tables

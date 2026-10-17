@@ -16,7 +16,12 @@ datasources:
     uid: ATM-Transactions
     type: postgres
     url: 172.22.10.45:5432
-    database: zabbix
+    # The portal's tables live here since the split. Leaving this on "zabbix"
+    # does not error and does not look wrong - the dashboards simply render
+    # frozen data, which is worse, because a dashboard is how you notice that
+    # something has stopped. This is a reader, and readers were not covered by
+    # the service inventory: the six writers were checked, this was not.
+    database: portal
     user: zabbix
     secureJsonData:
       # Injected from the GF_PG_PASSWORD container env (== DB_PASS) at startup
