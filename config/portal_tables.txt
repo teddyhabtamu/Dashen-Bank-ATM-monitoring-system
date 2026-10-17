@@ -10,8 +10,15 @@
 # scoped dump without it would quietly re-show invented money.
 #
 # ── WHEN YOU ADD A PORTAL TABLE, ADD IT HERE ────────────────────────────────
-# tests/test_portal_tables.py fails if a CREATE TABLE appears anywhere in the
-# repo and is missing from this file. That test is the point of having one list.
+# tests/test_portal_tables.py fails if a CREATE TABLE or CREATE VIEW appears
+# anywhere in the repo and is missing from this file. That test is the point of
+# having one list - but only once it actually reads every file, which it did not
+# until 2026-10-18: its glob list skipped the Python files in the repo root, so
+# it never saw cash_watcher.py and missed atm_cassette_levels entirely.
+#
+# VIEWS COUNT. atm_transactions_visible is the view routes.py and nearly every
+# page queries. Without it the portal starts and then fails on its first
+# transaction query, against a database that verified clean.
 #
 # ── WHAT DOES NOT BELONG HERE ───────────────────────────────────────────────
 # Zabbix's own tables (hosts, items, users, interfaces, triggers, history,
@@ -24,6 +31,7 @@
 # quietly covers less than it appears to and nothing says so.
 
 app_users
+atm_cassette_levels
 atm_anomalies
 atm_current_state
 atm_delete_archive
@@ -33,6 +41,7 @@ atm_network_events
 atm_network_metrics
 atm_state_history
 atm_transactions
+atm_transactions_visible
 audit_log
 cash_replenishments
 fault_type_map

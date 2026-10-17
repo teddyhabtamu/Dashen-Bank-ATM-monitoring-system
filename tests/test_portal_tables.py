@@ -67,12 +67,20 @@ def repo_create_table_statements():
             return
         found.setdefault(name, set()).add(str(f.relative_to(REPO)))
 
-    globs = ('config/postgres/*.sql', 'report-portal/*.py',
+    # Root-level *.py matters as much as anything else: cash_watcher.py,
+    # anomaly_detector.py and network_correlator.py live there, and omitting
+    # them is how atm_cassette_levels went missing from the list for a whole
+    # commit while the test suite stayed green.
+    globs = ('*.py', 'config/postgres/*.sql', 'report-portal/*.py',
              'report-portal/blueprints/*.py', 'scripts/*.sql', 'scripts/*.py',
              'simulators/*.py', 'zabbix_modules/*.py')
 
     literal = re.compile(r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?'
                          r'(?:\{?[A-Z_]+\}?\.)?(%s)' % TABLE_NAME, re.I)
+    # A view the portal queries is just as load-bearing as a table, and the same
+    # -t flag copies it - checked against a real pg_dump rather than assumed.
+    view = re.compile(r'CREATE\s+(?:OR\s+REPLACE\s+)?(?:MATERIALIZED\s+)?VIEW\s+'
+                      r'(?:\{?[A-Z_]+\}?\.)?(?:public\.)?(%s)' % TABLE_NAME, re.I)
     # A module-level constant holding a table name: TABLE = 'fleet_report_cache'
     const = re.compile(r'^\s*(?:[A-Z][A-Z0-9_]*_)?TABLE\s*=\s*[\'"](%s)[\'"]'
                        % TABLE_NAME, re.I | re.M)
@@ -82,6 +90,8 @@ def repo_create_table_statements():
                 continue      # our own migration consumer, not a source of truth
             text = f.read_text(errors='replace')
             for m in literal.finditer(text):
+                record(m.group(1), f)
+            for m in view.finditer(text):
                 record(m.group(1), f)
             for m in const.finditer(text):
                 record(m.group(1), f)
@@ -129,7 +139,7 @@ def mentioned_outside_own_artifacts(name):
     check catches those without false-flagging anything, because the files that
     merely mention a name in passing are excluded.
     """
-    for glob in ('config/postgres/*.sql', 'report-portal/*.py',
+    for glob in ('*.py', 'config/postgres/*.sql', 'report-portal/*.py',
                  'report-portal/blueprints/*.py', 'scripts/*.py',
                  'simulators/*.py', 'zabbix_modules/*.py'):
         for f in sorted(REPO.glob(glob)):
