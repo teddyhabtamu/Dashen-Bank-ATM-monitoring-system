@@ -39,7 +39,34 @@ DB_USER="${SPLIT_DB_USER:-zabbix}"
 psql_cmd() { run_psql -d "$1" ${2:+-c "$2"}; }
 
 # sql_of <db> <sql> -> unaligned tuples, no header, blank line on error
+# A query that fails used to look exactly like one that returned no rows,
+# because stderr was discarded. That is how a type error in the leakage query
+# turned into "all expected": the copy was reported clean while the check that
+# was supposed to prove it clean had not run at all. A failed query now returns
+# this marker, and every caller treats it as a failure.
+SQL_ERR_MARK='__sql_error__'
+
+# Only "the query blew up".
+sql_errored() { [ "$1" = "$SQL_ERR_MARK" ]; }
+# Blown up, or came back with nothing at all. Use where an empty answer is also
+# wrong - but NOT where an empty answer is the expected result, such as the list
+# of unexpected relations when there are none.
+sql_failed() { sql_errored "$1" || [ -z "$1" ]; }
+
 sql_of() {
+    local out err rc
+    err="${TMPDIR:-/tmp}/split_sql_err.$$"
+    out=$(run_psql -d "$1" -tAc "$2" 2>"$err" </dev/null); rc=$?
+    if [ $rc -ne 0 ] || [ -s "$err" ]; then
+        rm -f "$err"
+        printf '%s' "$SQL_ERR_MARK"
+    else
+        rm -f "$err"
+        printf '%s' "$out"
+    fi
+}
+
+_sql_of_unused() {
     # stdin is closed deliberately.
     #
     # run_psql used to forward stdin with `docker exec -i`, and psql consumes
@@ -67,8 +94,7 @@ verify() {
     echo "Checking the copy against the source as it stood when the copy was taken."
     echo "MISMATCH means the copy does not hold what the source held - stop."
     echo
-    if [ -z "$(sql_of "$TARGET_DB" "SELECT to_regclass('public.$MANIFEST_TABLE');")" ] \
-       || [ "$(sql_of "$TARGET_DB" "SELECT to_regclass('public.$MANIFEST_TABLE') IS NULL;")" = "t" ]; then
+    if sql_of "$TARGET_DB" "SELECT to_regclass('public.$MANIFEST_TABLE') IS NULL;" | grep -qx t; then
         echo "  ERROR    $TARGET_DB has no $MANIFEST_TABLE."
         echo "           That copy was made by an older version of this script, which"
         echo "           recorded nothing. Re-run without --verify to rebuild it."
@@ -80,7 +106,7 @@ verify() {
         checked=$((checked+1))
         expected=$(manifest_value table "$t")
         dst=$(sql_of "$TARGET_DB" "SELECT count(*) FROM public.$t;")
-        if [ -z "$expected" ] || [ -z "$dst" ]; then
+        if sql_failed "$expected" || sql_failed "$dst"; then
             printf '  ERROR    %-26s expected=%s copy=%s\n' "$t" "${expected:-<none>}" "${dst:-<unreadable>}"
             failed=1
             continue
@@ -206,6 +232,10 @@ verify_sequences() {
     # still matters - it is just measured against the snapshot, not the clock.
     local nseq checked=0 failed=0 s expected dv now
     nseq=$(owned_sequences | grep -c .)
+    if owned_sequences | grep -qx "$SQL_ERR_MARK"; then
+        echo "  ERROR    could not list portal sequences"
+        return 1
+    fi
     if [ "$nseq" -eq 0 ]; then
         echo "  (no portal sequences in $SOURCE_DB - nothing to compare)"
         return 0
@@ -214,14 +244,14 @@ verify_sequences() {
     while read -r s; do
         [ -z "$s" ] && continue
         checked=$((checked+1))
-        if [ "$(sql_of "$TARGET_DB" "SELECT to_regclass('public.$s') IS NULL;")" = "t" ]; then
+        if sql_of "$TARGET_DB" "SELECT to_regclass('public.$s') IS NULL;" | grep -qx t; then
             printf '  MISSING  %-26s not present in the copy\n' "$s"
             failed=1
             continue
         fi
         expected=$(manifest_value sequence "$s")
         dv=$(sql_of "$TARGET_DB" "SELECT last_value || ':' || is_called FROM public.$s;")
-        if [ -z "$expected" ] || [ -z "$dv" ]; then
+        if sql_failed "$expected" || sql_failed "$dv"; then
             printf '  ERROR    %-26s snapshot=%s copy=%s\n' "$s" "${expected:-<none>}" "${dv:-<unreadable>}"
             failed=1
         elif [ "$expected" = "$dv" ]; then
@@ -269,28 +299,52 @@ verify_sequences() {
 }
 
 verify_no_zabbix_leakage() {
-    # The copy must contain the portal's tables and nothing else. If the flag
+    # The copy must contain the portal's relations and nothing else. If the flag
     # list ever resolves empty, pg_dump does not dump nothing - it dumps the whole
     # database - and this is what would catch it.
-    local extra expected found
+    #
+    # pg_class, not pg_tables: pg_tables filters to relkind 'r' and 'p', so it
+    # cannot see a view at all. Checking with pg_tables claimed "20 tables, all
+    # expected" on UAT while atm_transactions_visible - the view nearly every
+    # page queries - was invisible to the count, and a stray Zabbix view would
+    # have passed unnoticed. Verified against a real pg_class, not assumed.
+    #
+    # Sequences are deliberately excluded here (relkind 'S'); they are checked
+    # separately by verify_sequences, against the ones portal tables own.
+    local extra found ntab nview
     extra=$(sql_of "$TARGET_DB" "
-        SELECT tablename FROM pg_tables
-        WHERE schemaname = 'public'
-          AND tablename NOT IN ($(portal_table_array_literal), '$MANIFEST_TABLE')
+        -- relkind::text is required: relkind is of type "char", so text||"char"
+        -- is ambiguous and the whole query fails.
+        SELECT c.relname || ' [' || c.relkind::text || ']'
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public'
+          AND c.relkind IN ('r','p','v','m','f')
+          AND c.relname NOT IN ($(portal_table_array_literal), '$MANIFEST_TABLE')
         ORDER BY 1;")
-    found=$(sql_of "$TARGET_DB" "SELECT count(*) FROM pg_tables WHERE schemaname='public';")
-    expected=$(portal_table_count)
-    if [ -z "$found" ] || [ "$found" -eq 0 ] 2>/dev/null; then
+    found=$(sql_of "$TARGET_DB" "
+        SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind IN ('r','p','v','m','f');")
+    ntab=$(sql_of "$TARGET_DB" "
+        SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind IN ('r','p');")
+    nview=$(sql_of "$TARGET_DB" "
+        SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'v';")
+    # $extra is legitimately empty when nothing leaked, so only the error marker
+    # disqualifies it.
+    if sql_errored "$extra" || sql_failed "$found" || sql_failed "$ntab" \
+       || sql_failed "$nview" || [ "$found" -eq 0 ] 2>/dev/null; then
         # An empty list must not read as a pass. NOT IN () over an empty array is
         # how a copy with nothing in it would come back "clean".
-        echo "  UNKNOWN  could not count tables in $TARGET_DB - treating as failure"
+        echo "  UNKNOWN  could not count relations in $TARGET_DB - treating as failure"
         return 1
     fi
     if [ -z "$extra" ]; then
-        printf '  ok       %s has %s tables, all expected\n' "$TARGET_DB" "$found"
+        printf '  ok       %s has %s tables and %s view(s), all expected\n' \
+            "$TARGET_DB" "$ntab" "$nview"
         return 0
     fi
-    echo "  LEAK     $TARGET_DB contains tables that are not portal tables:"
+    echo "  LEAK     $TARGET_DB contains relations that are not portal relations:"
     sed 's/^/             /' <<<"$extra"
     return 1
 }

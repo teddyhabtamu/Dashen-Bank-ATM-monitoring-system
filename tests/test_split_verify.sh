@@ -172,6 +172,38 @@ if [ "$rc" -ne 0 ] && grep -q LEAK <<<"$out"; then
 else
     bad "Zabbix leakage not caught: rc=$rc out=$out"
 fi
+psql_q "DROP TABLE changelog;" portal >/dev/null
+
+# And a stray VIEW, which pg_tables cannot see at all. The check used
+# pg_tables, so it reported "all expected" on UAT while counting a view it
+# could not see, and any Zabbix view in the copy would have passed unnoticed.
+psql_q "CREATE TABLE zbase (id serial PRIMARY KEY, v int);" portal >/dev/null
+psql_q "INSERT INTO zbase(v) SELECT 1;" portal >/dev/null
+psql_q "CREATE VIEW zabbix_some_view AS SELECT id FROM zbase;" portal >/dev/null
+out=$(verify_no_zabbix_leakage); rc=$?
+if [ "$rc" -ne 0 ] && grep -q LEAK <<<"$out"; then
+    ok "a stray view in the copy is caught, not just stray tables"
+else
+    bad "stray view not caught: rc=$rc out=$out"
+fi
+psql_q "DROP VIEW zabbix_some_view; DROP TABLE zbase;" portal >/dev/null
+
+# The count must include views, or it understates what was copied. The view has
+# to be one the list actually claims, otherwise LEAK fires - correctly - and the
+# count line is never printed.
+cp "$FIXTURE_DIR" "$FIXTURE_DIR.bak"
+printf 'atm_portal_view\n' >> "$FIXTURE_DIR"
+load_script "$FIXTURE_DIR"
+psql_q "CREATE VIEW atm_portal_view AS SELECT 1 AS x;" portal >/dev/null
+out=$(verify_no_zabbix_leakage); rc=$?
+if [ "$rc" -eq 0 ] && grep -qE '1 view' <<<"$out"; then
+    ok "the reported count includes views"
+else
+    bad "view not counted: rc=$rc out=$out"
+fi
+psql_q "DROP VIEW atm_portal_view;" portal >/dev/null
+mv "$FIXTURE_DIR.bak" "$FIXTURE_DIR"
+load_script "$FIXTURE_DIR"
 
 # ── 5. row-count comparison still works both ways ────────────────────────────
 psql_q "DELETE FROM atm_anomalies WHERE id > 7;" portal >/dev/null
@@ -277,6 +309,90 @@ if [ "$rc" -ne 0 ] && grep -qi 'manifest' <<<"$out"; then
     ok "a copy with no manifest refuses to pass rather than guessing"
 else
     bad "missing manifest not caught: rc=$rc out=$out"
+fi
+
+# ── 9. a query that ERRORS must never look like an empty result ──────────────
+# I introduced this one myself: the leakage query built a string with
+# c.relname || c.relkind, but relkind is of type "char", so text||"char" is
+# ambiguous and the query fails. stderr was discarded, so the query returned
+# nothing, nothing is also what a clean copy returns, and the copy was reported
+# as "all expected" by a check that had not run.
+psql_q "CREATE TABLE zz_leak (id serial PRIMARY KEY);" portal >/dev/null
+out=$(verify_no_zabbix_leakage); rc=$?
+if [ "$rc" -ne 0 ] && grep -q LEAK <<<"$out"; then
+    ok "a real leak is still reported after the error-handling change"
+else
+    bad "leak detection regressed: rc=$rc out=$out"
+fi
+psql_q "DROP TABLE zz_leak;" portal >/dev/null
+
+# Now make the queries genuinely fail, which is what the type error did. Every
+# query errors at once: if any of them is allowed to look like an empty result,
+# the copy reads as clean.
+run_psql() { "$PGBIN/psql" -X -U zabbix "$@" -c 'SELECT nonexistent_column_xyz FROM nowhere;' >/dev/null 2>&1; return 1; }
+out=$(verify_no_zabbix_leakage); rc=$?
+if [ "$rc" -ne 0 ] && ! grep -q 'all expected' <<<"$out"; then
+    ok "a query that errors is reported as an error, not as a clean copy"
+else
+    bad "a broken query still reads as clean: rc=$rc out=$out"
+fi
+# and verify() must refuse too, rather than comparing markers as if they were counts
+out=$(verify); rc=$?
+if [ "$rc" -ne 0 ] && ! grep -qE 'All [0-9]+ tables match' <<<"$out"; then
+    ok "verify() also refuses when its queries fail"
+else
+    bad "verify() passed on failing queries: rc=$rc out=$out"
+fi
+unset -f run_psql
+# Put the real runner back. Without this, run_psql is simply undefined, every
+# query fails, and the tests below pass for the wrong reason - which is exactly
+# how they passed while the swallow-errors version was still in place.
+load_script "$FIXTURE_DIR"
+
+# The precise regression, and the one that actually happened. A REAL leak is
+# sitting in the copy, and the query that would report it is broken - exactly
+# the state after the relkind type error, where the leak list came back empty
+# and the copy was called clean. Only the leak query fails; the count queries
+# still work, so nothing else gives the failure away.
+#
+# Self-contained: it resets and re-copies first. Relying on whatever the tests
+# above left behind is how this assertion ended up passing while the leak table
+# it was checking for did not exist at all.
+reset_fixture; copy_fixture
+psql_q "CREATE TABLE zz_real_leak (id serial PRIMARY KEY);" portal >/dev/null
+
+load_script "$FIXTURE_DIR"
+# No "is the leak table actually there" pre-check. The assertion at the end -
+# the same copy flagged as leaking once the query works - is that proof, and a
+# pre-check of its own just tested whatever state the tests above left behind.
+# Call psql directly: a helper saved as "run_psql() { run_psql; }" recurses into
+# the override it was meant to preserve, so every query fails and the assertion
+# below passes for entirely the wrong reason. That happened once already.
+# Match on "relname ||" - the concatenation that only the leak list does. A
+# looser pattern on "relname" also matches every count query, because they all
+# join pg_namespace on c.relnamespace, and "relnamespace" contains "relname".
+# That made the whole check fail for the wrong reason and this test pass while
+# proving nothing.
+run_psql() {
+    case " $* " in
+        *"relname ||"*) return 1 ;;             # the leak list, broken
+        *) "$PGBIN/psql" -X -U zabbix "$@" ;;
+    esac
+}
+out=$(verify_no_zabbix_leakage); rc=$?
+if [ "$rc" -ne 0 ] && ! grep -q 'all expected' <<<"$out"; then
+    ok "a broken leak query cannot certify a copy that does leak"
+else
+    bad "a leaking copy was certified by a broken query: rc=$rc out=$out"
+fi
+# sanity: with a working runner the very same copy must be flagged as leaking
+unset -f run_psql
+load_script "$FIXTURE_DIR"
+out=$(verify_no_zabbix_leakage); rc=$?
+if [ "$rc" -ne 0 ] && grep -q LEAK <<<"$out"; then
+    ok "and the same copy is flagged as leaking once the query works"
+else
+    bad "leak not detected with a working query: rc=$rc out=$out"
 fi
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
