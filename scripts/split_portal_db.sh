@@ -25,7 +25,9 @@
 # The full backup was restore-tested on 2026-10-17 before this was written.
 set -uo pipefail
 
-HERE="$(cd "$(dirname "$0")" && pwd)"
+# BASH_SOURCE, not $0: when a test sources this file, $0 is the test script
+# and the path below would resolve to the wrong directory.
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$HERE")"
 # shellcheck source=portal_tables.sh
 source "$HERE/portal_tables.sh"
@@ -34,29 +36,52 @@ TARGET_DB="${SPLIT_TARGET_DB:-portal}"
 SOURCE_DB="${SPLIT_SOURCE_DB:-zabbix}"
 DB_USER="${SPLIT_DB_USER:-zabbix}"
 
-psql_cmd() { docker exec -i zabbix-db psql -U "$DB_USER" -d "$1" ${2:+-c "$2"}; }
+psql_cmd() { run_psql -d "$1" ${2:+-c "$2"}; }
+
+# sql_of <db> <sql> -> unaligned tuples, no header, blank line on error
+sql_of() {
+    run_psql -d "$1" -tAc "$2" 2>/dev/null
+}
+
+# Every database call goes through here, so a test can point the whole script at
+# a different postgres by defining run_psql before sourcing it. The verify steps
+# had produced two wrong verdicts before this existed and could only be checked
+# by running the real copy on a live server.
+run_psql() { docker exec -i zabbix-db psql -U "$DB_USER" "$@"; }
+run_pg_dump() { docker exec zabbix-db pg_dump -U "$DB_USER" "$@"; }
 
 verify() {
     echo "Comparing row counts: $SOURCE_DB (source) vs $TARGET_DB (copy)"
     echo "MISMATCH means the copy is not trustworthy - stop and investigate."
     echo
-    local failed=0 t
+    local failed=0 t src dst checked=0
     while read -r t; do
-        local src dst
-        src=$(docker exec zabbix-db psql -U "$DB_USER" -d "$SOURCE_DB" -tAc \
-              "SELECT count(*) FROM public.$t" 2>/dev/null) || src="ERR"
-        dst=$(docker exec zabbix-db psql -U "$DB_USER" -d "$TARGET_DB" -tAc \
-              "SELECT count(*) FROM public.$t" 2>/dev/null) || dst="ERR"
-        if [ "$src" = "$dst" ]; then
+        [ -z "$t" ] && continue
+        checked=$((checked+1))
+        src=$(sql_of "$SOURCE_DB" "SELECT count(*) FROM public.$t;")
+        dst=$(sql_of "$TARGET_DB" "SELECT count(*) FROM public.$t;")
+        # An unreachable or erroring query used to be reported as "ok", because
+        # both sides came back as the same placeholder string and the comparison
+        # was a plain string equality. So a copy that could not be read at all
+        # was announced as "All tables match" - the one situation where this
+        # check exists to stop a switch happening, and it waved it through.
+        if [ -z "$src" ] || [ -z "$dst" ]; then
+            printf '  ERROR    %-26s source=%s copy=%s\n' "$t" "${src:-<unreadable>}" "${dst:-<unreadable>}"
+            failed=1
+        elif [ "$src" = "$dst" ]; then
             printf '  ok       %-26s %s\n' "$t" "$src"
         else
             printf '  MISMATCH %-26s source=%s copy=%s\n' "$t" "$src" "$dst"
             failed=1
         fi
     done < <(portal_table_names)
+    if [ "$checked" -eq 0 ]; then
+        echo "  ERROR    no tables were compared - the table list is empty"
+        failed=1
+    fi
     echo
     if [ "$failed" = 0 ]; then
-        echo "All tables match. Stage 1 and 2 are done."
+        echo "All $checked tables match. Stage 1 and 2 are done."
         echo "Do NOT switch any service yet - leave that for a quiet window."
     else
         echo "One or more tables do not match. The copy is NOT usable."
@@ -64,60 +89,133 @@ verify() {
     return $failed
 }
 
+# "'a','b','c'" for the table list, so it can go straight into an ARRAY[...]
+portal_table_array_literal() {
+    portal_table_names | sed "s/.*/'&'/" | paste -sd, -
+}
+
 verify_sequences() {
     # Row counts alone are not enough. If a sequence is not carried across, the
     # copy looks perfect until the next insert, which then fails with a duplicate
     # key on a primary key that already exists - the same class of failure as the
     # lost constraints, and just as hard to explain from the log.
-    local src dst seqs
-    seqs=$(docker exec zabbix-db psql -U "$DB_USER" -d "$SOURCE_DB" -tAc \
-        "SELECT sequencename FROM pg_sequences WHERE schemaname='public' ORDER BY 1" 2>/dev/null)
-    if [ -z "$seqs" ]; then
-        echo "  (no sequences in $SOURCE_DB - nothing to compare)"
+    #
+    # Only sequences OWNED BY A PORTAL TABLE are checked. Checking every sequence
+    # in the schema sounds stricter but is simply wrong: the source database also
+    # holds Zabbix's own sequences (changelog_changelogid_seq and the proxy_*
+    # family), which are deliberately not copied. Reporting those as BEHIND made
+    # a perfect copy look broken - it did exactly that on UAT on 2026-10-17.
+    #
+    # "not present" and "present but never used" are also kept apart. Reading
+    # last_value through pg_sequences yields NULL for a sequence that has never
+    # been called, and coalescing that to 0 makes an absent sequence look
+    # identical to an empty one. A check that passes when the thing it is
+    # checking is missing is not a check.
+    local tbls src dst s
+    tbls=$(portal_table_array_literal)
+    src=$(sql_of "$SOURCE_DB" "
+        SELECT s.relname
+        FROM pg_class s
+        JOIN pg_namespace sn ON sn.oid = s.relnamespace
+        JOIN pg_depend d ON d.objid = s.oid
+                        AND d.classid = 'pg_class'::regclass
+                        AND d.refclassid = 'pg_class'::regclass
+                        AND d.deptype = 'a'
+        JOIN pg_class t ON t.oid = d.refobjid
+        JOIN pg_namespace tn ON tn.oid = t.relnamespace
+        WHERE s.relkind = 'S' AND sn.nspname = 'public' AND tn.nspname = 'public'
+          AND t.relname = ANY(ARRAY[$tbls])
+        ORDER BY 1;")
+    if [ -z "$src" ]; then
+        echo "  (no portal sequences in $SOURCE_DB - nothing to compare)"
         return 0
     fi
-    echo "Sequences (max last_value; a lower value in the copy means the next"
-    echo "insert will collide with an existing row):"
-    local failed=0 s
+    echo "Sequences owned by portal tables:"
+    local failed=0
     while read -r s; do
         [ -z "$s" ] && continue
-        src=$(docker exec zabbix-db psql -U "$DB_USER" -d "$SOURCE_DB" -tAc \
-              "SELECT coalesce(max(last_value),0) FROM pg_sequences WHERE sequencename='$s'" 2>/dev/null) || src="ERR"
-        dst=$(docker exec zabbix-db psql -U "$DB_USER" -d "$TARGET_DB" -tAc \
-              "SELECT coalesce(max(last_value),0) FROM pg_sequences WHERE sequencename='$s'" 2>/dev/null) || dst="ERR"
-        if [ "$src" = "$dst" ]; then
-            printf '  ok       %-26s %s\n' "$s" "$src"
-        elif [ "$dst" != "ERR" ] && [ "$src" != "ERR" ] && [ "$dst" -ge "$src" ] 2>/dev/null; then
-            # Ahead is fine: rows were added to the source after the dump.
-            printf '  ok       %-26s %s (source now %s)\n' "$s" "$dst" "$src"
-        else
-            printf '  BEHIND   %-26s source=%s copy=%s\n' "$s" "$src" "$dst"
+        if [ "$(sql_of "$TARGET_DB" "SELECT to_regclass('public.$s') IS NULL;")" = "t" ]; then
+            printf '  MISSING  %-26s not present in the copy\n' "$s"
             failed=1
+            continue
         fi
-    done <<<"$seqs"
+        local sv dv
+        sv=$(sql_of "$SOURCE_DB" "SELECT last_value || ':' || is_called FROM public.$s;")
+        dv=$(sql_of "$TARGET_DB" "SELECT last_value || ':' || is_called FROM public.$s;")
+        if [ -z "$sv" ] || [ -z "$dv" ]; then
+            printf '  ERROR    %-26s source=%s copy=%s\n' "$s" "${sv:-<unreadable>}" "${dv:-<unreadable>}"
+            failed=1
+        elif [ "$sv" = "$dv" ]; then
+            printf '  ok       %-26s %s\n' "$s" "$sv"
+        else
+            local sl dl
+            sl=${sv%%:*}; dl=${dv%%:*}
+            if [ "${dv##*:}" = "false" ] || [ "$dl" -lt "$sl" ] 2>/dev/null; then
+                printf '  BEHIND   %-26s source=%s copy=%s\n' "$s" "$sv" "$dv"
+                failed=1
+            else
+                # Ahead is fine: rows landed in the source after the dump ran.
+                printf '  ok       %-26s %s (source was %s)\n' "$s" "$dv" "$sv"
+            fi
+        fi
+    done <<<"$src"
     return $failed
 }
 
+verify_no_zabbix_leakage() {
+    # The copy must contain the portal's tables and nothing else. If the flag
+    # list ever resolves empty, pg_dump does not dump nothing - it dumps the whole
+    # database - and this is what would catch it.
+    local extra expected found
+    extra=$(sql_of "$TARGET_DB" "
+        SELECT tablename FROM pg_tables
+        WHERE schemaname = 'public'
+          AND tablename NOT IN ($(portal_table_array_literal))
+        ORDER BY 1;")
+    found=$(sql_of "$TARGET_DB" "SELECT count(*) FROM pg_tables WHERE schemaname='public';")
+    expected=$(portal_table_count)
+    if [ -z "$found" ] || [ "$found" -eq 0 ] 2>/dev/null; then
+        # An empty list must not read as a pass. NOT IN () over an empty array is
+        # how a copy with nothing in it would come back "clean".
+        echo "  UNKNOWN  could not count tables in $TARGET_DB - treating as failure"
+        return 1
+    fi
+    if [ -z "$extra" ]; then
+        printf '  ok       %s has %s tables, all expected\n' "$TARGET_DB" "$found"
+        return 0
+    fi
+    echo "  LEAK     $TARGET_DB contains tables that are not portal tables:"
+    sed 's/^/             /' <<<"$extra"
+    return 1
+}
+
+main() {
 case "${1:-}" in
     --verify)
         verify
         rc=$?
         verify_sequences
+        rc=$(( rc | $? ))
+        echo
+        verify_no_zabbix_leakage
         exit $(( rc | $? ))
         ;;
     --drop)
         echo "Removing $TARGET_DB. The original $SOURCE_DB is untouched."
         psql_cmd postgres "DROP DATABASE IF EXISTS $TARGET_DB"
-        exit $?
+        return $?
         ;;
 esac
+
 
 echo "== Stage 1: create $TARGET_DB and copy the portal tables =="
 echo "   source=$SOURCE_DB  tables=$(portal_table_count)"
 echo
 
+
 psql_cmd postgres "DROP DATABASE IF EXISTS $TARGET_DB" >/dev/null 2>&1
-psql_cmd postgres "CREATE DATABASE $TARGET_DB" || exit 1
+psql_cmd postgres "CREATE DATABASE $TARGET_DB" || return 1
+
 
 echo "-- dumping portal tables from $SOURCE_DB"
 # --no-owner/--no-acl so the copy is not tied to a specific role's privileges.
@@ -131,7 +229,7 @@ if [ "$T_COUNT" -lt 15 ]; then
     echo "ABORT: only $T_COUNT -t flags resolved, expected $(portal_table_count)."
     echo "Refusing to run pg_dump, because with too few flags it would copy the"
     echo "entire $SOURCE_DB while reporting success."
-    exit 1
+    return 1
 fi
 # shellcheck disable=SC2086  (flags carry no spaces; splitting is intended)
 if ! docker exec zabbix-db pg_dump -U "$DB_USER" --no-owner --no-acl $T_FLAGS "$SOURCE_DB" \
@@ -140,13 +238,15 @@ if ! docker exec zabbix-db pg_dump -U "$DB_USER" --no-owner --no-acl $T_FLAGS "$
     cat /tmp/split_err
     echo
     echo "$SOURCE_DB is untouched. Fix the error above and re-run."
-    exit 1
+    return 1
 fi
+
 
 if [ -s /tmp/split_err ]; then
     echo "-- psql reported:"
     cat /tmp/split_err
 fi
+
 
 echo
 echo "== Stage 2: verify =="
@@ -156,19 +256,32 @@ echo
 verify_sequences
 rc=$(( rc | $? ))
 echo
+verify_no_zabbix_leakage
+rc=$(( rc | $? ))
+echo
 if [ $rc -eq 0 ]; then
     cat <<'NEXT'
 Next, when you have a quiet window (NOT today if you are demonstrating):
 
+
   Stage 3 - point ONE service at the copy and prove it reads:
       DB_NAME: "portal"
+
 
   Stage 4 - switch the portal, and KEEP the old database:
       docker compose up -d report-portal
     Rollback is one env var and a restart.
 
+
 Reminder: the Zabbix containers must keep DB_NAME=zabbix. Only the portal
 services move. Changing it globally points Zabbix at an empty database.
 NEXT
 fi
-exit $rc
+return $rc
+}
+
+# Sourced by tests/test_split_verify.sh to exercise the verify steps against
+# a real postgres. Running it is what actually does the copy.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    main "$@"
+fi

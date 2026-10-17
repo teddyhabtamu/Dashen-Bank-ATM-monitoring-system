@@ -237,11 +237,38 @@ def test_the_split_never_touches_the_source_database():
 def test_the_split_checks_sequences():
     """Row counts matching is not the same as a usable copy. A sequence that was
     not carried across leaves the copy looking perfect until the next insert,
-    which then fails with a duplicate key on a primary key that already exists."""
+    which then fails with a duplicate key on a primary key that already exists.
+
+    It reads the sequence directly rather than through pg_sequences, because
+    pg_sequences reports last_value as NULL for a sequence that has never been
+    called - so a missing sequence and an empty one look identical, and the
+    check would pass on the very thing it exists to catch."""
     src = code_without_comments(REPO / 'scripts' / 'split_portal_db.sh')
-    assert 'pg_sequences' in src, 'sequence positions must be compared'
-    assert 'last_value' in src
+    assert 'last_value' in src, 'sequence positions must be compared'
+    assert 'is_called' in src
+    assert 'to_regclass' in src, 'a missing sequence must be distinguishable from an empty one'
     assert 'verify_sequences' in src
+
+
+def test_the_split_only_checks_sequences_it_owns():
+    """The source database also holds Zabbix's own sequences - changelog and the
+    proxy_* family - which are deliberately not copied. Checking every sequence
+    in the schema reported those as BEHIND and made a byte-perfect copy look
+    broken. That happened on UAT on 2026-10-17."""
+    src = code_without_comments(REPO / 'scripts' / 'split_portal_db.sh')
+    assert 'pg_depend' in src, 'ownership must come from pg_depend'
+    assert "deptype = 'a'" in src, "only auto-owned (serial) sequences belong to a table"
+    assert 'pg_sequences' not in src, (
+        'pg_sequences enumerates Zabbix sequences too, which is the bug this '
+        'replaced')
+
+
+def test_the_split_proves_nothing_extra_was_copied():
+    """If the flag list ever resolves empty, pg_dump dumps the whole database
+    rather than nothing, and reports success while doing it."""
+    src = code_without_comments(REPO / 'scripts' / 'split_portal_db.sh')
+    assert 'verify_no_zabbix_leakage' in src
+    assert 'NOT IN' in src, 'the copy must be checked for tables it should not have'
 
 
 def test_the_split_aborts_rather_than_dumping_everything():
