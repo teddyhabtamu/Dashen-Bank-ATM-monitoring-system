@@ -610,3 +610,19 @@ def test_restore_fails_when_a_relation_is_missing():
     assert 'Do not start the portal against it' in src, \
         'a failed restore must say so in terms an operator will act on'
     assert 'exit 1' in src
+
+
+def test_the_restore_can_be_inspected_without_destroying_anything():
+    """A destructive script cannot be verified on a live host without a way to
+    look at it first. The real run drops and recreates the portal database, which
+    on UAT-01 is the database the demo reads and everything written since the
+    last backup. So there has to be a mode that resolves the target, finds the
+    backup and validates it, then stops."""
+    src = (REPO / 'scripts' / 'restore_db.sh').read_text()
+    assert '--dry-run' in src, 'a dry-run mode is required to check this safely'
+    dry = src[src.index('if [ "$DRY_RUN" -eq 1 ]'):]
+    dry = dry[:dry.index('fi') + 2]
+    assert 'DROP DATABASE' not in dry, 'the dry-run branch must not drop anything'
+    assert 'exit 0' in dry, 'the dry-run must stop before the destructive work'
+    # it must report the target, because "which database" is the whole question
+    assert 'would restore database' in dry

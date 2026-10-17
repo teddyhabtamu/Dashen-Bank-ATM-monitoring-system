@@ -36,6 +36,13 @@
 #       from atm_custom_tables.sql if no full dump is present. This is the
 #       normal case, and it never touches the zabbix database.
 #
+#   bash scripts/restore_db.sh --confirm --dry-run
+#       Everything the real run does except change anything: resolves which
+#       database it would target, finds the backup, validates it, and stops.
+#       This is the only safe way to check the script against a live system,
+#       because the real run drops and recreates the database - and on a live
+#       host that database holds everything written since the last backup.
+#
 #   bash scripts/restore_db.sh --confirm --also-zabbix
 #       Additionally replaces the WHOLE zabbix database - Zabbix's own
 #       configuration, hosts, items and history included. Deliberately separate
@@ -51,10 +58,12 @@ source "$HERE/portal_tables.sh"
 
 CONFIRMED=0
 ALSO_ZABBIX=0
+DRY_RUN=0
 for arg in "$@"; do
     case "$arg" in
         --confirm)      CONFIRMED=1 ;;
         --also-zabbix)  ALSO_ZABBIX=1 ;;
+        --dry-run)      DRY_RUN=1 ;;
     esac
 done
 
@@ -143,6 +152,20 @@ case "$PORTAL_DUMP" in
 esac
 SIZE=$(du -h "$PORTAL_DUMP" | cut -f1)
 echo "  backup verified: $PORTAL_DUMP ($SIZE)"
+
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo ""
+    echo "DRY RUN. Nothing has been changed and nothing will be."
+    echo "  would restore database : $PORTAL_DB"
+    echo "  from                   : $PORTAL_DUMP"
+    if [ "$ALSO_ZABBIX" -eq 1 ]; then
+        echo "  would also replace     : zabbix (from ${ZBX_DUMP:-no dump found})"
+    fi
+    echo ""
+    echo "Remove --dry-run to actually do it. That drops and recreates"
+    echo "'$PORTAL_DB', so anything written since this dump is lost."
+    exit 0
+fi
 
 # ── safety dump ──────────────────────────────────────────────────────────────
 PRE="pre_restore_$(date +%Y%m%d_%H%M%S).sql"
