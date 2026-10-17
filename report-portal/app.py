@@ -166,7 +166,68 @@ def create_app():
 
     @app.route('/health')
     def health():
+        # Liveness only, and it stays unconditional on purpose: this answers
+        # "is the process up", not "can it do its job". A readiness probe that
+        # failed on a dependency restart would take the whole portal out of
+        # rotation and turn a dependency blip into an outage.
         return {'status': 'ok'}, 200
+
+    @app.route('/ready')
+    def ready():
+        """Readiness: can this process actually serve a request right now?
+
+        Checks each dependency with a short timeout and reports each one
+        separately, because "not ready" is useless on its own - the question is
+        always WHICH dependency. Never raises: a dependency being down is a
+        reportable state, not a crash.
+        """
+        import time as _time
+        checks, healthy = {}, True
+
+        started = _time.time()
+        try:
+            from db import get_db
+            with get_db() as conn:
+                cur = conn.cursor()
+                cur.execute('SELECT 1')
+                cur.fetchone()
+                cur.close()
+            checks['database'] = {'ok': True, 'ms': int((_time.time() - started) * 1000)}
+        except Exception as e:
+            healthy = False
+            checks['database'] = {'ok': False, 'error': str(e)[:200]}
+
+        started = _time.time()
+        try:
+            import requests as _rq
+            url = os.environ.get('ZBX_URL') or os.environ.get('ZABBIX_URL') \
+                or 'http://zabbix-web:8080/api_jsonrpc.php'
+            _rq.post(url, json={'jsonrpc': '2.0', 'method': 'apiinfo.version',
+                                'params': {}, 'id': 1},
+                     auth=(os.environ.get('ZBX_USER', ''), os.environ.get('ZBX_PASS', '')),
+                     timeout=3).raise_for_status()
+            checks['zabbix'] = {'ok': True, 'ms': int((_time.time() - started) * 1000)}
+        except Exception as e:
+            healthy = False
+            checks['zabbix'] = {'ok': False, 'error': str(e)[:200]}
+
+        started = _time.time()
+        try:
+            import requests as _rq
+            host = os.environ.get('ES_HOST') or os.environ.get('OPENSEARCH_HOST')
+            if not host:
+                checks['opensearch'] = {'ok': True, 'skipped': 'ES_HOST not configured'}
+            else:
+                url = host if host.startswith('http') else 'http://%s' % host
+                _rq.get(url, timeout=3).raise_for_status()
+                checks['opensearch'] = {'ok': True,
+                                        'ms': int((_time.time() - started) * 1000)}
+        except Exception as e:
+            # EJ search degrades on its own; the portal is not "down" without it.
+            checks['opensearch'] = {'ok': False, 'error': str(e)[:200]}
+
+        return ({'status': 'ready' if healthy else 'degraded', 'checks': checks},
+                200 if healthy else 503)
 
     return app
 

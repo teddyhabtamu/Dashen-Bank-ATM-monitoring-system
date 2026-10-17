@@ -164,6 +164,31 @@ calling an ATM live.
 
 ---
 
+## Operational guardrails (added 2026-10-16)
+
+After a cron job failed silently for ~19 days (its crontab invoked
+`venv/bin/python`, which does not exist on this host), three guardrails were
+added so that class of failure cannot hide again.
+
+```bash
+# 1. Are the cron jobs still running? Exit 0 = all healthy, 1 = something is wrong
+python3 scripts/check_jobs.py
+
+# 2. What is this environment actually running? Captures image DIGESTS (a tag
+#    can be repointed; a digest cannot) and the installed Python packages.
+bash scripts/capture_env_lock.sh          # read-only
+bash scripts/capture_env_lock.sh --apply  # also appends commented pins to .env
+
+# 3. Can the portal actually serve a request, and if not, which dependency?
+curl -s localhost:8888/ready | python3 -m json.tool
+```
+
+`/ready` returns 503 when the database or Zabbix is unreachable and names the
+failing dependency. `/health` is unchanged and stays unconditional — it answers
+"is the process alive", which must not fail during a dependency restart.
+
+Wire `check_jobs.py` to whatever alerts you use. Its exit code is the contract.
+
 ## Deploying a change to the portal
 
 ```bash
