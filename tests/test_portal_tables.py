@@ -924,10 +924,21 @@ def test_collapsing_the_sidebar_hides_no_destination():
 def test_the_collapsed_rail_keeps_a_mark_and_a_divider_per_group():
     """Two defects visible only in the collapsed state: the brand rendered as an
     empty box (logo display:none plus text collapsed to width:0), and the
-    section headers had nowhere to go."""
+    section headers had nowhere to go.
+
+    This test used to read base.html only and passed anyway. The
+    display:none survived in report-portal/static/style.css, which base.html
+    loads at line 14, so the live portal rendered the empty box that the fix was
+    supposed to prevent. A fix to one copy of a stylesheet is not a fix."""
+    for name in ('report-portal/templates/base.html',
+                 'report-portal/static/style.css'):
+        # Strip comments: the note recording the removal quotes the very rule
+        # it removed, which is documentation, not a live declaration.
+        tpl = re.sub(r'/\*.*?\*/', '', (REPO / name).read_text(), flags=re.S)
+        assert '.sidebar.collapsed .sidebar-logo{display:none}' not in tpl, \
+            'the brand mark must survive the collapse in %s - an empty box ' \
+            'reads as a fault' % name
     tpl = (REPO / 'report-portal' / 'templates' / 'base.html').read_text()
-    assert '.sidebar.collapsed .sidebar-logo{display:none}' not in tpl, \
-        'the brand mark must survive the collapse - an empty box reads as a fault'
     assert '.sidebar.collapsed .nav-section-head{' in tpl, \
         'the section header needs a collapsed presentation'
     # A 1px divider must not be a 1px click target.
@@ -976,3 +987,121 @@ def test_menu_rows_are_the_size_they_appear_to_be():
     for stale in ('.nav-group-header', '.nav-group-items .nav-item{'):
         assert stale not in tpl, \
             'stale rule from the submenu design is still overriding the rail: %s' % stale
+
+
+def test_the_active_page_marker_is_a_fill_and_never_a_gold_bar():
+    """Commit 2ad68ed removed a 3px brand-gold (#FDD79A) vertical bar from the
+    active row:
+
+        .nav-item.active::before{content:'';position:absolute;left:0;top:6px;
+          bottom:6px;width:3px;border-radius:0 3px 3px 0;background:#FDD79A}
+
+    It came back and the entire suite stayed green, because every other sidebar
+    test asks whether a destination is reachable or hidden - none of them asked
+    what the active state looks like. A gold rule down the left edge also reads
+    as a rendering fault rather than a selection, and it is invisible to anyone
+    reviewing the DOM.
+
+    Reject the mechanism, not the hex: the active row is marked by fill, weight
+    and text colour alone, so it must carry no pseudo-element at all.
+    """
+    for name in ('report-portal/templates/base.html',
+                 'report-portal/static/style.css'):
+        path = REPO / name
+        if not path.exists():
+            continue
+        # Comments are documentation here and they name selectors and hexes on
+        # purpose. Strip them before parsing, or the prose is read as code.
+        src = re.sub(r'/\*.*?\*/', '', path.read_text(), flags=re.S)
+
+        pseudo = re.findall(r'\.nav-item\.active\s*::\w[^{]*\{[^}]*\}', src)
+        assert not pseudo, (
+            'the active row must not draw a pseudo-element bar: %s'
+            % ' | '.join(p.strip()[:80] for p in pseudo))
+
+        # Belt and braces, in case it returns as a border-left on the base rule.
+        # Match rules by SELECTOR rather than slicing the file by offset: the two
+        # copies of this stylesheet do not share sentinel comments, and a slice
+        # bounded by the wrong one reaches into .btn-gold - which is gold on
+        # purpose - and fails a test written to prove gold is gone.
+        nav_rules = [(sel.strip(), body) for sel, body
+                     in re.findall(r'([^{}]+)\{([^{}]*)\}', src)
+                     if re.search(r'\b(?:nav-|sidebar)', sel)]
+        assert nav_rules, 'expected to find the sidebar rules in %s' % name
+        gold = [h.strip()[:70] for sel, body in nav_rules
+                for h in re.findall(r'#(?:FDD79A|C49A00)\b', sel + body, re.I)]
+        assert not gold, (
+            'brand gold on a sidebar rule is the 3px active bar coming back: %s'
+            % gold)
+
+
+def test_the_loaded_stylesheet_cannot_resurrect_a_dropped_sidebar_rule():
+    """base.html loads report-portal/static/style.css at line 14 and then declares
+    its own inline <style>. Equal specificity means the later inline block wins -
+    but only for selectors it actually declares.
+
+    A selector it does NOT declare passes straight through from style.css. That
+    is how a rule could be deleted from base.html, pass every test, and still
+    render: the gold active bar, the hidden collapsed brand mark and the hidden
+    collapsed section labels were all "removed" in base.html and all three were
+    still live in style.css. Deleting a rule from one copy of a stylesheet is not
+    a deletion.
+
+    So every sidebar selector the external sheet declares must also be declared
+    in the template. That makes the inline block the single source of truth and
+    leaves the external sheet unable to outlive a decision.
+    """
+    css = re.sub(r'/\*.*?\*/', '',
+                 (REPO / 'report-portal' / 'static' / 'style.css').read_text(),
+                 flags=re.S)
+    tpl = (REPO / 'report-portal' / 'templates' / 'base.html').read_text()
+    inline = tpl[tpl.index('<style>'):tpl.index('</style>')]
+    inline = re.sub(r'/\*.*?\*/', '', inline, flags=re.S)
+
+    def selectors(src):
+        return {re.sub(r'\s+', ' ', sel).strip()
+                for sel in re.findall(r'([^{}]+)\{', src)}
+
+    inline_sels = selectors(inline)
+    orphans = sorted(sel for sel in selectors(css)
+                     if re.search(r'\b(?:nav-|sidebar)', sel)
+                     and sel not in inline_sels)
+    assert not orphans, (
+        'these sidebar rules load from style.css with nothing in base.html to '
+        'override them, so they outlive any change made to the template: %s'
+        % orphans)
+
+
+def test_no_section_can_render_empty_for_any_role():
+    """The argument for static section labels is that they can never conceal
+    anything - but only if every section keeps at least one destination that is
+    NOT behind an admin gate. Right now the gating is lopsided: of the six items
+    under Manage, five require admin, so a non-admin operator sees the uppercase
+    header MANAGE with exactly one link under it, and zero under nothing.
+
+    That is the real defect a dropdown would have hidden rather than fixed, so
+    this test states the property the static layout depends on. If someone gates
+    the last ungated item in a section, the section has to be relabelled or the
+    item moved before this fails.
+    """
+    tpl = (REPO / 'report-portal' / 'templates' / 'base.html').read_text()
+    nav = tpl[tpl.index('<nav class="sidebar-nav">'):]
+    nav = nav[:nav.index('</nav>', nav.index('<nav class="sidebar-nav">'))]
+
+    # The gate's {% endif %} sits on its own line; the one inside
+    # class="nav-item {% if ... %}active{% endif %}" does not, so anchor to the
+    # line start. An unanchored match stops at that inline endif and reports
+    # gated items as ungated, which is the bug this probe had first.
+    gate = re.compile(r"^\s*\{%\s*if session\.get\('role'\)\s*==\s*'admin'"
+                      r"\s*%\}.*?^\s*\{%\s*endif\s*%\}", re.S | re.M)
+
+    chunks = nav.split('<div class="nav-group">')[1:]
+    assert len(chunks) == 3, 'expected three sections, found %d' % len(chunks)
+
+    for chunk in chunks:
+        label = re.search(r'nav-section-label">([^<]+)<', chunk).group(1)
+        visible = re.findall(r'<span>([^<]+)</span>', gate.sub('', chunk))
+        assert visible, (
+            'section %r has no destination a non-admin can reach, so its header '
+            'would sit above nothing - gate nothing else in it, move an item, '
+            'or drop the section' % label)
