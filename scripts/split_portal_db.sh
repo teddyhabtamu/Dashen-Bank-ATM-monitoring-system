@@ -64,27 +64,37 @@ run_psql_stdin() { docker exec -i zabbix-db psql -U "$DB_USER" "$@"; }
 run_pg_dump() { docker exec zabbix-db pg_dump -U "$DB_USER" "$@"; }
 
 verify() {
-    echo "Comparing row counts: $SOURCE_DB (source) vs $TARGET_DB (copy)"
-    echo "MISMATCH means the copy is not trustworthy - stop and investigate."
+    echo "Checking the copy against the source as it stood when the copy was taken."
+    echo "MISMATCH means the copy does not hold what the source held - stop."
     echo
-    local failed=0 t src dst checked=0
+    if [ -z "$(sql_of "$TARGET_DB" "SELECT to_regclass('public.$MANIFEST_TABLE');")" ] \
+       || [ "$(sql_of "$TARGET_DB" "SELECT to_regclass('public.$MANIFEST_TABLE') IS NULL;")" = "t" ]; then
+        echo "  ERROR    $TARGET_DB has no $MANIFEST_TABLE."
+        echo "           That copy was made by an older version of this script, which"
+        echo "           recorded nothing. Re-run without --verify to rebuild it."
+        return 1
+    fi
+    local failed=0 t expected dst now checked=0 drifted=0
     while read -r t; do
         [ -z "$t" ] && continue
         checked=$((checked+1))
-        src=$(sql_of "$SOURCE_DB" "SELECT count(*) FROM public.$t;")
+        expected=$(manifest_value table "$t")
         dst=$(sql_of "$TARGET_DB" "SELECT count(*) FROM public.$t;")
-        # An unreachable or erroring query used to be reported as "ok", because
-        # both sides came back as the same placeholder string and the comparison
-        # was a plain string equality. So a copy that could not be read at all
-        # was announced as "All tables match" - the one situation where this
-        # check exists to stop a switch happening, and it waved it through.
-        if [ -z "$src" ] || [ -z "$dst" ]; then
-            printf '  ERROR    %-26s source=%s copy=%s\n' "$t" "${src:-<unreadable>}" "${dst:-<unreadable>}"
+        if [ -z "$expected" ] || [ -z "$dst" ]; then
+            printf '  ERROR    %-26s expected=%s copy=%s\n' "$t" "${expected:-<none>}" "${dst:-<unreadable>}"
             failed=1
-        elif [ "$src" = "$dst" ]; then
-            printf '  ok       %-26s %s\n' "$t" "$src"
+            continue
+        fi
+        if [ "$expected" = "$dst" ]; then
+            now=$(sql_of "$SOURCE_DB" "SELECT count(*) FROM public.$t;")
+            if [ -n "$now" ] && [ "$now" != "$expected" ]; then
+                drifted=$((drifted+1))
+                printf '  ok       %-26s %s (source has since grown to %s)\n' "$t" "$dst" "$now"
+            else
+                printf '  ok       %-26s %s\n' "$t" "$dst"
+            fi
         else
-            printf '  MISMATCH %-26s source=%s copy=%s\n' "$t" "$src" "$dst"
+            printf '  MISMATCH %-26s snapshot=%s copy=%s\n' "$t" "$expected" "$dst"
             failed=1
         fi
     done < <(portal_table_names)
@@ -94,48 +104,34 @@ verify() {
         echo "  ERROR    no tables were compared - the table list is empty"
         failed=1
     elif [ "$checked" -ne "$expected_total" ]; then
-        # This is not a hypothetical. A query that consumed stdin ended the loop
-        # early, and the run reported "All 1 tables match" with a zero exit code.
-        # Comparing fewer tables than the list names is a failure, always - the
-        # tables that were skipped are exactly the ones nobody knows about.
+        # Not hypothetical: a query that consumed stdin ended this loop early and
+        # the run reported "All 1 tables match" with a zero exit code.
         echo "  ERROR    compared $checked of $expected_total tables - the loop was cut short"
         failed=1
     fi
     echo
-    if [ "$failed" = 0 ]; then
-        echo "All $checked tables match. Stage 1 and 2 are done."
+    if [ "$failed" -eq 0 ]; then
+        echo "All $checked tables match the snapshot taken at copy time."
+        if [ "$drifted" -gt 0 ]; then
+            echo "$drifted table(s) have received new rows since - normal for a live"
+            echo "source, and the reason this compares against the snapshot."
+        fi
         echo "Do NOT switch any service yet - leave that for a quiet window."
     else
-        echo "One or more tables do not match. The copy is NOT usable."
+        echo "The copy does NOT hold what the source held when it was taken."
     fi
     return $failed
 }
 
-# "'a','b','c'" for the table list, so it can go straight into an ARRAY[...]
 portal_table_array_literal() {
     portal_table_names | sed "s/.*/'&'/" | paste -sd, -
 }
 
-verify_sequences() {
-    # Row counts alone are not enough. If a sequence is not carried across, the
-    # copy looks perfect until the next insert, which then fails with a duplicate
-    # key on a primary key that already exists - the same class of failure as the
-    # lost constraints, and just as hard to explain from the log.
-    #
-    # Only sequences OWNED BY A PORTAL TABLE are checked. Checking every sequence
-    # in the schema sounds stricter but is simply wrong: the source database also
-    # holds Zabbix's own sequences (changelog_changelogid_seq and the proxy_*
-    # family), which are deliberately not copied. Reporting those as BEHIND made
-    # a perfect copy look broken - it did exactly that on UAT on 2026-10-17.
-    #
-    # "not present" and "present but never used" are also kept apart. Reading
-    # last_value through pg_sequences yields NULL for a sequence that has never
-    # been called, and coalescing that to 0 makes an absent sequence look
-    # identical to an empty one. A check that passes when the thing it is
-    # checking is missing is not a check.
-    local tbls src dst s
-    tbls=$(portal_table_array_literal)
-    src=$(sql_of "$SOURCE_DB" "
+# Sequences belonging to a portal table. Zabbix's own sequences (changelog, the
+# proxy_* family) live in the same database and are deliberately not copied, so
+# including them would make a perfect copy report a failure.
+owned_sequences() {
+    sql_of "$SOURCE_DB" "
         SELECT s.relname
         FROM pg_class s
         JOIN pg_namespace sn ON sn.oid = s.relnamespace
@@ -146,45 +142,125 @@ verify_sequences() {
         JOIN pg_class t ON t.oid = d.refobjid
         JOIN pg_namespace tn ON tn.oid = t.relnamespace
         WHERE s.relkind = 'S' AND sn.nspname = 'public' AND tn.nspname = 'public'
-          AND t.relname = ANY(ARRAY[$tbls])
-        ORDER BY 1;")
-    if [ -z "$src" ]; then
+          AND t.relname = ANY(ARRAY[$(portal_table_array_literal)])
+        ORDER BY 1;"
+}
+
+# A point-in-time copy cannot be checked for equality against a source that keeps
+# being written to. network-correlator adds to atm_network_metrics every 120
+# seconds, so a perfectly good copy is ALWAYS behind by the time verify runs, and
+# demanding equality makes the check cry wolf on a healthy system. A check that
+# always fails is one people learn to ignore, which is worse than no check.
+#
+# So the source's row counts and sequence positions are recorded inside the copy
+# at dump time, and verify compares against those. That is the question that can
+# actually be answered: did the copy capture what the source held when it was
+# taken? How far the source has moved since is then reported separately, because
+# that is expected, not a fault.
+MANIFEST_TABLE=portal_split_manifest
+
+capture_manifest() {
+    local out="$1" t s
+    : > "$out"
+    while read -r t; do
+        [ -z "$t" ] && continue
+        printf 'table\t%s\t%s\n' "$t" \
+            "$(sql_of "$SOURCE_DB" "SELECT count(*) FROM public.$t;")" >> "$out"
+    done < <(portal_table_names)
+    while read -r s; do
+        [ -z "$s" ] && continue
+        printf 'sequence\t%s\t%s\n' "$s" \
+            "$(sql_of "$SOURCE_DB" "SELECT last_value || ':' || is_called FROM public.$s;")" >> "$out"
+    done <<<"$(owned_sequences)"
+}
+
+load_manifest() {
+    local f="$1" kind name value
+    {
+        echo "CREATE TABLE IF NOT EXISTS $MANIFEST_TABLE ("
+        echo "  kind text NOT NULL, name text NOT NULL,"
+        echo "  value text, dumped_at timestamptz NOT NULL DEFAULT now(),"
+        echo "  PRIMARY KEY (kind, name));"
+        echo "DELETE FROM $MANIFEST_TABLE;"
+        while IFS="$(printf '\t')" read -r kind name value; do
+            [ -z "$name" ] && continue
+            printf "INSERT INTO %s (kind,name,value) VALUES ('%s','%s','%s');\n" \
+                "$MANIFEST_TABLE" "$kind" "$name" "$value"
+        done < "$f"
+    } | run_psql_stdin -d "$TARGET_DB" -q 2>/dev/null
+}
+
+manifest_value() {
+    sql_of "$TARGET_DB" \
+        "SELECT value FROM $MANIFEST_TABLE WHERE kind='$1' AND name='$2';"
+}
+
+verify_sequences() {
+    # Same reasoning as verify(): a sequence that the source has advanced past
+    # since the copy was taken is staleness, not corruption. fault_type_map is
+    # re-seeded by init_audit_schema() with ON CONFLICT DO UPDATE on every portal
+    # start, which burns one sequence value per row while leaving the row count
+    # alone - so its position drifts constantly and means nothing.
+    #
+    # A copy that is genuinely BEHIND will collide on the next insert, so this
+    # still matters - it is just measured against the snapshot, not the clock.
+    local nseq checked=0 failed=0 s expected dv now
+    nseq=$(owned_sequences | grep -c .)
+    if [ "$nseq" -eq 0 ]; then
         echo "  (no portal sequences in $SOURCE_DB - nothing to compare)"
         return 0
     fi
-    local nseq
-    nseq=$(printf '%s\n' "$src" | grep -c .)
     echo "Sequences owned by portal tables ($nseq):"
-    local failed=0
     while read -r s; do
         [ -z "$s" ] && continue
+        checked=$((checked+1))
         if [ "$(sql_of "$TARGET_DB" "SELECT to_regclass('public.$s') IS NULL;")" = "t" ]; then
             printf '  MISSING  %-26s not present in the copy\n' "$s"
             failed=1
             continue
         fi
-        local sv dv
-        sv=$(sql_of "$SOURCE_DB" "SELECT last_value || ':' || is_called FROM public.$s;")
+        expected=$(manifest_value sequence "$s")
         dv=$(sql_of "$TARGET_DB" "SELECT last_value || ':' || is_called FROM public.$s;")
-        if [ -z "$sv" ] || [ -z "$dv" ]; then
-            printf '  ERROR    %-26s source=%s copy=%s\n' "$s" "${sv:-<unreadable>}" "${dv:-<unreadable>}"
+        if [ -z "$expected" ] || [ -z "$dv" ]; then
+            printf '  ERROR    %-26s snapshot=%s copy=%s\n' "$s" "${expected:-<none>}" "${dv:-<unreadable>}"
             failed=1
-        elif [ "$sv" = "$dv" ]; then
-            printf '  ok       %-26s %s\n' "$s" "$sv"
+        elif [ "$expected" = "$dv" ]; then
+            now=$(sql_of "$SOURCE_DB" "SELECT last_value || ':' || is_called FROM public.$s;")
+            if [ -n "$now" ] && [ "$now" != "$expected" ]; then
+                printf '  ok       %-26s %s (source has since moved to %s)\n' "$s" "$dv" "$now"
+            else
+                printf '  ok       %-26s %s\n' "$s" "$dv"
+            fi
         else
-            local sl dl
-            sl=${sv%%:*}; dl=${dv%%:*}
-            if [ "${dv##*:}" = "false" ] || [ "$dl" -lt "$sl" ] 2>/dev/null; then
-                printf '  BEHIND   %-26s source=%s copy=%s\n' "$s" "$sv" "$dv"
+            # Compare the numbers. Only treating is_called=false as "behind" let a
+            # copy sitting at 5:true pass against a snapshot of 50:true - which
+            # collides on the very next insert, which is the entire point.
+            # %% strips the longest *suffix* and ## the longest *prefix, so the
+            # number before the colon is ${v%%:*} and the flag after it is
+            # ${v##*:}. Using ## for the number gave "true", the numeric test
+            # errored, 2>/dev/null swallowed it, and the copy was reported ok.
+            local sl dl sc dc
+            sl=${expected%%:*}; dl=${dv%%:*}
+            sc=${expected##*:}; dc=${dv##*:}
+            # A non-numeric value is not something to guess about.
+            if ! [[ "$sl" =~ ^[0-9]+$ && "$dl" =~ ^[0-9]+$ ]]; then
+                printf '  ERROR    %-26s snapshot=%s copy=%s (unreadable position)\n' \
+                    "$s" "$expected" "$dv"
+                failed=1
+            elif [ "$dl" -lt "$sl" ]; then
+                printf '  BEHIND   %-26s snapshot=%s copy=%s\n' "$s" "$expected" "$dv"
+                failed=1
+            elif [ "$dl" -eq "$sl" ] && [ "$dc" = "false" ] && [ "$sc" = "true" ]; then
+                # Same number, but never handed out in the copy: the next insert
+                # reuses a value that already exists.
+                printf '  BEHIND   %-26s snapshot=%s copy=%s (never called)\n' "$s" "$expected" "$dv"
                 failed=1
             else
-                # Ahead is fine: rows landed in the source after the dump ran.
-                printf '  ok       %-26s %s (source was %s)\n' "$s" "$dv" "$sv"
+                # Ahead of the snapshot is fine: rows landed after the copy ran.
+                printf '  ok       %-26s %s (snapshot was %s)\n' "$s" "$dv" "$expected"
             fi
         fi
-    done <<<"$src"
-    local checked
-    checked=$(printf '%s\n' "$src" | grep -c .)
+    done <<<"$(owned_sequences)"
     if [ "$checked" -ne "$nseq" ]; then
         echo "  ERROR    compared $checked of $nseq sequences - the loop was cut short"
         failed=1
@@ -200,7 +276,7 @@ verify_no_zabbix_leakage() {
     extra=$(sql_of "$TARGET_DB" "
         SELECT tablename FROM pg_tables
         WHERE schemaname = 'public'
-          AND tablename NOT IN ($(portal_table_array_literal))
+          AND tablename NOT IN ($(portal_table_array_literal), '$MANIFEST_TABLE')
         ORDER BY 1;")
     found=$(sql_of "$TARGET_DB" "SELECT count(*) FROM pg_tables WHERE schemaname='public';")
     expected=$(portal_table_count)
@@ -261,6 +337,11 @@ if [ "$T_COUNT" -lt 15 ]; then
     echo "entire $SOURCE_DB while reporting success."
     return 1
 fi
+# Recorded BEFORE the dump, so it describes the source at the moment the dump
+# read it. The dump runs immediately after.
+MANIFEST_TSV="$(mktemp)"
+capture_manifest "$MANIFEST_TSV"
+
 # shellcheck disable=SC2086  (flags carry no spaces; splitting is intended)
 if ! run_pg_dump --no-owner --no-acl $T_FLAGS "$SOURCE_DB" \
         | run_psql_stdin -d "$TARGET_DB" -q 2>/tmp/split_err; then
@@ -276,6 +357,15 @@ if [ -s /tmp/split_err ]; then
     echo "-- psql reported:"
     cat /tmp/split_err
 fi
+
+echo "-- recording what the source held at copy time"
+if ! load_manifest "$MANIFEST_TSV"; then
+    echo "WARNING: could not write $MANIFEST_TABLE. Without it, verify has"
+    echo "nothing trustworthy to compare against and will refuse to pass."
+    # Not fatal here: the dump itself succeeded. Stage 2 will say so plainly
+    # rather than passing on a comparison it cannot make.
+fi
+rm -f "$MANIFEST_TSV"
 
 
 echo

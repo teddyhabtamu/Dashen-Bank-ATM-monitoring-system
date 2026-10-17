@@ -208,7 +208,10 @@ def test_the_split_cannot_lose_constraints():
     defaults, no indexes - and the next insert fails on a duplicate key weeks
     later with nothing in the log to explain it."""
     src = code_without_comments(REPO / 'scripts' / 'split_portal_db.sh')
-    assert 'CREATE TABLE' not in src, (
+    # Precisely CTAS, not any CREATE TABLE. The script legitimately creates its
+    # own portal_split_manifest table; what it must never do is copy DATA with
+    # CREATE TABLE AS, which drops keys, defaults, indexes and sequences.
+    assert not re.search(r'CREATE\s+TABLE[^;]*?\bAS\b', src, re.I), (
         'the split must use pg_dump, not CREATE TABLE AS')
     assert 'pg_dump' in src
     assert '--no-owner' in src and '--no-acl' in src, (
@@ -231,7 +234,15 @@ def test_the_split_never_touches_the_source_database():
         assert 'IF EXISTS $TARGET_DB' in l, (
             'DROP must only ever target the copy: %s' % l.strip())
     assert 'TRUNCATE' not in src.upper(), 'the split must never truncate'
-    assert 'DELETE FROM' not in src.upper(), 'the split must never delete rows'
+    # Deleting from the manifest to reload it is fine. Deleting from a portal
+    # table would destroy the very data being verified.
+    deletes = re.findall(r'DELETE\s+FROM\s+([A-Za-z_][A-Za-z0-9_$]*)', src)
+    for t in deletes:
+        assert t == 'MANIFEST_TABLE', (
+            'the split must never delete from %s' % t)
+    assert not re.search(r'DELETE\s+FROM\s+(?!\$MANIFEST_TABLE)', src, re.I), (
+        'the only DELETE allowed is the one clearing the manifest')
+    assert 'DROP DATABASE' in src, '--drop must remain available'
 
 
 def test_query_runner_does_not_forward_stdin():

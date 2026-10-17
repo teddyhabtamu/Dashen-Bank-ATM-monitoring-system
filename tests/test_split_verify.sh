@@ -69,9 +69,14 @@ copy_fixture() {
     "$PGBIN/psql" -X -q -d postgres -c "CREATE DATABASE portal;" >/dev/null 2>&1
     local flags="" t
     for t in "${FIXTURE_TABLES[@]}"; do flags="$flags -t $t"; done
+    MANIFEST_TSV="$(mktemp)"
+    load_script "$FIXTURE_DIR"
+    capture_manifest "$MANIFEST_TSV"
     # shellcheck disable=SC2086
     "$PGBIN/pg_dump" --no-owner --no-acl $flags zabbix \
         | "$PGBIN/psql" -X -q -d portal >/dev/null 2>&1
+    load_manifest "$MANIFEST_TSV"
+    rm -f "$MANIFEST_TSV"
 }
 
 # Drive the real script's functions with its database calls redirected at the
@@ -81,6 +86,10 @@ load_script() {
     # shellcheck source=/dev/null
     source "$ROOT/scripts/split_portal_db.sh"
     run_psql()  { "$PGBIN/psql"  -X -U zabbix "$@"; }
+    # load_manifest writes through run_psql_stdin. Overriding only run_psql left
+    # it calling docker, so the manifest was never written and every comparison
+    # had nothing to check against.
+    run_psql_stdin() { "$PGBIN/psql" -X -U zabbix "$@"; }
     run_pg_dump() { "$PGBIN/pg_dump" -U zabbix "$@"; }
     SOURCE_DB=zabbix
     TARGET_DB=portal
@@ -234,6 +243,41 @@ else
 fi
 unset -f portal_table_names portal_table_count
 load_script "$FIXTURE_DIR"
+
+# ── 8. staleness must pass; corruption must still fail ───────────────────────
+# This is the UAT failure of 2026-10-18. network-correlator writes to
+# atm_network_metrics every 120 seconds, so by the time verify ran, a
+# byte-perfect copy was 57 rows behind - with the row delta and the max(id)
+# delta identical, so provably just staleness - and verify called it
+# "NOT usable". Demanding equality against a source that is still being written
+# to means the check fails on every healthy system, and a check that always
+# fails is one people stop reading.
+reset_fixture; copy_fixture
+psql_q "INSERT INTO atm_transactions(amount) SELECT 1 FROM generate_series(1,7);" zabbix
+out=$(verify); rc=$?
+if [ "$rc" -eq 0 ] && grep -q 'source has since grown' <<<"$out"; then
+    ok "a copy that is merely behind a live source still verifies"
+else
+    bad "staleness treated as corruption: rc=$rc out=$out"
+fi
+
+# The other half: being lenient must not mean being blind.
+psql_q "DELETE FROM atm_transactions WHERE id > 45;" portal
+out=$(verify); rc=$?
+if [ "$rc" -ne 0 ] && grep -q MISMATCH <<<"$out"; then
+    ok "a copy that really lost rows still fails"
+else
+    bad "real row loss not caught: rc=$rc out=$out"
+fi
+
+# and a copy with no manifest has nothing trustworthy to compare against
+psql_q "DROP TABLE portal_split_manifest;" portal >/dev/null
+out=$(verify); rc=$?
+if [ "$rc" -ne 0 ] && grep -qi 'manifest' <<<"$out"; then
+    ok "a copy with no manifest refuses to pass rather than guessing"
+else
+    bad "missing manifest not caught: rc=$rc out=$out"
+fi
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
