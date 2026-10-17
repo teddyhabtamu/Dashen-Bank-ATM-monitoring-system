@@ -24,6 +24,16 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .sidebar.collapsed .sidebar-brand{justify-content:center;padding:16px 8px;gap:0}
 .sidebar-logo{width:28px;height:28px;object-fit:contain;flex-shrink:0}
 .sidebar.collapsed .sidebar-actions{margin-left:0}
+/* Collapsed rail: drop the toggle, and let the logo expand the sidebar.
+   The brand row could never fit both - 28px logo + 28px button = 56px inside a
+   44px box (60px rail less 8px padding each side) - so justify-content:center
+   split the 12px overflow and shaved 6px off each control, which read as a
+   rendering fault rather than a rail. With the toggle gone the logo is the only
+   way back out of the collapsed state. */
+.sidebar.collapsed .sidebar-collapse-btn{display:none}
+.sidebar.collapsed .sidebar-logo{cursor:pointer;border-radius:6px;transition:opacity .2s ease,background .2s ease}
+.sidebar.collapsed .sidebar-logo:hover{opacity:.85;background:rgba(255,255,255,.08)}
+.sidebar.collapsed .sidebar-logo:focus-visible{outline:2px solid rgba(255,255,255,.6);outline-offset:2px}
 .sidebar-brand-text{display:flex;flex-direction:column;white-space:nowrap;opacity:1;transition:opacity .2s ease .15s}
 .sidebar.collapsed .sidebar-brand-text{opacity:0;width:0;overflow:hidden;padding:0;margin:0;pointer-events:none;flex-shrink:0}
 .sidebar-brand-text .name{font-size:13px;font-weight:700;color:#fff;letter-spacing:-.1px;line-height:1.3}
@@ -368,7 +378,7 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
 
 <div class="sidebar" id="sidebar">
   <div class="sidebar-brand">
-    <img src="/static/brand-logo.png" alt="Dashen Bank" class="sidebar-logo">
+    <img src="/static/brand-logo.png" alt="Dashen Bank" title="Dashen Bank" class="sidebar-logo" tabindex="-1">
     <div class="sidebar-brand-text">
       <span class="name">Dashen Bank</span>
       <span class="sub">ATM Monitoring</span>
@@ -597,24 +607,55 @@ document.querySelectorAll('[href*="localhost"]').forEach(function(el){
 });
 
 // ── SIDEBAR COLLAPSE ──
-(function(){
-  var saved = localStorage.getItem('sidebarCollapsed');
-  try { sessionStorage.removeItem('navTempExpand'); } catch(e) {}
-  if(saved === 'true') {
-    document.getElementById('sidebar').classList.add('collapsed');
-    var icon = document.querySelector('.collapse-icon polyline');
-    if(icon) icon.setAttribute('points', '10 9 15 12 10 15');
+// One function owns the state. The class, the chevron, the logo's label and
+// localStorage were four separate things to update from two different call
+// sites, and the logo's affordance is the kind of detail that silently rots.
+function setCollapsed(collapsed){
+  var s = document.getElementById('sidebar');
+  if(!s) return;
+  s.classList.toggle('collapsed', collapsed);
+
+  var icon = s.querySelector('.collapse-icon polyline');
+  if(icon) icon.setAttribute('points', collapsed ? '10 9 15 12 10 15' : '16 15 11 12 16 9');
+
+  // In the rail the toggle is gone, so the logo is the only way out. It is
+  // inert - and removed from the tab order - while the sidebar is open, so it
+  // is never a focusable control that does nothing.
+  var logo = s.querySelector('.sidebar-logo');
+  if(logo){
+    var label = collapsed ? 'Expand sidebar' : 'Dashen Bank';
+    logo.setAttribute('title', label);
+    logo.setAttribute('aria-label', label);
+    logo.setAttribute('tabindex', collapsed ? '0' : '-1');
   }
+
+  localStorage.setItem('sidebarCollapsed', collapsed);
+}
+
+(function(){
+  try { sessionStorage.removeItem('navTempExpand'); } catch(e) {}
+  setCollapsed(localStorage.getItem('sidebarCollapsed') === 'true');
   lucide.createIcons();
 })();
 
 function toggleCollapse(){
   var s = document.getElementById('sidebar');
-  s.classList.toggle('collapsed');
-  var icon = s.querySelector('.collapse-icon polyline');
-  if(icon) icon.setAttribute('points', s.classList.contains('collapsed') ? '10 9 15 12 10 15' : '16 15 11 12 16 9');
-  localStorage.setItem('sidebarCollapsed', s.classList.contains('collapsed'));
+  setCollapsed(!s.classList.contains('collapsed'));
 }
+
+(function(){
+  var logo = document.querySelector('.sidebar-logo');
+  if(!logo) return;
+  var expand = function(e){
+    var s = document.getElementById('sidebar');
+    if(!s.classList.contains('collapsed')) return;
+    if(e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    setCollapsed(false);
+  };
+  logo.addEventListener('click', expand);
+  logo.addEventListener('keydown', expand);
+})();
 
 // ── MOBILE ──
 function toggleMobile(){

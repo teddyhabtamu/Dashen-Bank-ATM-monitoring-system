@@ -1105,3 +1105,43 @@ def test_no_section_can_render_empty_for_any_role():
             'section %r has no destination a non-admin can reach, so its header '
             'would sit above nothing - gate nothing else in it, move an item, '
             'or drop the section' % label)
+
+
+def test_the_collapsed_rail_drops_the_toggle_and_expands_from_the_logo():
+    """The 60px rail could not hold its own brand row.
+
+    The rail is 60px with 8px padding either side, so the content box is 44px.
+    The logo is 28px and the collapse toggle is 28px, with gap:0 in the
+    collapsed state - 56px of content in a 44px box. overflow:hidden plus
+    justify-content:center split the 12px shortfall and clipped 6px off each
+    control, so both looked shaved rather than tight.
+
+    The toggle is hidden in the rail and the logo becomes the expander, which
+    also removes the overflow at its source: one 28px control in a 44px box.
+
+    Asserted here rather than left to the arithmetic, because this is the third
+    sidebar defect in a row that only the box model or a screenshot could see.
+    """
+    tpl = (REPO / 'report-portal' / 'templates' / 'base.html').read_text()
+
+    hide = re.search(
+        r'\.sidebar\.collapsed\s+\.sidebar-collapse-btn\s*\{([^}]*)\}', tpl)
+    assert hide and 'display:none' in hide.group(1), \
+        'the rail must drop the toggle, which does not fit beside the logo'
+    assert re.search(r'\.sidebar\.collapsed\s+\.sidebar-logo\s*\{[^}]*'
+                     r'cursor:pointer', tpl), \
+        'the logo must advertise that it is now the expander'
+
+    # Keyboard parity: a control reachable only by mouse is not an expander.
+    js = tpl[tpl.index('function setCollapsed'):]
+    js = js[:js.index('</script>')]
+    assert "logo.addEventListener('click', expand)" in js, \
+        'the logo must expand the sidebar'
+    assert "logo.addEventListener('keydown', expand)" in js, \
+        'the logo must expand the sidebar from the keyboard too'
+    assert "'tabindex', collapsed ? '0' : '-1'" in js, \
+        'the logo must leave the tab order while the sidebar is open, or it is ' \
+        'a focusable control that does nothing'
+
+    # The brand mark itself must survive - an empty rail reads as a fault.
+    assert '.sidebar.collapsed .sidebar-logo{display:none}' not in tpl
