@@ -105,7 +105,7 @@ def db_atms():
     try:
         conn = psycopg2.connect(
             host=os.environ.get('DB_HOST', 'postgres'),
-            dbname=os.environ.get('DB_NAME', 'zabbix'),
+            dbname=_require_db_name(),
             user=os.environ.get('DB_USER', 'zabbix'),
             password=os.environ.get('DB_PASS', ''),
         )
@@ -403,6 +403,26 @@ def do_apply(atms, import_templates=False):
             time.sleep(1)
 
     print(f"\n  Done: {created} created, {skipped} skipped, {no_ip} without IP")
+
+
+
+def _require_db_name():
+    """DB_NAME must be explicit. Do not guess.
+
+    Run inside a container it is set correctly; run on the host it is unset, and
+    defaulting to 'zabbix' meant the script quietly operated on the pre-split
+    database - the one the portal no longer reads - while reporting success.
+    Syncing ATMs into the old copy is worse than not syncing at all, because the
+    portal would then show a fleet that does not match the one it is serving.
+    """
+    name = os.environ.get('DB_NAME')
+    if not name:
+        sys.stderr.write(
+            'DB_NAME is not set, so this cannot tell which database to write to.\n'
+            'Run it inside a container that has it, or set DB_NAME explicitly.\n'
+            'Refusing to assume.\n')
+        sys.exit(2)
+    return name
 
 
 def main():

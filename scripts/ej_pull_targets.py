@@ -52,7 +52,50 @@ def _docker_bin(explicit=None):
     """Read at call time, not import time, so the env var always wins."""
     return explicit or os.environ.get('EJ_DOCKER_BIN') or DOCKER_DEFAULT
 DB_USER = os.environ.get('DB_USER', 'zabbix')
-DB_NAME = os.environ.get('DB_NAME', 'zabbix')
+
+# Which database holds the portal tables. This resolver runs EVERY MINUTE from
+# cron, and the cron line exports ZBX_URL/ZBX_USER/ZBX_PASS but not DB_NAME - so
+# the old hardcoded default of 'zabbix' meant the EJ pipeline resolved its
+# target ATMs from the pre-split database, which stopped moving the moment the
+# portal switched.
+#
+# Nothing about that fails. The read succeeds, it just returns the old rows. So
+# an ATM registered in the portal would never be pulled for, and the only
+# symptom would be an ATM quietly having no journals. It worked on UAT only
+# because atm_locations happened not to have changed since the copy.
+#
+# portal_schema_version is a portal-only marker created by txn_sources.py, and
+# it travels with the copy - which is what makes it usable as the test. An
+# explicit DB_NAME still wins, for an operator who knows better.
+_MARKER = "SELECT to_regclass('public.portal_schema_version') IS NOT NULL;"
+
+
+def detect_portal_db(docker_bin=None):
+    """Return the database holding the portal tables, or None."""
+    for candidate in ('portal', 'zabbix'):
+        cmd = [_docker_bin(explicit=docker_bin), 'exec', DB_CONTAINER, 'psql',
+               '-U', DB_USER, '-d', candidate, '-tAc', _MARKER]
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if out.returncode == 0 and (out.stdout or '').strip() == 't':
+            return candidate
+    return None
+
+
+def _resolve_db_name(docker_bin=None):
+    """Read at call time, not import time - the same rule _docker_bin follows.
+
+    Resolving this at import meant an operator exporting DB_NAME before running
+    the script was ignored, and it made the DB path untestable. Both were
+    discovered by existing tests failing after this change, which is the tests
+    doing their job.
+    """
+    explicit = os.environ.get('DB_NAME')
+    if explicit:
+        return explicit
+    return detect_portal_db(docker_bin=docker_bin)
 
 # Same predicate as the DB query below — kept identical on purpose so the CSV
 # fallback and the live DB can never disagree about who is eligible.
@@ -145,8 +188,17 @@ def from_db(docker_bin=None):
     Returns None (not []) when the DB could not be read — the caller must then
     fall back rather than conclude there are no ATMs to pull.
     """
+    db_name = _resolve_db_name(docker_bin=docker_bin)
+    if not db_name:
+        # No marker found in either database, and no explicit override. Say so
+        # plainly rather than reading a database at random: the caller falls
+        # back to the CSV snapshot, which is written nightly from the portal and
+        # is therefore safe to use, if a little stale.
+        sys.stderr.write('ej_pull_targets: could not determine which database '
+                         'holds the portal tables; using the CSV snapshot\n')
+        return None
     cmd = [_docker_bin(explicit=docker_bin), 'exec', DB_CONTAINER, 'psql',
-           '-U', DB_USER, '-d', DB_NAME, '-tAF|', '-c', DB_QUERY]
+           '-U', DB_USER, '-d', db_name, '-tAF|', '-c', DB_QUERY]
     try:
         out = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError) as e:

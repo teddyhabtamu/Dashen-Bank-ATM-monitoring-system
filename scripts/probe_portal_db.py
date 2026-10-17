@@ -86,9 +86,21 @@ def main():
               ' < scripts/probe_portal_db.py')
         return 2
 
+    # No default, for the same reason the other scripts refuse to guess: the
+    # point of this probe is to prove a specific database is readable, and a
+    # silent fallback to the pre-split one would have it measuring the wrong
+    # thing. Inside the portal container DB_NAME is set; on the host, say so.
+    dbname = os.environ.get('DB_NAME')
+    if not dbname:
+        print('DB_NAME is not set, so this cannot tell which database to probe.\n'
+              'Run it as:\n'
+              '    docker exec -e DB_NAME=portal -i report-portal python3 -'
+              ' < scripts/probe_portal_db.py')
+        return 2
+
     dsn = dict(
         host=os.environ.get('DB_HOST', 'postgres'),
-        dbname=os.environ.get('DB_NAME', 'zabbix'),
+        dbname=dbname,
         user=os.environ.get('DB_USER', 'zabbix'),
         password=os.environ.get('DB_PASS', ''),
     )

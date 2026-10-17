@@ -89,6 +89,10 @@ def _fake_psql(stdout, returncode=0, stderr=''):
 
 
 def test_db_source_parses_pipe_separated_rows(monkeypatch):
+    # DB_NAME must be explicit now. Left to itself the resolver detects the
+    # database by asking for the portal marker, which this fake answers with
+    # ATM rows, so detection finds nothing and the DB path is never reached.
+    monkeypatch.setenv('DB_NAME', 'portal')
     monkeypatch.setattr(ept.subprocess, 'run',
                         _fake_psql('ATM-0001|10.41.30.114|TESTMACHINE\nATM-0002|10.41.30.115|BOX2\n'))
     targets, source, _ = ept.resolve()
@@ -127,6 +131,7 @@ def test_empty_but_reachable_db_falls_through_to_csv(monkeypatch, tmp_path):
 def test_docker_bin_is_configurable_for_cron(monkeypatch):
     """A cron PATH without docker must be fixable without editing code."""
     monkeypatch.setenv('EJ_DOCKER_BIN', '/usr/bin/docker')
+    monkeypatch.setenv('DB_NAME', 'portal')
     seen = {}
 
     def fake_run(cmd, **kw):
@@ -137,3 +142,34 @@ def test_docker_bin_is_configurable_for_cron(monkeypatch):
     targets, source, _ = ept.resolve()
     assert source == 'database'
     assert seen['cmd'][0] == '/usr/bin/docker'
+
+
+def test_the_database_is_detected_when_db_name_is_not_set(monkeypatch):
+    """The cron line exports ZBX_URL/ZBX_USER/ZBX_PASS but not DB_NAME, so
+    detection is what actually runs on the per-minute path. Without it the
+    resolver read the pre-split database, which returns the old rows without
+    erroring - so an ATM registered in the portal would quietly stop having its
+    journals pulled."""
+    calls = []
+
+    def fake_run(cmd, **kw):
+        # The marker probe runs first; the data query second.
+        marker = any('portal_schema_version' in str(a) for a in cmd)
+        calls.append(cmd)
+        if marker:
+            return subprocess.CompletedProcess(cmd, 0, 't\n', '')
+        return subprocess.CompletedProcess(
+            cmd, 0, 'ATM-0001|10.41.30.114|TESTMACHINE\n', '')
+
+    monkeypatch.delenv('DB_NAME', raising=False)
+    monkeypatch.setattr(ept.subprocess, 'run', fake_run)
+
+    targets, source, _ = ept.resolve()
+    assert source == 'database'
+    assert targets == [('ATM-0001', '10.41.30.114', 'TESTMACHINE')]
+    probed = [c for c in calls if 'portal_schema_version' in str(c)]
+    assert probed, 'detection must actually probe for the marker'
+    # and the data query must go to the detected database, not to zabbix
+    data_calls = [c for c in calls if 'portal_schema_version' not in str(c)]
+    assert any('-d' in c and c[c.index('-d') + 1] == 'portal' for c in data_calls), (
+        'the read must use the detected database')

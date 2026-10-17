@@ -13,7 +13,7 @@ transaction blocks). IF NOT EXISTS = re-runnable.
 
 Usage: python3 scripts/add_perf_indexes.py   (uses DB_HOST/DB_NAME/DB_USER/DB_PASS)
 """
-import os
+import os, sys
 import sys
 import time
 
@@ -29,10 +29,31 @@ INDEXES = [
 ]
 
 
+
+def _require_db_name():
+    """DB_NAME must be explicit. Do not guess.
+
+    These scripts run inside a container (which sets DB_NAME correctly) or on a
+    host (where it is unset). Defaulting to 'zabbix' meant that the standalone
+    case quietly operated on the pre-split database - the one the portal no
+    longer reads - and reported success. An unset variable now stops the script
+    instead of sending the work somewhere harmless-looking and wrong.
+    """
+    name = os.environ.get('DB_NAME')
+    if not name:
+        sys.stderr.write(
+            'DB_NAME is not set, so this cannot tell which database to work on.\n'
+            'Run it inside a container that has it:\n'
+            '    docker exec -i report-portal python3 - < scripts/add_perf_indexes.py\n'
+            'or set DB_NAME explicitly. Refusing to assume.\n' % NAME)
+        sys.exit(2)
+    return name
+
+
 def main():
     conn = psycopg2.connect(
         host=os.environ.get('DB_HOST', 'localhost'),
-        dbname=os.environ.get('DB_NAME', 'zabbix'),
+        dbname=_require_db_name(),
         user=os.environ.get('DB_USER', 'zabbix'),
         password=os.environ.get('DB_PASS', ''),
         connect_timeout=10,

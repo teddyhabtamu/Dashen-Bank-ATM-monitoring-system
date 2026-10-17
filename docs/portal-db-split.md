@@ -256,19 +256,35 @@ a switched host and are worth triaging before production.
 | `backup_db.sh` | fixed — detects where the tables live |
 | `split_portal_db.sh` | correct — `zabbix` is its source by definition |
 | `probe_portal_db.py` | correct — takes `DB_NAME` from the environment |
-| `add_perf_indexes.py` | **wrong** — defaults `DB_NAME` to `zabbix`; would add indexes to the old copy |
-| `ej_pull_targets.py` | **wrong** — same default; would resolve EJ hosts from a stale copy |
-| `sync_atms_to_zabbix.py` | **wrong** — same default |
-| `uat_preflight.sh` | **wrong** — checks `atm_locations` in `zabbix` |
+| `ej_pull_targets.py` | **was wrong — fixed.** Ran every minute and read `zabbix` |
+| `add_perf_indexes.py` | fixed — now requires `DB_NAME` |
+| `sync_atms_to_zabbix.py` | fixed — now requires `DB_NAME` |
+| `uat_preflight.sh` | fixed — portal check follows the detection, `hosts` stays on `zabbix` |
+| `probe_portal_db.py` | fixed — now requires `DB_NAME` |
 | `restore_db.sh` | **worst** — restores only `zabbix`, so a restore would silently omit portal data |
 | `setup_new_machine.sh` | builds the pre-split layout |
 | `update_host_visible_names.py` | correct — writes Zabbix's own `hosts` table |
 
-The pattern to fix is `os.environ.get('DB_NAME', 'zabbix')`: the fallback is
-now the wrong default for anything touching portal tables. Defaulting to
-`portal` would be worse on a host that has not switched, so the honest fix is
-to fail loudly when `DB_NAME` is unset rather than guess, the same reasoning
-`backup_db.sh` uses for detection.
+### The `DB_NAME` default, and why one of these was much worse
+
+The pattern was `os.environ.get('DB_NAME', 'zabbix')`. After the split that
+fallback is the one database the portal no longer reads.
+
+`ej_pull_targets.py` was the serious one. It runs **every minute** from cron, and
+the cron line exports `ZBX_URL`/`ZBX_USER`/`ZBX_PASS` but not `DB_NAME` — so the
+EJ pipeline was resolving its target ATMs from the pre-split database. Nothing
+about that fails. The read succeeds and returns the old rows, so an ATM
+registered through the portal would simply never have its journals pulled, and
+the only symptom would be an ATM quietly having no data. It appeared to work on
+UAT only because `atm_locations` had not changed since the copy.
+
+It now detects the database using the same `portal_schema_version` marker the
+backup uses, and falls back to the nightly CSV snapshot - which *is* written
+from the portal - with a message saying so, when detection fails.
+
+The other three now **require** `DB_NAME` instead of assuming one. Defaulting
+to `portal` would be wrong on a host that has not switched, and defaulting to
+`zabbix` is what caused this. Neither is guessable, so they stop.
 
 `restore_db.sh` deserves attention first. A restore that quietly omits the
 portal is the same failure class as the backup that omitted it: the command

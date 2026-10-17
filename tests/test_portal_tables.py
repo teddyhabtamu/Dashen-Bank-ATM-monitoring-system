@@ -702,3 +702,66 @@ def test_every_artefact_the_backup_and_restore_write_is_ignored():
     assert not unignored, (
         'these outputs of backup_db.sh / restore_db.sh are not gitignored and '
         'would be committed by `git add -A`:\n  %s' % '\n  '.join(unignored))
+
+
+def test_no_portal_script_defaults_to_the_zabbix_database():
+    """`os.environ.get('DB_NAME', 'zabbix')` was in four scripts, and after the
+    split "zabbix" is the one database the portal no longer reads.
+
+    The worst was ej_pull_targets.py, which runs EVERY MINUTE from cron. The
+    cron line exports ZBX_URL/ZBX_USER/ZBX_PASS but not DB_NAME, so the EJ
+    pipeline resolved its target ATMs from the pre-split database. Nothing about
+    that fails - the read succeeds and returns the old rows - so an ATM
+    registered through the portal would simply never have its journals pulled,
+    and the only symptom would be an ATM quietly having no data. It worked on
+    UAT only because atm_locations happened not to have changed since the copy.
+    """
+    offenders = []
+    for f in sorted((REPO / 'scripts').glob('*.py')):
+        src = f.read_text()
+        if re.search(r"environ\.get\(\s*['\"]DB_NAME['\"]\s*,\s*['\"]zabbix['\"]", src):
+            offenders.append(f.name)
+    assert not offenders, (
+        'these scripts still default DB_NAME to zabbix, so run standalone they '
+        'operate on the pre-split database and report success:\n  %s'
+        % '\n  '.join(offenders))
+
+
+def test_the_ej_resolver_detects_the_database_instead_of_guessing():
+    """The one script on the per-minute path has to find the database itself,
+    because nothing on its cron line tells it. Detection uses the same marker
+    the backup uses, and an explicit DB_NAME still wins for an operator who
+    knows better."""
+    src = (REPO / 'scripts' / 'ej_pull_targets.py').read_text()
+    assert 'def detect_portal_db' in src, 'the EJ resolver must detect the database'
+    assert 'portal_schema_version' in src, \
+        'detection needs the same marker backup_db.sh uses'
+    assert "_MARKER" in src
+    # an explicit setting must still win, and an undetectable one must not
+    # silently become zabbix
+    assert "os.environ.get('DB_NAME')" in src, \
+        'an explicit DB_NAME must override detection'
+    assert 'using the CSV snapshot' in src, \
+        'when detection fails it must say so and fall back, not guess'
+
+
+def test_the_two_database_scripts_refuse_rather_than_guess():
+    for name in ('add_perf_indexes.py', 'sync_atms_to_zabbix.py'):
+        src = (REPO / 'scripts' / name).read_text()
+        assert '_require_db_name' in src, \
+            '%s must require DB_NAME rather than defaulting it' % name
+        assert 'sys.exit(2)' in src, 'and must stop when it is unset'
+
+
+def test_the_preflight_sends_portal_and_zabbix_checks_to_different_databases():
+    """One file, two kinds of table. Sending a portal check to the Zabbix
+    database reports OK for a fleet the portal is not serving, which is false
+    confidence from the one tool meant to catch a bad cutover."""
+    src = (REPO / 'scripts' / 'uat_preflight.sh').read_text()
+    assert 'detect_portal_db' in src
+    # the portal table must follow the detection
+    assert re.search(r'psql[^\n]*-d "\$PORTAL_DB"[^\n]*atm_locations', src), \
+        'atm_locations is a portal table and must be read from $PORTAL_DB'
+    # Zabbix's own table must NOT
+    assert re.search(r'psql[^\n]*-d zabbix[^\n]*FROM hosts', src), \
+        "hosts is Zabbix's own table and must stay on the zabbix database"

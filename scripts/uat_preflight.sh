@@ -7,6 +7,23 @@ ZBX_PORT="${ZABBIX_PORT:-8080}"
 DATA_VM_IP="${DATA_VM_IP:-172.22.10.60}"
 fail=0
 
+# Two kinds of check live in this file and they must not be sent to the same
+# database. atm_locations and the rest of the portal's tables moved to their own
+# database; Zabbix's hosts/items/interfaces did not. Reading the portal tables
+# from "zabbix" would check a frozen copy and report OK for a fleet the portal
+# is not actually serving - false confidence in the one tool meant to catch a
+# bad cutover.
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=portal_tables.sh
+source "$HERE/portal_tables.sh"
+PORTAL_DB="$(detect_portal_db || true)"
+if [ -z "$PORTAL_DB" ]; then
+    echo "  [FAIL] could not determine which database holds the portal tables"
+    echo "         (looked for portal_schema_version in 'portal' and 'zabbix')"
+    fail=1
+    PORTAL_DB="zabbix"   # keep going so the remaining checks still report
+fi
+
 ok()   { echo "  [OK]   $1"; }
 bad()  { echo "  [FAIL] $1"; fail=1; }
 
@@ -24,7 +41,7 @@ else
 fi
 
 echo "-- seeded test ATMs --"
-if docker exec zabbix-db psql -U zabbix -d zabbix -tAc "SELECT count(*) FROM atm_locations WHERE atm_id IN ('ATM-TEST-NCR','ATM-TEST-GRG');" 2>/dev/null | grep -q 2; then
+if docker exec zabbix-db psql -U zabbix -d "$PORTAL_DB" -tAc "SELECT count(*) FROM atm_locations WHERE atm_id IN ('ATM-TEST-NCR','ATM-TEST-GRG');" 2>/dev/null | grep -q 2; then
   ok "ATM-TEST-NCR / ATM-TEST-GRG seeded"
 else
   bad "test ATMs not seeded (run setup + seed_uat_atms.sql)"
