@@ -51,6 +51,10 @@ docker exec zabbix-db pg_dump -U zabbix zabbix \
   -t ticket_seen \
   -t fault_type_map \
   -t atm_delete_archive \
+  -t txn_source_policy \
+  -t fleet_report_cache \
+  -t atm_incidents \
+  -t atm_devices \
   > "$BACKUP_DIR/atm_custom_tables.sql"
 
 # Full Zabbix database backup (includes hosts, items, triggers, history)
