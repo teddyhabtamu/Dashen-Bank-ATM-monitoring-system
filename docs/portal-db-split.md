@@ -28,6 +28,25 @@ demo transactions. Missing it means transactions keep landing in the old
 database while the portal reads the new one — no error anywhere, and a demo
 with no transactions in it.
 
+There is also a **reader**, which is not a service and has no `DB_NAME`:
+
+| Reader | Where | Reads |
+|---|---|---|
+| Grafana datasource `ATM-Transactions` | UAT-01, `config/grafana/datasources-uat.yml` | `atm_transactions`, `atm_current_state`, `atm_network_metrics`, `atm_network_correlation`, `atm_locations`, `atm_anomalies` |
+
+It was missed in the first pass, because the inventory was built by walking
+services and this is a provisioning file. While it pointed at the old database
+every dashboard rendered frozen data with no error: transactions stuck at
+181,265 while the portal read 181,378, and `last_seen` stuck at 16:48:27.
+A stranded *writer* costs one page. A stranded *dashboard* costs the instrument
+you would use to notice that data has stopped moving.
+
+Grafana reads provisioning **at startup**, so a bind-mounted change needs a
+restart. `docker compose up -d grafana` does not restart it when only a mounted
+file changed — it reports `Running` and changes nothing. Use
+`docker compose restart grafana`, then confirm with
+`docker inspect grafana --format '{{.State.StartedAt}}'`.
+
 **Zabbix itself never moves.** `postgres`, `zabbix-server`, `zabbix-web`,
 `zabbix-agent` and `nginx` stay on `zabbix`. Pointing Zabbix at the portal
 database would leave it with no hosts, no items and no history.
@@ -202,6 +221,29 @@ database with `psql -f`, rather than piping, so the exit status is meaningful.
 Drop the scratch database when finished.
 
 ---
+
+## Outcome on UAT (2026-10-17)
+
+Completed. Every writer and the reader verified by observing rows move into
+`portal` while the old database stayed flat — configuration alone was not
+treated as proof, because a stranded writer produces no error at all.
+
+The old database is frozen and intact at the moment of the switch
+(181,265 transactions, `last_seen` 16:48:27), which is what makes rollback
+clean in either direction.
+
+UAT-02 holds local, uncommitted work predating this split: its
+`docker-compose.yml` is a deliberately reduced local version, and
+`camel/iso8583_gateway.py` and `config/opensearch/atm_ej_parser.json` differ
+from git. That work was committed to a local branch `uat02-local`
+(`ec5dc2f`) before the switch, so it is no longer at risk from a stray
+`git pull`. **UAT-02 is 358 commits behind `uat-prep`** and reconciling it is
+its own piece of work.
+
+Backup writes both databases and the `portal` dump was restore-tested: every
+table matched the live database except `atm_transactions`, which was 17 rows
+behind because the gateway kept writing during the restore. That direction is
+correct for a point-in-time dump.
 
 ## What this does not fix
 
