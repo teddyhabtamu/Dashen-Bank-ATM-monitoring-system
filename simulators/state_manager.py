@@ -133,6 +133,40 @@ def determine_state(m, vendor='NCR', availability=None):
     return interpret_state(vendor, m)
 
 
+# A state must be seen this many times in a row before it is believed.
+#
+# Seen live on UAT 2026-10-17: ATM-TEST-NCR alternated UNREACHABLE ->
+# HARDWARE_FAULT -> UNREACHABLE on every 30s poll, for 24 hours. Zabbix's
+# interface.available records whichever poll most recently succeeded, so one
+# unlucky timeout on a flaky link flips the verdict.
+#
+# Flapping is not cosmetic. It writes an atm_state_history segment per flip -
+# and the availability percentage is computed from those segments, so that
+# number becomes meaningless - it churns the dashboard, and once triggers follow
+# state changes it pages someone every 30 seconds, which is how alerts get
+# ignored. Debouncing belongs here, once, rather than in every trigger.
+STATE_CONFIRMATIONS = int(os.environ.get('STATE_CONFIRMATIONS', '3'))
+_pending = {}          # atm_id -> [candidate_state, consecutive_count]
+
+
+def _debounced(atm_id, current_state, candidate):
+    """True once `candidate` has been seen STATE_CONFIRMATIONS times running."""
+    if candidate == current_state:
+        _pending.pop(atm_id, None)
+        return True, 0
+    held = _pending.get(atm_id)
+    if held and held[0] == candidate:
+        held[1] += 1
+        count = held[1]
+    else:
+        count = 1
+        _pending[atm_id] = [candidate, count]
+    if count < STATE_CONFIRMATIONS:
+        return False, count
+    _pending.pop(atm_id, None)
+    return True, count
+
+
 def update_states(auth):
     conn = get_db()
     try:
@@ -179,6 +213,16 @@ def update_states(auth):
             cur.execute("SELECT state FROM atm_current_state WHERE atm_id = %s", (atm_id,))
             row = cur.fetchone()
             current_state = row[0] if row else None
+            settled, seen = _debounced(atm_id, current_state, new_state)
+            if not settled:
+                # No state write, but last_seen keeps moving: that is how
+                # the portal tells "we could not read this machine" apart
+                # from "this machine went away".
+                cur.execute("UPDATE atm_current_state SET last_seen = NOW(), "
+                            "updated_at = NOW() WHERE atm_id = %s", (atm_id,))
+                print(f"[STATE HOLD] {atm_id}: {new_state} seen "
+                      f"{seen}/{STATE_CONFIRMATIONS}, keeping {current_state}")
+                continue
             if current_state != new_state:
                 print(f"[STATE CHANGE] {atm_id}: {current_state} -> {new_state}")
                 cur.execute("""
@@ -214,24 +258,38 @@ def update_states(auth):
         conn.close()
 
 
-print("ATM State Manager (Zabbix-backed) started — updating every %d seconds" % POLL_INTERVAL)
+def main():
+    """Entry point. Kept out of module scope on purpose.
 
-for i in range(30):
-    try:
-        get_db().close()
-        print("Connected to PostgreSQL")
-        break
-    except Exception:
-        print("Waiting for DB (%d/30)..." % (i + 1))
-        time.sleep(5)
+    The file is run as a script (the container command is
+    `python3 /app/state_manager.py`), so this still runs exactly as before.
+    But a module-level `while True:` means the file cannot be imported,
+    which is why none of the pure logic here - determine_state,
+    _debounced, fetch_host_metrics - could ever be unit-tested.
+    """
+    print("ATM State Manager (Zabbix-backed) started — updating every %d seconds" % POLL_INTERVAL)
 
-while True:
-    try:
-        auth = zbx_login()
-        if auth:
-            update_states(auth)
-        else:
-            print("[ZABBIX] login failed — skipping state update this cycle")
-    except Exception as e:
-        print(f"State update error: {e}")
-    time.sleep(POLL_INTERVAL)
+    for i in range(30):
+        try:
+            get_db().close()
+            print("Connected to PostgreSQL")
+            break
+        except Exception:
+            print("Waiting for DB (%d/30)..." % (i + 1))
+            time.sleep(5)
+
+    while True:
+        try:
+            auth = zbx_login()
+            if auth:
+                update_states(auth)
+            else:
+                print("[ZABBIX] login failed — skipping state update this cycle")
+        except Exception as e:
+            print(f"State update error: {e}")
+        time.sleep(POLL_INTERVAL)
+
+
+
+if __name__ == "__main__":
+    main()

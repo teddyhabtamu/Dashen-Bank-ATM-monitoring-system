@@ -63,26 +63,56 @@ DEMO = ('SIMULATOR', 'ISO8583_SIM', 'ISO8583_REAL')
 
 
 def show(conn):
+    """Report EFFECTIVE visibility, not the raw enabled flag.
+
+    This printed `enabled` under a heading called VISIBLE, and warned that
+    simulated data was on screen when the demo window had already closed - while
+    the SHOWN column on the same line said 0. On UAT the expiring demo window had
+    correctly hidden everything and this tool claimed the opposite.
+
+    A monitor that contradicts the thing it monitors is worse than no monitor,
+    so the demo predicate is evaluated here exactly as the view evaluates it.
+    """
+    now = datetime.datetime.now(datetime.timezone.utc)
     with conn.cursor() as cur:
         cur.execute("""
-            SELECT p.source, p.label, p.trusted, p.enabled,
+            SELECT p.source, p.label, p.trusted, p.enabled, p.demo_expires_at,
                    (SELECT count(*) FROM atm_transactions t WHERE t.source = p.source),
                    (SELECT count(*) FROM atm_transactions_visible v WHERE v.source = p.source)
               FROM txn_source_policy p
              ORDER BY p.enabled DESC, p.trusted DESC, p.source""")
-        rows = cur.fetchall()
-    if not rows:
+        raw = cur.fetchall()
+
+    if not raw:
         print('txn_source_policy is empty - run scripts/migrate_txn_sources.sql first.')
         return 1
-    print('%-14s %-6s %-8s %10s %10s  %s' % ('SOURCE', 'TRUSTED', 'VISIBLE', 'ROWS', 'SHOWN', 'LABEL'))
-    for src, label, trusted, enabled, present, shown in rows:
-        print('%-14s %-6s %-8s %10s %10s  %s' % (
-            src, 'yes' if trusted else 'NO', 'yes' if enabled else 'no',
+
+    rows = []
+    for src, label, trusted, enabled, expires, present, shown in raw:
+        window_open = expires is not None and expires > now
+        live = enabled and (trusted or window_open)
+        rows.append((src, label, trusted, enabled, live, window_open, present, shown))
+
+    print('%-14s %-7s %-9s %-10s %10s %9s  %s'
+          % ('SOURCE', 'TRUSTED', 'ON SCREEN', 'ENABLED', 'ROWS', 'SHOWN', 'LABEL'))
+    for src, label, trusted, enabled, live, window_open, present, shown in rows:
+        state = 'yes' if live else 'no'
+        if enabled and not live:
+            state = 'no (window closed)' if window_open is False and expires \
+                else 'no'
+        print('%-14s %-7s %-9s %-10s %10s %9s  %s' % (
+            src, 'yes' if trusted else 'NO', state,
+            'yes' if enabled else 'no',
             f'{present:,}', f'{shown:,}', label))
-    hidden = sum(r[4] for r in rows) - sum(r[5] for r in rows)
+
+    hidden = sum(r[6] for r in rows) - sum(r[7] for r in rows)
     print('\n%d row(s) present but hidden.' % hidden)
-    if any(r[3] and not r[2] for r in rows):
-        print('WARNING: simulated data is currently visible (red banner in the portal).')
+    demo_on = [r[0] for r in rows if r[4] and not r[2]]
+    if demo_on:
+        print('WARNING: simulated data IS on screen (%s) - red banner in the portal.'
+              % ', '.join(demo_on))
+    else:
+        print('No simulated data on screen. The portal shows real sources only.')
     return 0
 
 
