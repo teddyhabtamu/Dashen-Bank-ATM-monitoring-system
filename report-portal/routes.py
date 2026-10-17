@@ -136,10 +136,18 @@ def api_stats():
                         (SELECT COUNT(*) FROM atm_locations WHERE status = 'active')
                     FROM atm_transactions_visible t
                     JOIN atm_locations l ON t.atm_id = l.atm_id
-                    WHERE t.recorded_at >= NOW() - INTERVAL '7 days'
+                    WHERE t.recorded_at >= NOW() - INTERVAL '24 hours'
                       AND l.status = 'active'
                 """)
                 r = cur.fetchone(); cur.close()
+            # The window is 24 hours, and the tile reads "Transactions (24h)".
+            # A 7-day window was correct arithmetic and useless as a headline:
+            # with a constant-rate stream, rows enter the window and fall out of
+            # it at the same rate, so the number never moves. Measured on UAT:
+            # 60 arriving and 60 leaving per 10 minutes, dead level. It read as
+            # frozen, and a monitoring KPI that appears frozen trains people to
+            # ignore it. 24h tracks what the ATM is doing now, and matches the
+            # "Cash Dispensped Today" tile beside it.
             return {'total_txns': int(r[0] or 0), 'success_rate': float(r[1]) if r[1] is not None else 0.0, 'cash_today': float(r[2] or 0), 'atm_count': int(r[3] or 0)}
         # Shared across viewers (12s TTL under the 15s frontend poll).
         return jsonify(livecache.get_or_compute('api_stats', 12, _run))

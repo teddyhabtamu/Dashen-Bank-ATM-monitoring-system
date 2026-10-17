@@ -477,3 +477,35 @@ def test_backup_refuses_to_guess_the_database():
     assert 'Refusing to guess' in src
     block = src[src.index('PORTAL_DB=""'):src.index('echo "Backing up PostgreSQL')]
     assert 'exit 1' in block, 'a failed detection must abort, not carry on'
+
+
+def test_the_kpi_tile_labels_match_the_windows_they_query():
+    """A label that disagrees with its query is a defect nobody can see.
+
+    The Overview tile read "Transactions (7d)" while the query it renders used a
+    seven-day rolling window. That was not a bug - the count was correct - but
+    because rows entered and left the window at the same rate the number never
+    changed, so it looked frozen and would have been reported as one. The tile
+    and the interval are now tied together by this test, so changing one
+    without the other fails the suite.
+    """
+    import re
+    routes = (REPO / 'report-portal' / 'routes.py').read_text()
+    template = (REPO / 'report-portal' / 'templates' / 'portal.html').read_text()
+
+    m = re.search(r'Transactions \((\d+)([hd])\)', template)
+    assert m, 'could not find the Transactions KPI tile label'
+    amount, unit = int(m.group(1)), m.group(2)
+
+    # The window the tile is fed by: /api/stats is the endpoint the tile polls.
+    api = routes[routes.index("def api_stats()"):]
+    api = api[:api.index("\n@") if "\n@" in api else len(api)]
+    window = re.search(r"recorded_at >= NOW\(\) - INTERVAL '(\d+) (hour|day)s?'", api)
+    assert window, 'could not find the time window in the api_stats query'
+    hours = int(window.group(1)) * (24 if window.group(2).startswith('day') else 1)
+    label_hours = amount * (24 if unit == 'd' else 1)
+
+    assert label_hours == hours, (
+        'the tile says Transactions (%d%s) but the query counts %d hours - the '
+        'label would be lying about the number underneath it'
+        % (amount, unit, hours))
