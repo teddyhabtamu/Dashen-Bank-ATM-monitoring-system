@@ -198,5 +198,42 @@ if [ "$rc" -ne 0 ]; then ok "an empty table list is a failure, not a clean bill"
 else bad "empty table list passed: $out"; fi
 PORTAL_TABLES_FILE="$FIXTURE_DIR"
 
+# ── 7. sql_of must not swallow the caller's stdin ────────────────────────────
+# The real run_psql forwards stdin with `docker exec -i` and psql consumes it.
+# Inside a `while read` loop that ate the remaining table names: the UAT verify
+# compared ONE table of eighteen, printed "All 1 tables match" and exited 0.
+#
+# This overrides run_psql with something that deliberately eats stdin, the way
+# psql does, so the isolation in sql_of is what is under test - not the local
+# psql, which would never have shown the problem.
+run_psql() { cat >/dev/null; printf '1\n'; }
+n=0
+while read -r _t; do n=$((n+1)); sql_of zabbix "SELECT 1;" >/dev/null; done \
+    < <(printf 'a\nb\nc\nd\ne\n')
+if [ "$n" -eq 5 ]; then
+    ok "sql_of does not consume the caller's stdin"
+else
+    bad "sql_of ate the loop's stdin: read $n of 5 lines"
+fi
+
+# And the guard that turns a short loop into a failure. Simulating it by making
+# run_psql eat stdin no longer works - that is the bug that is now fixed, so the
+# loop runs to completion. Instead, shorten the list itself: portal_table_names
+# yields one name while portal_table_count still reports five, which is exactly
+# what "the loop was cut short" means.
+# portal_table_count is derived from portal_table_names, so overriding only the
+# names would leave the expected count at 1 too and the guard would never see a
+# discrepancy. Pin both, to what a cut-short loop actually looks like.
+portal_table_names() { printf 'atm_transactions\n'; }
+portal_table_count() { printf '5\n'; }
+out=$(verify); rc=$?
+if [ "$rc" -ne 0 ] && grep -q 'cut short' <<<"$out"; then
+    ok "a verify that skipped tables fails instead of reporting a match"
+else
+    bad "short loop not caught: rc=$rc out=$out"
+fi
+unset -f portal_table_names portal_table_count
+load_script "$FIXTURE_DIR"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

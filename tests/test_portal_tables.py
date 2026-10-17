@@ -234,6 +234,40 @@ def test_the_split_never_touches_the_source_database():
     assert 'DELETE FROM' not in src.upper(), 'the split must never delete rows'
 
 
+def test_query_runner_does_not_forward_stdin():
+    """`docker exec -i` hands psql the caller's stdin, and psql consumes it.
+
+    Inside the `while read` loops in verify(), that ate the remaining table
+    names: the UAT verify compared ONE table of eighteen, printed "All 1 tables
+    match" and exited 0 - on 2026-10-18, straight after a run that had correctly
+    compared all eighteen. I introduced the -i myself in 699bf18.
+
+    The shell harness cannot catch this one, because it overrides run_psql to
+    point at a local postgres, so the shipped definition is never exercised.
+    Hence a source-level check as well.
+    """
+    src = (REPO / 'scripts' / 'split_portal_db.sh').read_text()
+    m = re.search(r'^run_psql\(\)\s*\{(.*)\}', src, re.M)
+    assert m, 'run_psql must still be defined and overridable'
+    assert '-i' not in m.group(1), (
+        'run_psql must not forward stdin: psql will swallow the verify loops\' '
+        'input and the run will compare a fraction of the tables')
+    # The restore genuinely does read stdin, from the dump pipe.
+    assert re.search(r'^run_psql_stdin\(\)\s*\{.*-i', src, re.M), (
+        'the restore reads a dump from a pipe and needs stdin forwarded')
+    assert 'run_psql_stdin -d "$TARGET_DB"' in src, 'the restore must use the stdin runner'
+
+
+def test_verify_refuses_to_pass_on_a_partial_comparison():
+    """The script must not be able to report success after checking fewer tables
+    than its own list names - that is the failure that produced a clean-looking
+    run over one table."""
+    src = code_without_comments(REPO / 'scripts' / 'split_portal_db.sh')
+    assert 'cut short' in src, 'a short comparison loop must be an explicit failure'
+    assert re.search(r'checked.*-ne.*expected_total', src), (
+        'the compared count must be checked against the expected count')
+
+
 def test_the_split_checks_sequences():
     """Row counts matching is not the same as a usable copy. A sequence that was
     not carried across leaves the copy looking perfect until the next insert,

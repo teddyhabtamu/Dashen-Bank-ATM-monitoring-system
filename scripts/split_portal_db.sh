@@ -40,14 +40,27 @@ psql_cmd() { run_psql -d "$1" ${2:+-c "$2"}; }
 
 # sql_of <db> <sql> -> unaligned tuples, no header, blank line on error
 sql_of() {
-    run_psql -d "$1" -tAc "$2" 2>/dev/null
+    # stdin is closed deliberately.
+    #
+    # run_psql used to forward stdin with `docker exec -i`, and psql consumes
+    # whatever it is given. Inside the `while read` loops below that meant psql
+    # ate the remaining table names, so the copy was compared against the source
+    # for exactly ONE table and the run finished with "All 1 tables match" and
+    # exit status 0 - on UAT, on 2026-10-18, immediately after a run that had
+    # correctly compared all eighteen. A verification that quietly checks one
+    # table is worse than none, because it looks like it worked.
+    run_psql -d "$1" -tAc "$2" 2>/dev/null </dev/null
 }
 
 # Every database call goes through here, so a test can point the whole script at
 # a different postgres by defining run_psql before sourcing it. The verify steps
 # had produced two wrong verdicts before this existed and could only be checked
 # by running the real copy on a live server.
-run_psql() { docker exec -i zabbix-db psql -U "$DB_USER" "$@"; }
+run_psql() { docker exec zabbix-db psql -U "$DB_USER" "$@"; }
+# No -i. Forwarding stdin is what let psql swallow a caller's loop input.
+# The restore is the one place stdin really is the data - it reads a dump from a
+# pipe - so that one goes through run_psql_stdin, which does forward it.
+run_psql_stdin() { docker exec -i zabbix-db psql -U "$DB_USER" "$@"; }
 run_pg_dump() { docker exec zabbix-db pg_dump -U "$DB_USER" "$@"; }
 
 verify() {
@@ -75,8 +88,17 @@ verify() {
             failed=1
         fi
     done < <(portal_table_names)
+    local expected_total
+    expected_total=$(portal_table_count)
     if [ "$checked" -eq 0 ]; then
         echo "  ERROR    no tables were compared - the table list is empty"
+        failed=1
+    elif [ "$checked" -ne "$expected_total" ]; then
+        # This is not a hypothetical. A query that consumed stdin ended the loop
+        # early, and the run reported "All 1 tables match" with a zero exit code.
+        # Comparing fewer tables than the list names is a failure, always - the
+        # tables that were skipped are exactly the ones nobody knows about.
+        echo "  ERROR    compared $checked of $expected_total tables - the loop was cut short"
         failed=1
     fi
     echo
@@ -130,7 +152,9 @@ verify_sequences() {
         echo "  (no portal sequences in $SOURCE_DB - nothing to compare)"
         return 0
     fi
-    echo "Sequences owned by portal tables:"
+    local nseq
+    nseq=$(printf '%s\n' "$src" | grep -c .)
+    echo "Sequences owned by portal tables ($nseq):"
     local failed=0
     while read -r s; do
         [ -z "$s" ] && continue
@@ -159,6 +183,12 @@ verify_sequences() {
             fi
         fi
     done <<<"$src"
+    local checked
+    checked=$(printf '%s\n' "$src" | grep -c .)
+    if [ "$checked" -ne "$nseq" ]; then
+        echo "  ERROR    compared $checked of $nseq sequences - the loop was cut short"
+        failed=1
+    fi
     return $failed
 }
 
@@ -232,8 +262,8 @@ if [ "$T_COUNT" -lt 15 ]; then
     return 1
 fi
 # shellcheck disable=SC2086  (flags carry no spaces; splitting is intended)
-if ! docker exec zabbix-db pg_dump -U "$DB_USER" --no-owner --no-acl $T_FLAGS "$SOURCE_DB" \
-        | docker exec -i zabbix-db psql -U "$DB_USER" -d "$TARGET_DB" -q 2>/tmp/split_err; then
+if ! run_pg_dump --no-owner --no-acl $T_FLAGS "$SOURCE_DB" \
+        | run_psql_stdin -d "$TARGET_DB" -q 2>/tmp/split_err; then
     echo "COPY FAILED:"
     cat /tmp/split_err
     echo
