@@ -473,10 +473,22 @@ def test_backup_finds_the_portal_database_instead_of_hardcoding_it():
 def test_backup_refuses_to_guess_the_database():
     """A backup that covers the wrong database is worse than no backup, because
     nobody finds out until a restore. Detection failure must stop the run."""
+    shared = (REPO / 'scripts' / 'portal_tables.sh').read_text()
+    assert 'detect_portal_db' in shared, 'detection is shared, not duplicated'
+    fn = shared[shared.index('detect_portal_db()'):]
+    assert 'return 1' in fn, 'a failed detection must be reported as failure'
+
     src = (REPO / 'scripts' / 'backup_db.sh').read_text()
+    assert 'detect_portal_db' in src, 'backup_db must use the shared detection'
     assert 'Refusing to guess' in src
-    block = src[src.index('PORTAL_DB=""'):src.index('echo "Backing up PostgreSQL')]
-    assert 'exit 1' in block, 'a failed detection must abort, not carry on'
+    assert 'exit 1' in src, 'a failed detection must abort, not carry on'
+
+    # restore_db.sh needs the same answer, and must not come to a different one.
+    rst = (REPO / 'scripts' / 'restore_db.sh').read_text()
+    assert 'detect_portal_db' in rst, (
+        'restore_db.sh must detect the portal database too, or it restores into '
+        'the wrong one')
+    assert 'exit 1' in rst
 
 
 def test_the_kpi_tile_labels_match_the_windows_they_query():
@@ -539,3 +551,62 @@ def test_no_two_tracked_jobs_share_a_log_file():
             '%s and %s both write to %s - a failure in the first is hidden by '
             'the second succeeding afterwards' % (seen[log], name, log))
         seen[log] = name
+
+
+def test_restore_uses_the_shared_list_not_a_hand_written_one():
+    """The restore kept its own table list and it had drifted: five relations
+    were missing from both its -t list and its DROP list. Those five would have
+    been left holding stale data while the other fifteen were replaced - the
+    view every page queries, the table deciding whether simulated transactions
+    are shown, the cassette levels, the fleet cache and the schema version."""
+    src = (REPO / 'scripts' / 'restore_db.sh').read_text()
+    assert 'portal_table_count' in src and 'portal_table_names' in src, \
+        'the restore must read config/portal_tables.txt'
+    hand = re.findall(r'-t ([a-z_]+)', src)
+    assert not hand, 'the restore still hardcodes table names: %s' % hand
+    drops = re.findall(r'DROP TABLE IF EXISTS ([a-z_]+)', src)
+    assert not drops, ('dropping tables one by one is how five relations were '
+                       'left behind holding stale data: %s' % drops)
+    assert 'DROP DATABASE IF EXISTS' in src, \
+        'the database is replaced wholesale, which cannot be half-done'
+
+
+def test_restore_cannot_load_portal_data_into_the_zabbix_database():
+    """The fault that would have quietly undone the split.
+
+    atm_custom_tables.sql is written from whichever database holds the portal
+    tables - after the split, that is portal. The old restore loaded it into
+    zabbix. So on a switched host it would have put every portal table back
+    into the Zabbix database and reported success throughout."""
+    src = (REPO / 'scripts' / 'restore_db.sh').read_text()
+    assert 'detect_portal_db' in src
+    # the restore target must be the detected database, never a literal
+    assert re.search(r'psql[^\n]*-d\s+"?zabbix"?[^\n]*(CREATE|DROP)', src) is None, \
+        'a DROP/CREATE of the zabbix database must be behind the explicit ' \
+        '--also-zabbix flag, not the default path'
+    assert '--also-zabbix' in src, 'restoring zabbix wholesale needs its own flag'
+
+
+def test_restore_checks_the_backup_before_destroying_anything():
+    """Found by rehearsing the restore against a fixture: it dropped the
+    database, loaded an empty file, and only noticed afterwards. The
+    verification caught it and refused to claim success - but by then the data
+    was gone. A truncated gzip fails halfway through loading, which is the worst
+    possible moment to find out."""
+    src = (REPO / 'scripts' / 'restore_db.sh').read_text()
+    check = src.index('Checking the backup is usable')
+    destroy = src.index('DROP DATABASE IF EXISTS')
+    assert check < destroy, 'the backup must be validated before the DROP'
+    assert 'gzip -t' in src, 'a corrupt archive must be caught, not discovered mid-load'
+    assert '-s "$PORTAL_DUMP"' in src, 'a missing or empty backup must be caught'
+
+
+def test_restore_fails_when_a_relation_is_missing():
+    """The previous version printed row counts afterwards and exited 0 having
+    restored almost nothing. Counting and printing proves nothing; what matters
+    is that every relation the list names is actually present."""
+    src = (REPO / 'scripts' / 'restore_db.sh').read_text()
+    assert 'missing=' in src or 'missing' in src
+    assert 'Do not start the portal against it' in src, \
+        'a failed restore must say so in terms an operator will act on'
+    assert 'exit 1' in src

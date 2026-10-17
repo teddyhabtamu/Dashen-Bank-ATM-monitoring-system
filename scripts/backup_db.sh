@@ -23,15 +23,12 @@ fi
 # So detect it. portal_schema_version is a portal-only marker, created by
 # txn_sources.py, and it travels with the copy - which is exactly what makes it
 # usable as the test.
-PORTAL_DB=""
-for candidate in portal zabbix; do
-    if docker exec zabbix-db psql -U zabbix -d "$candidate" -tAc \
-        "SELECT to_regclass('public.portal_schema_version') IS NOT NULL;" 2>/dev/null \
-        | grep -qx t; then
-        PORTAL_DB="$candidate"
-        break
-    fi
-done
+# shellcheck source=portal_tables.sh
+source "$(dirname "$0")/portal_tables.sh"
+
+# Detection is shared with restore_db.sh, which needs the same answer and must
+# not come to a different one.
+PORTAL_DB="$(detect_portal_db || true)"
 if [ -z "$PORTAL_DB" ]; then
     echo "ERROR: could not find portal_schema_version in either the portal or"
     echo "       the zabbix database. Refusing to guess - a backup that silently"

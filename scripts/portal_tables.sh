@@ -44,3 +44,26 @@ portal_dump_flags() {
         printf -- '-t\n%s\n' "$t"
     done
 }
+
+# Which database actually holds the portal tables?
+#
+# Before the split that was "zabbix", where the portal shared a database with
+# Zabbix's own configuration. Afterwards it is "portal". Hardcoding either is how
+# a backup covers the wrong database: nothing fails, the file is written, the
+# log looks normal, and portal data is simply absent until someone restores it.
+#
+# portal_schema_version is a portal-only marker created by txn_sources.py, and
+# it travels with the copy - which is what makes it usable as the test. Returns
+# empty when found in neither, so callers can refuse rather than guess.
+detect_portal_db() {
+    local candidate
+    for candidate in portal zabbix; do
+        if docker exec zabbix-db psql -U zabbix -d "$candidate" -tAc \
+            "SELECT to_regclass('public.portal_schema_version') IS NOT NULL;" \
+            2>/dev/null | grep -qx t; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
