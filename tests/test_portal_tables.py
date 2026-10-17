@@ -1131,6 +1131,12 @@ def test_the_collapsed_rail_drops_the_toggle_and_expands_from_the_logo():
     assert re.search(r'\.sidebar\.collapsed\s+\.sidebar-logo\s*\{[^}]*'
                      r'cursor:pointer', tpl), \
         'the logo must advertise that it is now the expander'
+    # The mark is a square brand asset. Rounding its corners clips the artwork,
+    # so the radius must not creep back in with the hover treatment.
+    logo_rule = re.search(
+        r'\.sidebar\.collapsed\s+\.sidebar-logo\s*\{([^}]*)\}', tpl).group(1)
+    assert 'border-radius' not in logo_rule, \
+        'the logo must keep square corners in the rail: %s' % logo_rule
 
     # Keyboard parity: a control reachable only by mouse is not an expander.
     js = tpl[tpl.index('function setCollapsed'):]
