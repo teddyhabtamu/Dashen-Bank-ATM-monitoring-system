@@ -433,3 +433,47 @@ def test_the_probe_refuses_to_call_a_vacuous_check_a_pass():
     # Nothing at all is legitimately inconclusive, but not alarming either.
     assert mod.view_evidence(0, 0, 0) == '', (
         'an empty database is not evidence of anything either way')
+
+
+def test_backup_covers_both_databases_once_split():
+    """The most dangerous thing about this split is not a broken page, it is a
+    backup that looks complete and is missing everything.
+
+    After the switch the portal's rows live in "portal" while Zabbix's own
+    configuration stays in "zabbix". Dumping only zabbix would produce nightly
+    files of a normal size, no errors in the log, and no portal data in any of
+    them - discovered only when a restore is attempted.
+    """
+    src = (REPO / 'scripts' / 'backup_db.sh').read_text()
+    assert 'zabbix_full_' in src, 'the Zabbix configuration dump must remain'
+    assert 'portal_full_' in src, \
+        'the portal database must get its own full dump once split'
+    assert 'portal_full_*.sql.gz' in src, \
+        'portal dumps need retention too, or they fill the disk'
+
+
+def test_backup_finds_the_portal_database_instead_of_hardcoding_it():
+    """backup_db.sh had nine hardcoded references to the zabbix database. Any
+    of them left pointing at the old database quietly backs up the wrong
+    tables - including a CREATE TABLE that would materialise an empty
+    atm_delete_archive there."""
+    src = (REPO / 'scripts' / 'backup_db.sh').read_text()
+    assert 'PORTAL_DB=' in src, 'the portal database must be detected'
+    assert 'portal_schema_version' in src, \
+        'detection needs a marker that only exists with the portal tables'
+    # Every COPY, scoped dump and verification query must use the detected name.
+    assert '-d zabbix \\\n  -c "COPY' not in src, 'CSV exports must not be pinned'
+    assert 'pg_dump -U zabbix zabbix --no-owner --no-acl $PORTAL_T_FLAGS' not in src, \
+        'the scoped dump must not be pinned to zabbix'
+    # Zabbix's own full dump must stay pinned - it must never follow the marker.
+    assert 'pg_dump -U zabbix zabbix --no-owner --no-acl \\\n  | gzip > "$BACKUP_DIR/zabbix_full_' in src, \
+        "Zabbix's own configuration dump must always come from zabbix"
+
+
+def test_backup_refuses_to_guess_the_database():
+    """A backup that covers the wrong database is worse than no backup, because
+    nobody finds out until a restore. Detection failure must stop the run."""
+    src = (REPO / 'scripts' / 'backup_db.sh').read_text()
+    assert 'Refusing to guess' in src
+    block = src[src.index('PORTAL_DB=""'):src.index('echo "Backing up PostgreSQL')]
+    assert 'exit 1' in block, 'a failed detection must abort, not carry on'
