@@ -25,10 +25,10 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 CHECK_JOBS = REPO / 'scripts' / 'check_jobs.py'
 
 
-def run_check(root, **kwargs):
+def run_check(root, **extra):
     # CHECK_JOBS_ROOT rather than cwd: the checker resolves paths against the
     # repo it lives in, so pointing it at a fixture is the honest way to test.
-    env = dict(os.environ, CHECK_JOBS_ROOT=str(root))
+    env = _env(root, **extra)
     out = subprocess.run([sys.executable, str(CHECK_JOBS), '--json'],
                          capture_output=True, text=True, env=env, timeout=60)
     assert out.returncode in (0, 1), out.stderr
@@ -36,15 +36,27 @@ def run_check(root, **kwargs):
 
 
 def _make_repo(tmp_path, ages):
-    """Build a fake repo with log files of the given ages (seconds)."""
+    """Build a fake repo with log files of the given ages (seconds).
+
+    The backup logs go to $HOME, because that is where cron writes them -
+    reproducing that mistake is what the false-positive test below guards.
+    """
     now = time.time()
     for rel, age in ages.items():
-        p = tmp_path / rel
+        p = tmp_path / rel if not rel.startswith('$HOME/') \
+            else tmp_path / 'home' / rel.split('/', 1)[1]
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text('log line\n')
         t = now - age
         os.utime(p, (t, t))
     return tmp_path
+
+
+def _env(root, **extra):
+    env = dict(os.environ, CHECK_JOBS_ROOT=str(root))
+    env['HOME'] = str(root / 'home')
+    env.update(extra)
+    return env
 
 
 # ── check_jobs ──────────────────────────────────────────────────────────────
@@ -63,7 +75,7 @@ def test_stale_log_is_overdue(tmp_path):
     _make_repo(tmp_path, {
         'logs/ej-pull.log': 5400,       # 90 min old, limit is 60 min x 6
         'logs/reconcile.log': 300,
-        'atm-backup.log': 300,
+        '$HOME/atm-backup.log': 300,
     })
     data = run_check(tmp_path)
     overdue = [p for p in data['problems'] if p['state'] == 'OVERDUE']
@@ -82,7 +94,7 @@ def test_the_reconcile_failure_we_actually_had_is_detected(tmp_path):
     """
     _make_repo(tmp_path, {
         'logs/ej-pull.log': 30,
-        'atm-backup.log': 30,
+        '$HOME/atm-backup.log': 30,
     })
     (tmp_path / 'logs').mkdir(parents=True, exist_ok=True)
     (tmp_path / 'logs' / 'reconcile.log').write_text(
@@ -102,9 +114,9 @@ def test_healthy_repo_reports_nothing_and_exits_zero(tmp_path):
     _make_repo(tmp_path, {
         'logs/ej-pull.log': 30,
         'logs/reconcile.log': 600,
-        'atm-backup.log': 600,
+        '$HOME/atm-backup.log': 600,
     })
-    env = dict(os.environ, CHECK_JOBS_ROOT=str(tmp_path))
+    env = _env(tmp_path)
     out = subprocess.run([sys.executable, str(CHECK_JOBS), '--json'],
                          capture_output=True, text=True, env=env, timeout=60)
     assert out.returncode == 0, out.stdout
@@ -117,7 +129,7 @@ def test_missing_table_in_a_log_is_reported(tmp_path):
     _make_repo(tmp_path, {
         'logs/ej-pull.log': 30,
         'logs/reconcile.log': 600,
-        'atm-backup.log': 600,
+        '$HOME/atm-backup.log': 600,
     })
     p = tmp_path / 'logs' / 'reconcile.log'
     p.write_text('psycopg2.errors.UndefinedTable: relation "atm_x" does not exist\n')
@@ -130,7 +142,7 @@ def test_missing_table_in_a_log_is_reported(tmp_path):
 
 def test_quiet_mode_prints_nothing(tmp_path):
     _make_repo(tmp_path, {})
-    env = dict(os.environ, CHECK_JOBS_ROOT=str(tmp_path))
+    env = _env(tmp_path)
     out = subprocess.run([sys.executable, str(CHECK_JOBS), '--quiet'],
                          capture_output=True, text=True, env=env, timeout=60)
     assert out.stdout.strip() == ''
@@ -240,3 +252,56 @@ def test_lock_capture_script_resolves_digests_not_tags():
     assert '{{.Image}}' in src, 'must resolve the running image to a digest'
     assert 'pip freeze' in src or 'pip' in src and 'freeze' in src
     assert '--apply' in src, 'opt-in, never mutate .env by default'
+
+def test_home_paths_are_expanded_not_taken_literally(tmp_path):
+    """os.path.expanduser handles ~ but NOT $HOME.
+
+    The first version looked for a file literally named "$HOME/atm-backup.log",
+    so it reported NEVER_RAN on a host where the backups were running fine. A
+    monitor that cries wolf gets ignored, which is worse than no monitor.
+    """
+    _make_repo(tmp_path, {'$HOME/atm-backup.log': 600})
+    data = run_check(tmp_path)
+    problems = {p['job']: p for p in data['problems']}
+    assert 'backup_db' not in problems, (
+        problems.get('backup_db', {}).get('log', ''))
+    assert 'atm-backup.log' in json.dumps(data)
+
+
+def test_log_path_can_be_overridden_per_job(tmp_path):
+    """Cron runs as its own user, which is often not the user running the check."""
+    (tmp_path / 'elsewhere').mkdir()
+    log = tmp_path / 'elsewhere' / 'nightly.log'
+    log.write_text('ok\n')
+    now = time.time()
+    os.utime(log, (now, now))
+    _make_repo(tmp_path, {'logs/ej-pull.log': 30, 'logs/reconcile.log': 600,
+                          '$HOME/atm-backup.log': 600})
+    data = run_check(tmp_path, CHECK_JOBS_LOG_backup_db=str(log))
+    problems = {p['job'] for p in data['problems']}
+    assert 'backup_db' not in problems, 'the override must be honoured'
+
+
+def test_a_shared_log_is_flagged_as_a_known_blind_spot(tmp_path):
+    """Two jobs, one log file: if one fails nightly and the other succeeds, the
+    log still updates and the failing job looks healthy. That is a false
+    NEGATIVE - it hides a fault - so it must be stated, not just tolerated."""
+    _make_repo(tmp_path, {'logs/ej-pull.log': 30, 'logs/reconcile.log': 600,
+                          '$HOME/atm-backup.log': 600})
+    data = run_check(tmp_path)
+    jobs = {r['job']: r for r in data['results']}
+    assert set(jobs['backup_db']['shared_with']) == {'backup_configs'}
+    assert 'SHARED LOG' in jobs['backup_db']['detail']
+    assert jobs['ej_pull']['shared_with'] == [], (
+        'a job with its own log must not be annotated as sharing')
+
+
+def test_missing_log_message_names_the_resolved_path(tmp_path):
+    """The operator needs the path that was actually looked for, not the
+    configured one."""
+    _make_repo(tmp_path, {'logs/ej-pull.log': 30})
+    data = run_check(tmp_path)
+    problems = {p['job']: p for p in data['problems']}
+    assert 'backup_db' in problems
+    assert str(tmp_path / 'home') in problems['backup_db']['log'], \
+        problems['backup_db']['log']

@@ -189,6 +189,22 @@ failing dependency. `/health` is unchanged and stays unconditional — it answer
 
 Wire `check_jobs.py` to whatever alerts you use. Its exit code is the contract.
 
+**Log paths.** Jobs are located by the log they write, so the paths in
+`check_jobs.py` must match your crontab. `backup_db.sh` and
+`backup_configs.sh` both write to `$HOME/atm-backup.log` — **and cron runs as
+its own user**, which may not be you. If a job reports `NEVER_RAN` but you know
+it runs, override the path:
+
+```bash
+CHECK_JOBS_LOG_backup_db=/root/atm-backup.log python3 scripts/check_jobs.py
+```
+
+**Those two backup jobs share one log file.** That means neither can be verified
+independently: if one starts failing nightly while the other succeeds, the log
+still updates and the failing one looks healthy. The checker flags this as a
+known blind spot rather than pretending otherwise. Giving each job its own log
+is the fix.
+
 ## Deploying a change to the portal
 
 ```bash
