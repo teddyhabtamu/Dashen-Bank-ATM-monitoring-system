@@ -819,3 +819,74 @@ def test_no_tracked_env_file_carries_a_real_secret():
             assert placeholder.search(value), (
                 '%s: %s is not a placeholder. This file is TRACKED, so .env* will '
                 'not save it - untrack the file instead.' % (f, key))
+
+
+def test_every_sidebar_icon_exists_in_the_bundled_lucide():
+    """A wrong data-lucide name renders as nothing at all.
+
+    No error, no warning, no gap in the markup - just a silently missing glyph,
+    which in an icon-only collapsed rail means an unlabelled button. The bundle
+    is lucide v1.27.0 and stores icons in PascalCase, so the check has to
+    translate: my first attempt substring-matched the raw file and reported 25
+    of 27 icons missing, including ones that had been in use for months.
+    """
+    import re
+    lucide = (REPO / 'report-portal' / 'static' / 'lucide.js').read_text()
+    tpl = (REPO / 'report-portal' / 'templates' / 'base.html').read_text()
+    used = sorted(set(re.findall(r'data-lucide="([a-z0-9-]+)"', tpl)))
+    assert used, 'expected the sidebar to use lucide icons'
+    missing = []
+    for name in used:
+        pascal = ''.join(w[:1].upper() + w[1:] for w in name.split('-'))
+        if not re.search(r'\b%s\b' % re.escape(pascal), lucide):
+            missing.append('%s (looked for %s)' % (name, pascal))
+    assert not missing, (
+        'these data-lucide names are not in the bundled lucide and will render '
+        'as blank space:\n  %s' % '\n  '.join(missing))
+
+
+def test_the_sidebar_keeps_every_route_and_every_admin_gate():
+    """The sidebar was regrouped by task rather than by codebase location. The
+    grouping is a judgement call; losing a destination or an access control to
+    it is not. Snapshot both and compare."""
+    import json
+    tpl = (REPO / 'report-portal' / 'templates' / 'base.html').read_text()
+    nav = tpl[tpl.index('<nav class="sidebar-nav">'):
+              tpl.index('</nav>', tpl.index('<nav class="sidebar-nav">'))]
+    depth, routes, gated = 0, [], []
+    for line in nav.split('\n'):
+        stripped = line.strip()
+        # Only BLOCK-level tags: inline ones belong to active-class expressions
+        # and decrementing on those lines loses the gate entirely.
+        if re.fullmatch(r"\{%\s*if\s+session\.get\('role'\)\s*==\s*'admin'\s*%\}", stripped):
+            depth += 1
+            continue
+        if re.fullmatch(r'\{%\s*endif\s*%\}', stripped):
+            depth = max(0, depth - 1)
+            continue
+        for h in re.findall(r'href="([^"]+)"', line):
+            routes.append(h)
+            if depth > 0:
+                gated.append(h)
+    assert len(routes) == 16, 'expected 16 destinations, found %d' % len(routes)
+    assert sorted(gated) == sorted([
+        '/admin/audit', '/admin/onboard', '/admin/onboard/fleet',
+        '/admin/schedules', '/admin/users', '{{ grafana_url }}',
+    ]), 'the admin-gated destinations changed: %s' % sorted(gated)
+
+
+def test_every_sidebar_item_has_a_tooltip():
+    """The collapsed rail is icons only, so a missing title attribute is an
+    unlabelled button. Before the regrouping only 6 of 16 items had one."""
+    tpl = (REPO / 'report-portal' / 'templates' / 'base.html').read_text()
+    nav = tpl[tpl.index('<nav class="sidebar-nav">'):
+              tpl.index('</nav>', tpl.index('<nav class="sidebar-nav">'))]
+    items = re.findall(r'<a[^>]*class="nav-item[^"]*"', nav)
+    titled = re.findall(r'<a[^>]*class="nav-item[^"]*"[^>]*title="', nav)
+    # the multiline anchors put title after class, so count both orders
+    titled = re.findall(r'class="nav-item[^"]*"[^>]*?title="[^"]+"', nav, re.S) + \
+             re.findall(r'title="[^"]+"[^>]*?class="nav-item[^"]*"', nav, re.S)
+    assert items, 'no nav items found'
+    assert len(titled) == len(items), (
+        'every sidebar item needs a title for the collapsed rail: %d of %d have one'
+        % (len(titled), len(items)))
