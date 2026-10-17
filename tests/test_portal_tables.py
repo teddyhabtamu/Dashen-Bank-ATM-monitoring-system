@@ -400,3 +400,36 @@ def test_the_stage3_probe_is_read_only():
     assert 'current_database()' in probe, (
         'the probe must report which database it actually reached')
     assert 'DB_NAME' in probe
+
+
+def test_the_probe_refuses_to_call_a_vacuous_check_a_pass():
+    """With the demo window closed, atm_transactions_visible returns 0 rows -
+    and so does any join built on it. A broken view returns 0 too, so "ok 0
+    rows" for those two checks is indistinguishable from a working one. That is
+    precisely the false pass this probe exists to prevent, and on 2026-10-18
+    the probe did print a bare ok for both."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        'probe_portal_db', str(REPO / 'scripts' / 'probe_portal_db.py'))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    # The live UAT case: 181265 raw rows, demo window closed, nothing visible.
+    note = mod.view_evidence(181265, 0, 0)
+    assert note, 'a view exposing nothing must not count as evidence'
+    assert 'demo window' in note, 'the likely cause should be named'
+    assert 'prove nothing' in note
+
+    # A real fault, not a vacuous check: rows exist but never join.
+    note = mod.view_evidence(100, 50, 0)
+    assert note and 'real fault' in note, (
+        'visible rows that do not join is a genuine mismatch, and must not be '
+        'dismissed as vacuous')
+
+    # Healthy: rows visible and joining.
+    assert mod.view_evidence(100, 50, 50) == '', (
+        'a working view with matching joins must not raise a note')
+
+    # Nothing at all is legitimately inconclusive, but not alarming either.
+    assert mod.view_evidence(0, 0, 0) == '', (
+        'an empty database is not evidence of anything either way')

@@ -27,6 +27,32 @@ import os
 import sys
 
 FAILURES = []
+NOTES = []
+
+
+def view_evidence(raw_rows, visible_rows, joined_rows):
+    """Can the view and join results actually be believed?
+
+    With the demo window closed, atm_transactions_visible returns 0 rows - and
+    so does any join built on it. A view that was broken, mis-joined or missing
+    a predicate would return 0 as well, so a zero here is indistinguishable
+    from a working one. Printing a plain "ok 0 rows" for that is exactly the
+    false pass this probe exists to avoid.
+
+    Returns a note; empty means the evidence is good.
+    """
+    if raw_rows and not visible_rows:
+        return ('%s raw transactions but the view exposes none, so the view '
+                'check and the join check below prove nothing - they would '
+                'return 0 even if the view were broken. Most likely the demo '
+                'window is closed and every row is simulated; re-run with it '
+                'open before trusting these two lines.'
+                % raw_rows)
+    if visible_rows and not joined_rows:
+        return ('the view exposes %s rows but none of them join to '
+                'atm_locations, which means atm_id does not line up. That is a '
+                'real fault, not a vacuous check.' % visible_rows)
+    return ''
 
 
 def report(label, ok, detail=''):
@@ -36,6 +62,19 @@ def report(label, ok, detail=''):
     print('  %s %-34s %s' % (mark, label, detail), flush=True)
     if ok != 'yes':
         FAILURES.append(label)
+
+
+def _wrap(text, width=74):
+    words, line, out = text.split(), '', []
+    for w in words:
+        if len(line) + len(w) + 1 > width:
+            out.append(line)
+            line = w
+        else:
+            line = (line + ' ' + w).strip()
+    if line:
+        out.append(line)
+    return out
 
 
 def main():
@@ -111,18 +150,39 @@ def main():
 
     # The join routes.py performs on essentially every page. A view can exist,
     # hold the right row count, and still not join.
+    raw = visible = joined = 0
+    try:
+        cur.execute('SELECT count(*) FROM public.atm_transactions')
+        raw = cur.fetchone()[0]
+    except Exception:                                 # noqa: BLE001
+        conn.rollback()
+        cur = conn.cursor()
+    try:
+        cur.execute('SELECT count(*) FROM public.atm_transactions_visible')
+        visible = cur.fetchone()[0]
+    except Exception:                                 # noqa: BLE001
+        conn.rollback()
+        cur = conn.cursor()
     try:
         cur.execute("""
             SELECT count(*)
             FROM atm_transactions_visible t
             JOIN atm_locations l ON t.atm_id = l.atm_id
         """)
-        n = cur.fetchone()[0]
-        report('view JOINs atm_locations', 'yes', '%s rows' % n)
+        joined = cur.fetchone()[0]
+        report('view JOINs atm_locations', 'yes', '%s rows' % joined)
     except Exception as exc:                          # noqa: BLE001
         conn.rollback()
         report('view JOINs atm_locations', 'no', str(exc).strip().splitlines()[0])
         cur = conn.cursor()
+
+    note = view_evidence(raw, visible, joined)
+    if note:
+        print()
+        print('  NOTE   the two checks above are not evidence:')
+        for line in _wrap(note):
+            print('         %s' % line)
+        NOTES.append(note)
 
     # The one that bites in production and nowhere else. Row counts match and
     # the portal still fails, because every insert collides with a row that is
@@ -175,6 +235,10 @@ def main():
         print('%d check(s) failed: %s' % (len(FAILURES), ', '.join(FAILURES)))
         print('The copy is NOT ready for Stage 4.')
         return 1
+    if NOTES:
+        print('All checks passed, but %d of them proved nothing.' % len(NOTES))
+        print('Re-run with the demo window open before treating this as proof.')
+        return 0
     print('All checks passed against %s.' % actual)
     print('Stage 3 is a read-only proof. Nothing has been switched.')
     print('Stage 4 still needs: a quiet window, and network-correlator moved')
