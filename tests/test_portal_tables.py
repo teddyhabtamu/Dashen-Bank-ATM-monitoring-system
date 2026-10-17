@@ -765,3 +765,57 @@ def test_the_preflight_sends_portal_and_zabbix_checks_to_different_databases():
     # Zabbix's own table must NOT
     assert re.search(r'psql[^\n]*-d zabbix[^\n]*FROM hosts', src), \
         "hosts is Zabbix's own table and must stay on the zabbix database"
+
+
+def test_no_tracked_env_file_carries_a_real_secret():
+    """.env.uat was TRACKED and held real UAT credentials - a GLPI app token and
+    the Zabbix password, identified by shape alone: a 36-character
+    UUID-pattern token and an 11-character random string. The remote is GitHub,
+    and the migration guide instructs copying that file to .env, so it was doing
+    a real job and could not simply be deleted.
+
+    It is now untracked, and its twelve keys were added to .env.example as
+    placeholders so the template stays complete. The values remain in git
+    HISTORY: this test is not a fix on its own, rotating them is. What it does
+    is stop it happening again.
+
+    Scoped to secret-shaped KEYS rather than judging every value. An earlier
+    version tried to classify values and flagged ISO8583_MODE=simulation,
+    PGADMIN_EMAIL and GATEWAY_IP - three false alarms in a row. A check that
+    cries wolf gets switched off. Key names are unambiguous; values are not.
+    """
+    import re
+    placeholder = re.compile(
+        r'(CHANGEME|REPLACE|your[-_ ]|xxx+|<[^>]*>|\.\.\.|TODO|PLACEHOLDER|'
+        r'EXAMPLE|DUMMY|generate|random[-_ ]?secret|-here$|_here$|insert[-_ ]|'
+        r'fill[-_ ]?in|\b(change|insert|generate|provide|supply|edit|enter|set)[-_ ]'
+        r'|^(change|insert|generate)[-_ ]?me)', re.I)
+    secret_key = re.compile(r'(PASS|PASSWORD|TOKEN|SECRET|KEY|CREDENTIAL)', re.I)
+    # The vendor default, publicly documented, and not a credential anyone
+    # gained by reading the repository. Whether a deployment should still be
+    # running on it is a separate hardening question - not what this test is for.
+    public_defaults = {'zabbix'}
+
+    tracked = subprocess.run(['git', 'ls-files'], capture_output=True, text=True,
+                             cwd=str(REPO), timeout=60).stdout.split()
+    env_files = [f for f in tracked if pathlib.Path(f).name.startswith('.env')]
+    assert env_files, 'expected .env.example to stay tracked as the template'
+    assert '.env.uat' not in env_files, (
+        '.env.uat holds real UAT credentials. A tracked file cannot be rescued by '
+        'an ignore rule, so untrack it - and record its keys in .env.example as '
+        'placeholders.')
+
+    for f in env_files:
+        for line in (REPO / f).read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, _, value = line.partition('=')
+            value = value.strip().strip('"\'')
+            if not value or not secret_key.search(key):
+                continue
+            if value.lower() in public_defaults:
+                continue
+            assert placeholder.search(value), (
+                '%s: %s is not a placeholder. This file is TRACKED, so .env* will '
+                'not save it - untrack the file instead.' % (f, key))
