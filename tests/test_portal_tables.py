@@ -935,3 +935,44 @@ def test_the_collapsed_rail_keeps_a_mark_and_a_divider_per_group():
     collapsed_head = collapsed_head[:collapsed_head.index('}')]
     assert 'pointer-events:none' in collapsed_head, \
         'a hairline divider must not be interactive'
+
+
+def test_sidebar_sections_are_labels_not_disclosures():
+    """I wrote 'the chevron is there to collapse, not to conceal' and then shipped
+    a chevron that conceals. The screenshot caught it within seconds of use: all
+    three sections closed, and a closed section is indistinguishable from an
+    empty one - the operator cannot tell there is anything behind it.
+
+    The whole-sidebar collapse is the density control. Section collapse only
+    removes destinations from view, and loses the operator's place: close the
+    section you are currently in and the active item vanishes."""
+    tpl = (REPO / 'report-portal' / 'templates' / 'base.html').read_text()
+    nav = tpl[tpl.index('<nav class="sidebar-nav">'):
+              tpl.index('</nav>', tpl.index('<nav class="sidebar-nav">'))]
+    assert 'toggleNavGroup' not in nav, \
+        'section headers must not be collapsible'
+    assert 'chevron-down' not in nav, \
+        'a chevron invites a click that hides destinations'
+    assert nav.count('nav-section-head') == 3, 'expected three section headers'
+    # And nothing may hide the items behind CSS either. A pattern, not one
+    # exact string: matching ".nav-group .nav-group-items{display:none" alone
+    # missed a rule written as ".nav-group-items{display:none}", which hides
+    # exactly the same thing.
+    hidden = re.findall(r'[^}]*\.nav-group-items\s*\{[^}]*display\s*:\s*none',
+                        tpl)
+    assert not hidden, (
+        'navigation items must not be hidden by any rule: %s' % ' | '.join(
+            h.strip()[:70] for h in hidden))
+    assert 'function toggleNavGroup' not in tpl, \
+        'the handler is unreachable dead code that invites rewiring'
+
+
+def test_menu_rows_are_the_size_they_appear_to_be():
+    """.nav-group-items .nav-item is (0,2,0) and beats .nav-item at (0,1,0).
+    A leftover rule from the Dashboard-submenu design set rows to 31px/12px, so
+    every menu item rendered three pixels shorter than intended - while the test
+    guarding row height passed, because it only looked at the base rule."""
+    tpl = (REPO / 'report-portal' / 'templates' / 'base.html').read_text()
+    for stale in ('.nav-group-header', '.nav-group-items .nav-item{'):
+        assert stale not in tpl, \
+            'stale rule from the submenu design is still overriding the rail: %s' % stale

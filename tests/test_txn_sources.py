@@ -17,6 +17,7 @@ after itself.
 import ast
 import datetime
 import pathlib
+import re
 import sys
 
 import pytest
@@ -473,6 +474,15 @@ def test_sidebar_scrollbar_is_slim_and_the_menu_is_tighter():
     assert '.sidebar-nav::-webkit-scrollbar{width:6px}' in css
     nav = css[css.index('.nav-item{'):css.index('.nav-item.active{')]
     assert 'min-height:34px' in nav, 'menu rows must be tighter to fit'
+
+    # The base rule is not the one that wins. This checked only ".nav-item", so a
+    # stale ".nav-group-items .nav-item{min-height:31px}" from the old
+    # Dashboard-submenu design overrode it at (0,2,0) and every menu row
+    # rendered 3px shorter than intended - for as long as the test existed.
+    overrides = re.findall(r'\.nav-group-items\s+\.nav-item\s*\{[^}]*\}', css)
+    assert not overrides, (
+        'these override the base row height and will silently shrink every menu '
+        'item: %s' % overrides)
 
 
 # ── fleet counts must count the fleet ───────────────────────────────────────

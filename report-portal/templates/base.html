@@ -50,15 +50,11 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .nav-external{margin-top:4px;padding-top:5px;border-top:1px solid rgba(255,255,255,.07)}
 .sidebar.collapsed .nav-item span{opacity:0;width:0;margin:0;padding:0;pointer-events:none}
 .nav-section-label{font-size:10.5px;font-weight:700;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.9px;overflow:hidden;white-space:nowrap;transition:opacity .2s ease}
-.nav-section-head{width:100%;display:flex;align-items:center;background:none;border:none;cursor:pointer;font-family:inherit;padding:11px 12px 5px;margin-top:0}
-.nav-section-head:hover .nav-section-label{color:rgba(255,255,255,.75)}
-.nav-section-head .chev{width:13px;height:13px;color:rgba(255,255,255,.28);transition:transform .2s ease;margin-left:auto}
-.nav-group.open > .nav-section-head .chev{transform:rotate(180deg)}
-.nav-section-head:focus-visible{outline:2px solid #7dd3fc;outline-offset:-2px;border-radius:6px}
+.nav-section-head{display:flex;align-items:center;padding:11px 12px 5px;margin-top:0;cursor:default}
 # Collapsed: the label cannot fit, so the header becomes a hairline divider.
 # Grouping survives without words, which is the point of grouping.
 .sidebar.collapsed .nav-section-head{padding:0;margin:9px 14px;height:1px;background:rgba(255,255,255,.12);border-radius:1px;display:block;pointer-events:none}
-.sidebar.collapsed .nav-section-head .chev,.sidebar.collapsed .nav-section-head .nav-section-label{display:none}
+.sidebar.collapsed .nav-section-head .nav-section-label{display:none}
 :root {
   --dashen-navy: #012169;
   --dashen-blue: #273274;
@@ -83,18 +79,12 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
   --shadow-xl: 0 20px 60px rgba(1,33,105,0.1), 0 8px 20px rgba(1,33,105,0.04);
   --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.nav-group .nav-group-items{display:none;flex-direction:column;gap:1px;padding:0 0 1px}
-.nav-group.open .nav-group-items{display:flex}
-.nav-group-header{width:100%;background:none;border:none;cursor:pointer;font-family:inherit}
-.nav-group-header .chev{margin-left:auto;transition:transform .2s ease}
-.nav-group.open .nav-group-header .chev{transform:rotate(180deg)}
-.nav-group-items .nav-item{min-height:31px;font-size:12px}
+.nav-group-items{display:flex;flex-direction:column;gap:1px;padding:0 0 1px}
 /* The collapsed rail shows EVERY item as an icon, grouped by the hairline
    dividers above. This rule used to hide group items, which was correct when
    the Dashboard group was the only one and clicking its icon expanded the
    sidebar to reveal them. Once every destination moved into a group, it hid the
    entire menu: the rail rendered with a toggle button and nothing else. */
-.sidebar.collapsed .nav-group-header .chev{display:none}
 .sidebar.collapsed .nav-section-label{opacity:0;height:0;padding:0 12px;margin:0;overflow:hidden;pointer-events:none}
 
 /* ── PROFILE DROPDOWN ── */
@@ -198,7 +188,6 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
      hairline divider is wrong here - it would leave the label rendered inside a
      1px-tall box. Restore the full section header. */
   .sidebar.collapsed .nav-section-head{display:flex;padding:15px 12px 7px;margin-top:1px;height:auto;background:none;border-radius:0}
-  .sidebar.collapsed .nav-section-head .chev{display:block}
   .sidebar.collapsed .nav-section-head .nav-section-label{display:inline}
   .sidebar.collapsed .sidebar-collapse-btn{display:none}
   .sidebar-nav{padding:8px 10px}
@@ -408,11 +397,10 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
         Every href and every admin gate is carried over unchanged; only the
         grouping and the visual rhythm differ. -#}
 
-    <div class="nav-group open">
-      <button class="nav-section-head" onclick="toggleNavGroup(this)" aria-expanded="true">
+    <div class="nav-group">
+      <div class="nav-section-head">
         <span class="nav-section-label">Monitor</span>
-        <i data-lucide="chevron-down" class="chev"></i>
-      </button>
+      </div>
       <div class="nav-group-items">
         <a href="/" class="nav-item {% if request.path == '/' %}active{% endif %}"
            title="Overview — network at a glance">
@@ -444,11 +432,10 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
       </div>
     </div>
 
-    <div class="nav-group open">
-      <button class="nav-section-head" onclick="toggleNavGroup(this)" aria-expanded="true">
+    <div class="nav-group">
+      <div class="nav-section-head">
         <span class="nav-section-label">Investigate</span>
-        <i data-lucide="chevron-down" class="chev"></i>
-      </button>
+      </div>
       <div class="nav-group-items">
         <a href="/kpi" class="nav-item {% if request.path.startswith('/kpi') %}active{% endif %}"
            title="Management KPIs — performance across the network">
@@ -478,11 +465,10 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
       </div>
     </div>
 
-    <div class="nav-group open">
-      <button class="nav-section-head" onclick="toggleNavGroup(this)" aria-expanded="true">
+    <div class="nav-group">
+      <div class="nav-section-head">
         <span class="nav-section-label">Manage</span>
-        <i data-lucide="chevron-down" class="chev"></i>
-      </button>
+      </div>
       <div class="nav-group-items">
         <a href="/admin/atm" class="nav-item {% if request.path.startswith('/admin/atm') %}active{% endif %}"
            title="ATM Registration — the inventory everything else reads from">
@@ -631,20 +617,6 @@ function toggleCollapse(){
 }
 
 // ── MOBILE ──
-function toggleNavGroup(btn){
-  var s = document.getElementById('sidebar');
-  var g = btn.closest('.nav-group');
-  if(s.classList.contains('collapsed')){
-    // Collapsed: expand in place for picking. Storage untouched, so the
-    // next page load collapses again — selection closes the drawer.
-    s.classList.remove('collapsed');
-    g.classList.add('open');
-    btn.setAttribute('aria-expanded', 'true');
-    return;
-  }
-  var open = g.classList.toggle('open');
-  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-}
 function toggleMobile(){
   var s = document.getElementById('sidebar');
   if(s.classList.contains('open')) return closeMobile();
