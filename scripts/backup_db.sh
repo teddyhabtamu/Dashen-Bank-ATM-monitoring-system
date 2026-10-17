@@ -36,25 +36,19 @@ docker exec zabbix-db psql -U zabbix -d zabbix \
 # fault_type_map were previously omitted — losing them on restore.
 docker exec zabbix-db pg_dump -U zabbix zabbix \
   --no-owner --no-acl \
-  -t atm_locations \
-  -t atm_transactions \
-  -t atm_current_state \
-  -t atm_anomalies \
-  -t atm_network_events \
-  -t atm_network_correlation \
-  -t atm_network_metrics \
-  -t app_users \
-  -t audit_log \
-  -t scheduled_reports \
-  -t cash_replenishments \
-  -t atm_state_history \
-  -t ticket_seen \
-  -t fault_type_map \
-  -t atm_delete_archive \
-  -t txn_source_policy \
-  -t fleet_report_cache \
-  -t atm_incidents \
-  -t atm_devices \
+# Table list comes from config/portal_tables.txt, shared with
+# scripts/split_portal_db.sh. The two lists drifted once already: this one
+# was missing txn_source_policy, which decides whether simulated
+# transactions are visible, so a restore from THIS file would have quietly
+# re-shown invented money. The full dump below masked the gap entirely.
+# shellcheck source=portal_tables.sh
+source "$(dirname "$0")/portal_tables.sh"
+# Unquoted on purpose: the flags carry no spaces, so word splitting is exactly
+# what is wanted - and it avoids eval with nested quotes, which silently
+# produced ZERO -t flags when this was written the first way.
+PORTAL_T_FLAGS="$(portal_dump_flags | tr '\n' ' ')"
+# shellcheck disable=SC2086
+docker exec zabbix-db pg_dump -U zabbix zabbix --no-owner --no-acl $PORTAL_T_FLAGS \
   > "$BACKUP_DIR/atm_custom_tables.sql"
 
 # Full Zabbix database backup (includes hosts, items, triggers, history)
