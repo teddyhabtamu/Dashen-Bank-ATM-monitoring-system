@@ -151,7 +151,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
           </svg>
           <div class="atm-cap">{% if (atm.status or 'active') != 'active' %}Last known telemetry (retired ATM){% elif hardware %}Live telemetry from {{ hw_source or 'SNMP' }}{% else %}No live telemetry — showing last known state{% endif %}</div>
           {% else %}
-          <div class="no-data" style="padding:60px 12px">Live cassette data unavailable (ATM not reachable).</div>
+          <div class="no-data" style="padding:60px 12px">Live cassette data unavailable. {{ telemetry_note }}</div>
           {% endif %}
         </div>
       </div>
@@ -229,7 +229,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
           </div>
           <div class="atm-cap">Live telemetry from {{ hw_source or 'SNMP' }}</div>
           {% else %}
-          <div class="no-data">Live hardware status unavailable (ATM not reachable).</div>
+          <div class="no-data">Live hardware status unavailable. {{ telemetry_note }}</div>
           {% endif %}
         </div>
       </div>
@@ -264,7 +264,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
             </div>
           </div>
           {% else %}
-          <div class="no-data">Live parts data unavailable (ATM not reachable).</div>
+          <div class="no-data">Live parts data unavailable. {{ telemetry_note }}</div>
           {% endif %}
         </div>
       </div>

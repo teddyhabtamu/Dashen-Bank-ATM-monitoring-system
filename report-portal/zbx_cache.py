@@ -32,8 +32,17 @@ def _now():
     return time.time()
 
 
-def get(key, loader, ttl=DEFAULT_TTL_SECONDS):
-    """Return loader(key) from cache when fresh, else compute and store."""
+def get(key, loader, ttl=DEFAULT_TTL_SECONDS, cacheable=None, retry_after=1.0):
+    """Return loader(key) from cache when fresh, else compute and store.
+
+    cacheable(value) -> False marks the result a FAILURE: it is then held for
+    retry_after seconds instead of the full ttl. Without that distinction a
+    single API blip was stored as fact for the whole TTL, and because this cache
+    is per worker, consecutive reloads that landed on different workers
+    disagreed about whether the same ATM was reachable - the page flapped
+    between live data and "ATM not reachable" on a hard refresh with no error
+    logged anywhere. A failure is not an answer; it is the absence of one.
+    """
     global _hits, _misses
     with _lock:
         hit = _entries.get(key)
@@ -41,10 +50,12 @@ def get(key, loader, ttl=DEFAULT_TTL_SECONDS):
             _hits += 1
             return hit[1]
     value = loader(key)          # outside the lock: a slow API call must not
-    with _lock:                   # block every other reader in this worker
+    ok = cacheable(value) if cacheable else True   # block every other reader
+    window = max(ttl, 0) if ok else max(retry_after, 0)
+    with _lock:
         if len(_entries) >= MAX_ENTRIES:
             _entries.clear()      # cheap bounded reset, no LRU bookkeeping
-        _entries[key] = (_now() + max(ttl, 0), value)
+        _entries[key] = (_now() + window, value)
         _misses += 1
     return value
 

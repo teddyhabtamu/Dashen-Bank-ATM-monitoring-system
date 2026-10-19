@@ -110,3 +110,64 @@ def test_stats_report_a_hit_rate():
     zc.get('metrics:ATM-1', loader, ttl=10)
     st = zc.stats()
     assert st['hits'] >= 1 and st['hit_rate'] is not None
+
+
+def test_a_failed_read_is_retried_instead_of_being_served_as_fact():
+    """The ATM detail page flapped between live data and "ATM not reachable" on
+    a hard refresh, with no error in the log anywhere.
+
+    One cause was here: the cache stored whatever the loader returned, so a
+    single failed Zabbix read was held as an answer for the full TTL. Because
+    this cache is per process and gunicorn runs three workers, consecutive
+    reloads that landed on different workers disagreed about the same ATM.
+    A failure is the absence of an answer, not an answer.
+    """
+    calls = []
+
+    def loader(key):
+        calls.append(key)
+        return None                     # the Zabbix read failed
+
+    kw = dict(ttl=10, cacheable=lambda v: v is not None, retry_after=0.01)
+    zc.get('metrics:ATM-1', loader, **kw)
+    time.sleep(0.03)
+    zc.get('metrics:ATM-1', loader, **kw)
+    assert len(calls) == 2, 'a failure must be retried, not cached for 10s'
+
+
+def test_a_successful_read_is_still_cached_for_the_full_ttl():
+    """The predicate must not disable caching — the whole reason this module
+    exists is to stop the portal stampeding the Zabbix API."""
+    calls = []
+    loader = lambda k: calls.append(k) or {'atm.parts': '1'}  # noqa: E731
+
+    kw = dict(ttl=10, cacheable=lambda v: v is not None, retry_after=0.01)
+    for _ in range(5):
+        zc.get('metrics:ATM-1', loader, **kw)
+    assert len(calls) == 1, 'a good value is still served from cache'
+
+
+def test_a_failure_is_still_coalesced_briefly():
+    """Not caching failures at all would send every concurrent reader at the
+    API during an outage — a stampede exactly when Zabbix is least able to
+    take one. The failure is held for retry_after instead."""
+    calls = []
+
+    def loader(key):
+        calls.append(key)
+        return None
+
+    kw = dict(ttl=10, cacheable=lambda v: v is not None, retry_after=10)
+    zc.get('metrics:ATM-1', loader, **kw)
+    for _ in range(5):
+        zc.get('metrics:ATM-1', loader, **kw)
+    assert len(calls) == 1, 'concurrent readers must not stampede a failing API'
+
+
+def test_the_default_still_caches_everything():
+    """No predicate means the old behaviour, so this is opt-in per caller."""
+    calls = []
+    loader = lambda k: calls.append(k) or None  # noqa: E731
+    zc.get('metrics:ATM-1', loader, ttl=10)
+    zc.get('metrics:ATM-1', loader, ttl=10)
+    assert len(calls) == 1

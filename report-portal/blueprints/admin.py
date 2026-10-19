@@ -259,14 +259,36 @@ def _zbx_login():
     return _zbx_auth['token']
 
 
-def _zbx_call(method, params, auth):
+def _zbx_call(method, params, auth, _retried=False):
+    from zbx_session import error_text, is_auth_error
     try:
         res = _zbx_post({'jsonrpc': '2.0', 'method': method, 'params': params,
                          'auth': auth, 'id': 1})
-        return res.get('result')
     except Exception as e:
         print(f"[ZABBIX] call {method} failed: {e}")
         return None
+
+    err = res.get('error')
+    if not err:
+        return res.get('result')
+
+    # An error response carries no 'result' key, so the old code returned None
+    # with no log at all. A dead session token therefore looked exactly like an
+    # ATM that was not reporting, and left nothing behind to diagnose - the
+    # container log was empty while the page said "not reachable".
+    text = error_text(err)
+    print(f"[ZABBIX] {method} error {err.get('code')}: {text}")
+
+    # The token is cached per worker and was never revalidated, so once a
+    # session expired that worker returned None for every ATM until the
+    # container was restarted - with three workers, that is a page that seems
+    # to work about two reloads in three.
+    if not _retried and is_auth_error(text):
+        _zbx_auth['token'] = None
+        fresh = _zbx_login()
+        if fresh and fresh != auth:
+            return _zbx_call(method, params, fresh, _retried=True)
+    return None
 
 
 def fetch_zabbix_metrics(atm_id):
@@ -277,7 +299,9 @@ def fetch_zabbix_metrics(atm_id):
     the portal's own API stampede at fleet scale - see report-portal/zbx_cache.
     """
     from zbx_cache import get as _cached
-    return _cached(f'metrics:{atm_id}', lambda k: _fetch_zabbix_metrics(k.split(':', 1)[1]))
+    return _cached(f'metrics:{atm_id}',
+                   lambda k: _fetch_zabbix_metrics(k.split(':', 1)[1]),
+                   cacheable=lambda v: v is not None)
 
 
 def _fetch_zabbix_metrics(atm_id):
@@ -299,7 +323,10 @@ def _fetch_zabbix_metrics(atm_id):
         # map to None so the detail page shows grey no-data instead of fake zeros.
         return {it['key_']: (it.get('lastvalue') if str(it.get('lastclock')) != '0' else None)
                 for it in items}
-    except Exception:
+    except Exception as e:
+        # Silence here is why the first diagnosis produced an empty log: every
+        # failure path in this function returned None without saying so.
+        print(f"[ZABBIX] read failed for {atm_id}: {e!r}")
         return None
 
 
@@ -557,6 +584,21 @@ def atm_list():
                            vendor_options=vendor_options)
 
 
+def _telemetry_note(metrics):
+    """Why a live panel is empty, in words that are true.
+
+    'ATM not reachable' was a claim the portal cannot support. When the Zabbix
+    read fails, the portal knows one thing: it could not read Zabbix. The ATM
+    may be reporting perfectly - a direct `zabbix_get` to the agent answered
+    while the page said the machine was unreachable. Saying so is the same rule
+    hardware_view.py already enforces for chips: never red without a value.
+    """
+    if metrics is None:
+        return ('No live telemetry: the portal could not read Zabbix. This is a '
+                'portal-side read failure, not evidence that the ATM is down.')
+    return 'Zabbix has no collected reading for this component yet.'
+
+
 @bp.route('/atms/<atm_id>')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
@@ -650,6 +692,7 @@ def atm_detail(atm_id):
                                hardware=hw, hw_source=hw_source,
                                part_rows=part_rows, device_rows=device_rows,
                                metrics_online=metrics is not None,
+                               telemetry_note=_telemetry_note(metrics),
                                total_txns=total_txns, success_rate=success_rate,
                                cash_today=cash_today, active_faults=active_faults,
                                txns=txns, cash_outlook=cash_outlook)
