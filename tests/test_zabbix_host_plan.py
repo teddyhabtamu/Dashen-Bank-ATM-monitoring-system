@@ -7,13 +7,42 @@ provisioning path without these is how a working fleet gets broken silently.
 """
 import os
 import sys
+from pathlib import Path
 
+REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'report-portal'))
 
 import zabbix_sync as zs  # noqa: E402
 
 TCR, TGRG, TWMI = '101', '102', '103'
 G_ALL, G_NCR, G_GRG, G_ADAMA = '11', '12', '13', '14'
+
+
+def _project(host, params):
+    """Emulate Zabbix's output/select projection.
+
+    The fake used to return the whole stored host whatever `output` said. That
+    hid a real bug for 25 tests: _host_states asked for
+    ["hostid", "status", "name"] - never `host`, the TECHNICAL name - and keyed
+    its results with `h.get("host") or h.get("name")`. The real API therefore
+    returned no `host` field, the key silently fell back to the VISIBLE name
+    ("4 Kilo ATM" rather than "ATM-0001"), and the plan looked up atm_id,
+    missed, and reported "create host" for a host that already existed. Every
+    fixture here stores both names, so only a fake that obeys `output` can tell
+    the two apart.
+    """
+    keep = params.get('output')
+    if not keep or keep == 'extend':
+        out = dict(host)
+    else:
+        out = {k: host[k] for k in keep if k in host}
+    for param, field in (('selectInterfaces', 'interfaces'),
+                         ('selectMacros', 'macros'),
+                         ('selectParentTemplates', 'parentTemplates'),
+                         ('selectGroups', 'groups')):
+        if param in params and field in host:
+            out[field] = host[field]
+    return out
 
 
 class FakeZabbix:
@@ -60,7 +89,8 @@ class FakeZabbix:
             wanted = params['filter']['host']
             if isinstance(wanted, str):
                 wanted = [wanted]
-            return [dict(self.hosts[h]) for h in wanted if h in self.hosts]
+            return [_project(self.hosts[h], params) for h in wanted
+                    if h in self.hosts]
         if method in ('host.create', 'host.update'):
             if method == 'host.create':
                 self.hosts[params['host']] = {'hostid': '500', 'host': params['host'], 'status': '0',
@@ -414,3 +444,41 @@ def test_a_failed_host_read_never_plans_creates(monkeypatch):
     assert summary['failed'] == 2
     assert all('Could not read host state' in d['error']
                for d in summary['details'])
+
+
+def test_a_host_is_found_by_its_technical_name_not_its_visible_name(monkeypatch):
+    """The fleet report said "create host" for ATM-TEST-GRG while verify,
+    reading the same Zabbix through the same API, called it provisioned.
+
+    _host_states maps host.get results back by the technical name, which is the
+    one that equals atm_id. It asked for ["hostid", "status", "name"] and keyed
+    with `h.get("host") or h.get("name")` - so the key was the VISIBLE name
+    ("4 Kilo ATM"), `_build_plans` looked up "ATM-0001", missed, and planned a
+    create for a host that already existed. On a real sync that is a duplicate
+    create, not merely a wrong report.
+    """
+    cur = existing()          # host='ATM-0001', name='4 Kilo ATM'
+    assert cur['host'] != cur['name'], 'the fixture must keep the two distinct'
+    install(monkeypatch, FakeZabbix(hosts={'ATM-0001': cur}))
+
+    summary, plans = zs.plan_hosts([row()])
+
+    assert plans[0]['action'] != 'create', (
+        'a host whose visible name differs from its atm_id must still be found')
+    assert summary['created'] == 0
+
+
+def test_host_get_requests_the_field_the_results_are_keyed_by():
+    """Zabbix returns only the attributes named in `output`. The test fake did
+    not emulate that, so a request that omitted the technical name still came
+    back with it and 25 tests passed over a real bug."""
+    src = (REPO / 'report-portal' / 'zabbix_sync.py').read_text()
+    fn = src[src.index('def _host_states('):src.index('def _agent_interface(')]
+
+    call = fn[fn.index('"host.get"'):]
+    start = call.index('"output": [')
+    output = call[start:call.index(']', start)]
+
+    assert '"host"' in output, (
+        'the results are keyed by the technical name, so it must be requested: %s'
+        % output)

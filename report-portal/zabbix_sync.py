@@ -155,9 +155,17 @@ def _host_states(z, hosts, chunk=None):
     for i in range(0, len(wanted), step):
         part = wanted[i:i + step]
         try:
-            res = z.call("host.get", {"output": ["hostid", "status", "name"],
-                                      "filter": {"host": part},
-                                      **HOST_STATE_SELECT})
+            res = z.call("host.get", {
+                # `host` is the TECHNICAL name - the one that equals atm_id, and
+                # the one the filter matches on. It MUST be in output: the
+                # results are keyed by it below, and leaving it out made the key
+                # silently fall back to `name` (the VISIBLE name, e.g. "4 Kilo
+                # ATM"), so every lookup by atm_id missed and the plan reported
+                # "create host" for hosts that already existed. verify.py's
+                # snapshot documents the same trap from the other direction.
+                "output": ["hostid", "host", "status", "name"],
+                "filter": {"host": part},
+                **HOST_STATE_SELECT})
         except Exception as e:
             logger.warning("host.get batch failed (%d hosts): %s", len(part), e)
             ok = False
@@ -168,7 +176,15 @@ def _host_states(z, hosts, chunk=None):
             ok = False
             continue
         for h in res:
-            key = (h.get("host") or h.get("name") or "").strip()
+            key = (h.get("host") or "").strip()
+            if not key:
+                # Only reachable if `host` is dropped from output above. Say so
+                # loudly rather than keying by the visible name, which is what
+                # made every existing host look absent.
+                logger.warning('host.get returned no technical name for %r; '
+                               'this host will look unprovisioned',
+                               h.get('name'))
+                key = (h.get("name") or "").strip()
             if key:
                 out[key] = h
     return out, ok
