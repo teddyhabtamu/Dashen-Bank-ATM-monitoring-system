@@ -275,6 +275,28 @@ def onboard_stage():
 _FLEET_LOCK = threading.Lock()
 _FLEET_RUNNING = False
 
+# Schema DDL is a once-per-process job, not a per-view job. ensure() creates
+# the cache table if absent and adds the heartbeat column; Postgres takes an
+# ACCESS EXCLUSIVE lock for the ALTER even when the column already exists.
+# Running that on every page load serialised concurrent views behind each other
+# and, once one leaked transaction existed, made each view wait the full
+# lock_timeout (5s). Retried on failure rather than assumed: a sweep that cannot
+# reach its cache table should not be locked out until the next restart.
+_FLEET_SCHEMA_READY = False
+_FLEET_SCHEMA_LOCK = threading.Lock()
+
+
+def _ensure_fleet_schema():
+    global _FLEET_SCHEMA_READY
+    if _FLEET_SCHEMA_READY:
+        return
+    from fleet_store import ensure
+    with _FLEET_SCHEMA_LOCK:
+        if _FLEET_SCHEMA_READY:
+            return
+        ensure(_db_conn())
+        _FLEET_SCHEMA_READY = True
+
 
 def _db_conn():
     """A pooled connection. fleet_store calls db() expecting a CONNECTION -
@@ -323,10 +345,10 @@ def onboard_fleet():
     """Fleet onboarding health. Read-only; computes in the background."""
     from fleet_report import format_eat
     from fleet_store import (DEFAULT_TTL_MINUTES, RUN_WINDOW_MINUTES, claim_run,
-                            ensure, load_any, record_failure)
+                            load_any, record_failure)
     ttl = int(request.args.get('ttl', DEFAULT_TTL_MINUTES))
     try:
-        ensure(_db_conn())
+        _ensure_fleet_schema()
     except Exception as e:
         logger.warning('fleet cache table unavailable: %s', e)
     cached = load_any(db=_db_conn)
@@ -388,6 +410,10 @@ def onboard_fleet():
 def onboard_fleet_refresh():
     """Recompute now. Expensive on a large fleet, so it is a background job."""
     from fleet_store import claim_run
+    try:
+        _ensure_fleet_schema()
+    except Exception as e:
+        logger.warning('fleet cache table unavailable: %s', e)
     if claim_run(db=_db_conn):
         threading.Thread(target=_compute_fleet, daemon=True).start()
     return redirect(url_for('.onboard_fleet'))

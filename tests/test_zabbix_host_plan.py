@@ -391,3 +391,26 @@ def test_a_fleet_plan_is_not_silently_truncated(monkeypatch):
     # The default must remain capped - that is the write path's guard.
     _, capped = zs.plan_hosts(atms)
     assert len(capped) == zs.MAX_BATCH
+
+def test_a_failed_host_read_never_plans_creates(monkeypatch):
+    """A host read that fails must not be read as "the host does not exist".
+
+    _Client.call() signals an API error by returning None. Folding that into an
+    empty result is easy and silent, and it inverts the meaning: every ATM looks
+    unprovisioned. The fleet report then shows "create host" for machines that
+    are already in Zabbix and reporting - which is exactly what appeared for
+    ATM-TEST-GRG while verify, reading the same Zabbix, called it provisioned.
+
+    On a real sync it is worse than a wrong report: it would attempt duplicate
+    creates for the whole fleet.
+    """
+    fake = install(monkeypatch, FakeZabbix())
+    fake.fail.add('host.get')          # API error -> call() returns None
+
+    summary, plans = zs.plan_hosts([row(), row(atm_id='ATM-0002')])
+
+    creates = [p for p in plans if p['action'] == 'create']
+    assert not creates, 'a failed read must never become a create plan: %s' % creates
+    assert summary['failed'] == 2
+    assert all('Could not read host state' in d['error']
+               for d in summary['details'])

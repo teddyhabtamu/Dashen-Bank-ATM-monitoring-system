@@ -136,17 +136,22 @@ def _host_states(z, hosts, chunk=None):
     reintroduced it — 1,300 ATMs meant 1,300 serial round-trips *on top of* the
     sweep that had just been made cheap.
 
-    host.get accepts an array in `filter`, so this is the same shape as the
+    Host.get accepts an array in `filter`, so this is the same shape as the
     verify path. Chunked so the request stays bounded at fleet scale.
-    Returns {host_name: host_dict}; a failed chunk is omitted rather than
-    raising, and the caller treats a missing entry as "unknown", never as
-    "does not exist".
+
+    Returns (states, ok). ok is False when any chunk could not be read: the
+    caller must NOT interpret that as "these hosts do not exist", or a failed
+    read plans a create for every host in the fleet. _Client.call() signals an
+    API error by returning None, which is easy to fold into an empty result by
+    accident - that mistake made the fleet report claim ATM-TEST-GRG needed a
+    host created while verify, reading the same Zabbix, called it provisioned.
     """
     out = {}
     wanted = [h for h in (hosts or []) if h]
     if not wanted:
-        return out
+        return out, True
     step = chunk or HOST_STATE_CHUNK
+    ok = True
     for i in range(0, len(wanted), step):
         part = wanted[i:i + step]
         try:
@@ -155,12 +160,18 @@ def _host_states(z, hosts, chunk=None):
                                       **HOST_STATE_SELECT})
         except Exception as e:
             logger.warning("host.get batch failed (%d hosts): %s", len(part), e)
+            ok = False
             continue
-        for h in (res or []):
+        if res is None:
+            logger.warning("host.get batch returned no result (%d hosts): %s",
+                           len(part), getattr(z, 'last_error', '') or 'no error text')
+            ok = False
+            continue
+        for h in res:
             key = (h.get("host") or h.get("name") or "").strip()
             if key:
                 out[key] = h
-    return out
+    return out, ok
 
 
 def _agent_interface(ip):
@@ -357,7 +368,18 @@ def _build_plans(atm_dicts, create_groups=True, max_batch=MAX_BATCH):
         # scale linearly in serial round-trips, which is what made "Recompute
         # now" feel hung on a fleet of three and would have taken minutes at
         # 1,300 - see _host_states().
-        known = _host_states(z, [(a.get("atm_id") or "").strip() for a in rows])
+        known, read_ok = _host_states(
+            z, [(a.get("atm_id") or "").strip() for a in rows])
+        if not read_ok:
+            # Do not plan against a read we know failed: an absent host means
+            # "create", so guessing here would report the whole fleet as
+            # unprovisioned and, on a real sync, attempt duplicate creates.
+            summary["failed"] = len(rows)
+            summary["details"] = [
+                {"atm_id": r.get("atm_id"),
+                 "error": "Could not read host state from Zabbix"}
+                for r in rows]
+            return summary, plans, _CLIENT[0]
 
         for a in rows:
             host = (a.get("atm_id") or "").strip()

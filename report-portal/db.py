@@ -56,9 +56,29 @@ class _PooledConnection:
         object.__setattr__(self, '_pool', pool)
 
     def close(self):
+        """Return the connection to the pool, reset first.
+
+        psycopg2's pool does not reset state, and get_db() opens a transaction
+        just by issuing SET statement_timeout / SET lock_timeout. Returning
+        that connection as-is left it idle-in-transaction, holding every lock
+        its queries had taken until some later borrower happened to commit.
+
+        That is not theoretical. On the fleet page it took the form of
+        fleet_store.ensure() - a CREATE/ALTER - waiting on lock_timeout (5s) on
+        every single view, so /admin/onboard/fleet always answered in ~5010ms
+        and the background sweep could never write its result. A rollback here
+        is a no-op for a caller that already committed, and the correct reset
+        for one that did not.
+        """
+        conn = object.__getattribute__(self, '_conn')
+        pool = object.__getattribute__(self, '_pool')
         try:
-            object.__getattribute__(self, '_pool').putconn(
-                object.__getattribute__(self, '_conn'))
+            if not getattr(conn, 'closed', 0):
+                conn.rollback()
+        except Exception as e:
+            logger.error('Rollback before returning connection failed: %s', e)
+        try:
+            pool.putconn(conn)
         except Exception as e:
             logger.error('Failed to return connection to pool: %s', e)
 
