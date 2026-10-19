@@ -307,3 +307,64 @@ def test_a_recompute_does_not_replace_the_table_with_a_spinner():
     assert all('computing=False' in c for c in results_call), (
         'serving cached rows must not set computing from cached["running"], or '
         'a recompute hides a usable table behind a spinner')
+
+
+def _row_db(generated_at, error, heartbeat_at, rows=None):
+    def factory():
+        class Cur:
+            def execute(self, sql, args=None):
+                self.row = (generated_at, {'total': 2},
+                            rows if rows is not None else [{'atm_id': 'ATM-TEST-GRG'}],
+                            error, heartbeat_at)
+
+            def fetchone(self):
+                return self.row
+
+            def close(self):
+                pass
+
+        class Conn:
+            def cursor(self):
+                return Cur()
+
+        return Conn()
+    return factory
+
+
+def test_a_claim_whose_heartbeat_stopped_is_not_reported_as_running():
+    """The process that claimed a sweep can be restarted mid-flight - every
+    deploy does it. The row then says IN_FLIGHT with nothing alive behind it.
+
+    Reading "running" from the error column alone is what made the fleet page
+    say "recomputing in the background" forever: there was no worker left to
+    clear the marker, and the route only recovered a dead claim when the report
+    had no rows - the one case a working deployment stops having.
+
+    Liveness is the heartbeat, not the marker.
+    """
+    old = NOW - timedelta(minutes=5)
+    got = fs.load_any(now=NOW, db=_row_db(old, fs.IN_FLIGHT, old))
+
+    assert got['running'] is False, 'nothing is alive behind this claim'
+    assert got['stale_claim'] is True, 'the page must be told to recover it'
+    assert got['failed'] is False, 'a stale claim is not a failure to display'
+    assert got['rows'], 'the last known report is still worth serving'
+
+
+def test_a_long_sweep_stays_running_while_its_heartbeat_is_fresh():
+    """A sweep that began 30 minutes ago is alive if it is still beating. Age
+    of the run must not be confused with health of the run."""
+    started = NOW - timedelta(minutes=30)
+    got = fs.load_any(now=NOW, db=_row_db(started, fs.IN_FLIGHT,
+                                          NOW - timedelta(seconds=5)))
+
+    assert got['running'] is True
+    assert got['stale_claim'] is False
+
+
+def test_fresh_rows_and_a_completed_error_are_neither_running_nor_stale():
+    fresh = NOW - timedelta(seconds=5)
+    got = fs.load_any(now=NOW, db=_row_db(fresh, '', fresh))
+    assert got['running'] is False
+    assert got['stale_claim'] is False
+    assert got['failed'] is False

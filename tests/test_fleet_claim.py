@@ -157,3 +157,32 @@ def test_a_heartbeat_failure_cannot_abort_the_sweep():
     src = (REPO / 'report-portal' / 'verify.py').read_text()
     body = src[src.index('def fleet('):]
     assert 'except Exception as e:' in body[body.index('def beat():'):body.index('def beat():') + 400]
+
+def test_a_stale_claim_is_recovered_even_when_a_report_exists():
+    """The recovery condition used to require an empty report. That is the one
+    state a deployment stops having after its first good sweep, so every
+    restart mid-sweep left the banner up permanently."""
+    src = (REPO / 'report-portal' / 'blueprints' / 'onboarding.py').read_text()
+    fn = src[src.index('def onboard_fleet():'):]
+
+    start = fn.index("if cached and cached.get('stale_claim')")
+    end = fn.index('cached = load_any', start)
+    recovery = fn[start:end]
+
+    assert 'stale_claim' in fn, 'the route must act on a dead claim'
+    assert 'rows' not in recovery, (
+        'recovery must not be gated on having no rows: a deployment that has '
+        'ever produced a report always has rows, which is exactly when a '
+        'restart mid-sweep leaves the banner up forever')
+
+
+def test_the_worker_has_no_in_process_latch():
+    """One lock, in the database. The boolean that used to live here could be
+    held forever by a wedged thread, and every later claim then started a
+    worker that returned immediately - leaving the claim set with no one to
+    clear it."""
+    src = (REPO / 'report-portal' / 'blueprints' / 'onboarding.py').read_text()
+    fn = src[src.index('def _compute_fleet'):src.index("@bp.route('/onboard/fleet'")]
+
+    assert '_FLEET_RUNNING' not in fn
+    assert 'if _FLEET_RUNNING' not in fn

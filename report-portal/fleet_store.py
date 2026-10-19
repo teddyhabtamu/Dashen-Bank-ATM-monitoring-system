@@ -155,29 +155,46 @@ def claim_run(db=None, window_minutes=RUN_WINDOW_MINUTES, now=None):
         return True          # fail open: a stuck lock is worse than a slow page
 
 
-def load_any(now=None, db=None):
+def load_any(now=None, db=None, window_minutes=RUN_WINDOW_MINUTES):
     """Whatever is cached, fresh or not, plus how old it is.
 
     Serving the last known report with a "this is N minutes old" banner is far
     better than an empty spinner: an operator can act on stale truth and knows
     it is stale. Returns None only when nothing was ever computed.
+
+    "running" is a heartbeat question, not an error-column question. Reading it
+    from the error column alone meant a sweep whose process was restarted was
+    reported as still computing forever: nothing was left alive to clear the
+    marker. A claim whose heartbeat has stopped is a stale_claim, and the page
+    is told to recover it rather than lie about it.
     """
     try:
         conn = _conn(db)
         cur = conn.cursor()
-        cur.execute(f"SELECT generated_at, counts, rows, error FROM {TABLE} WHERE id = 1")
+        cur.execute(f"SELECT generated_at, counts, rows, error, heartbeat_at "
+                    f"FROM {TABLE} WHERE id = 1")
         row = cur.fetchone()
         cur.close()
         if not row:
             return None
-        generated_at, counts, rows, error = row
+        generated_at, counts, rows, error = row[:4]
+        # Tolerate a row that predates the heartbeat column: callers and tests
+        # built against the four-column shape must keep working.
+        heartbeat_at = row[4] if len(row) > 4 else None
         now = now or datetime.now(timezone.utc)
         ga = generated_at if getattr(generated_at, 'tzinfo', None) else \
             generated_at.replace(tzinfo=timezone.utc)
         age = (now - ga).total_seconds() / 60.0
+        last_seen = heartbeat_at or ga
+        if not getattr(last_seen, 'tzinfo', None):
+            last_seen = last_seen.replace(tzinfo=timezone.utc)
+        live = (error == IN_FLIGHT) and is_fresh(last_seen, window_minutes, now)
         return {'generated_at': generated_at.isoformat(), 'counts': counts or {},
                 'rows': rows or [], 'error': error or '', 'age_minutes': age,
-                'running': (error == IN_FLIGHT),
+                'running': live,
+                # The sweep was claimed and then its worker disappeared. Not
+                # running, not failed either: it needs restarting.
+                'stale_claim': (error == IN_FLIGHT) and not live,
                 'failed': bool(error) and error != IN_FLIGHT,
                 'fresh': age <= DEFAULT_TTL_MINUTES}
     except Exception:

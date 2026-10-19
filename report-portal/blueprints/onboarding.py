@@ -269,11 +269,9 @@ def onboard_stage():
 # Verifying 1,202 ATMs is a Zabbix sweep per ATM. That cannot run inside a
 # request, so it is computed in the background and served from a shared cache
 # (fleet_store) that every gunicorn worker can read.
-# Cross-process coordination lives in fleet_store (a DB claim), because
-# gunicorn runs 3 workers and an in-memory flag would let two of them sweep the
-# fleet at once. This lock only protects threads inside one process.
-_FLEET_LOCK = threading.Lock()
-_FLEET_RUNNING = False
+# Cross-process coordination lives in fleet_store: a DB claim, because gunicorn
+# runs 3 workers and an in-memory flag would let two of them sweep the fleet at
+# once. There is deliberately no second in-process lock - see _compute_fleet().
 
 # Schema DDL is a once-per-process job, not a per-view job. ensure() creates
 # the cache table if absent and adds the heartbeat column; Postgres takes an
@@ -308,16 +306,15 @@ def _db_conn():
 def _compute_fleet(window_minutes=15):
     """Background worker: build the report and cache it.
 
-    The caller has already claimed the run (fleet_store.claim_run), so this
-    never starts a duplicate sweep. Failures are recorded so the page can show
-    them instead of spinning.
+    Only ever started after fleet_store.claim_run() returned True, so the claim
+    row is the cross-process lock and the heartbeat is the liveness signal.
+    There used to be an in-process boolean as well. A thread stuck in a network
+    call held it set forever, so every later claim started a thread that
+    returned on the first line - leaving the claim in the table with nobody to
+    clear it. That is the other half of "recomputing forever". Two locks where
+    one is never released is worse than one.
     """
-    global _FLEET_RUNNING
     from fleet_store import record_failure, save, touch_heartbeat
-    with _FLEET_LOCK:
-        if _FLEET_RUNNING:
-            return
-        _FLEET_RUNNING = True
     try:
         from verify import fleet
         # heartbeat=lambda: touch_heartbeat(db=_db_conn) keeps the claim alive
@@ -333,9 +330,6 @@ def _compute_fleet(window_minutes=15):
     except Exception as e:
         logger.warning('fleet report failed: %s', e)
         record_failure(f'Fleet report failed: {e}', db=_db_conn)
-    finally:
-        with _FLEET_LOCK:
-            _FLEET_RUNNING = False
 
 
 @bp.route('/onboard/fleet', methods=['GET'])
@@ -344,21 +338,26 @@ def _compute_fleet(window_minutes=15):
 def onboard_fleet():
     """Fleet onboarding health. Read-only; computes in the background."""
     from fleet_report import format_eat
-    from fleet_store import (DEFAULT_TTL_MINUTES, RUN_WINDOW_MINUTES, claim_run,
-                            load_any, record_failure)
+    from fleet_store import (DEFAULT_TTL_MINUTES, claim_run, load_any,
+                            record_failure)
     ttl = int(request.args.get('ttl', DEFAULT_TTL_MINUTES))
     try:
         _ensure_fleet_schema()
     except Exception as e:
         logger.warning('fleet cache table unavailable: %s', e)
     cached = load_any(db=_db_conn)
-    # A run that claimed the sweep and then died leaves the marker set with no
-    # rows. Treating that as "still computing" is how this page spun forever:
-    # the error was recorded but the route rendered the spinner regardless.
-    if cached and cached.get('running') and not cached.get('rows') \
-            and cached.get('age_minutes', 0) > RUN_WINDOW_MINUTES:
-        record_failure('The previous fleet sweep did not finish. '
-                       'Recompute, or check the portal logs.', db=_db_conn)
+    # A claim whose heartbeat stopped is not a running sweep: the process that
+    # took it was restarted or killed. This page used to call that "recomputing"
+    # forever, for two reasons that compounded: running was read from the error
+    # column without its heartbeat, and the recovery below only ran when there
+    # were no rows - the one case a working deployment stops having after its
+    # first successful sweep. Recover it instead and start the sweep again, so
+    # the banner is true rather than permanent.
+    if cached and cached.get('stale_claim'):
+        record_failure('The previous fleet sweep did not finish; restarting it.',
+                       db=_db_conn)
+        if claim_run(db=_db_conn):
+            threading.Thread(target=_compute_fleet, args=(ttl,), daemon=True).start()
         cached = load_any(db=_db_conn)
     if cached and cached.get('failed'):
         # Show the failure even when there is no data to show.
