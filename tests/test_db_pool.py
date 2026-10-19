@@ -131,3 +131,47 @@ def test_the_wrapper_still_delegates_and_returns_itself_from_context():
     assert hasattr(wrapper, 'cursor')
     with wrapper as got:
         assert got is wrapper
+
+def test_a_connection_left_to_the_garbage_collector_is_returned():
+    """fleet_store.py takes a connection in every function and never closes it.
+    Without a finalizer each of those connections is lost for good: psycopg2's
+    pool tracks in-use connections per thread and never reclaims them, so every
+    background sweep thread permanently consumed a slot. At DB_POOL_MAX the pool
+    raises, save() and record_failure() both swallow that, and the sweep's claim
+    stays marked in flight with nobody left to clear it - a permanent
+    "recomputing in the background"."""
+    import gc
+    db = _import_db()
+    conn, pool = FakeConn(), FakePool()
+
+    wrapper = db._PooledConnection(conn, pool)
+    del wrapper
+    gc.collect()
+
+    assert pool.events == ['putconn'], 'the connection must come back on its own'
+    assert pool.put == [conn]
+
+
+def test_closing_twice_returns_the_connection_only_once():
+    """__del__ calls close(), so every normal `with` block now runs close()
+    twice. Putting the same connection back twice would leave it in the pool
+    while still in use, and hand it to two threads at once."""
+    db = _import_db()
+    conn, pool = FakeConn(), FakePool()
+    wrapper = db._PooledConnection(conn, pool)
+
+    wrapper.close()
+    wrapper.close()
+
+    assert pool.events == ['putconn'], 'putconn must be called exactly once'
+
+
+def test_a_finalized_wrapper_is_safe_during_interpreter_shutdown():
+    """__del__ runs while modules are being torn down and must never raise."""
+    db = _import_db()
+    conn, pool = FakeConn(rollback_raises=True), FakePool()
+
+    wrapper = db._PooledConnection(conn, pool)
+    wrapper.__del__()          # must not raise
+
+    assert pool.events == ['putconn']

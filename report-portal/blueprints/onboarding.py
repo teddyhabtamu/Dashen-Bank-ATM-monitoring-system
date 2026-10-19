@@ -18,6 +18,7 @@ roles are still NOT here (docs/onboarding-wizard-spec.md).
 import logging
 import socket
 import threading
+import time
 
 from flask import (Blueprint, Response, render_template, request,
                    redirect, url_for)
@@ -315,20 +316,28 @@ def _compute_fleet(window_minutes=15):
     one is never released is worse than one.
     """
     from fleet_store import record_failure, save, touch_heartbeat
+    started = time.monotonic()
     try:
         from verify import fleet
+        # Started/finished are logged at INFO so "recomputing forever" can be
+        # diagnosed from the log alone: started with no finished means the
+        # sweep is stuck; neither means the thread never ran.
+        logger.info('fleet sweep started')
         # heartbeat=lambda: touch_heartbeat(db=_db_conn) keeps the claim alive
         # for as long as this worker is genuinely working. Without it a sweep
         # longer than RUN_WINDOW_MINUTES looks dead and a second one starts.
         out = fleet(window_minutes=window_minutes,
                     heartbeat=lambda: touch_heartbeat(db=_db_conn))
         ok = save({'counts': out['counts'], 'rows': out['rows'], 'error': ''}, db=_db_conn)
+        logger.info('fleet sweep finished in %.1fs: %s (saved=%s)',
+                    time.monotonic() - started, out['counts'], ok)
         if ok:
             log_action('FLEET_REPORT', f'fleet verified: {out["counts"]}')
         else:
             record_failure('Could not write the fleet report cache.', db=_db_conn)
     except Exception as e:
-        logger.warning('fleet report failed: %s', e)
+        logger.warning('fleet report failed after %.1fs: %s',
+                       time.monotonic() - started, e, exc_info=True)
         record_failure(f'Fleet report failed: {e}', db=_db_conn)
 
 
@@ -354,6 +363,8 @@ def onboard_fleet():
     # first successful sweep. Recover it instead and start the sweep again, so
     # the banner is true rather than permanent.
     if cached and cached.get('stale_claim'):
+        logger.warning('fleet sweep claim is stale (last beat %.1f min ago); '
+                       'restarting it', cached.get('beat_age_minutes', -1))
         record_failure('The previous fleet sweep did not finish; restarting it.',
                        db=_db_conn)
         if claim_run(db=_db_conn):

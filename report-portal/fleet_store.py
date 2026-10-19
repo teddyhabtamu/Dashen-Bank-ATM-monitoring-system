@@ -144,8 +144,12 @@ def claim_run(db=None, window_minutes=RUN_WINDOW_MINUTES, now=None):
         cur.execute(
             f"INSERT INTO {TABLE} (id, generated_at, counts, rows, error, heartbeat_at) "
             f"VALUES (1, NOW(), '{{}}'::jsonb, '[]'::jsonb, %s, NOW()) "
-            "ON CONFLICT (id) DO UPDATE SET generated_at = NOW(), "
-            "error = EXCLUDED.error, heartbeat_at = NOW()",
+            # generated_at is NOT touched on conflict. It means "when a report
+            # was last COMPLETED", and overwriting it with the claim time made
+            # an in-flight sweep look like a fresh report: the page showed the
+            # claim's timestamp next to rows computed minutes earlier.
+            "ON CONFLICT (id) DO UPDATE SET error = EXCLUDED.error, "
+            "heartbeat_at = NOW()",
             (IN_FLIGHT,))
         conn.commit()
         cur.close()
@@ -191,6 +195,7 @@ def load_any(now=None, db=None, window_minutes=RUN_WINDOW_MINUTES):
         live = (error == IN_FLIGHT) and is_fresh(last_seen, window_minutes, now)
         return {'generated_at': generated_at.isoformat(), 'counts': counts or {},
                 'rows': rows or [], 'error': error or '', 'age_minutes': age,
+                'beat_age_minutes': (now - last_seen).total_seconds() / 60.0,
                 'running': live,
                 # The sweep was claimed and then its worker disappeared. Not
                 # running, not failed either: it needs restarting.
