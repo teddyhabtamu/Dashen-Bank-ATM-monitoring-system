@@ -17,6 +17,7 @@ downtime, and safe to run from several processes at once.
 import json
 import logging
 import os
+import time
 from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
@@ -94,6 +95,13 @@ IN_FLIGHT = '__running__'
 # long we wait before declaring a run dead. Tunable for a slower environment
 # without a redeploy.
 RUN_WINDOW_MINUTES = int(os.environ.get('FLEET_RUN_WINDOW_MINUTES', '1'))
+
+# How long "Recompute now" waits for its own sweep before redirecting. A small
+# fleet finishes in ~0.4s, so the page normally renders the finished report and
+# no banner is ever shown. Large fleets exceed this and get the banner plus the
+# template's own refresh.
+FLEET_REFRESH_WAIT_SECONDS = float(
+    os.environ.get('FLEET_REFRESH_WAIT_SECONDS', '3'))
 
 
 def touch_heartbeat(db=None):
@@ -216,6 +224,40 @@ def record_failure(error, db=None):
         cur.close()
     except Exception as e:
         logger.warning('fleet failure record failed: %s', e)
+
+
+def wait_until_idle(load_state, seconds=FLEET_REFRESH_WAIT_SECONDS, poll=0.2,
+                    sleep=None, now=None):
+    """Wait briefly for an in-flight sweep, so the page can show its result.
+
+    "Recompute now" claimed the run, started the worker and redirected at once.
+    The page therefore rendered WHILE the sweep was in flight, so it painted
+    "Recomputing in the background" for a job that finished in 0.4s - before the
+    banner could even be read. Nothing then cleared it: only the no-rows view
+    refreshed itself, so the banner stayed until the operator reloaded by hand.
+    That is what "recomputing forever" was, on a sweep that had already
+    succeeded.
+
+    Returns True when the cache reports nothing in flight, False when the
+    deadline passed first (a genuinely large or slow fleet - the banner and its
+    own refresh cover that case).
+
+    A loader that raises counts as idle: a database error must not turn a click
+    into a multi-second hang.
+    """
+    sleep = sleep or time.sleep
+    now = now or time.monotonic
+    deadline = now() + max(0.0, seconds)
+    while True:
+        try:
+            state = load_state()
+        except Exception:
+            state = None
+        if not (state and state.get('running')):
+            return True
+        if now() >= deadline:
+            return False
+        sleep(poll)
 
 
 def load(ttl_minutes=DEFAULT_TTL_MINUTES, now=None, db=None):

@@ -7,7 +7,9 @@ swallow their own errors on purpose, so the tests concentrate on the decision.
 import os
 import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
+REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'report-portal'))
 
 import fleet_store as fs  # noqa: E402
@@ -368,3 +370,92 @@ def test_fresh_rows_and_a_completed_error_are_neither_running_nor_stale():
     assert got['running'] is False
     assert got['stale_claim'] is False
     assert got['failed'] is False
+
+
+class _Clock:
+    """Deterministic monotonic clock + sleep, so the wait is tested without
+    actually waiting."""
+    def __init__(self):
+        self.t = 0.0
+        self.slept = []
+
+    def now(self):
+        return self.t
+
+    def sleep(self, seconds):
+        self.slept.append(seconds)
+        self.t += seconds
+
+
+def test_waiting_for_a_sweep_returns_as_soon_as_it_is_done():
+    """A small fleet finishes in ~0.4s. The click must not sit behind the
+    deadline when the answer is already there."""
+    clock = _Clock()
+    states = [{'running': True}, {'running': True}, {'running': False}]
+
+    got = fs.wait_until_idle(lambda: states.pop(0), seconds=3, poll=0.2,
+                             sleep=clock.sleep, now=clock.now)
+
+    assert got is True
+    assert clock.t == 0.4, 'two polls of 0.2s, then done'
+    assert states == [], 'and it stops as soon as the sweep is finished'
+
+
+def test_waiting_does_not_sleep_at_all_when_nothing_is_running():
+    clock = _Clock()
+
+    got = fs.wait_until_idle(lambda: {'running': False}, seconds=3,
+                             sleep=clock.sleep, now=clock.now)
+
+    assert got is True
+    assert clock.t == 0.0 and clock.slept == []
+
+
+def test_a_sweep_that_outlasts_the_wait_returns_false_at_the_deadline():
+    """A large fleet outlasts the wait. The page then shows the banner, which
+    refreshes itself - the point is that the click does not hang forever."""
+    clock = _Clock()
+
+    got = fs.wait_until_idle(lambda: {'running': True}, seconds=1, poll=0.25,
+                             sleep=clock.sleep, now=clock.now)
+
+    assert got is False
+    assert clock.t >= 1.0
+    assert clock.t < 1.5, 'and it stops at the deadline, not later'
+
+
+def test_a_database_error_while_waiting_does_not_hang_the_click():
+    clock = _Clock()
+
+    def broken():
+        raise RuntimeError('connection pool exhausted')
+
+    got = fs.wait_until_idle(broken, seconds=3, sleep=clock.sleep, now=clock.now)
+
+    assert got is True, 'a broken cache must not turn a click into a hang'
+    assert clock.t == 0.0
+
+
+def test_wait_until_idle_is_called_by_the_refresh_route():
+    """Static: the route must wait, or every recompute paints a banner for a
+    job that is already finished."""
+    src = (REPO / 'report-portal' / 'blueprints' / 'onboarding.py').read_text()
+    fn = src[src.index('def onboard_fleet_refresh():'):src.index(
+        "@bp.route('/onboard/fleet/csv'")]
+
+    # The call, not the import: asserting on the bare name matched the
+    # "from fleet_store import ..., wait_until_idle" line and passed even when
+    # the call had been removed.
+    assert 'wait_until_idle(lambda' in fn
+
+
+def test_the_running_banner_refreshes_itself():
+    """The no-rows view always reloaded itself; the banner over an existing
+    report did not, which is what left "recomputing" on screen forever."""
+    src = (REPO / 'report-portal' / 'templates' / 'fleet.html').read_text()
+
+    assert 'id="fleet-running"' in src, 'the banner needs a hook'
+    script = src[src.index('fleetRunningReloads'):]
+    assert "getElementById('fleet-running')" in script, (
+        'the refresh must be driven by the banner, not by the computing view')
+    assert 'reload()' in script

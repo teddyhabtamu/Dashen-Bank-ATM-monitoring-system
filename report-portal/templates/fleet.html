@@ -99,7 +99,7 @@ td.atm{white-space:nowrap;font-weight:600}
 </div>
 {% endif %}
 {% if cached and cached.running %}
-<div class="alert-card info" style="margin-bottom:20px">
+<div class="alert-card info" style="margin-bottom:20px" id="fleet-running">
   <i data-lucide="loader-2" class="alert-icon spin"></i>
   <div class="alert-content">
     <div class="alert-title">Recomputing in the background</div>
@@ -181,6 +181,22 @@ td.atm{white-space:nowrap;font-weight:600}
   // shares .empty and must not loop.
   if(!document.getElementById('fleet-computing')) return;
   setTimeout(function(){ window.location.reload(); }, 8000);
+})();
+// A recompute over an existing report keeps the table and shows a banner. The
+// sweep takes ~0.4s, so this page was very likely rendered WHILE it was in
+// flight: without a refresh the banner outlived the job it described, which
+// reads as "recomputing forever" on a sweep that already succeeded. Capped so
+// a job that genuinely dies cannot spin the tab.
+(function(){
+  var KEY = 'fleetRunningReloads';
+  if(!document.getElementById('fleet-running')){
+    sessionStorage.removeItem(KEY);
+    return;
+  }
+  var n = parseInt(sessionStorage.getItem(KEY) || '0', 10);
+  if(n >= 40) return;
+  sessionStorage.setItem(KEY, String(n + 1));
+  setTimeout(function(){ window.location.reload(); }, 3000);
 })();
 </script>
 {% endblock %}

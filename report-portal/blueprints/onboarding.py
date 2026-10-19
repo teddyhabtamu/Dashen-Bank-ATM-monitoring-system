@@ -419,13 +419,20 @@ def onboard_fleet():
 @role_required(ROLE_ADMIN)
 def onboard_fleet_refresh():
     """Recompute now. Expensive on a large fleet, so it is a background job."""
-    from fleet_store import claim_run
+    from fleet_store import claim_run, load_any, wait_until_idle
     try:
         _ensure_fleet_schema()
     except Exception as e:
         logger.warning('fleet cache table unavailable: %s', e)
     if claim_run(db=_db_conn):
         threading.Thread(target=_compute_fleet, daemon=True).start()
+    # Wait for the sweep before redirecting. Without this the page renders
+    # mid-sweep and shows "Recomputing in the background" for a job that
+    # finished in 0.4s, and nothing clears a banner on a report that already
+    # has rows. Bounded, and a no-op when the sweep is already done.
+    if not wait_until_idle(lambda: load_any(db=_db_conn)):
+        logger.info('fleet sweep still running after the refresh wait; '
+                    'the page will show the banner and refresh itself')
     return redirect(url_for('.onboard_fleet'))
 
 
