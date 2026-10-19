@@ -376,7 +376,7 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
     </div>
 </header>
 
-<div class="sidebar" id="sidebar">
+<div class="sidebar{% if request and request.cookies.get('sidebar') == 'collapsed' %} collapsed{% endif %}" id="sidebar">
   <div class="sidebar-brand">
     <img src="/static/brand-logo.png" alt="Dashen Bank" title="Dashen Bank" class="sidebar-logo" tabindex="-1">
     <div class="sidebar-brand-text">
@@ -630,11 +630,29 @@ function setCollapsed(collapsed){
   }
 
   localStorage.setItem('sidebarCollapsed', collapsed);
+  // The class is applied by JavaScript, which runs after the browser has
+  // already parsed (and may have painted) the sidebar - so every navigation
+  // from one page to another showed the sidebar open for a moment and then
+  // snapping shut. The server cannot know a localStorage value; a cookie it
+  // CAN read, so the next page ships `class="sidebar collapsed"` in the HTML
+  // and there is nothing left to flicker. One flash remains, on the first load
+  // after this change, until the cookie exists.
+  try {
+    document.cookie = 'sidebar=' + (collapsed ? 'collapsed' : 'expanded') +
+      ';path=/;max-age=31536000;SameSite=Lax';
+  } catch(e) {}
 }
 
 (function(){
   try { sessionStorage.removeItem('navTempExpand'); } catch(e) {}
-  setCollapsed(localStorage.getItem('sidebarCollapsed') === 'true');
+  var s = document.getElementById('sidebar');
+  // The server renders the collapsed state from a cookie; localStorage is the
+  // pre-cookie source. If the two disagree - a browser carrying an old
+  // localStorage value and no cookie yet - honouring the rendered class avoids
+  // snapping the sidebar the OTHER way on load, and setCollapsed() re-syncs
+  // both. Collapsing is never undone by a stale source.
+  var rendered = !!(s && s.classList.contains('collapsed'));
+  setCollapsed(rendered || localStorage.getItem('sidebarCollapsed') === 'true');
   lucide.createIcons();
 })();
 

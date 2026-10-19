@@ -1254,3 +1254,46 @@ def test_no_two_routes_claim_the_same_path():
         seen.setdefault(re.sub(r'<[^>]+>', '<>', p), []).append('%s:%s' % (f, fn))
     dupes = {k: v for k, v in seen.items() if len(v) > 1}
     assert not dupes, 'two views claim the same path: %s' % dupes
+
+
+def test_the_sidebar_renders_collapsed_before_the_first_paint():
+    """The collapsed class was applied by JavaScript only.
+
+    The script runs after the browser has parsed - and may already have painted
+    - the sidebar, so every navigation from one page to another showed the
+    sidebar open and then snapping shut. The server cannot know a localStorage
+    value; a cookie it CAN read, so the state now arrives in the HTML and there
+    is nothing left to flicker.
+
+    This is the same class of defect as the gold active-page bar: state that
+    only exists once client-side code has run will be seen in its wrong shape
+    first.
+    """
+    tpl = (REPO / 'report-portal' / 'templates' / 'base.html').read_text()
+
+    line = next(l for l in tpl.splitlines() if 'id="sidebar"' in l)
+    assert "request.cookies.get('sidebar')" in line, (
+        'the sidebar must render its collapsed state server-side: %s' % line)
+    assert 'collapsed' in line
+
+    js = tpl[tpl.index('function setCollapsed'):]
+    js = js[:js.index('</script>')]
+    assert "document.cookie = 'sidebar='" in js, (
+        'the toggle must write the cookie the server reads, or the rendered '
+        'class and the stored preference disagree after every toggle')
+
+
+def test_the_rendered_collapsed_state_outranks_a_stale_localstorage_value():
+    """Two sources now hold the preference. If the load-time call trusted
+    localStorage alone, a browser with an old localStorage value and no cookie
+    would have the server render one state and the script snap to the other -
+    the same flicker in the opposite direction."""
+    tpl = (REPO / 'report-portal' / 'templates' / 'base.html').read_text()
+
+    js = tpl[tpl.index('var rendered'):]
+    js = js[:js.index('lucide.createIcons')]
+
+    assert "classList.contains('collapsed')" in js, \
+        'the load path must read what the server rendered'
+    assert 'rendered ||' in js, (
+        'the rendered class must win over a stale localStorage value')
