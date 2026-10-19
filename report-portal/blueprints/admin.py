@@ -64,7 +64,35 @@ def to_eat(dt, fmt='%Y-%m-%d %H:%M'):
         return dt.astimezone(EAT).strftime(fmt)
     return str(dt)
 
-bp = Blueprint('admin', __name__, url_prefix='/admin')
+# No url_prefix. It was '/admin' for everything in this file, which made the
+# prefix describe which FILE the code lives in rather than who may reach it -
+# so a viewer read the ATM registry at /admin/atm. Admin-only routes now say
+# /admin explicitly; shared surfaces sit at /atms and /cash, where the path
+# matches the gate. A test enforces that /admin/* is always ADMIN-gated.
+bp = Blueprint('admin', __name__)
+
+# The registry and cash surfaces used to live behind /admin because that was the
+# file's url_prefix, not because they were privileged. Anything bookmarked,
+# pasted into a runbook or cited in a ticket keeps working via redirect, query
+# string included so saved searches and filters survive the move.
+#
+# 308, not 301: this prefix also fronted /admin/atm/save, /import and /delete, and
+# a 301 makes the browser re-issue those as GET - so a stale form would post into a
+# 405 instead of saving. 308 is permanent AND preserves the method and body.
+@bp.route('/admin/atm')
+@bp.route('/admin/atm/<path:rest>')
+def _legacy_registry_paths(rest=''):
+    target = '/atms' + (('' if rest.startswith('/') else '/') + rest if rest else '')
+    if request.query_string:
+        target += '?' + request.query_string.decode()
+    return redirect(target, code=308)
+
+
+@bp.route('/admin/cash')
+def _legacy_cash_path():
+    if request.query_string:
+        return redirect('/cash?' + request.query_string.decode(), code=308)
+    return redirect('/cash', code=308)
 
 # Credential fields: operator+ only. Viewers keep inventory visibility
 # (branch, city, IP) but must never receive shared secrets. Deliberately
@@ -421,7 +449,7 @@ FIELDS = [
 ]
 
 
-@bp.route('/atm')
+@bp.route('/atms')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_list():
@@ -529,7 +557,7 @@ def atm_list():
                            vendor_options=vendor_options)
 
 
-@bp.route('/atm/<atm_id>')
+@bp.route('/atms/<atm_id>')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_detail(atm_id):
@@ -631,7 +659,7 @@ def atm_detail(atm_id):
         return render_template('error_500.html'), 500
 
 
-@bp.route('/atm/get')
+@bp.route('/atms/get')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_get():
@@ -710,7 +738,7 @@ def save_atm_record(data, source='registration'):
     """THE single DB writer for ATM facts.
 
     Validation, upsert, state seeding, sim-port assignment and the audit line
-    all live here. Both /admin/atm/save and the onboarding wizard call it, so a
+    all live here. Both /atms/save and the onboarding wizard call it, so a
     second writer cannot drift away from the first — which is how ATM records
     ended up half-saved in the past.
 
@@ -823,7 +851,7 @@ def save_atm_record(data, source='registration'):
             'atm_id': data['atm_id'], 'created': created, 'source': source}
 
 
-@bp.route('/atm/save', methods=['POST'])
+@bp.route('/atms/save', methods=['POST'])
 @login_required
 @role_required(ROLE_OPERATOR, ROLE_ADMIN)
 def atm_save():
@@ -838,7 +866,7 @@ def atm_save():
             flash(res['errors']['_general'], 'error')
         else:
             flash('Validation failed. Please correct the highlighted fields.', 'error')
-        return redirect('/admin/atm')
+        return redirect('/atms')
 
     log_action('ATM_SAVE', res['audit_detail'])
     threading.Thread(target=_bg_zabbix_sync, args=([dict(data)],), daemon=True).start()
@@ -901,7 +929,7 @@ def _archive_atm(cur, atm_id, deleted_by):
         return False, None
 
 
-@bp.route('/atm/delete', methods=['POST'])
+@bp.route('/atms/delete', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
 def atm_delete():
@@ -911,7 +939,7 @@ def atm_delete():
         if is_ajax:
             return jsonify({'error': True, 'message': 'ATM ID is required.'})
         flash('ATM ID is required for deletion.', 'error')
-        return redirect('/admin/atm')
+        return redirect('/atms')
 
     with get_db() as conn:
         cur = conn.cursor()
@@ -928,14 +956,14 @@ def atm_delete():
                 if is_ajax:
                     return jsonify({'error': True, 'message': f'ATM {atm_id} not found.'})
                 flash(f'ATM {atm_id} not found.', 'error')
-                return redirect('/admin/atm')
+                return redirect('/atms')
             conn.commit()
         except Exception as e:
             conn.rollback()
             if is_ajax:
                 return jsonify({'error': True, 'message': f'Database error: {str(e)}'})
             flash(f'Database error: {str(e)}', 'error')
-            return redirect('/admin/atm')
+            return redirect('/atms')
         finally:
             cur.close()
 
@@ -953,10 +981,10 @@ def atm_delete():
         return jsonify({'success': True, 'atm_id': atm_id})
     log_action('ATM_DELETE', del_detail)
     threading.Thread(target=_bg_zabbix_disable, args=([atm_id],), daemon=True).start()
-    return redirect('/admin/atm')
+    return redirect('/atms')
 
 
-@bp.route('/atm/bulk-delete', methods=['POST'])
+@bp.route('/atms/bulk-delete', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
 def atm_bulk_delete():
@@ -994,7 +1022,7 @@ def atm_bulk_delete():
     return jsonify({'success': True, 'deleted': deleted})
 
 
-@bp.route('/atm/check', methods=['POST'])
+@bp.route('/atms/check', methods=['POST'])
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_check():
@@ -1089,19 +1117,19 @@ def cash_log():
         errors.append('Notes added cannot exceed 100,000 per load.')
     if errors:
         flash('Not saved: ' + ' '.join(errors), 'error')
-        return redirect('/admin/cash')
+        return redirect('/cash')
     if not _take_cash_token(request.form.get('cash_token', '')):
         # Double-click, back-button resubmit, or retried POST: the first one
         # already committed. Never insert twice; say so plainly.
         flash('Already logged — duplicate submission ignored.', 'success')
-        return redirect(f'/admin/cash?atm_id={atm_id}' if atm_id else '/admin/cash')
+        return redirect(f'/cash?atm_id={atm_id}' if atm_id else '/cash')
     with get_db() as conn:
         cur = conn.cursor()
         try:
             cur.execute("SELECT 1 FROM atm_locations WHERE atm_id = %s", (atm_id,))
             if not cur.fetchone():
                 flash(f'Not saved: unknown ATM {atm_id}.', 'error')
-                return redirect('/admin/cash')
+                return redirect('/cash')
             cur.execute(
                 "INSERT INTO cash_replenishments "
                 "(atm_id, cassette, notes_added, recorded_by, notes, source) "
@@ -1114,14 +1142,14 @@ def cash_log():
         except Exception as e:
             conn.rollback()
             flash(f'Not saved: database error ({e}).', 'error')
-            return redirect('/admin/cash')
+            return redirect('/cash')
         finally:
             cur.close()
     flash(f'Logged: {notes_added} notes into {atm_id} cassette {cassette}.', 'success')
-    return redirect(f'/admin/cash?atm_id={atm_id}')
+    return redirect(f'/cash?atm_id={atm_id}')
 
 
-@bp.route('/atm/csv')
+@bp.route('/atms/csv')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_csv_export():
@@ -1157,7 +1185,7 @@ def atm_csv_export():
     )
 
 
-@bp.route('/atm/template')
+@bp.route('/atms/template')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_csv_template():
@@ -1186,7 +1214,7 @@ def atm_csv_template():
     )
 
 
-@bp.route('/atm/import', methods=['POST'])
+@bp.route('/atms/import', methods=['POST'])
 @login_required
 @role_required(ROLE_OPERATOR, ROLE_ADMIN)
 def atm_import():
@@ -1319,7 +1347,7 @@ def atm_import():
     })
 
 
-@bp.route('/atm/zabbix-sync', methods=['POST'])
+@bp.route('/atms/zabbix-sync', methods=['POST'])
 @login_required
 @role_required(ROLE_OPERATOR, ROLE_ADMIN)
 def atm_zabbix_sync():
@@ -1348,7 +1376,7 @@ def atm_zabbix_sync():
     return jsonify({'success': True, 'checked': len(rows), **summary})
 
 
-@bp.route('/atm/zabbix-status')
+@bp.route('/atms/zabbix-status')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_zabbix_status():
@@ -1414,7 +1442,7 @@ def _validate(data):
 
 # ─── AUDIT LOG ───────────────────────────────────────────────
 
-@bp.route('/audit')
+@bp.route('/admin/audit')
 @login_required
 @role_required(ROLE_ADMIN)
 def audit_log():
@@ -1470,7 +1498,7 @@ def audit_log():
 
 # ─── SCHEDULED REPORTS ─────────────────────────────────────────
 
-@bp.route('/schedules')
+@bp.route('/admin/schedules')
 @login_required
 @role_required(ROLE_ADMIN)
 def schedule_list():
@@ -1521,7 +1549,7 @@ def _valid_cron(expr):
     return None
 
 
-@bp.route('/schedules/save', methods=['POST'])
+@bp.route('/admin/schedules/save', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
 def schedule_save():
@@ -1571,7 +1599,7 @@ def schedule_save():
     return redirect('/admin/schedules')
 
 
-@bp.route('/schedules/toggle', methods=['POST'])
+@bp.route('/admin/schedules/toggle', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
 def schedule_toggle():
@@ -1594,7 +1622,7 @@ def schedule_toggle():
         return jsonify({'error': True, 'message': str(e)}), 500
 
 
-@bp.route('/schedules/delete', methods=['POST'])
+@bp.route('/admin/schedules/delete', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
 def schedule_delete():
@@ -1623,7 +1651,7 @@ def schedule_delete():
         return jsonify({'error': True, 'message': str(e)}), 500
 
 
-@bp.route('/schedules/send-now', methods=['POST'])
+@bp.route('/admin/schedules/send-now', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
 def schedule_send_now():
@@ -1659,7 +1687,7 @@ def schedule_send_now():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
-@bp.route('/schedules/get')
+@bp.route('/admin/schedules/get')
 @login_required
 @role_required(ROLE_ADMIN)
 def schedule_get():
@@ -1688,7 +1716,7 @@ def _valid_email(v):
     return bool(re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', v or ''))
 
 
-@bp.route('/users')
+@bp.route('/admin/users')
 @login_required
 @role_required(ROLE_ADMIN)
 def user_list():
@@ -1712,7 +1740,7 @@ def user_list():
         return render_template('admin_users.html', users=[], roles=ROLES, search=search)
 
 
-@bp.route('/users/emails')
+@bp.route('/admin/users/emails')
 @login_required
 @role_required(ROLE_ADMIN)
 def user_emails():
@@ -1751,7 +1779,7 @@ def _email_taken(cur, email, exclude_username=None):
     return cur.fetchone() is not None
 
 
-@bp.route('/users/create', methods=['POST'])
+@bp.route('/admin/users/create', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
 def user_create():
@@ -1814,7 +1842,7 @@ def _admin_count(cur):
     return int(cur.fetchone()[0] or 0)
 
 
-@bp.route('/users/edit', methods=['POST'])
+@bp.route('/admin/users/edit', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
 def user_edit():
@@ -1879,7 +1907,7 @@ def user_edit():
         return redirect('/admin/users')
 
 
-@bp.route('/users/delete', methods=['POST'])
+@bp.route('/admin/users/delete', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
 def user_delete():
@@ -1946,5 +1974,5 @@ def _guide_page(data):
   <code>E:\\EJLogs\\&lt;date&gt;_&lt;HOST&gt;_EJDATA.log</code> filenames — no script editing.
   GRG boxes: no journal pull exists; their data comes over SNMP/UDP, so nothing to do here.</p>
 
-  <a href="/admin/atm" class="btn">&#8592; Back to ATM Management</a>
+  <a href="/atms" class="btn">&#8592; Back to ATM Management</a>
 </div></body></html>"""

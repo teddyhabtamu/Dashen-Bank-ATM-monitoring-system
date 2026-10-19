@@ -149,7 +149,7 @@ Minor (cosmetic), Conditional (⬜-linked, never blocks).
 ## 10. Operations handover
 
 - **Health:** `docker ps` (all Up) · Zabbix/Grafana/GLPI/Portal/Dashboards URLs respond · `ss -lun` shows `:514` · OpenSearch `:9200` reachable from UAT-01.
-- **Add an ATM:** portal `/admin/atm` form (IP, SNMP community/version, EJ format included; blanks keep existing on edit) or CSV import → `sync_atms_to_zabbix.py --apply` → verify Latest data → confirm EJ + transactions → check dashboards + one filtered report.
+- **Add an ATM:** portal `/atms` form (IP, SNMP community/version, EJ format included; blanks keep existing on edit) or CSV import → `sync_atms_to_zabbix.py --apply` → verify Latest data → confirm EJ + transactions → check dashboards + one filtered report.
 - **RED host triage:** Latest data "Not supported" → firewall UDP 161, then community string, then template OID; `UNREACHABLE` state with empty polls is honest output, not a bug.
 - **Restarts:** `docker compose up -d <service>`; portal picks up `.env` on recreate; Grafana admin password resets via `grafana-cli`, not `.env`.
 - **Backups:** DB dump before any direct SQL (`pg_dump`); template `*.simulator.bak` before every remap.

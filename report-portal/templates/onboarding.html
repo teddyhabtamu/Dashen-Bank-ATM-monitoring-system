@@ -413,7 +413,7 @@ details.wstep.pending>summary{opacity:.55}
           <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
           <button type="submit" class="btn btn-outline"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Re-run check</button>
         </form>
-        <a class="btn btn-outline" href="/admin/atm/{{ values.atm_id }}"><i data-lucide="external-link" style="width:14px;height:14px"></i> Open ATM page</a>
+        <a class="btn btn-outline" href="/atms/{{ values.atm_id }}"><i data-lucide="external-link" style="width:14px;height:14px"></i> Open ATM page</a>
       </div>
     {% elif provisioned %}
       <p class="step-note">Proving it reports is the only thing allowed to call an ATM live. This is read-only.</p>

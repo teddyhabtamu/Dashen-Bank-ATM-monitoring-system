@@ -1151,3 +1151,106 @@ def test_the_collapsed_rail_drops_the_toggle_and_expands_from_the_logo():
 
     # The brand mark itself must survive - an empty rail reads as a fault.
     assert '.sidebar.collapsed .sidebar-logo{display:none}' not in tpl
+
+
+# Routes that only forward to a real page. They have to stay reachable by every
+# role, because a viewer following an old /admin/atm bookmark must land on the
+# registry - which enforces its own gate on the other side of the redirect.
+LEGACY_REDIRECT_VIEWS = {'_legacy_registry_paths', '_legacy_cash_path'}
+
+_ROUTE_RE = re.compile(
+    r"@\w+\.route\(\s*'([^']+)'(?P<rest>[^)]*)\)\s*\n"
+    r"(?P<decos>(?:\s*@[\w.]+[^\n]*\n)*)"
+    r"\s*def\s+(?P<fn>\w+)", re.M)
+
+
+def _portal_routes():
+    """(file, full_path, roles, view_name) for every route the portal serves.
+
+    Read from source rather than by importing the app: report-portal needs Flask,
+    psycopg2 and a database, and the suite is deliberately runnable without any
+    of them.
+    """
+    files = sorted((REPO / 'report-portal' / 'blueprints').glob('*.py'))
+    files.append(REPO / 'report-portal' / 'routes.py')
+    out = []
+    for f in files:
+        src = f.read_text()
+        prefix = ''
+        pre = re.search(r"url_prefix='([^']+)'", src)
+        if pre:
+            prefix = pre.group(1)
+        for m in _ROUTE_RE.finditer(src):
+            roles = ''
+            rr = re.search(r'role_required\(([^)]*)\)', m.group('decos'))
+            if rr:
+                roles = rr.group(1)
+            out.append((f.name, prefix + m.group(1), roles, m.group('fn')))
+    return out
+
+
+def test_an_admin_url_is_always_admin_gated():
+    """url_prefix='/admin' made the path describe which FILE the code lives in
+    rather than who may reach it.
+
+    Both the admin and onboarding blueprints carried that prefix. Onboarding is
+    uniformly ADMIN-gated, so its paths were honest. admin.py was not: it held the
+    ATM registry and the cash surface, both readable by ROLE_VIEWER, so an
+    operator signed in as viewer read the fleet inventory at a URL called /admin.
+    The authorisation was correct the whole time - only the URL lied.
+
+    That matters in a bank for reasons that have nothing to do with the code:
+    access logs and proxy logs record /admin/atm for viewer traffic, so an auditor
+    reading them concludes a viewer touched an admin surface; and any "block
+    /admin/* unless admin" rule at the WAF breaks the inventory page for the
+    people who need it.
+
+    The fix moved the shared surfaces to /atms, /cash and /anomalies, where the
+    path matches the gate. This test is what keeps it that way, because the same
+    mistake costs nothing to make again.
+    """
+    routes = _portal_routes()
+    assert len(routes) > 40, 'route parsing broke, not the routes: %d' % len(routes)
+
+    ungated = [(f, p, r, fn) for f, p, r, fn in routes
+               if p.startswith('/admin')
+               and fn not in LEGACY_REDIRECT_VIEWS
+               and 'ADMIN' not in r]
+    assert not ungated, (
+        'these /admin paths are not admin-gated, so the URL claims a privilege '
+        'that is not enforced: %s'
+        % ' | '.join('%s -> %s (%s)' % (p, fn, r or 'no gate')
+                     for _, p, r, fn in ungated))
+
+    viewer_reachable = [(f, p) for f, p, r, fn in routes
+                        if p.startswith('/admin') and 'VIEWER' in r
+                        and fn not in LEGACY_REDIRECT_VIEWS]
+    assert not viewer_reachable, (
+        'a viewer must never reach a path under /admin: %s' % viewer_reachable)
+
+    # The legacy redirects have to preserve the method. A 301 turns a stale form
+    # POST into a GET, so a save from a cached page would land on a 405 instead
+    # of saving - and look like a bug in the form.
+    legacy = (REPO / 'report-portal' / 'blueprints' / 'admin.py').read_text()
+    legacy = legacy[legacy.index('_legacy_registry_paths'):
+                    legacy.index('# Credential fields')]
+    assert 'code=301' not in legacy, \
+        'a 301 rewrites a POST into a GET; these paths front /atms/save etc.'
+    assert legacy.count('redirect(') == legacy.count('code=308'), \
+        'every legacy redirect must be 308 (permanent, method-preserving)'
+
+
+def test_no_two_routes_claim_the_same_path():
+    """A duplicate path is invisible until someone requests it and gets whichever
+    view Flask happened to register first - which is how a redirect to /cash
+    could have shadowed the cash page itself.
+
+    Written while making the change above: a scripted rewrite turned the legacy
+    /admin/cash redirect into '/cash' pointing at '/cash', an infinite loop that
+    would have replaced the real page. Nothing about reading that diff felt
+    wrong, so the check is a test rather than care."""
+    seen = {}
+    for f, p, r, fn in _portal_routes():
+        seen.setdefault(re.sub(r'<[^>]+>', '<>', p), []).append('%s:%s' % (f, fn))
+    dupes = {k: v for k, v in seen.items() if len(v) > 1}
+    assert not dupes, 'two views claim the same path: %s' % dupes

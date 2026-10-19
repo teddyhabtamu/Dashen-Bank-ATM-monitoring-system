@@ -19,7 +19,7 @@ def to_eat(dt, fmt='%Y-%m-%d %H:%M'):
         return dt.astimezone(EAT).strftime(fmt)
     return str(dt)
 
-bp = Blueprint('anomalies', __name__, url_prefix='/admin')
+bp = Blueprint('anomalies', __name__)
 
 SEVERITIES = ['HIGH', 'MEDIUM', 'LOW']
 ANOMALY_TYPES = ['VELOCITY', 'FAILURE_SPIKE', 'LARGE_TXN', 'RAPID_SEQ', 'OFFHOURS_SPIKE']

@@ -49,7 +49,7 @@ dependency.
 |---|---|---|---|
 | 6.1 | ATM availability report | MET | Report type present |
 | 6.2 | Transaction summary | MET | Report type present |
-| 6.3 | Cash level: current, cash dispensed, replenishment history | MET | `/admin/cash` unified record |
+| 6.3 | Cash level: current, cash dispensed, replenishment history | MET | `/cash` unified record |
 | 6.4 | Errors, incident resolution time, error frequency | PARTIAL | Incidents + GLPI; resolution-time figure partial |
 | 6.5 | Most/least used ATMs, peak transaction hours | MET | `performance` report type |
 

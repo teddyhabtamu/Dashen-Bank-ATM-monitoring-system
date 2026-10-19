@@ -141,7 +141,7 @@ td.atm{white-space:nowrap;font-weight:600}
     <tbody>
       {% for r in rows %}
       <tr>
-        <td class="atm"><a href="/admin/atm/{{ r.atm_id }}">{{ r.atm_id }}</a></td>
+        <td class="atm"><a href="/atms/{{ r.atm_id }}">{{ r.atm_id }}</a></td>
         <td class="status">
           <span class="badge {{ 'active' if r.status == 'reporting' else 'inactive' if r.status in ('failed','provisioned_not_reporting') else 'TIMEOUT' }}">{{ r.status_label }}</span>
         </td>

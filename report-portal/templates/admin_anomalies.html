@@ -97,7 +97,7 @@ td .detail-preview.expanded{overflow:visible;text-overflow:clip;white-space:norm
 <div class="card">
   <div class="card-header">
     <h2>Anomaly Alerts ({{ total }})</h2>
-    <form method="get" action="/admin/anomalies" class="search-bar" style="overflow:visible;width:100%">
+    <form method="get" action="/anomalies" class="search-bar" style="overflow:visible;width:100%">
       <div class="filters-wrap">
         <select name="severity" onchange="this.form.submit()">
           <option value="">All Severities</option>
@@ -124,7 +124,7 @@ td .detail-preview.expanded{overflow:visible;text-overflow:clip;white-space:norm
         </div>
         <button type="submit" class="btn btn-primary" style="font-size:11px">Filter</button>
         {% if filters.severity or filters.type or filters.atm_id or filters.from or filters.to %}
-        <a href="/admin/anomalies" class="btn btn-outline" style="font-size:11px">Clear</a>
+        <a href="/anomalies" class="btn btn-outline" style="font-size:11px">Clear</a>
         {% endif %}
       </div>
     </form>
@@ -375,7 +375,7 @@ function updateSelection() {
 }
 
 function unacknowledge(id) {
-  fetch('/admin/anomalies/unacknowledge', {
+  fetch('/anomalies/unacknowledge', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({id: id})
@@ -418,7 +418,7 @@ function confirmAcknowledge() {
   var type = pendingAck.type;
   var ids = pendingAck.ids;
   var payload = type === 'bulk' ? {ids: ids} : {id: ids[0]};
-  var url = type === 'bulk' ? '/admin/anomalies/bulk-acknowledge' : '/admin/anomalies/acknowledge';
+  var url = type === 'bulk' ? '/anomalies/bulk-acknowledge' : '/anomalies/acknowledge';
   closeAckModal();
   fetch(url, {
     method: 'POST',

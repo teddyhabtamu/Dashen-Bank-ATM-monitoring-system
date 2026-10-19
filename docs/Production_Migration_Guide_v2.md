@@ -1690,7 +1690,7 @@ INSERT INTO atm_locations VALUES
 ON CONFLICT (atm_id) DO NOTHING;
 ```
 
-Or use the web form: `http://172.26.18.74:8888/admin/atm`
+Or use the web form: `http://172.26.18.74:8888/atms`
 
 ## 11.3 Bulk Import (Full Fleet)
 
@@ -1754,7 +1754,7 @@ Manually creating hosts for 1,202 ATMs is not feasible. Two mechanisms:
 ## 12.3 What Auto-Discovery Does Not Do
 
 Auto-discovery handles Zabbix host creation only. For each newly discovered ATM, you still need:
-- **Location data** → Enter via admin form at `http://172.26.18.74:8888/admin/atm` (or bulk import, Phase 7)
+- **Location data** → Enter via admin form at `http://172.26.18.74:8888/atms` (or bulk import, Phase 7)
 - **EJ log shipping** → Configure per ATM (or use the centralized method from Phase 5)
 - **ISO 8583 transactions** → Automatic (the gateway is switch-wide, not per-ATM)
 

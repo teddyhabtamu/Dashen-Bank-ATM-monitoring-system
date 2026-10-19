@@ -434,7 +434,7 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
           <i data-lucide="server"></i>
           <span>Monitoring Center</span>
         </a>
-        <a href="/admin/anomalies" class="nav-item {% if request.path.startswith('/admin/anomalies') %}active{% endif %}"
+        <a href="/anomalies" class="nav-item {% if request.path.startswith('/anomalies') %}active{% endif %}"
            title="Alert Management — open anomalies and their state">
           <i data-lucide="bell"></i>
           <span>Alert Management</span>
@@ -467,7 +467,7 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
           <i data-lucide="ticket"></i>
           <span>Incident Management</span>
         </a>
-        <a href="/admin/cash" class="nav-item {% if request.path.startswith('/admin/cash') %}active{% endif %}"
+        <a href="/cash" class="nav-item {% if request.path.startswith('/cash') %}active{% endif %}"
            title="Cash Loads — cassette levels and replenishment evidence">
           <i data-lucide="banknote"></i>
           <span>Cash Loads</span>
@@ -480,7 +480,7 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
         <span class="nav-section-label">Manage</span>
       </div>
       <div class="nav-group-items">
-        <a href="/admin/atm" class="nav-item {% if request.path.startswith('/admin/atm') %}active{% endif %}"
+        <a href="/atms" class="nav-item {% if request.path.startswith('/atms') %}active{% endif %}"
            title="ATM Registration — the inventory everything else reads from">
           <i data-lucide="map-pin"></i>
           <span>ATM Registration</span>

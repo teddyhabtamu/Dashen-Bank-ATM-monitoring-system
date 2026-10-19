@@ -171,14 +171,14 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
   <div class="card-header">
     <h2>Registered ATMs ({{ atm_count }})</h2>
     <div style="display:flex;gap:8px;align-items:center">
-      <form method="get" action="/admin/atm" id="searchForm" style="display:flex;gap:6px;align-items:center" onsubmit="event.preventDefault(); applyFilter();">
+      <form method="get" action="/atms" id="searchForm" style="display:flex;gap:6px;align-items:center" onsubmit="event.preventDefault(); applyFilter();">
         <input type="text" name="search" placeholder="Search ATM ID, branch, city…" value="{{ search }}" maxlength="100"
                style="padding:7px 12px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;width:220px;transition:border-color .2s"
                onfocus="this.style.borderColor='#012169'" onblur="this.style.borderColor='#E4E9F1'">
         <button type="submit" class="btn btn-outline" style="padding:7px 12px" onclick="event.preventDefault(); applyFilter();"><i data-lucide="search" style="width:14px;height:14px"></i></button>
-        {% if search or f_vendor or f_status or f_region or f_city %}<a href="/admin/atm" class="btn btn-outline clear-btn" style="padding:7px 12px">Clear</a>{% endif %}
+        {% if search or f_vendor or f_status or f_region or f_city %}<a href="/atms" class="btn btn-outline clear-btn" style="padding:7px 12px">Clear</a>{% endif %}
       </form>
-      <a id="atmExportBtn" href="/admin/atm/csv" class="btn btn-outline"><i data-lucide="download" style="width:14px;height:14px"></i> Export CSV</a>
+      <a id="atmExportBtn" href="/atms/csv" class="btn btn-outline"><i data-lucide="download" style="width:14px;height:14px"></i> Export CSV</a>
       {% if session.get('role') in ('admin', 'operator') %}
       <button class="btn btn-outline" onclick="openImportModal()"><i data-lucide="upload" style="width:14px;height:14px"></i> Import CSV</button>
       <button class="btn btn-outline" id="zabbixSyncBtn" onclick="syncZabbix()"><i data-lucide="server" style="width:14px;height:14px"></i> Sync to Zabbix</button>
@@ -207,7 +207,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
       {% for c in filter_options.cities %}<option value="{{ c }}" {{ 'selected' if f_city==c }}>{{ c }}</option>{% endfor %}
     </select>
     {% if search or f_vendor or f_status or f_region or f_city %}
-    <a href="/admin/atm" class="btn btn-outline filter-reset" style="padding:7px 12px;font-size:12px"><i data-lucide="x" style="width:14px;height:14px"></i> Clear Filters</a>
+    <a href="/atms" class="btn btn-outline filter-reset" style="padding:7px 12px;font-size:12px"><i data-lucide="x" style="width:14px;height:14px"></i> Clear Filters</a>
     {% endif %}
   </div>
     <div style="overflow:visible">
@@ -267,7 +267,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
             <td class="kebab-wrap">
               <button class="kebab-btn" onclick="toggleKebab(event,this)" title="Actions">&#8942;</button>
               <div class="kebab-menu">
-                <a class="kebab-item view" href="/admin/atm/{{ d.atm_id }}"><i data-lucide="eye" style="width:14px;height:14px"></i> View Detail</a>
+                <a class="kebab-item view" href="/atms/{{ d.atm_id }}"><i data-lucide="eye" style="width:14px;height:14px"></i> View Detail</a>
                 <button class="kebab-item edit" onclick="editATM(this)"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
                 {% if session.get('role') == 'admin' %}<button class="kebab-item delete" onclick="deleteATM(this)"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>{% endif %}
               </div>
@@ -355,7 +355,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
           {% endif %}
         </div>
         <div class="atm-card-actions">
-          <a class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;text-decoration:none" href="/admin/atm/{{ d.atm_id }}"><i data-lucide="eye" style="width:14px;height:14px"></i> View</a>
+          <a class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;text-decoration:none" href="/atms/{{ d.atm_id }}"><i data-lucide="eye" style="width:14px;height:14px"></i> View</a>
           {% if session.get('role') in ('admin', 'operator') %}
           <button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px" onclick="editATM(this)"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
           {% if session.get('role') == 'admin' %}<button class="btn btn-outline" style="flex:1;padding:8px 12px;font-size:12px;color:#DC2626;border-color:#FECACA" onclick="deleteATM(this)"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>{% endif %}
@@ -368,7 +368,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
     {% endif %}
   </div>
 
-  {% macro qs(page) %}/admin/atm?page={{ page }}{% if search %}&search={{ search }}{% endif %}{% if f_vendor %}&vendor={{ f_vendor }}{% endif %}{% if f_status %}&status={{ f_status }}{% endif %}{% if f_region %}&region={{ f_region }}{% endif %}{% if f_city %}&city={{ f_city }}{% endif %}{% endmacro %}
+  {% macro qs(page) %}/atms?page={{ page }}{% if search %}&search={{ search }}{% endif %}{% if f_vendor %}&vendor={{ f_vendor }}{% endif %}{% if f_status %}&status={{ f_status }}{% endif %}{% if f_region %}&region={{ f_region }}{% endif %}{% if f_city %}&city={{ f_city }}{% endif %}{% endmacro %}
   {% if total_pages > 1 %}
   <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-top:1px solid #EEF1F6">
     <div style="font-size:12px;color:#64748B">Page {{ page }} of {{ total_pages }}</div>
@@ -395,7 +395,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
       <h2 id="modalTitle">Add New ATM</h2>
       <button class="modal-close" onclick="closeModal()"><i data-lucide="x"></i></button>
     </div>
-    <form method="post" action="/admin/atm/save" id="atmForm" novalidate>
+    <form method="post" action="/atms/save" id="atmForm" novalidate>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="modal-alert" id="formAlert"></div>
       <div class="form-grid">
@@ -480,7 +480,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
         (optional: <code>atm_name, ip_address, snmp_community, snmp_version, ej_log_format</code>).
         Existing ATMs with matching IDs will be updated (blank network fields keep existing values).
       </p>
-      <a href="/admin/atm/template" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#012169;font-weight:500;text-decoration:none;margin-bottom:24px">
+      <a href="/atms/template" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#012169;font-weight:500;text-decoration:none;margin-bottom:24px">
         <i data-lucide="download" style="width:14px;height:14px"></i> Download import template
       </a>
       <div id="importDropZone" style="border:2px dashed #CBD5E1;border-radius:12px;padding:40px 24px;cursor:pointer;transition:all .2s;background:#FAFBFC;max-width:500px;margin:0 auto"
@@ -548,7 +548,7 @@ function applyFilter(){
     var el = document.querySelector('[name="'+k+'"]');
     if(el && el.value) params.set(k, el.value);
   });
-  window.location = '/admin/atm?' + params.toString();
+  window.location = '/atms?' + params.toString();
 }
 
     function atmIdFromEl(el){
@@ -616,7 +616,7 @@ function syncCustomSelects(){
 function editATM(btn){
   var id = atmIdFromEl(btn);
   if(!id) return;
-  fetch('/admin/atm/get?atm_id=' + encodeURIComponent(id), {
+  fetch('/atms/get?atm_id=' + encodeURIComponent(id), {
     headers: {'X-Requested-With': 'XMLHttpRequest'}
   })
   .then(function(r){ return r.json(); })
@@ -647,7 +647,7 @@ function confirmDelete(){
   lucide.createIcons();
   var spnIcon = btn.querySelector('svg');
   if(spnIcon){ spnIcon.style.animation = 'spin 1s linear infinite'; }
-  fetch('/admin/atm/delete', {
+  fetch('/atms/delete', {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
     body: 'atm_id=' + encodeURIComponent(id)
@@ -700,7 +700,7 @@ function initFlatpickr(){
 
 function checkDuplicateAtmId(id, callback){
   if(!id || id.length < 3){ if(callback) callback(false); return; }
-  fetch('/admin/atm/check', {
+  fetch('/atms/check', {
     method: 'POST',
     headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
     body: JSON.stringify({ids: [id]})
@@ -853,7 +853,7 @@ document.getElementById('atmForm').addEventListener('submit', function(e){
     } else {
       showAlert('ATM saved successfully! Redirecting...', 'success');
       // Keep the user's filter/search context — a bare redirect wipes it.
-      setTimeout(function(){ window.location.href = '/admin/atm' + window.location.search; }, 600);
+      setTimeout(function(){ window.location.href = '/atms' + window.location.search; }, 600);
     }
   })
   .catch(function(){
@@ -909,7 +909,7 @@ function selectImportFile(file){
     }
 
     if(allIds.length > 0){
-      fetch('/admin/atm/check', {
+      fetch('/atms/check', {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
         body: JSON.stringify({ids: allIds})
@@ -1235,7 +1235,7 @@ function uploadImport(){
   var formData = new FormData();
   formData.append('file', new Blob([csvBlob], {type: 'text/csv'}), 'import.csv');
 
-  fetch('/admin/atm/import', {
+  fetch('/atms/import', {
     method: 'POST',
     body: formData,
     headers: {'X-Requested-With': 'XMLHttpRequest'}
@@ -1368,7 +1368,7 @@ function syncZabbix(){
   lucide.createIcons();
   var spn = btn.querySelector('svg');
   if(spn) spn.style.animation = 'spin 1s linear infinite';
-  fetch('/admin/atm/zabbix-sync', {
+  fetch('/atms/zabbix-sync', {
     method: 'POST',
     headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
     body: JSON.stringify({ids: ids})
@@ -1416,19 +1416,19 @@ function updateSelection(){
   var delBtn = document.getElementById('bulkDeleteBtn');
   document.getElementById('selectedCount').textContent = count;
   var expBtn = document.getElementById('atmExportBtn');
-  if(!expBtn) expBtn = document.querySelector('a[href*="/admin/atm/csv"]');
+  if(!expBtn) expBtn = document.querySelector('a[href*="/atms/csv"]');
   if(count > 0){
     bar.style.display = 'flex';
     delBtn.disabled = false;
     if(expBtn){
-      expBtn.href = '/admin/atm/csv?ids=' + encodeURIComponent(ids.join(','));
+      expBtn.href = '/atms/csv?ids=' + encodeURIComponent(ids.join(','));
       expBtn.innerHTML = '<i data-lucide="download" style="width:14px;height:14px"></i> Export CSV (' + count + ')';
     }
   } else {
     bar.style.display = 'none';
     delBtn.disabled = true;
     if(expBtn){
-      expBtn.href = '/admin/atm/csv';
+      expBtn.href = '/atms/csv';
       expBtn.innerHTML = '<i data-lucide="download" style="width:14px;height:14px"></i> Export CSV';
     }
   }
@@ -1468,7 +1468,7 @@ function confirmBulkDelete(){
 
   var ids = selectedIds();
 
-  fetch('/admin/atm/bulk-delete', {
+  fetch('/atms/bulk-delete', {
     method: 'POST',
     headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
     body: JSON.stringify({ids: ids})

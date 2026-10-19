@@ -72,7 +72,7 @@
            style="width:100%;height:auto;display:block;background:#F8FAFC;border-radius:8px">
         <path d="{{ map_svg }}" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.5" stroke-linejoin="round"/>
         {% for d in map_dots %}
-        <a href="/admin/atm/{{ d.atm_id }}" data-map-dot data-atm="{{ d.atm_id }}">
+        <a href="/atms/{{ d.atm_id }}" data-map-dot data-atm="{{ d.atm_id }}">
           <circle cx="{{ d.x }}" cy="{{ d.y }}" r="9" data-health="{{ d.health }}"
                   fill="{% if d.health == 'Healthy' %}#10B981{% elif d.health == 'Degraded' %}#F59E0B{% elif d.health == 'Critical' %}#DC2626{% else %}#94A3B8{% endif %}"
                   stroke="#fff" stroke-width="2.5" style="cursor:pointer">
@@ -443,7 +443,7 @@
        fillColor: COLORS[d.health] || '#94A3B8', fillOpacity: 1, health: d.health});
     m.bindTooltip(d.atm_id + ' · ' + d.branch + (d.city ? ' (' + d.city + ')' : '') +
       ' — ' + d.state + ' · ' + d.health + ' (' + d.txns + ' txns/1h)', {sticky: true});
-    m.on('click', function(){ window.location = '/admin/atm/' + encodeURIComponent(d.atm_id); });
+    m.on('click', function(){ window.location = '/atms/' + encodeURIComponent(d.atm_id); });
     m.options.atmId = d.atm_id;
     (window._fleetMarkers = window._fleetMarkers || {})[d.atm_id] = m;
     group.addLayer(m);

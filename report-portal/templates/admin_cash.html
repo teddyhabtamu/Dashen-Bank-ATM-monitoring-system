@@ -24,7 +24,7 @@
     <span class="card-title">Log a missed load</span>
   </div>
   <p style="padding:0 24px;color:#64748B;font-size:12px">Levels detected automatically once SNMP flows — use this form only for loads the system missed (e.g. during monitoring outages).</p>
-  <form method="post" action="/admin/cash/log" onsubmit="var b=this.querySelector('button[type=submit]');if(b){b.disabled=true;b.textContent='Logging…';}">
+  <form method="post" action="/cash/log" onsubmit="var b=this.querySelector('button[type=submit]');if(b){b.disabled=true;b.textContent='Logging…';}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="cash_token" value="{{ cash_token }}">
     <div class="form-grid">
@@ -65,14 +65,14 @@
   <div class="card-header">
     <span class="card-title">Recent loads{% if atm_filter %} — {{ atm_filter }}{% endif %}</span>
     <div>
-      <form method="get" action="/admin/cash" style="display:flex;gap:8px;align-items:center">
+      <form method="get" action="/cash" style="display:flex;gap:8px;align-items:center">
         <select name="atm_id" onchange="this.form.submit()">
           <option value="">All ATMs</option>
           {% for a in atms %}
           <option value="{{ a.atm_id }}" {% if a.atm_id == atm_filter %}selected{% endif %}>{{ a.atm_id }}</option>
           {% endfor %}
         </select>
-        {% if atm_filter %}<a href="/admin/cash" class="btn">Clear</a>{% endif %}
+        {% if atm_filter %}<a href="/cash" class="btn">Clear</a>{% endif %}
       </form>
     </div>
   </div>
