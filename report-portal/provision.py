@@ -80,7 +80,8 @@ def review_queue(rows):
     return out
 
 
-def provision_atms(atm_ids=None, dry_run=True, actor='', active_only=False):
+def provision_atms(atm_ids=None, dry_run=True, actor='', active_only=False,
+                   max_batch=None):
     """Provision ATM hosts in Zabbix from the database.
 
     Returns:
@@ -120,7 +121,10 @@ def provision_atms(atm_ids=None, dry_run=True, actor='', active_only=False):
 
     try:
         if dry_run:
-            summary, outcomes = plan_hosts(passable)
+            # max_batch is threaded through so a read-only fleet report can
+            # plan every ATM instead of the write path's default slice.
+            summary, outcomes = (plan_hosts(passable, max_batch=max_batch)
+                                 if max_batch else plan_hosts(passable))
         else:
             summary, outcomes = sync_hosts_detailed(passable)
     except Exception as e:  # both are best-effort, but never trust that

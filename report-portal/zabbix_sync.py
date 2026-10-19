@@ -107,37 +107,60 @@ def _group_id(z, name, cache, create=True):
     return gid
 
 
-def _host_state(z, host):
-    """Current Zabbix state of one host, or None when it does not exist."""
-    res = z.call("host.get", {"output": ["hostid", "status", "name"],
-                              # type/port/main are needed to tell an SNMP
-                              # interface from an agent one when reconciling.
-                              "selectInterfaces": ["interfaceid", "ip", "dns", "useip",
-                                                   "port", "type", "main", "details"],
-                              "selectMacros": ["macro", "value"],
-                              "selectParentTemplates": ["templateid"],
-                              "selectGroups": ["groupid"],
-                              "filter": {"host": [host]}})
-    return res[0] if res else None
-
-
 def _new_summary():
     return {"created": 0, "reenabled": 0, "macros_fixed": 0, "updated": 0,
             "skipped": 0, "no_ip": 0, "failed": 0, "details": []}
 
 
-def _host_state(z, host):
-    """Current Zabbix state of one host, or None when it does not exist."""
-    res = z.call("host.get", {"output": ["hostid", "status", "name"],
-                              # type/port/main are needed to tell an SNMP
-                              # interface from an agent one when reconciling.
-                              "selectInterfaces": ["interfaceid", "ip", "dns", "useip",
-                                                   "port", "type", "main", "details"],
-                              "selectMacros": ["macro", "value"],
-                              "selectParentTemplates": ["templateid"],
-                              "selectGroups": ["groupid"],
-                              "filter": {"host": [host]}})
-    return res[0] if res else None
+HOST_STATE_CHUNK = int(os.environ.get("ZABBIX_HOST_STATE_CHUNK", "250"))
+
+
+HOST_STATE_SELECT = {
+    # type/port/main are needed to tell an SNMP interface from an agent one
+    # when reconciling.
+    "selectInterfaces": ["interfaceid", "ip", "dns", "useip",
+                         "port", "type", "main", "details"],
+    "selectMacros": ["macro", "value"],
+    "selectParentTemplates": ["templateid"],
+    "selectGroups": ["groupid"],
+}
+
+
+def _host_states(z, hosts, chunk=None):
+    """Zabbix state for many hosts in a handful of calls, keyed by technical name.
+
+    _build_plans() asked host.get once per ATM. That was invisible at three
+    ATMs and became the fleet report's bottleneck: the verify sweep had already
+    been batched (see verify._zabbix_snapshot, which documents the same mistake
+    being fixed there), but the provisioning dry run runs after it and
+    reintroduced it — 1,300 ATMs meant 1,300 serial round-trips *on top of* the
+    sweep that had just been made cheap.
+
+    host.get accepts an array in `filter`, so this is the same shape as the
+    verify path. Chunked so the request stays bounded at fleet scale.
+    Returns {host_name: host_dict}; a failed chunk is omitted rather than
+    raising, and the caller treats a missing entry as "unknown", never as
+    "does not exist".
+    """
+    out = {}
+    wanted = [h for h in (hosts or []) if h]
+    if not wanted:
+        return out
+    step = chunk or HOST_STATE_CHUNK
+    for i in range(0, len(wanted), step):
+        part = wanted[i:i + step]
+        try:
+            res = z.call("host.get", {"output": ["hostid", "status", "name"],
+                                      "filter": {"host": part},
+                                      **HOST_STATE_SELECT})
+        except Exception as e:
+            logger.warning("host.get batch failed (%d hosts): %s", len(part), e)
+            continue
+        for h in (res or []):
+            key = (h.get("host") or h.get("name") or "").strip()
+            if key:
+                out[key] = h
+    return out
 
 
 def _agent_interface(ip):
@@ -302,6 +325,15 @@ def _build_plans(atm_dicts, create_groups=True, max_batch=MAX_BATCH):
     rows = (atm_dicts or [])[:max_batch]
     if not rows:
         return summary, plans, None
+    # Truncation used to be silent. A caller passing 1,300 ATMs got 200 plans
+    # and a summary that counted only those 200, so the fleet report said
+    # "3 ATMs checked" on a fleet of 1,300 - wrong rather than merely partial.
+    # The cap is real and deliberate (Zabbix request size), so it stays; what
+    # changes is that the caller can now see it happened.
+    truncated = len(atm_dicts or []) - len(rows)
+    if truncated > 0:
+        logger.warning("host planning capped at %d of %d ATMs; %d not planned",
+                       len(rows), len(atm_dicts or []), truncated)
     try:
         z = _Client()
         _CLIENT[0] = z
@@ -319,6 +351,14 @@ def _build_plans(atm_dicts, create_groups=True, max_batch=MAX_BATCH):
         groups = {}
         for gname in ("ATMs", "ATM-NCR", "ATM-GRG"):
             _group_id(z, gname, groups, create=create_groups)
+
+        # One batched read for every host in the batch, instead of one host.get
+        # per ATM inside the loop. The per-ATM version made the fleet report
+        # scale linearly in serial round-trips, which is what made "Recompute
+        # now" feel hung on a fleet of three and would have taken minutes at
+        # 1,300 - see _host_states().
+        known = _host_states(z, [(a.get("atm_id") or "").strip() for a in rows])
+
         for a in rows:
             host = (a.get("atm_id") or "").strip()
             if not host:
@@ -329,7 +369,7 @@ def _build_plans(atm_dicts, create_groups=True, max_batch=MAX_BATCH):
                 plans.append({"atm_id": host, "action": "no_ip", "params": None,
                               "changes": [], "error": "skipped: no IP address", "pending_groups": []})
                 continue
-            cur = _host_state(z, host)
+            cur = known.get(host)
             if cur:
                 upd, changed = _plan_update(a, cur, tids, groups, create_groups)
                 if changed:
@@ -370,10 +410,14 @@ def _summarise(plans):
     return summary
 
 
-def plan_hosts(atm_dicts):
+def plan_hosts(atm_dicts, max_batch=MAX_BATCH):
     """DRY RUN. What would change in Zabbix for these ATMs, changing nothing.
-    Returns (summary, plans) — the summary counts would-be outcomes."""
-    summary, plans, _z = _build_plans(atm_dicts, create_groups=False)
+    Returns (summary, plans) — the summary counts would-be outcomes.
+
+    max_batch is explicit so a fleet-wide caller can raise the cap rather than
+    silently receiving a 200-row slice of a 1,300-row fleet."""
+    summary, plans, _z = _build_plans(atm_dicts, create_groups=False,
+                                      max_batch=max_batch)
     if not plans and summary["failed"]:
         return summary, plans
     return _summarise(plans), plans

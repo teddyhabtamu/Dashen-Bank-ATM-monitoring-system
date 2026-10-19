@@ -532,7 +532,13 @@ def fleet(atm_ids=None, window_minutes=15, with_plan=True,
                 plan_fn = provision_atms
             # provision_atms() returns a DICT: {ok, summary, results, review,
             # error, ...}. The rows the report needs live under 'results'.
-            planned = plan_fn(atm_ids, dry_run=True, actor='verify')
+            #
+            # max_batch is raised to the fleet size: the 200 cap protects the
+            # WRITE path, but this is a read-only dry run, and at the default
+            # the report silently covered 200 of 1,300 ATMs while claiming to
+            # describe the fleet. Truncating a report is not a safety property.
+            planned = plan_fn(atm_ids, dry_run=True, actor='verify',
+                              max_batch=max(len(atm_ids), 1))
             beat()
             plans = (planned or {}).get('results') or []
             if (planned or {}).get('error'):

@@ -146,7 +146,7 @@ def test_fleet_joins_verification_with_a_provisioning_plan():
                                           'vendor': 'NCR', 'ip_address': '10.0.0.9'},
                 'checks': []}
 
-    def fake_plan(atm_ids, dry_run=True, actor=''):
+    def fake_plan(atm_ids, dry_run=True, actor='', max_batch=None):
         assert dry_run is True, 'the fleet report must never write'
         return {'ok': True, 'error': '', 'summary': {},
                 'results': [{'atm_id': a, 'action': 'update',
@@ -184,7 +184,7 @@ def test_fleet_reports_a_planner_error_instead_of_hiding_it():
                 'blockers': [], 'facts': {'items_reporting': 1, 'items_total': 1},
                 'checks': []}
 
-    def plan_with_error(atm_ids, dry_run=True, actor=''):
+    def plan_with_error(atm_ids, dry_run=True, actor='', max_batch=None):
         return {'ok': False, 'error': 'Zabbix login failed', 'summary': {}, 'results': []}
 
     out = verify.fleet(atm_ids=['ATM-7'], verify_fn=fake_verify, plan_fn=plan_with_error)

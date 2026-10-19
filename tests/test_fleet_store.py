@@ -278,3 +278,32 @@ def test_a_real_callable_still_works():
     assert fs._conn(lambda: Conn()) == 'cursor' or True
     conn = Conn()
     assert fs._conn(lambda: conn) is conn
+
+
+def test_a_recompute_does_not_replace_the_table_with_a_spinner():
+    """Clicking Filter while a background recompute was running wiped the table
+    and showed "Checking the fleet…", which read as "filtering is slow".
+
+    Filtering is a list comprehension over rows already in memory; it cannot be
+    slow. The route passed computing=bool(cached['running']), so any request
+    during a sweep took the full-page spinner branch instead of the branch the
+    template already had for exactly this case (cached.running keeps the table
+    and shows a banner).
+
+    computing must therefore mean "nothing to show yet", not "a sweep is in
+    flight". Asserted on the route source because the route needs Flask and a
+    database to import, and this is a one-line contract that is easy to undo.
+    """
+    import pathlib
+    import re
+
+    src = (pathlib.Path(__file__).resolve().parent.parent
+           / 'report-portal' / 'blueprints' / 'onboarding.py').read_text()
+    # The render call that serves cached rows (it passes counts=cached['counts']).
+    calls = re.findall(r'render_template\(\s*[\'"]fleet\.html[\'"][^)]*\)', src, re.S)
+    assert len(calls) >= 2, 'expected the spinner render and the results render'
+    results_call = [c for c in calls if "cached['counts']" in c]
+    assert results_call, 'could not find the render call that serves rows'
+    assert all('computing=False' in c for c in results_call), (
+        'serving cached rows must not set computing from cached["running"], or '
+        'a recompute hides a usable table behind a spinner')

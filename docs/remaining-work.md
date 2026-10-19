@@ -103,6 +103,7 @@ and cleaning it is part of the job.
 |---|---|---|
 | C1 | Swap the scheduler's `/tmp/portal-scheduler.lock` `fcntl.flock` for a Postgres advisory lock (`pg_try_advisory_lock`). Same singleton design, same "no Redis" property, but it works across hosts instead of within one container | Portal work |
 | C2 | Decide production topology: Postgres on its own host, or colocated? Drives backup windows, HA and cutover. Coupled to 0.1 and B2 | You |
+| C5 | **Fleet report scaling.** The provisioning dry run read `host.get` once per ATM (`zabbix_sync._build_plans`), so the fleet sweep cost 1,304 serial round-trips at 1,300 ATMs — on top of the verify sweep that had already been batched. Now batched (`_host_states`, 250 per call): 1,300 ATMs is 10 round-trips. The 200-ATM `MAX_BATCH` cap also truncated the read-only report silently; the fleet path now raises it to the fleet size, and the cap stays for writes. **Remaining:** the report is still computed synchronously-ish in the background with no progress indicator beyond a spinner, and `provision_atms` still loads every ATM row before planning — fine at 1,300, worth revisiting above ~10k | Done (measured); revisit at 10k+ |
 | C3 | Alert on the portal itself. `/ready` exists and nothing polls it. If the portal is down, the first person to notice is whoever needed a report | Portal work |
 | C4 | Reconcile UAT-02: 358 commits behind, gateway work parked on local branch `uat02-local` @ `ec5dc2f`. Decide whether it merges or the host is re-based | Portal work |
 

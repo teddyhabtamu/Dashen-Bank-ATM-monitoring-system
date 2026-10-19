@@ -53,9 +53,14 @@ class FakeZabbix:
             self.groups[params['name']] = str(self.next_group_id)
             return {'groupids': [str(self.next_group_id)]}
         if method == 'host.get':
-            host = params['filter']['host'][0]
-            cur = self.hosts.get(host)
-            return [dict(cur)] if cur else []
+            # Zabbix accepts an ARRAY in filter.host. The fake used to read
+            # only [0], so a batched caller silently saw one host and looked
+            # correct - a fake that cannot express the batched contract would
+            # make the batching test above meaningless.
+            wanted = params['filter']['host']
+            if isinstance(wanted, str):
+                wanted = [wanted]
+            return [dict(self.hosts[h]) for h in wanted if h in self.hosts]
         if method in ('host.create', 'host.update'):
             if method == 'host.create':
                 self.hosts[params['host']] = {'hostid': '500', 'host': params['host'], 'status': '0',
@@ -337,3 +342,52 @@ def test_batch_is_capped(monkeypatch):
     install(monkeypatch, FakeZabbix())
     _, plans = zs.plan_hosts([row(atm_id=f'ATM-{i:04d}') for i in range(zs.MAX_BATCH + 50)])
     assert len(plans) == zs.MAX_BATCH
+
+
+def test_planning_reads_hosts_in_batches_not_once_per_atm(monkeypatch):
+    """The fleet report's "Recompute now" felt hung at three ATMs and would
+    have taken minutes at 1,300.
+
+    _build_plans called _host_state(z, host) inside its per-ATM loop, so the
+    provisioning dry run issued one serial host.get per ATM - on top of the
+    verify sweep, which had already been batched for exactly this reason (see
+    verify._zabbix_snapshot, whose docstring documents the same mistake being
+    fixed there). Reintroducing it on the planning side undid that work.
+
+    Asserts the property, not the implementation: the number of host.get calls
+    must not grow with the number of ATMs.
+    """
+    fake = install(monkeypatch, FakeZabbix())
+    atms = [row(atm_id=f'ATM-{i:04d}', ip_address=f'10.0.{i // 250}.{i % 250 + 1}')
+            for i in range(600)]
+    # max_batch is raised deliberately: this test is about the SHAPE of the
+    # calls, and the default 200-row cap would truncate the input before the
+    # batching had a chance to matter (asserted separately below).
+    zs.plan_hosts(atms, max_batch=len(atms))
+
+    gets = [c for c in fake.calls if c[0] == 'host.get']
+    assert len(gets) <= 4, (
+        'host.get must be batched, not one call per ATM: %d calls for %d ATMs'
+        % (len(gets), len(atms)))
+    # And the batch must actually carry the ATMs, or "fewer calls" just means
+    # "fewer hosts looked at" - the failure mode a naive count would hide.
+    asked = sum(len(c[1]['filter']['host']) for c in gets)
+    assert asked == len(atms), 'every ATM must appear in a batch: %d of %d' % (asked, len(atms))
+
+
+def test_a_fleet_plan_is_not_silently_truncated(monkeypatch):
+    """The 200-ATM cap exists to bound a write request. Applied to the
+    read-only fleet report it produced a report that claimed to describe the
+    fleet while covering 200 of 1,300 ATMs, with the rest simply absent.
+
+    Truncating a report is not a safety property, so the fleet path raises the
+    cap to the fleet size; the default cap stays for the write path.
+    """
+    install(monkeypatch, FakeZabbix())
+    atms = [row(atm_id=f'ATM-{i:04d}') for i in range(zs.MAX_BATCH + 50)]
+    _, plans = zs.plan_hosts(atms, max_batch=len(atms))
+    assert len(plans) == len(atms)
+
+    # The default must remain capped - that is the write path's guard.
+    _, capped = zs.plan_hosts(atms)
+    assert len(capped) == zs.MAX_BATCH

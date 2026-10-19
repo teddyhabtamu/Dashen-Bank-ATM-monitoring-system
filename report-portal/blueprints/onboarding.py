@@ -367,8 +367,15 @@ def onboard_fleet():
         rows = [r for r in rows
                 if q in str(r.get('atm_id', '')).lower() or q in str(r.get('ip', '')).lower()
                 or q in str(r.get('vendor', '')).lower()]
+    # computing means "nothing to show yet, wait for the first sweep". A
+    # recompute over an existing report is NOT that: the template already has a
+    # separate branch (cached.running) that keeps the table and shows a banner.
+    # Tying this to cached.running replaced a perfectly usable table with a
+    # spinner on every filter click while a background sweep was in flight,
+    # which read as "filtering is slow" when filtering is a list comprehension
+    # over rows already in memory.
     return render_template('fleet.html', cached=cached,
-                           computing=bool(cached.get('running')),
+                           computing=False,
                            counts=cached['counts'], rows=rows, ttl=ttl,
                            failed=(cached.get('error') if cached.get('failed') else ''),
                            filter_mode=mode,
