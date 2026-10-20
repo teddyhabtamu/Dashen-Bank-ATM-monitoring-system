@@ -107,9 +107,11 @@ def _problem_get(auth):
     list down with it - the page still works, just without the notes.
     """
     params = {
-        'output': ['eventid', 'clock', 'name', 'severity', 'acknowledged', 'objectid'],
+        'output': ['eventid', 'clock', 'name', 'severity', 'acknowledged',
+                   'suppressed', 'objectid'],
         'selectHosts': ['hostid', 'host', 'name'],
         'selectAcknowledges': 'extend',
+        'selectSuppressionData': 'extend',
         # NB: problem.get allows sorting by eventid only (clock is rejected);
         # eventids grow with time so DESC is newest-first.
         'sortfield': 'eventid',
@@ -118,7 +120,10 @@ def _problem_get(auth):
     }
     res = _zbx_call('problem.get', params, auth)
     if res is None:
+        # A build that rejects either select must still show the problem
+        # list; the page degrades to no notes and no expiry, not to blank.
         params.pop('selectAcknowledges', None)
+        params.pop('selectSuppressionData', None)
         res = _zbx_call('problem.get', params, auth)
     return res
 
@@ -152,6 +157,14 @@ def _fmt_clock(clock):
         return '—'
 
 
+def _fmt_short(clock):
+    try:
+        dt = datetime.fromtimestamp(int(clock), tz=timezone.utc)
+        return dt.astimezone(EAT).strftime('%d %b %H:%M')
+    except (TypeError, ValueError):
+        return ''
+
+
 @bp.route('')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
@@ -159,11 +172,17 @@ def center():
     severity = request.args.get('severity', '').strip()
     ack = request.args.get('ack', '').strip()  # '' | 'no' | 'yes'
     summary, problems, hosts, error, at_cap = _collect(severity, ack)
+    # The duration list is rendered from the same table the route validates
+    # against, so the UI cannot offer a value the backend will reject.
+    from problem_actions import SUPPRESS_LABELS
+    is_admin = session.get('role') == ROLE_ADMIN
+    keys = ('30', '120', '480', '1440', '0') if is_admin else ('30', '120', '480', '1440')
     return render_template('monitoring_center.html',
                            problems=problems, hosts=hosts, summary=summary,
                            severities=SEVERITIES, sev_colors=SEV_COLORS,
                            f_severity=severity, f_ack=ack, error=error,
                            at_cap=at_cap,
+                           suppress_options=[(k, SUPPRESS_LABELS[k]) for k in keys],
                            can_act=session.get('role') in (ROLE_OPERATOR, ROLE_ADMIN))
 
 
@@ -183,16 +202,25 @@ def _back():
 @login_required
 @role_required(ROLE_OPERATOR, ROLE_ADMIN)
 def problem_action(eventid, action):
-    """Acknowledge or un-acknowledge a problem without opening Zabbix.
+    """Acknowledge, un-acknowledge, suppress or unsuppress a problem.
 
     A write path on a page that was read-only, so it is OPERATOR and above.
     Zabbix records the API service account as the actor; the human is recorded
     in the portal audit log, which is the only place that knows who clicked.
     """
-    from problem_actions import LABELS, ack_params
+    from problem_actions import LABELS, ack_params, suppress_until
     note = (request.form.get('message') or '').strip()
+    until = None
+    if action == 'suppress':
+        try:
+            until = suppress_until(request.form.get('duration', ''),
+                                   time.time(),
+                                   admin=session.get('role') == ROLE_ADMIN)
+        except ValueError as e:
+            flash(str(e), 'error')
+            return redirect(_back())
     try:
-        params = ack_params(eventid, action, note)
+        params = ack_params(eventid, action, note, until=until)
     except ValueError as e:
         flash(str(e), 'error')
         return redirect(_back())
@@ -203,12 +231,23 @@ def problem_action(eventid, action):
               'state, or the API account may lack permission.', 'error')
         return redirect(_back())
 
-    # The page redirects into a 20s read cache. Without this the Ack column
-    # still shows the old value and the action looks like it did nothing.
+    # The page redirects into a 20s read cache. Without this the Ack and
+    # Suppression columns still show the old state and the action looks like
+    # it did nothing.
     _cache['ts'] = 0.0
-    log_action('PROBLEM_' + action.upper(),
-               'eventid=%s%s' % (eventid, (' — ' + note) if note else ''))
-    flash('%s event %s.' % (LABELS.get(action, action), eventid), 'success')
+    detail = 'eventid=%s' % eventid
+    if action == 'suppress':
+        detail += ' until=%s' % ('indefinite' if not until else _fmt_clock(until))
+    if note:
+        detail += ' — ' + note
+    log_action('PROBLEM_' + action.upper(), detail)
+    if action == 'suppress':
+        when = 'indefinitely' if not until else 'until ' + _fmt_clock(until)
+        flash('Suppressed event %s %s.' % (eventid, when), 'success')
+    elif action == 'unsuppress':
+        flash('Suppression removed from event %s.' % eventid, 'success')
+    else:
+        flash('%s event %s.' % (LABELS.get(action, action), eventid), 'success')
     return redirect(_back())
 
 
@@ -263,11 +302,12 @@ def _collect(severity, ack):
 
     # ── Active problems (summary over ALL cached rows; severity/ack
     # filters apply to the displayed list only) ──
-    from problem_actions import notes_from
+    from problem_actions import notes_from, suppression_state
     all_problems = []
     for p in raw_problems:
         host = (p.get('hosts') or [{}])[0]
         notes = notes_from(p.get('acknowledges'))
+        suppressed, sup_until, maintenance = suppression_state(p)
         all_problems.append({
             'eventid': p.get('eventid'),
             'clock': _fmt_clock(p.get('clock')),
@@ -279,6 +319,10 @@ def _collect(severity, ack):
             'objectid': p.get('objectid'),
             'ack_notes': notes,
             'ack_note': notes[0]['message'] if notes else '',
+            'suppressed': suppressed,
+            'suppress_until': sup_until,
+            'suppress_until_label': _fmt_short(sup_until) if sup_until else '',
+            'maintenance': maintenance,
         })
     # Resolve any acknowledge author that came back as a bare userid, then
     # format the history once for both the row and its tooltip.

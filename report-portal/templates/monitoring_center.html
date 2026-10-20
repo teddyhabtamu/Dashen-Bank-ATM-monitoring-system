@@ -29,6 +29,9 @@
 .mc-act.primary:hover{background:#E0E7FF;border-color:#A5B4FC}
 .mc-muted{color:#94A3B8}
 .mc-note{margin-top:3px;font-size:11px;color:#64748B;font-style:italic;max-width:560px;white-space:normal;line-height:1.35}
+.sup-y{display:inline-block;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:100px;padding:1px 8px;font-size:10px;font-weight:700;white-space:nowrap}
+.sup-m{display:inline-block;background:#E0E7FF;color:#3730A3;border:1px solid #C7D2FE;border-radius:100px;padding:1px 8px;font-size:10px;font-weight:700;white-space:nowrap}
+.mc-actions{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
 .mc-modal{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center}
 .mc-modal[hidden]{display:none}
 .mc-modal-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.45)}
@@ -39,6 +42,7 @@
 .mc-modal-card label span{font-weight:400}
 .mc-modal-card textarea{width:100%;box-sizing:border-box;border:1px solid #CBD5E1;border-radius:8px;padding:8px 10px;font:inherit;font-size:12px;resize:vertical;min-height:64px}
 .mc-modal-card textarea:focus{outline:2px solid #BFDBFE;border-color:#93C5FD}
+.mc-modal-card select{width:100%;box-sizing:border-box;border:1px solid #CBD5E1;border-radius:8px;padding:8px 10px;font:inherit;font-size:12px;background:#fff}
 .mc-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 .err-banner{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;padding:12px 16px;border-radius:10px;font-size:12px;margin-bottom:16px}
 .empty-row td{text-align:center;color:#94A3B8;padding:22px !important}
@@ -92,7 +96,7 @@
     </div>
     <div class="mc-table-wrap">
       <table class="mc-table">
-        <thead><tr><th>Time</th><th>Severity</th><th>Host</th><th>Problem</th><th>Ack</th><th>Action</th></tr></thead>
+        <thead><tr><th>Time</th><th>Severity</th><th>Host</th><th>Problem</th><th>Ack</th><th>Suppression</th><th>Action</th></tr></thead>
         <tbody id="probBody">
           {% for p in problems %}
           <tr>
@@ -102,17 +106,37 @@
             <td>{{ p.name }}{% if p.ack_note %}<div class="mc-note" title="{{ p.ack_tip }}">&rarr; {{ p.ack_note|truncate(110) }}</div>{% endif %}</td>
             <td>{% if p.acknowledged %}<span class="ack-y">Yes</span>{% else %}<span class="ack-n">No</span>{% endif %}</td>
             <td>
+              {% if p.suppressed %}
+                {% if p.maintenance %}
+                <span class="sup-m" title="Suppressed by maintenance #{{ p.maintenance }}">Maintenance</span>
+                {% elif p.suppress_until_label %}
+                <span class="sup-y" title="Suppressed until {{ p.suppress_until_label }}">Until {{ p.suppress_until_label }}</span>
+                {% else %}
+                <span class="sup-y">Until removed</span>
+                {% endif %}
+              {% else %}<span class="mc-muted">&mdash;</span>{% endif %}
+            </td>
+            <td>
               {% if can_act %}
+              <div class="mc-actions">
                 {% if p.acknowledged %}
                 <button type="button" class="mc-act" data-eventid="{{ p.eventid }}" data-action="unacknowledge" data-problem="{{ p.name }}">Un-acknowledge</button>
                 {% else %}
                 <button type="button" class="mc-act primary" data-eventid="{{ p.eventid }}" data-action="acknowledge" data-problem="{{ p.name }}">Acknowledge</button>
                 {% endif %}
+                {% if p.suppressed %}
+                  {% if not p.maintenance %}
+                  <button type="button" class="mc-act" data-eventid="{{ p.eventid }}" data-action="unsuppress" data-problem="{{ p.name }}">Unsuppress</button>
+                  {% endif %}
+                {% else %}
+                <button type="button" class="mc-act" data-eventid="{{ p.eventid }}" data-action="suppress" data-problem="{{ p.name }}">Suppress</button>
+                {% endif %}
+              </div>
               {% else %}<span class="mc-muted">&mdash;</span>{% endif %}
             </td>
           </tr>
           {% else %}
-          <tr class="empty-row"><td colspan="6">No active problems.{% if error %} Zabbix may be unreachable.{% endif %}</td></tr>
+          <tr class="empty-row"><td colspan="7">No active problems.{% if error %} Zabbix may be unreachable.{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -152,8 +176,16 @@
   <div class="mc-modal-card" role="dialog" aria-modal="true" aria-labelledby="mcModalTitle">
     <h3 id="mcModalTitle">Acknowledge this problem?</h3>
     <p class="mc-modal-problem" id="mcModalProblem"></p>
+    <div id="mcDurationWrap" hidden>
+      <label for="mcDuration">Suppress for</label>
+      <select id="mcDuration">
+        {% for key, label in suppress_options %}
+        <option value="{{ key }}" {% if key == '1440' %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
     <div id="mcNoteWrap">
-      <label for="mcComment">Comment <span>(optional, stored in Zabbix history)</span></label>
+      <label for="mcComment">Comment <span id="mcNoteHint">(optional, stored in Zabbix history)</span></label>
       <textarea id="mcComment" rows="3" maxlength="2048"></textarea>
     </div>
     <div class="mc-modal-actions">
@@ -187,6 +219,8 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
   var prob = document.getElementById('mcModalProblem');
   var note = document.getElementById('mcComment');
   var noteWrap = document.getElementById('mcNoteWrap');
+  var durationWrap = document.getElementById('mcDurationWrap');
+  var noteHint = document.getElementById('mcNoteHint');
   var confirmBtn = document.getElementById('mcConfirm');
 
   function close(){ modal.hidden = true; pending = null; }
@@ -195,13 +229,26 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
                action: btn.getAttribute('data-action'),
                problem: btn.getAttribute('data-problem') || ''};
     var isAck = pending.action === 'acknowledge';
-    title.textContent = isAck ? 'Acknowledge this problem?' : 'Remove the acknowledgement?';
+    var isSuppress = pending.action === 'suppress';
+    var isUnsuppress = pending.action === 'unsuppress';
+    title.textContent = isSuppress ? 'Suppress this problem?'
+      : isUnsuppress ? 'Remove the suppression?'
+      : isAck ? 'Acknowledge this problem?' : 'Remove the acknowledgement?';
     prob.textContent = pending.problem;
-    confirmBtn.textContent = isAck ? 'Acknowledge' : 'Un-acknowledge';
-    noteWrap.hidden = !isAck;
+    confirmBtn.textContent = isSuppress ? 'Suppress'
+      : isUnsuppress ? 'Unsuppress'
+      : isAck ? 'Acknowledge' : 'Un-acknowledge';
+    noteWrap.hidden = pending.action === 'unacknowledge';
+    durationWrap.hidden = !isSuppress;
+    noteHint.textContent = isSuppress
+      ? '(required — stored in Zabbix history)'
+      : '(optional, stored in Zabbix history)';
+    note.placeholder = isSuppress
+      ? 'Why is this being suppressed? This is the audit trail.'
+      : 'Optional comment…';
     note.value = '';
     modal.hidden = false;
-    (isAck ? note : confirmBtn).focus();
+    (isSuppress ? note : confirmBtn).focus();
   }
 
   document.addEventListener('click', function(e){
@@ -211,15 +258,29 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
   });
   confirmBtn.addEventListener('click', function(){
     if(!pending) return;
+    var text = note.value.trim();
+    if(pending.action === 'suppress' && text.length < 5){
+      showToast('Write why the problem is being suppressed (at least 5 characters).', 'error');
+      note.focus();
+      return;
+    }
     form.action = '/monitoring/problems/' +
       encodeURIComponent(pending.eventid) + '/' +
       encodeURIComponent(pending.action);
-    var old = form.querySelector('input[name="message"]');
-    if(old) old.remove();
-    if(pending.action === 'acknowledge' && note.value.trim()){
+    var oldMsg = form.querySelector('input[name="message"]');
+    if(oldMsg) oldMsg.remove();
+    var oldDur = form.querySelector('input[name="duration"]');
+    if(oldDur) oldDur.remove();
+    if(text && pending.action !== 'unacknowledge'){
       var i = document.createElement('input');
-      i.type = 'hidden'; i.name = 'message'; i.value = note.value.trim();
+      i.type = 'hidden'; i.name = 'message'; i.value = text;
       form.appendChild(i);
+    }
+    if(pending.action === 'suppress'){
+      var d = document.createElement('input');
+      d.type = 'hidden'; d.name = 'duration';
+      d.value = document.getElementById('mcDuration').value;
+      form.appendChild(d);
     }
     form.submit();
   });
@@ -263,9 +324,28 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
         pb.innerHTML = (d.problems || []).map(function(p){
           var act = '<span class="mc-muted">&mdash;</span>';
           if(MC_CAN_ACT){
-            act = p.acknowledged
+            var ackBtn = p.acknowledged
               ? '<button type="button" class="mc-act" data-eventid="' + esc(p.eventid) + '" data-action="unacknowledge" data-problem="' + attr(p.name) + '">Un-acknowledge</button>'
               : '<button type="button" class="mc-act primary" data-eventid="' + esc(p.eventid) + '" data-action="acknowledge" data-problem="' + attr(p.name) + '">Acknowledge</button>';
+            var supBtn = '';
+            if(p.suppressed){
+              if(!p.maintenance){
+                supBtn = '<button type="button" class="mc-act" data-eventid="' + esc(p.eventid) + '" data-action="unsuppress" data-problem="' + attr(p.name) + '">Unsuppress</button>';
+              }
+            } else {
+              supBtn = '<button type="button" class="mc-act" data-eventid="' + esc(p.eventid) + '" data-action="suppress" data-problem="' + attr(p.name) + '">Suppress</button>';
+            }
+            act = '<div class="mc-actions">' + ackBtn + supBtn + '</div>';
+          }
+          var sup = '<span class="mc-muted">&mdash;</span>';
+          if(p.suppressed){
+            if(p.maintenance){
+              sup = '<span class="sup-m" title="Suppressed by maintenance #' + attr(p.maintenance) + '">Maintenance</span>';
+            } else if(p.suppress_until_label){
+              sup = '<span class="sup-y" title="Suppressed until ' + attr(p.suppress_until_label) + '">Until ' + esc(p.suppress_until_label) + '</span>';
+            } else {
+              sup = '<span class="sup-y">Until removed</span>';
+            }
           }
           return '<tr><td style="white-space:nowrap">' + esc(p.clock) + '</td>' +
             '<td><span class="sev" style="background:' + esc(p.sev_color || '#97AAB3') + '">' + esc(p.severity_name) + '</span></td>' +
@@ -274,8 +354,9 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
                 esc(p.ack_note.length > 110 ? p.ack_note.slice(0,110) + '…' : p.ack_note) + '</div>' : '') +
             '</td>' +
             '<td>' + (p.acknowledged ? '<span class="ack-y">Yes</span>' : '<span class="ack-n">No</span>') + '</td>' +
+            '<td>' + sup + '</td>' +
             '<td>' + act + '</td></tr>';
-        }).join('') || '<tr class="empty-row"><td colspan="6">No active problems.</td></tr>';
+        }).join('') || '<tr class="empty-row"><td colspan="7">No active problems.</td></tr>';
       }
       var hb = document.getElementById('hostBody');
       if(hb){

@@ -101,7 +101,7 @@ def test_the_auto_refresh_keeps_the_action_button():
 
     assert 'mc-act' in js, 'the re-rendered row needs the action cell'
     assert 'MC_CAN_ACT' in js, 'and it must respect the role flag'
-    assert 'colspan="6"' in js, 'the empty row spans the new column count'
+    assert 'colspan="7"' in js, 'the empty row spans the new column count'
 
 
 def test_every_row_has_the_same_number_of_cells():
@@ -110,8 +110,10 @@ def test_every_row_has_the_same_number_of_cells():
     tpl = (REPO / 'report-portal' / 'templates' / 'monitoring_center.html').read_text()
 
     header = tpl[tpl.index('<thead><tr>'):tpl.index('</tr></thead>')]
-    assert header.count('<th>') == 6
-    assert '<th>Ack</th>' in header and '<th>Action</th>' in header
+    assert header.count('<th>') == 7
+    assert '<th>Ack</th>' in header
+    assert '<th>Suppression</th>' in header
+    assert '<th>Action</th>' in header
 
 
 # ── comment / confirmation ─────────────────────────────────────────────────
@@ -233,6 +235,119 @@ def test_operator_text_is_escaped_for_attributes():
     tpl = _tpl()
 
     assert 'function attr(' in tpl
-    assert tpl.count("data-problem=\"' + attr(p.name)") == 2, (
-        'both action buttons re-render the problem name into an attribute')
+    assert tpl.count("data-problem=\"' + attr(p.name)") == 4, (
+        'ack, un-ack, suppress and unsuppress all re-render the name')
     assert "title=\"' + attr(p.ack_tip)" in tpl
+
+
+# ── suppression ────────────────────────────────────────────────────────────
+def test_suppress_acknowledges_and_carries_the_reason():
+    """32 = suppress, 2 = acknowledge, 4 = message. Suppressing without the
+    ack bit leaves the problem in the Unacknowledged filter the operator just
+    acted on."""
+    p = pa.ack_params('1700000001', 'suppress',
+                      'Vendor visit booked, ref VN-1042', until=1700003600)
+
+    assert p == {
+        'eventids': ['1700000001'],
+        'action': 38,
+        'message': 'Vendor visit booked, ref VN-1042',
+        'suppress_until': 1700003600,
+    }
+
+
+def test_suppress_requires_a_reason():
+    """A suppression without a reason is an invisible blind spot: the problem
+    disappears from the wall and nobody can say why it was silenced."""
+    with pytest.raises(ValueError):
+        pa.ack_params('123', 'suppress', '', until=1700003600)
+    with pytest.raises(ValueError):
+        pa.ack_params('123', 'suppress', '   ', until=1700003600)
+
+
+def test_suppress_requires_an_end_time():
+    with pytest.raises(ValueError):
+        pa.ack_params('123', 'suppress', 'vendor visit')
+
+
+def test_unsuppress_does_not_accept_an_end_time():
+    with pytest.raises(ValueError):
+        pa.ack_params('123', 'unsuppress', 'fixed', until=1700003600)
+
+
+def test_unsuppress_can_carry_a_note():
+    assert pa.ack_params('123', 'unsuppress') == {
+        'eventids': ['123'], 'action': 64}
+    assert pa.ack_params('123', 'unsuppress', 'part replaced')['action'] == 68
+
+
+def test_durations_are_a_closed_set():
+    """A raw minute count from the form is one typo away from a multi-year
+    blind spot, so only preset keys are accepted."""
+    now = 1_700_000_000
+    assert pa.suppress_until('30', now) == now + 30 * 60
+    assert pa.suppress_until('1440', now) == now + 24 * 60 * 60
+    for bad in ('5', '99999', '', None, 'forever'):
+        with pytest.raises(ValueError):
+            pa.suppress_until(bad, now)
+
+
+def test_only_an_admin_may_suppress_indefinitely():
+    with pytest.raises(ValueError):
+        pa.suppress_until('0', 1_700_000_000)
+    assert pa.suppress_until('0', 1_700_000_000, admin=True) == 0
+
+
+def test_bulk_ids_are_validated_deduped_and_capped():
+    assert pa.ack_params(['2', '1', '2'], 'acknowledge')['eventids'] == ['2', '1']
+    assert pa.ack_params('2,1', 'acknowledge')['eventids'] == ['2', '1']
+    with pytest.raises(ValueError):
+        pa.ack_params(['1', 'x'], 'acknowledge')
+    with pytest.raises(ValueError):
+        pa.ack_params(['%d' % i for i in range(pa.MAX_BULK + 1)], 'acknowledge')
+
+
+def test_suppression_state_reads_the_flag_expiry_and_maintenance():
+    assert pa.suppression_state({
+        'suppressed': '1',
+        'suppression_data': [{'suppress_until': '1700003600', 'maintenanceid': '0'}],
+    }) == (True, 1700003600, '')
+    assert pa.suppression_state({
+        'suppressed': '1',
+        'suppression_data': {'suppress_until': '1700003600', 'maintenanceid': '7'},
+    }) == (True, 1700003600, '7')
+
+
+def test_a_missing_suppression_block_does_not_crash():
+    assert pa.suppression_state({'suppressed': '0'}) == (False, 0, '')
+    assert pa.suppression_state({}) == (False, 0, '')
+    assert pa.suppression_state(None) == (False, 0, '')
+
+
+def test_the_page_asks_for_and_renders_suppression():
+    src = _monitoring_src()
+    assert "'suppressed'" in src
+    assert "'selectSuppressionData': 'extend'" in src
+
+    tpl = _tpl()
+    assert '<th>Suppression</th>' in tpl
+    assert 'class="sup-y"' in tpl and 'class="sup-m"' in tpl
+
+
+def test_maintenance_suppression_cannot_be_manually_removed():
+    """Zabbix will skip a manual unsuppress while a maintenance window is
+    active, so offering the button would lie to the operator."""
+    tpl = _tpl()
+    assert '{% if not p.maintenance %}' in tpl, 'server-rendered action cell'
+    assert 'if(!p.maintenance)' in tpl, 'the 20s re-render'
+
+
+def test_the_duration_options_come_from_the_validated_table():
+    """Hardcoding the <option> values in the template would let the UI offer a
+    duration the route rejects - and only an operator would find out."""
+    src = _monitoring_src()
+    assert 'from problem_actions import SUPPRESS_LABELS' in src
+    assert 'suppress_options=' in src
+
+    tpl = _tpl()
+    assert '{% for key, label in suppress_options %}' in tpl
