@@ -21,6 +21,9 @@
 .host-unk{color:#94A3B8;font-weight:700;font-size:11px}
 .filter-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .filter-row select{padding:7px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;outline:none;font-family:inherit}
+.mc-act{padding:3px 10px;border-radius:6px;border:1px solid #CBD5E1;background:#fff;color:#0F172A;font-size:11px;font-weight:600;cursor:pointer}
+.mc-act:hover{background:#F1F5F9}
+.mc-muted{color:#94A3B8}
 .err-banner{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;padding:12px 16px;border-radius:10px;font-size:12px;margin-bottom:16px}
 .empty-row td{text-align:center;color:#94A3B8;padding:22px !important}
 @media(max-width:768px){.mc-table-wrap{overflow-x:auto}}
@@ -73,7 +76,7 @@
     </div>
     <div class="mc-table-wrap">
       <table class="mc-table">
-        <thead><tr><th>Time</th><th>Severity</th><th>Host</th><th>Problem</th><th>Ack</th></tr></thead>
+        <thead><tr><th>Time</th><th>Severity</th><th>Host</th><th>Problem</th><th>Ack</th><th>Action</th></tr></thead>
         <tbody id="probBody">
           {% for p in problems %}
           <tr>
@@ -82,9 +85,18 @@
             <td>{{ p.host }}</td>
             <td>{{ p.name }}</td>
             <td>{% if p.acknowledged %}<span class="ack-y">Yes</span>{% else %}<span class="ack-n">No</span>{% endif %}</td>
+            <td>
+              {% if can_act %}
+                {% if p.acknowledged %}
+                <button type="button" class="mc-act" data-eventid="{{ p.eventid }}" data-action="unacknowledge">Un-acknowledge</button>
+                {% else %}
+                <button type="button" class="mc-act" data-eventid="{{ p.eventid }}" data-action="acknowledge">Acknowledge</button>
+                {% endif %}
+              {% else %}<span class="mc-muted">&mdash;</span>{% endif %}
+            </td>
           </tr>
           {% else %}
-          <tr class="empty-row"><td colspan="5">No active problems.{% if error %} Zabbix may be unreachable.{% endif %}</td></tr>
+          <tr class="empty-row"><td colspan="6">No active problems.{% if error %} Zabbix may be unreachable.{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -118,9 +130,31 @@
   </div>
 
 </div>
+
+<form id="mcActionForm" method="post" style="display:none">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="back" value="{{ request.full_path if request else '/monitoring' }}">
+</form>
 {% endblock %}
 {% block extra_scripts %}
 <script>
+/* The 20s re-render rebuilds every row, so the action cell has to be built
+   there too - and only for roles allowed to use it. */
+var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
+
+/* One delegated listener for the whole table: rows are replaced every 20s,
+   and a per-row onclick would have to be re-bound on every tick. */
+document.addEventListener('click', function(e){
+  var b = e.target && e.target.closest ? e.target.closest('.mc-act') : null;
+  if(!b) return;
+  var f = document.getElementById('mcActionForm');
+  if(!f) return;
+  f.action = '/monitoring/problems/' +
+             encodeURIComponent(b.getAttribute('data-eventid')) + '/' +
+             encodeURIComponent(b.getAttribute('data-action'));
+  f.submit();
+});
+
 /* 30s autosync: stat cards + both tables re-render from /monitoring/api/live.
    Skips while the tab is hidden; failures back off silently (stamp shows it). */
 (function(){
@@ -151,11 +185,18 @@
       var pb = document.getElementById('probBody');
       if(pb){
         pb.innerHTML = (d.problems || []).map(function(p){
+          var act = '<span class="mc-muted">&mdash;</span>';
+          if(MC_CAN_ACT){
+            act = p.acknowledged
+              ? '<button type="button" class="mc-act" data-eventid="' + esc(p.eventid) + '" data-action="unacknowledge">Un-acknowledge</button>'
+              : '<button type="button" class="mc-act" data-eventid="' + esc(p.eventid) + '" data-action="acknowledge">Acknowledge</button>';
+          }
           return '<tr><td style="white-space:nowrap">' + esc(p.clock) + '</td>' +
             '<td><span class="sev" style="background:' + esc(p.sev_color || '#97AAB3') + '">' + esc(p.severity_name) + '</span></td>' +
             '<td>' + esc(p.host) + '</td><td>' + esc(p.name) + '</td>' +
-            '<td>' + (p.acknowledged ? '<span class="ack-y">Yes</span>' : '<span class="ack-n">No</span>') + '</td></tr>';
-        }).join('') || '<tr class="empty-row"><td colspan="5">No active problems.</td></tr>';
+            '<td>' + (p.acknowledged ? '<span class="ack-y">Yes</span>' : '<span class="ack-n">No</span>') + '</td>' +
+            '<td>' + act + '</td></tr>';
+        }).join('') || '<tr class="empty-row"><td colspan="6">No active problems.</td></tr>';
       }
       var hb = document.getElementById('hostBody');
       if(hb){

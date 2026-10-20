@@ -4,13 +4,16 @@ In-portal Monitoring Center — Zabbix problems + host states without
 leaving the portal (Phase 1 of single-login UX).
 
 Reads via the Zabbix API service account (same helpers as admin.py).
-Read-only: acknowledge/escalate still happen in Zabbix itself for now.
+Acknowledge / un-acknowledge are the first write actions, OPERATOR and above.
+Suppress, close and severity changes still happen in Zabbix itself.
 """
 import logging
 from datetime import datetime, timezone, timedelta
-from flask import Blueprint, render_template, request, jsonify
+from flask import (Blueprint, flash, jsonify, redirect, render_template,
+                   request, session, url_for)
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from blueprints.admin import _zbx_login, _zbx_call
+from audit import log_action
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +126,51 @@ def center():
                            problems=problems, hosts=hosts, summary=summary,
                            severities=SEVERITIES, sev_colors=SEV_COLORS,
                            f_severity=severity, f_ack=ack, error=error,
-                           at_cap=at_cap)
+                           at_cap=at_cap,
+                           can_act=session.get('role') in (ROLE_OPERATOR, ROLE_ADMIN))
+
+
+def _back():
+    """Where to return after an action: the page the operator came from.
+
+    Validated to this blueprint: a form field must never become an open
+    redirect.
+    """
+    back = (request.form.get('back') or '').strip()
+    if back.startswith('/monitoring') and '\\' not in back and '\n' not in back:
+        return back
+    return url_for('.center')
+
+
+@bp.route('/problems/<eventid>/<action>', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def problem_action(eventid, action):
+    """Acknowledge or un-acknowledge a problem without opening Zabbix.
+
+    A write path on a page that was read-only, so it is OPERATOR and above.
+    Zabbix records the API service account as the actor; the human is recorded
+    in the portal audit log, which is the only place that knows who clicked.
+    """
+    from problem_actions import LABELS, ack_params
+    try:
+        params = ack_params(eventid, action)
+    except ValueError as e:
+        flash(str(e), 'error')
+        return redirect(_back())
+
+    auth = _zbx_login()
+    if not auth or _zbx_call('event.acknowledge', params, auth) is None:
+        flash('Zabbix did not accept the change. It may already be in that '
+              'state, or the API account may lack permission.', 'error')
+        return redirect(_back())
+
+    # The page redirects into a 20s read cache. Without this the Ack column
+    # still shows the old value and the action looks like it did nothing.
+    _cache['ts'] = 0.0
+    log_action('PROBLEM_' + action.upper(), 'eventid=%s' % eventid)
+    flash('%s event %s.' % (LABELS.get(action, action), eventid), 'success')
+    return redirect(_back())
 
 
 @bp.route('/api/live')
