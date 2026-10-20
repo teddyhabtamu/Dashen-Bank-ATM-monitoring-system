@@ -80,15 +80,7 @@ def _cached_zabbix():
                 'selectGroups': ['name'],
                 'sortfield': 'host',
             }, auth)
-            fp = ex.submit(_zbx_call, 'problem.get', {
-                'output': ['eventid', 'clock', 'name', 'severity', 'acknowledged', 'objectid'],
-                'selectHosts': ['hostid', 'host', 'name'],
-                # NB: problem.get allows sorting by eventid only (clock is
-                # rejected); eventids grow with time so DESC is newest-first.
-                'sortfield': 'eventid',
-                'sortorder': 'DESC',
-                'limit': 100,
-            }, auth)
+            fp = ex.submit(_problem_get, auth)
             hosts_raw = fh.result(timeout=12)
             problems = fp.result(timeout=12)
     except _FutureTimeout:
@@ -105,6 +97,51 @@ def _cached_zabbix():
     hosts = hosts_raw
     _cache.update(ts=now, hosts=hosts, problems=problems or [])
     return hosts, problems or []
+
+
+def _problem_get(auth):
+    """Active problems, including their acknowledgement history.
+
+    selectAcknowledges carries the operator's comment (the reason for the
+    ack). A build that rejects the parameter must not take the whole problem
+    list down with it - the page still works, just without the notes.
+    """
+    params = {
+        'output': ['eventid', 'clock', 'name', 'severity', 'acknowledged', 'objectid'],
+        'selectHosts': ['hostid', 'host', 'name'],
+        'selectAcknowledges': 'extend',
+        # NB: problem.get allows sorting by eventid only (clock is rejected);
+        # eventids grow with time so DESC is newest-first.
+        'sortfield': 'eventid',
+        'sortorder': 'DESC',
+        'limit': 100,
+    }
+    res = _zbx_call('problem.get', params, auth)
+    if res is None:
+        params.pop('selectAcknowledges', None)
+        res = _zbx_call('problem.get', params, auth)
+    return res
+
+
+_user_names = {}
+
+
+def _user_map(userids):
+    """userid -> username, cached per process.
+
+    Older builds return only userid on an acknowledge. One extra call is
+    cheaper than showing "1" where a person's name belongs, and the cache
+    keeps it to one call per process.
+    """
+    missing = [u for u in userids if u and u not in _user_names]
+    if missing:
+        auth = _zbx_login()
+        rows = _zbx_call('user.get', {'userids': missing,
+                                      'output': ['userid', 'username']},
+                         auth) if auth else None
+        for r in (rows or []):
+            _user_names[str(r.get('userid'))] = r.get('username') or ''
+    return _user_names
 
 
 def _fmt_clock(clock):
@@ -226,9 +263,11 @@ def _collect(severity, ack):
 
     # ── Active problems (summary over ALL cached rows; severity/ack
     # filters apply to the displayed list only) ──
+    from problem_actions import notes_from
     all_problems = []
     for p in raw_problems:
         host = (p.get('hosts') or [{}])[0]
+        notes = notes_from(p.get('acknowledges'))
         all_problems.append({
             'eventid': p.get('eventid'),
             'clock': _fmt_clock(p.get('clock')),
@@ -238,7 +277,23 @@ def _collect(severity, ack):
             'acknowledged': str(p.get('acknowledged')) == '1',
             'host': host.get('name') or host.get('host') or '—',
             'objectid': p.get('objectid'),
+            'ack_notes': notes,
+            'ack_note': notes[0]['message'] if notes else '',
         })
+    # Resolve any acknowledge author that came back as a bare userid, then
+    # format the history once for both the row and its tooltip.
+    needed = {n['userid'] for p in all_problems for n in p['ack_notes']
+              if n.get('userid') and not n.get('user')}
+    names = _user_map(needed) if needed else {}
+    for p in all_problems:
+        for n in p['ack_notes']:
+            if not n.get('user') and n.get('userid'):
+                n['user'] = names.get(n['userid'], '')
+            n['when'] = _fmt_clock(n['clock'])
+        p['ack_tip'] = '\n'.join(
+            '%s — %s: %s' % (n['when'], n['user'] or 'unknown', n['message'])
+            for n in p['ack_notes'])
+
     problems = [p for p in all_problems
                 if (severity not in SEVERITIES or p['severity'] == severity)
                 and (ack != 'no' or not p['acknowledged'])

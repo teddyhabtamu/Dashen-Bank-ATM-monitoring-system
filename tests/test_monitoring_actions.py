@@ -172,4 +172,67 @@ def test_the_dialog_knows_which_problem_it_is_for():
     or the dialog asks "remove the acknowledgement?" with no context."""
     tpl = _tpl()
     assert 'data-problem="{{ p.name }}"' in tpl
-    assert "data-problem=\"' + esc(p.name)" in tpl
+    assert "data-problem=\"' + attr(p.name)" in tpl
+
+
+# ── acknowledgement history ────────────────────────────────────────────────
+def test_notes_are_newest_first():
+    got = pa.notes_from([
+        {'clock': '100', 'message': 'older', 'username': 'a'},
+        {'clock': '300', 'message': 'newest', 'username': 'c'},
+        {'clock': '200', 'message': 'middle', 'username': 'b'},
+    ])
+
+    assert [n['message'] for n in got] == ['newest', 'middle', 'older']
+
+
+def test_events_without_a_message_do_not_hide_a_real_comment():
+    """Un-acknowledging records an event with no message. It is the newest
+    entry, and taking it as "the note" would erase the reason a human wrote."""
+    got = pa.notes_from([
+        {'clock': '300', 'message': '', 'action': '16'},
+        {'clock': '100', 'message': 'Dispenser replaced', 'username': 'a'},
+    ])
+
+    assert len(got) == 1
+    assert got[0]['message'] == 'Dispenser replaced'
+
+
+def test_a_note_survives_a_junk_clock():
+    assert pa.notes_from([{'clock': 'not-a-number', 'message': 'x'}])[0]['clock'] == 0
+
+
+def test_notes_tolerate_empty_or_missing_arrays():
+    assert pa.notes_from(None) == []
+    assert pa.notes_from([]) == []
+    assert pa.notes_from(['junk']) == []
+
+
+def test_the_page_asks_zabbix_for_the_acknowledges():
+    """The comment lives in `acknowledges`, which problem.get does not return
+    unless asked - that is why it was invisible after acknowledging."""
+    src = _monitoring_src()
+
+    assert "'selectAcknowledges': 'extend'" in src
+    assert "params.pop('selectAcknowledges'" in src, (
+        'a build that rejects the parameter must not lose the whole list')
+
+
+def test_the_note_is_rendered_on_the_row_and_after_the_auto_refresh():
+    tpl = _tpl()
+    assert 'p.ack_note' in tpl
+
+    js = tpl[tpl.index('pb.innerHTML'):tpl.index('var hb')]
+    assert 'mc-note' in js, 'the 20s re-render would drop the note'
+    assert 'attr(p.ack_tip)' in js
+
+
+def test_operator_text_is_escaped_for_attributes():
+    """The note is free text typed by a person. esc() handles & < > only, so a
+    double quote would close the title="" early."""
+    tpl = _tpl()
+
+    assert 'function attr(' in tpl
+    assert tpl.count("data-problem=\"' + attr(p.name)") == 2, (
+        'both action buttons re-render the problem name into an attribute')
+    assert "title=\"' + attr(p.ack_tip)" in tpl

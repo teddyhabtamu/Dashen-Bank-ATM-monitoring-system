@@ -28,6 +28,7 @@
 .mc-act.primary{background:#EEF2FF;border-color:#C7D2FE;color:#012169}
 .mc-act.primary:hover{background:#E0E7FF;border-color:#A5B4FC}
 .mc-muted{color:#94A3B8}
+.mc-note{margin-top:3px;font-size:11px;color:#64748B;font-style:italic;max-width:560px;white-space:normal;line-height:1.35}
 .mc-modal{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center}
 .mc-modal[hidden]{display:none}
 .mc-modal-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.45)}
@@ -98,7 +99,7 @@
             <td style="white-space:nowrap">{{ p.clock }}</td>
             <td><span class="sev" style="background:{{ sev_colors.get(p.severity, '#97AAB3') }}">{{ p.severity_name }}</span></td>
             <td>{{ p.host }}</td>
-            <td>{{ p.name }}</td>
+            <td>{{ p.name }}{% if p.ack_note %}<div class="mc-note" title="{{ p.ack_tip }}">&rarr; {{ p.ack_note|truncate(110) }}</div>{% endif %}</td>
             <td>{% if p.acknowledged %}<span class="ack-y">Yes</span>{% else %}<span class="ack-n">No</span>{% endif %}</td>
             <td>
               {% if can_act %}
@@ -233,6 +234,9 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
   var fails = 0, busy = false, t0 = 0;
   var INTERVAL = 20000, BACKOFF_MAX = 120000;
   function esc(s){ return String(s == null ? '—' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  /* esc() is not safe inside an attribute: a comment or a problem name with a
+     double quote would close the title="" / data-problem="" early. */
+  function attr(s){ return esc(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
   function stamp(ok){
     var el = document.getElementById('liveStamp');
     if(!el) return;
@@ -260,12 +264,15 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
           var act = '<span class="mc-muted">&mdash;</span>';
           if(MC_CAN_ACT){
             act = p.acknowledged
-              ? '<button type="button" class="mc-act" data-eventid="' + esc(p.eventid) + '" data-action="unacknowledge" data-problem="' + esc(p.name) + '">Un-acknowledge</button>'
-              : '<button type="button" class="mc-act primary" data-eventid="' + esc(p.eventid) + '" data-action="acknowledge" data-problem="' + esc(p.name) + '">Acknowledge</button>';
+              ? '<button type="button" class="mc-act" data-eventid="' + esc(p.eventid) + '" data-action="unacknowledge" data-problem="' + attr(p.name) + '">Un-acknowledge</button>'
+              : '<button type="button" class="mc-act primary" data-eventid="' + esc(p.eventid) + '" data-action="acknowledge" data-problem="' + attr(p.name) + '">Acknowledge</button>';
           }
           return '<tr><td style="white-space:nowrap">' + esc(p.clock) + '</td>' +
             '<td><span class="sev" style="background:' + esc(p.sev_color || '#97AAB3') + '">' + esc(p.severity_name) + '</span></td>' +
-            '<td>' + esc(p.host) + '</td><td>' + esc(p.name) + '</td>' +
+            '<td>' + esc(p.host) + '</td><td>' + esc(p.name) +
+              (p.ack_note ? '<div class="mc-note" title="' + attr(p.ack_tip) + '">&rarr; ' +
+                esc(p.ack_note.length > 110 ? p.ack_note.slice(0,110) + '…' : p.ack_note) + '</div>' : '') +
+            '</td>' +
             '<td>' + (p.acknowledged ? '<span class="ack-y">Yes</span>' : '<span class="ack-n">No</span>') + '</td>' +
             '<td>' + act + '</td></tr>';
         }).join('') || '<tr class="empty-row"><td colspan="6">No active problems.</td></tr>';

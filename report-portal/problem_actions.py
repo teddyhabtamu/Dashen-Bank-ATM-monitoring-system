@@ -53,3 +53,34 @@ def ack_params(eventid, action, message=None):
         params['action'] = bit | ADD_MESSAGE
         params['message'] = note[:2048]
     return params
+
+
+def notes_from(acknowledges):
+    """Normalise a problem's `acknowledges` array, newest first.
+
+    Only entries carrying a message are useful on the page: a plain
+    acknowledge or un-acknowledge is already represented by the Ack badge.
+    Kept pure so the ordering and the ignore-empty rules are testable - the
+    portal shows the newest note on the row and the full history in its
+    tooltip, and either would be wrong if an empty un-acknowledge event were
+    allowed to hide a real comment.
+    """
+    out = []
+    for a in acknowledges or []:
+        if not isinstance(a, dict):
+            continue
+        msg = (a.get('message') or '').strip()
+        if not msg:
+            continue
+        try:
+            clock = int(a.get('clock') or 0)
+        except (TypeError, ValueError):
+            clock = 0
+        out.append({
+            'clock': clock,
+            'user': (a.get('username') or '').strip(),
+            'userid': str(a.get('userid') or ''),
+            'message': msg,
+        })
+    out.sort(key=lambda n: n['clock'], reverse=True)
+    return out
