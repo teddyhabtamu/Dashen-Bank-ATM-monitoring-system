@@ -75,7 +75,7 @@ The only items whose cost goes *up* with time.
 
 | # | Task | Who can move it |
 |---|---|---|
-| A1 | Rotate `GLPI_APP_TOKEN` and `ZABBIX_PASS`. Untracking `.env.uat` did not remove them — they are in the history of every clone, and a token that has been in a repository should be treated as disclosed | You |
+| A1 | **Rotate every secret that was committed.** Not just the two first noticed: `.env.uat` was tracked until `6d40bfe` and carried ~35 real keys, including `FLASK_SECRET_KEY` (a forged session cookie is admin without a password), `ADMIN_PASS`, the DB passwords, `SMTP_PASS` and `GRAFANA_ADMIN_PASSWORD`; the GLPI App token was also hardcoded in `glpi_setup.py` and a tracked Zabbix XML until `711348b`. Untracking the file did not remove any of it — the values are in every clone. Read from the live containers, not from a local `.env`: the `svc-portal` / `svc-scripts` cutover **is** applied and authenticating. Ordered steps, verification and rollback: `docs/credential-rotation.md` | You |
 | A2 | Decide on history rewriting. Rotating first makes this optional; if the repo is held by a small group, rotation alone is defensible | You |
 | A3 | `report-portal/requirements.lock` exists only on UAT-01 and is untracked. Commit it for reproducible builds, or delete it so it stops looking like a lockfile | Portal work |
 
