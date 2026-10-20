@@ -21,9 +21,24 @@
 .host-unk{color:#94A3B8;font-weight:700;font-size:11px}
 .filter-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .filter-row select{padding:7px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;outline:none;font-family:inherit}
-.mc-act{padding:3px 10px;border-radius:6px;border:1px solid #CBD5E1;background:#fff;color:#0F172A;font-size:11px;font-weight:600;cursor:pointer}
-.mc-act:hover{background:#F1F5F9}
+.mc-table th:last-child,.mc-table td:last-child{width:1%;white-space:nowrap;text-align:right}
+.mc-act{height:26px;padding:0 12px;border-radius:100px;border:1px solid #CBD5E1;background:#fff;color:#334155;font-size:11px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.mc-act:hover{background:#F1F5F9;border-color:#94A3B8;color:#0F172A}
+.mc-act:focus-visible{outline:2px solid #93C5FD;outline-offset:1px}
+.mc-act.primary{background:#EEF2FF;border-color:#C7D2FE;color:#012169}
+.mc-act.primary:hover{background:#E0E7FF;border-color:#A5B4FC}
 .mc-muted{color:#94A3B8}
+.mc-modal{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center}
+.mc-modal[hidden]{display:none}
+.mc-modal-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.45)}
+.mc-modal-card{position:relative;width:min(440px,calc(100vw - 32px));background:#fff;border-radius:12px;box-shadow:0 20px 50px rgba(1,33,105,.25);padding:20px 22px}
+.mc-modal-card h3{margin:0 0 4px;font-size:15px;color:#0F172A}
+.mc-modal-problem{margin:0 0 14px;font-size:12px;color:#475569;line-height:1.45}
+.mc-modal-card label{display:block;font-size:11px;font-weight:600;color:#64748B;margin-bottom:5px}
+.mc-modal-card label span{font-weight:400}
+.mc-modal-card textarea{width:100%;box-sizing:border-box;border:1px solid #CBD5E1;border-radius:8px;padding:8px 10px;font:inherit;font-size:12px;resize:vertical;min-height:64px}
+.mc-modal-card textarea:focus{outline:2px solid #BFDBFE;border-color:#93C5FD}
+.mc-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 .err-banner{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;padding:12px 16px;border-radius:10px;font-size:12px;margin-bottom:16px}
 .empty-row td{text-align:center;color:#94A3B8;padding:22px !important}
 @media(max-width:768px){.mc-table-wrap{overflow-x:auto}}
@@ -88,9 +103,9 @@
             <td>
               {% if can_act %}
                 {% if p.acknowledged %}
-                <button type="button" class="mc-act" data-eventid="{{ p.eventid }}" data-action="unacknowledge">Un-acknowledge</button>
+                <button type="button" class="mc-act" data-eventid="{{ p.eventid }}" data-action="unacknowledge" data-problem="{{ p.name }}">Un-acknowledge</button>
                 {% else %}
-                <button type="button" class="mc-act" data-eventid="{{ p.eventid }}" data-action="acknowledge">Acknowledge</button>
+                <button type="button" class="mc-act primary" data-eventid="{{ p.eventid }}" data-action="acknowledge" data-problem="{{ p.name }}">Acknowledge</button>
                 {% endif %}
               {% else %}<span class="mc-muted">&mdash;</span>{% endif %}
             </td>
@@ -131,6 +146,22 @@
 
 </div>
 
+<div class="mc-modal" id="mcModal" hidden>
+  <div class="mc-modal-backdrop" data-close></div>
+  <div class="mc-modal-card" role="dialog" aria-modal="true" aria-labelledby="mcModalTitle">
+    <h3 id="mcModalTitle">Acknowledge this problem?</h3>
+    <p class="mc-modal-problem" id="mcModalProblem"></p>
+    <div id="mcNoteWrap">
+      <label for="mcComment">Comment <span>(optional, stored in Zabbix history)</span></label>
+      <textarea id="mcComment" rows="3" maxlength="2048"></textarea>
+    </div>
+    <div class="mc-modal-actions">
+      <button type="button" class="mc-act" data-close>Cancel</button>
+      <button type="button" class="mc-act primary" id="mcConfirm">Acknowledge</button>
+    </div>
+  </div>
+</div>
+
 <form id="mcActionForm" method="post" style="display:none">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="back" value="{{ request.full_path if request else '/monitoring' }}">
@@ -143,17 +174,58 @@
 var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
 
 /* One delegated listener for the whole table: rows are replaced every 20s,
-   and a per-row onclick would have to be re-bound on every tick. */
-document.addEventListener('click', function(e){
-  var b = e.target && e.target.closest ? e.target.closest('.mc-act') : null;
-  if(!b) return;
-  var f = document.getElementById('mcActionForm');
-  if(!f) return;
-  f.action = '/monitoring/problems/' +
-             encodeURIComponent(b.getAttribute('data-eventid')) + '/' +
-             encodeURIComponent(b.getAttribute('data-action'));
-  f.submit();
-});
+   and a per-row onclick would have to be re-bound on every tick. The dialog
+   is not cosmetic - it captures the comment, which Zabbix stores in the
+   problem's own event history beside the acknowledgement. */
+(function(){
+  var modal = document.getElementById('mcModal');
+  var form = document.getElementById('mcActionForm');
+  if(!modal || !form) return;
+  var pending = null;
+  var title = document.getElementById('mcModalTitle');
+  var prob = document.getElementById('mcModalProblem');
+  var note = document.getElementById('mcComment');
+  var noteWrap = document.getElementById('mcNoteWrap');
+  var confirmBtn = document.getElementById('mcConfirm');
+
+  function close(){ modal.hidden = true; pending = null; }
+  function open(btn){
+    pending = {eventid: btn.getAttribute('data-eventid'),
+               action: btn.getAttribute('data-action'),
+               problem: btn.getAttribute('data-problem') || ''};
+    var isAck = pending.action === 'acknowledge';
+    title.textContent = isAck ? 'Acknowledge this problem?' : 'Remove the acknowledgement?';
+    prob.textContent = pending.problem;
+    confirmBtn.textContent = isAck ? 'Acknowledge' : 'Un-acknowledge';
+    noteWrap.hidden = !isAck;
+    note.value = '';
+    modal.hidden = false;
+    (isAck ? note : confirmBtn).focus();
+  }
+
+  document.addEventListener('click', function(e){
+    var b = e.target && e.target.closest ? e.target.closest('.mc-act') : null;
+    if(b && !modal.contains(b)){ open(b); return; }
+    if(e.target && e.target.closest && e.target.closest('[data-close]')) close();
+  });
+  confirmBtn.addEventListener('click', function(){
+    if(!pending) return;
+    form.action = '/monitoring/problems/' +
+      encodeURIComponent(pending.eventid) + '/' +
+      encodeURIComponent(pending.action);
+    var old = form.querySelector('input[name="message"]');
+    if(old) old.remove();
+    if(pending.action === 'acknowledge' && note.value.trim()){
+      var i = document.createElement('input');
+      i.type = 'hidden'; i.name = 'message'; i.value = note.value.trim();
+      form.appendChild(i);
+    }
+    form.submit();
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && !modal.hidden) close();
+  });
+})();
 
 /* 30s autosync: stat cards + both tables re-render from /monitoring/api/live.
    Skips while the tab is hidden; failures back off silently (stamp shows it). */
@@ -188,8 +260,8 @@ document.addEventListener('click', function(e){
           var act = '<span class="mc-muted">&mdash;</span>';
           if(MC_CAN_ACT){
             act = p.acknowledged
-              ? '<button type="button" class="mc-act" data-eventid="' + esc(p.eventid) + '" data-action="unacknowledge">Un-acknowledge</button>'
-              : '<button type="button" class="mc-act" data-eventid="' + esc(p.eventid) + '" data-action="acknowledge">Acknowledge</button>';
+              ? '<button type="button" class="mc-act" data-eventid="' + esc(p.eventid) + '" data-action="unacknowledge" data-problem="' + esc(p.name) + '">Un-acknowledge</button>'
+              : '<button type="button" class="mc-act primary" data-eventid="' + esc(p.eventid) + '" data-action="acknowledge" data-problem="' + esc(p.name) + '">Acknowledge</button>';
           }
           return '<tr><td style="white-space:nowrap">' + esc(p.clock) + '</td>' +
             '<td><span class="sev" style="background:' + esc(p.sev_color || '#97AAB3') + '">' + esc(p.severity_name) + '</span></td>' +

@@ -153,8 +153,9 @@ def problem_action(eventid, action):
     in the portal audit log, which is the only place that knows who clicked.
     """
     from problem_actions import LABELS, ack_params
+    note = (request.form.get('message') or '').strip()
     try:
-        params = ack_params(eventid, action)
+        params = ack_params(eventid, action, note)
     except ValueError as e:
         flash(str(e), 'error')
         return redirect(_back())
@@ -168,7 +169,8 @@ def problem_action(eventid, action):
     # The page redirects into a 20s read cache. Without this the Ack column
     # still shows the old value and the action looks like it did nothing.
     _cache['ts'] = 0.0
-    log_action('PROBLEM_' + action.upper(), 'eventid=%s' % eventid)
+    log_action('PROBLEM_' + action.upper(),
+               'eventid=%s%s' % (eventid, (' — ' + note) if note else ''))
     flash('%s event %s.' % (LABELS.get(action, action), eventid), 'success')
     return redirect(_back())
 

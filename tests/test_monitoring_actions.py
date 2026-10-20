@@ -112,3 +112,64 @@ def test_every_row_has_the_same_number_of_cells():
     header = tpl[tpl.index('<thead><tr>'):tpl.index('</tr></thead>')]
     assert header.count('<th>') == 6
     assert '<th>Ack</th>' in header and '<th>Action</th>' in header
+
+
+# ── comment / confirmation ─────────────────────────────────────────────────
+def test_a_comment_is_sent_with_the_acknowledge_bit():
+    """Zabbix stores the note in the problem's own event history, next to the
+    acknowledgement - the trail an operator reads later, unlike the portal's
+    audit row which only knows that someone clicked."""
+    p = pa.ack_params('123', 'acknowledge', 'Customer reported; dispenser replaced.')
+
+    assert p['action'] == 6, '2 = acknowledge, 4 = add message'
+    assert p['message'] == 'Customer reported; dispenser replaced.'
+
+
+def test_an_empty_comment_does_not_set_the_message_bit():
+    """Bit 4 without a message is an error from Zabbix, and an empty textarea
+    is the common case - it must collapse to a plain acknowledge."""
+    for blank in ('', '   ', None):
+        assert pa.ack_params('123', 'acknowledge', blank) == {
+            'eventids': ['123'], 'action': 2}
+
+
+def test_a_comment_on_unacknowledge_is_rejected():
+    """The UI never offers the field for it; accepting one silently would set
+    a bit the caller did not mean."""
+    with pytest.raises(ValueError):
+        pa.ack_params('123', 'unacknowledge', 'note')
+
+
+def _tpl():
+    return (REPO / 'report-portal' / 'templates' / 'monitoring_center.html').read_text()
+
+
+def test_the_row_click_opens_a_dialog_instead_of_posting():
+    """Acknowledge is reversible, so a blocking confirm would be friction -
+    the dialog earns its place by carrying the comment, not by asking "are you
+    sure"."""
+    tpl = _tpl()
+    handler = tpl[tpl.index("document.addEventListener('click'"):
+                   tpl.index('confirmBtn.addEventListener')]
+
+    assert 'open(b)' in handler
+    assert 'form.submit()' not in handler, 'the row click must not post directly'
+    assert 'id="mcModal"' in tpl and 'id="mcConfirm"' in tpl
+
+
+def test_the_confirm_step_carries_the_comment_into_the_form():
+    tpl = _tpl()
+    js = tpl[tpl.index('confirmBtn.addEventListener'):]
+    js = js[:js.index("document.addEventListener('keydown'")]
+
+    assert 'form.submit()' in js
+    assert "i.name = 'message'" in js
+    assert "note.value.trim()" in js
+
+
+def test_the_dialog_knows_which_problem_it_is_for():
+    """Both the server render and the 20s re-render must pass the problem name,
+    or the dialog asks "remove the acknowledgement?" with no context."""
+    tpl = _tpl()
+    assert 'data-problem="{{ p.name }}"' in tpl
+    assert "data-problem=\"' + esc(p.name)" in tpl
