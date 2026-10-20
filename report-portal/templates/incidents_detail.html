@@ -47,6 +47,15 @@
 .sys-note{align-self:center;font-size:11px;color:#64748B;background:#F1F5F9;border-radius:100px;padding:4px 14px;max-width:90%;text-align:center}
 .sys-note b{color:#0F172A}
 .reply-box{background:#fff;border-radius:12px;border:1px solid #EEF1F6;padding:16px 18px;margin-top:4px}
+.ticket-modal{position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center}
+.ticket-modal[hidden]{display:none}
+.ticket-modal-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.45)}
+.ticket-modal-card{position:relative;width:min(420px,calc(100vw - 32px));background:#fff;border-radius:12px;box-shadow:0 20px 50px rgba(1,33,105,.25);padding:20px 22px}
+.ticket-modal-card h3{margin:0 0 6px;font-size:15px;color:#0F172A}
+.ticket-modal-text{margin:0;font-size:12px;color:#475569;line-height:1.5}
+.ticket-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.ticket-modal-actions .danger{border-color:#FCA5A5;color:#B91C1C;font-weight:700}
+.ticket-modal-actions .danger:hover{background:#FEF2F2}
 .reply-box textarea{width:100%;box-sizing:border-box;min-height:80px;padding:10px 12px;border:1px solid #E4E9F1;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical}
 .reply-box textarea:focus{border-color:#012169}
 .err-banner{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;padding:12px 16px;border-radius:10px;font-size:12px;margin-bottom:16px}
@@ -150,6 +159,18 @@
       <button class="act-btn" id="replyBtn" onclick="sendReply()" style="padding:8px 18px;background:#012169;color:#fff;border-color:#012169">Send reply</button>
     </div>
   </div>
+
+  <div class="ticket-modal" id="closeModal" hidden>
+    <div class="ticket-modal-backdrop" data-close></div>
+    <div class="ticket-modal-card" role="dialog" aria-modal="true" aria-labelledby="closeModalTitle">
+      <h3 id="closeModalTitle">Close ticket #{{ ticket.id }}?</h3>
+      <p class="ticket-modal-text">This marks the ticket closed. Only a solved ticket can be closed, and the action is recorded in the GLPI timeline.</p>
+      <div class="ticket-modal-actions">
+        <button type="button" class="act-btn" data-close>Cancel</button>
+        <button type="button" class="act-btn danger" id="closeConfirm" onclick="confirmClose()">Close ticket</button>
+      </div>
+    </div>
+  </div>
   {% endif %}
   <script>
   // Contact popover — deliberately OUTSIDE the operator gate above: viewers
@@ -235,10 +256,31 @@
       }
       body = {reason: text};
     } else if(kind === 'close'){
-      if(!window.confirm('Close ticket #{{ ticket.id }}? Only a solved ticket can be closed.')) return;
+      openCloseModal();
+      return;
     }
     ticketPost(url, body, btn);
   }
+  var closeModal = document.getElementById('closeModal');
+  function openCloseModal(){
+    if(!closeModal) return;
+    closeModal.hidden = false;
+    document.getElementById('closeConfirm').focus();
+  }
+  function hideCloseModal(){
+    if(closeModal) closeModal.hidden = true;
+  }
+  function confirmClose(){
+    hideCloseModal();
+    ticketPost('/incidents/{{ ticket.id }}/close', {}, null);
+  }
+  document.addEventListener('click', function(e){
+    if(e.target && e.target.closest && e.target.closest('[data-close]')) hideCloseModal();
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && closeModal && !closeModal.hidden) hideCloseModal();
+  });
+
   function showPickedFiles(input){
     // Accumulate into a managed list so files can be removed before send.
     if(!window._pickedDT) window._pickedDT = new DataTransfer();

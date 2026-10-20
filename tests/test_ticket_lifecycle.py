@@ -140,4 +140,16 @@ def test_js_posts_to_the_new_routes_and_confirms_close():
     assert "reopen: '/incidents/{{ ticket.id }}/reopen'" in js
     assert "pending: '/incidents/{{ ticket.id }}/pending'" in js
     assert 'text.length < 5' in js
-    assert 'window.confirm(' in js
+    assert 'openCloseModal();' in js, 'Close must open the portal dialog, not post immediately'
+    assert "ticketPost('/incidents/{{ ticket.id }}/close', {}, null)" in js
+    assert "e.key === 'Escape'" in js
+
+
+def test_close_uses_a_portal_dialog_not_the_browser_prompt():
+    """The native confirm belongs to the browser: it shows the host:port and
+    looks nothing like the portal. The dialog must be our own markup."""
+    tpl = _src('templates/incidents_detail.html')
+    assert 'id="closeModal"' in tpl
+    assert 'role="dialog"' in tpl
+    assert 'aria-modal="true"' in tpl
+    assert 'window.confirm(' not in tpl
