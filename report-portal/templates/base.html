@@ -358,6 +358,17 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
   .toast{padding:10px 14px}
 }
 .card-mask{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;font-variant-numeric:lining-nums tabular-nums;letter-spacing:.5px;white-space:nowrap}
+/* Shared action button: used by the incident list and the incident detail.
+   It lived only in incidents.html, so the detail page's buttons fell back to
+   native browser styling - visible the moment a dialog used them without
+   inline padding. */
+.act-btn{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #E4E9F1;background:#fff;color:#012169;transition:.15s;white-space:nowrap}
+.act-btn:hover{border-color:#012169;background:#EEF2FF}
+.act-btn:disabled{opacity:.5;cursor:default}
+.act-btn.solve{color:#065F46;border-color:#A7F3D0}
+.act-btn.solve:hover{background:#ECFDF5;border-color:#065F46}
+.act-btn.danger{border-color:#FCA5A5;color:#B91C1C}
+.act-btn.danger:hover{background:#FEF2F2;border-color:#B91C1C}
 {% block extra_style %}{% endblock %}
 </style>
 </head>

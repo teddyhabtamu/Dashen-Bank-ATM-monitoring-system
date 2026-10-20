@@ -153,3 +153,17 @@ def test_close_uses_a_portal_dialog_not_the_browser_prompt():
     assert 'role="dialog"' in tpl
     assert 'aria-modal="true"' in tpl
     assert 'window.confirm(' not in tpl
+
+
+def test_action_button_style_is_shared_not_page_local():
+    """The .act-btn rules lived only in incidents.html, so every button on the
+    detail page fell back to native styling. Inline padding hid it until the
+    confirmation dialog added buttons without any."""
+    base = _src('templates/base.html')
+    assert '.act-btn{' in base
+    assert '.act-btn.solve{' in base
+    assert '.act-btn.danger{' in base
+
+    detail = _src('templates/incidents_detail.html')
+    assert '.ticket-modal-actions .act-btn{' in detail, (
+        'the dialog needs the larger padding; the base button is compact')
