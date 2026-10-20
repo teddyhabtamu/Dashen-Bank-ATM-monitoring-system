@@ -132,8 +132,20 @@
       {% if ticket.status_n == 1 %}
       <button class="act-btn" id="ackBtn" onclick="replyAction('acknowledge', null)" style="padding:8px 18px">Acknowledge</button>
       {% endif %}
+      {% if ticket.status_n in (1, 2, 3) %}
+      <button class="act-btn" id="pendingBtn" onclick="replyAction('pending', null)" style="padding:8px 18px">Pending</button>
+      {% endif %}
       {% if ticket.status_n in (1, 2, 3, 4) %}
       <button class="act-btn solve" id="solveBtn" onclick="replyAction('solve', null)" style="padding:8px 18px">Solve</button>
+      {% endif %}
+      {% if ticket.status_n == 4 %}
+      <button class="act-btn" id="reopenBtn" onclick="replyAction('reopen', null)" style="padding:8px 18px">Resume</button>
+      {% endif %}
+      {% if ticket.status_n in (5, 6) %}
+      <button class="act-btn" id="reopenBtn" onclick="replyAction('reopen', null)" style="padding:8px 18px">Reopen</button>
+      {% endif %}
+      {% if ticket.status_n == 5 %}
+      <button class="act-btn" id="closeBtn" onclick="replyAction('close', null)" style="padding:8px 18px;border-color:#FCA5A5;color:#B91C1C">Close</button>
       {% endif %}
       <button class="act-btn" id="replyBtn" onclick="sendReply()" style="padding:8px 18px;background:#012169;color:#fff;border-color:#012169">Send reply</button>
     </div>
@@ -200,14 +212,30 @@
   {% if session.get('role') in ('admin', 'operator') %}
   <script>
   function replyAction(kind, btn){
-    var url = kind === 'acknowledge'
-      ? '/incidents/{{ ticket.id }}/acknowledge'
-      : '/incidents/{{ ticket.id }}/solve';
-    var body = null;
+    var urls = {
+      acknowledge: '/incidents/{{ ticket.id }}/acknowledge',
+      solve: '/incidents/{{ ticket.id }}/solve',
+      reopen: '/incidents/{{ ticket.id }}/reopen',
+      pending: '/incidents/{{ ticket.id }}/pending',
+      close: '/incidents/{{ ticket.id }}/close'
+    };
+    var url = urls[kind];
+    if(!url){ showToast('Unknown action.', 'error'); return; }
+    var body = {};
+    var text = document.getElementById('replyText').value.trim();
     if(kind === 'solve'){
-      var s = document.getElementById('replyText').value.trim();
-      if(!s){ showToast('Describe the resolution first — it becomes the GLPI solution.', 'error'); return; }
-      body = {solution: s};
+      if(!text){ showToast('Describe the resolution first — it becomes the GLPI solution.', 'error'); return; }
+      body = {solution: text};
+    } else if(kind === 'reopen' || kind === 'pending'){
+      if(text.length < 5){
+        showToast(kind === 'pending'
+          ? 'Write what the ticket is waiting for in the reply box first.'
+          : 'Write why the ticket is being reopened in the reply box first.', 'error');
+        return;
+      }
+      body = {reason: text};
+    } else if(kind === 'close'){
+      if(!window.confirm('Close ticket #{{ ticket.id }}? Only a solved ticket can be closed.')) return;
     }
     ticketPost(url, body, btn);
   }

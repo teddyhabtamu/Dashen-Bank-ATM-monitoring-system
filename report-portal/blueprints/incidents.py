@@ -18,6 +18,7 @@ from flask import Blueprint, render_template, request, jsonify, session, Respons
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from audit import log_action
 from db import get_db
+from ticket_lifecycle import decide as _decide_status, status_label
 
 logger = logging.getLogger(__name__)
 
@@ -1112,4 +1113,138 @@ def solve(ticket_id):
     res = _mutate(ticket_id, _run)
     if res['success']:
         log_action('TICKET_SOLVE', f'Ticket {ticket_id} solved by {actor}')
+    return jsonify(res)
+
+
+def _ticket_status(token, ticket_id):
+    """Current GLPI status, or None if the ticket cannot be read."""
+    ok, data = _api(token, 'GET', f'Ticket/{ticket_id}', None)
+    if not ok or not isinstance(data, dict):
+        return None
+    try:
+        return int(data.get('status'))
+    except (TypeError, ValueError):
+        return None
+
+
+def _has_technician(token, ticket_id):
+    """True if the ticket has an assigned technician (Ticket_User type 2)."""
+    ok, actors = _api(token, 'GET', f'Ticket/{ticket_id}/Ticket_User/', None)
+    if not ok or not isinstance(actors, list):
+        return False
+    for a in actors:
+        try:
+            if int(a.get('type', 0)) == 2:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
+@bp.route('/<int:ticket_id>/close', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def close(ticket_id):
+    """Solved -> Closed. Only from Solved: closing open work hides it."""
+    actor = _actor()
+
+    def _run(token):
+        status = _ticket_status(token, ticket_id)
+        if status is None:
+            return False, f'Cannot read ticket {ticket_id} from GLPI.'
+        ok, new_status, _code = _decide_status('close', status)
+        if not ok:
+            return False, ('Only a solved ticket can be closed '
+                           f'(current status: {status_label(status)}).')
+        if new_status is None:
+            return True, f'Ticket {ticket_id} is already closed.'
+        ok, data = _api(token, 'PUT', f'Ticket/{ticket_id}',
+                        {'input': {'status': new_status}})
+        if not ok:
+            return False, data
+        _add_followup(token, ticket_id,
+                      f'Closed from ATM Monitoring System by {actor}.')
+        return True, f'Ticket {ticket_id} closed.'
+
+    res = _mutate(ticket_id, _run)
+    if res['success']:
+        log_action('TICKET_CLOSE', f'Ticket {ticket_id} closed by {actor}')
+    return jsonify(res)
+
+
+@bp.route('/<int:ticket_id>/reopen', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def reopen(ticket_id):
+    """Solved/Closed -> open, or Pending -> open (resume)."""
+    actor = _actor()
+    reason = (request.get_json(silent=True) or {}).get('reason', '').strip()
+    if len(reason) < 5:
+        return jsonify({'success': False,
+                        'message': 'Write why the ticket is being reopened (at least 5 characters).'})
+    if len(reason) > 2000:
+        return jsonify({'success': False, 'message': 'Reason is too long (max 2000 characters).'})
+
+    def _run(token):
+        status = _ticket_status(token, ticket_id)
+        if status is None:
+            return False, f'Cannot read ticket {ticket_id} from GLPI.'
+        # Only ask GLPI for the assignee when a write is actually needed and
+        # the target status depends on it.
+        assigned = _has_technician(token, ticket_id)
+        ok, new_status, code = _decide_status('reopen', status, assigned=assigned)
+        if not ok:
+            return False, f'Cannot reopen ticket {ticket_id} (status: {status_label(status)}).'
+        if new_status is None:
+            return True, f'Ticket {ticket_id} is already open.'
+        ok, data = _api(token, 'PUT', f'Ticket/{ticket_id}',
+                        {'input': {'status': new_status}})
+        if not ok:
+            return False, data
+        verb = 'Resumed from pending' if code == 'resumed' else 'Reopened'
+        _add_followup(token, ticket_id,
+                      f'{verb} from ATM Monitoring System by {actor}: {reason}')
+        return True, (f'Ticket {ticket_id} resumed.' if code == 'resumed'
+                      else f'Ticket {ticket_id} reopened.')
+
+    res = _mutate(ticket_id, _run)
+    if res['success']:
+        log_action('TICKET_REOPEN', f'Ticket {ticket_id} reopened by {actor}: {reason}')
+    return jsonify(res)
+
+
+@bp.route('/<int:ticket_id>/pending', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def pending(ticket_id):
+    """Open -> Pending, with the reason recorded as a followup."""
+    actor = _actor()
+    reason = (request.get_json(silent=True) or {}).get('reason', '').strip()
+    if len(reason) < 5:
+        return jsonify({'success': False,
+                        'message': 'Write what the ticket is waiting for (at least 5 characters).'})
+    if len(reason) > 2000:
+        return jsonify({'success': False, 'message': 'Reason is too long (max 2000 characters).'})
+
+    def _run(token):
+        status = _ticket_status(token, ticket_id)
+        if status is None:
+            return False, f'Cannot read ticket {ticket_id} from GLPI.'
+        ok, new_status, _code = _decide_status('pending', status)
+        if not ok:
+            return False, ('Only an open ticket can be set to pending '
+                           f'(current status: {status_label(status)}).')
+        if new_status is None:
+            return True, f'Ticket {ticket_id} is already pending.'
+        ok, data = _api(token, 'PUT', f'Ticket/{ticket_id}',
+                        {'input': {'status': new_status}})
+        if not ok:
+            return False, data
+        _add_followup(token, ticket_id,
+                      f'Set to pending from ATM Monitoring System by {actor}: {reason}')
+        return True, f'Ticket {ticket_id} set to pending.'
+
+    res = _mutate(ticket_id, _run)
+    if res['success']:
+        log_action('TICKET_PENDING', f'Ticket {ticket_id} set pending by {actor}: {reason}')
     return jsonify(res)
