@@ -101,7 +101,7 @@ def test_the_auto_refresh_keeps_the_action_button():
 
     assert 'mc-act' in js, 'the re-rendered row needs the action cell'
     assert 'MC_CAN_ACT' in js, 'and it must respect the role flag'
-    assert 'colspan="7"' in js, 'the empty row spans the new column count'
+    assert 'colspan="8"' in js, 'the empty row spans the new column count'
 
 
 def test_every_row_has_the_same_number_of_cells():
@@ -110,7 +110,8 @@ def test_every_row_has_the_same_number_of_cells():
     tpl = (REPO / 'report-portal' / 'templates' / 'monitoring_center.html').read_text()
 
     header = tpl[tpl.index('<thead><tr>'):tpl.index('</tr></thead>')]
-    assert header.count('<th>') == 7
+    assert header.count('</th>') == 8, 'the selection column counts too'
+    assert 'id="mcCheckAll"' in header
     assert '<th>Ack</th>' in header
     assert '<th>Suppression</th>' in header
     assert '<th>Action</th>' in header
@@ -430,3 +431,61 @@ def test_a_glpi_ticket_is_linked_without_a_second_login():
     assert pa.glpi_ticket({'tags': [{'tag': 'other', 'value': '9'}]}) == ''
     assert pa.glpi_ticket({'tags': [{'tag': 'glpi_id', 'value': '9 OR 1=1'}]}) == ''
     assert pa.glpi_ticket({}) == ''
+
+
+# ── bulk actions ───────────────────────────────────────────────────────────
+def test_the_bulk_route_is_operator_only_and_limited_to_ack_and_suppress():
+    """Bulk un-acknowledge would erase ownership during a storm. The toolbar
+    never offers it, and the route must refuse it too."""
+    src = _monitoring_src()
+    head = src[src.index("@bp.route('/bulk/"):src.index('def problem_bulk_action')]
+    assert "methods=['POST']" in head
+    assert 'ROLE_OPERATOR' in head and 'ROLE_ADMIN' in head
+    assert 'ROLE_VIEWER' not in head
+
+    fn = src[src.index('def problem_bulk_action'):]
+    fn = fn[:fn.index('@bp.route')]
+    assert "BULK_ACTIONS = {'acknowledge', 'suppress'}" in src
+    assert 'if action not in BULK_ACTIONS:' in fn
+    assert "ack_params(request.form.get('eventids', '')" in fn
+    assert "_cache['ts'] = 0.0" in fn
+    assert 'PROBLEM_BULK_' in fn
+
+
+def test_the_bulk_bar_is_operator_only():
+    tpl = _tpl()
+    at = tpl.index('id="mcBulkBar"')
+    assert '{% if can_act %}' in tpl[max(0, at - 220):at]
+    assert 'id="mcBulkAck"' in tpl and 'id="mcBulkSuppress"' in tpl
+    assert 'id="mcBulkClear"' in tpl
+
+
+def test_every_row_has_a_selection_box():
+    tpl = _tpl()
+    start = tpl.index('{% for p in problems %}')
+    row = tpl[start:tpl.index('{% endfor %}', start)]
+
+    assert 'class="mc-check"' in row
+    assert 'data-eventid="{{ p.eventid }}"' in row
+    assert 'id="mcCheckAll"' in tpl
+
+    js = tpl[tpl.index('pb.innerHTML'):tpl.index('var hb')]
+    assert 'class="mc-check"' in js, 'the 20s re-render must rebuild the boxes'
+
+
+def test_selection_survives_the_auto_refresh():
+    """The re-render replaces every row. If the checked state is not re-applied
+    from a Set, a bulk action taken after 20 seconds silently applies to
+    nothing (or to the wrong rows)."""
+    tpl = _tpl()
+    assert 'window.mcSelectionRender = update' in tpl
+    assert 'if(window.mcSelectionRender) window.mcSelectionRender();' in tpl
+    assert 'selected.forEach(function(id){ if(!live.has(id)) selected.delete(id); })' in tpl
+
+
+def test_the_bulk_modal_posts_all_ids_to_one_call():
+    tpl = _tpl()
+    assert "form.action = '/monitoring/bulk/' + encodeURIComponent(pending.action)" in tpl
+    assert "idsInput.name = 'eventids'" in tpl
+    assert "pending.eventids.join(',')" in tpl
+    assert 'openBulk(' in tpl

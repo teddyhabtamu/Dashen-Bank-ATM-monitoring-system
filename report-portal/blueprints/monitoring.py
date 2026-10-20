@@ -253,6 +253,61 @@ def problem_action(eventid, action):
     return redirect(_back())
 
 
+BULK_ACTIONS = {'acknowledge', 'suppress'}
+
+
+@bp.route('/bulk/<action>', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def problem_bulk_action(action):
+    """Acknowledge or suppress many problems in one Zabbix call.
+
+    Bulk un-acknowledge is deliberately not offered: during a storm it would
+    erase the ownership operators just took. The route refuses it even if a
+    crafted form asks, rather than relying on the toolbar not rendering it.
+    """
+    from problem_actions import ack_params, suppress_until
+    if action not in BULK_ACTIONS:
+        flash('That action is not available in bulk.', 'error')
+        return redirect(_back())
+
+    note = (request.form.get('message') or '').strip()
+    until = None
+    if action == 'suppress':
+        try:
+            until = suppress_until(request.form.get('duration', ''),
+                                   time.time(),
+                                   admin=session.get('role') == ROLE_ADMIN)
+        except ValueError as e:
+            flash(str(e), 'error')
+            return redirect(_back())
+    try:
+        params = ack_params(request.form.get('eventids', ''), action, note, until=until)
+    except ValueError as e:
+        flash(str(e), 'error')
+        return redirect(_back())
+
+    auth = _zbx_login()
+    if not auth or _zbx_call('event.acknowledge', params, auth) is None:
+        flash('Zabbix did not accept the bulk change. Nothing was applied.', 'error')
+        return redirect(_back())
+
+    _cache['ts'] = 0.0
+    count = len(params['eventids'])
+    detail = 'events=%d' % count
+    if action == 'suppress':
+        detail += ' until=%s' % ('indefinite' if not until else _fmt_clock(until))
+    if note:
+        detail += ' — ' + note
+    log_action('PROBLEM_BULK_' + action.upper(), detail)
+    if action == 'suppress':
+        when = 'indefinitely' if not until else 'until ' + _fmt_clock(until)
+        flash('Suppressed %d problems %s.' % (count, when), 'success')
+    else:
+        flash('Acknowledged %d problems.' % count, 'success')
+    return redirect(_back())
+
+
 @bp.route('/api/live')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)

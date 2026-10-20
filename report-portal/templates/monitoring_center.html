@@ -36,6 +36,10 @@
 .mc-kebab:hover{background:#F1F5F9;color:#0F172A}
 .mc-kebab:focus-visible{outline:2px solid #93C5FD;outline-offset:1px}
 .mc-kebab-empty{padding:7px 12px;font-size:11px;color:#64748B;white-space:nowrap}
+.mc-bulkbar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#EEF2FF;border:1px solid #C7D2FE;border-radius:8px;margin:0 14px 10px;font-size:12px;font-weight:600;color:#012169}
+.mc-bulkbar[hidden]{display:none}
+.mc-check-cell{width:1%;text-align:center;white-space:nowrap}
+.mc-check{width:14px;height:14px;cursor:pointer;accent-color:#012169;vertical-align:middle}
 .mc-modal{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center}
 .mc-modal[hidden]{display:none}
 .mc-modal-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.45)}
@@ -98,12 +102,22 @@
         {% endif %}
       </form>
     </div>
+    {% if can_act %}
+    <div class="mc-bulkbar" id="mcBulkBar" hidden>
+      <span id="mcBulkCount">0 selected</span>
+      <span style="flex:1"></span>
+      <button type="button" class="mc-act primary" id="mcBulkAck">Acknowledge</button>
+      <button type="button" class="mc-act" id="mcBulkSuppress">Suppress&hellip;</button>
+      <button type="button" class="mc-act" id="mcBulkClear">Clear</button>
+    </div>
+    {% endif %}
     <div class="mc-table-wrap">
       <table class="mc-table">
-        <thead><tr><th>Time</th><th>Severity</th><th>Host</th><th>Problem</th><th>Ack</th><th>Suppression</th><th>Action</th></tr></thead>
+        <thead><tr><th class="mc-check-cell">{% if can_act %}<input type="checkbox" class="mc-check" id="mcCheckAll" title="Select all visible" aria-label="Select all visible problems">{% endif %}</th><th>Time</th><th>Severity</th><th>Host</th><th>Problem</th><th>Ack</th><th>Suppression</th><th>Action</th></tr></thead>
         <tbody id="probBody">
           {% for p in problems %}
           <tr>
+            <td class="mc-check-cell">{% if can_act %}<input type="checkbox" class="mc-check" data-eventid="{{ p.eventid }}" aria-label="Select this problem">{% endif %}</td>
             <td style="white-space:nowrap">{{ p.clock }}</td>
             <td><span class="sev" style="background:{{ sev_colors.get(p.severity, '#97AAB3') }}">{{ p.severity_name }}</span></td>
             <td>{{ p.host }}</td>
@@ -138,7 +152,7 @@
             </td>
           </tr>
           {% else %}
-          <tr class="empty-row"><td colspan="7">No active problems.{% if error %} Zabbix may be unreachable.{% endif %}</td></tr>
+          <tr class="empty-row"><td colspan="8">No active problems.{% if error %} Zabbix may be unreachable.{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -231,15 +245,19 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
 
   function close(){ modal.hidden = true; pending = null; }
 
-  function openAction(eventid, action, problem){
-    pending = {eventid: eventid, action: action, problem: problem || ''};
+  function showModal(p){
+    pending = p;
+    var action = p.action;
     var isAck = action === 'acknowledge';
     var isSuppress = action === 'suppress';
     var isUnsuppress = action === 'unsuppress';
-    title.textContent = isSuppress ? 'Suppress this problem?'
+    var count = p.eventids.length;
+    title.textContent = isSuppress
+      ? (p.bulk ? 'Suppress ' + count + ' problems?' : 'Suppress this problem?')
       : isUnsuppress ? 'Remove the suppression?'
-      : isAck ? 'Acknowledge this problem?' : 'Remove the acknowledgement?';
-    prob.textContent = pending.problem;
+      : isAck ? (p.bulk ? 'Acknowledge ' + count + ' problems?' : 'Acknowledge this problem?')
+      : 'Remove the acknowledgement?';
+    prob.textContent = p.problem || '';
     confirmBtn.textContent = isSuppress ? 'Suppress'
       : isUnsuppress ? 'Unsuppress'
       : isAck ? 'Acknowledge' : 'Un-acknowledge';
@@ -249,11 +267,22 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
       ? '(required — stored in Zabbix history)'
       : '(optional, stored in Zabbix history)';
     note.placeholder = isSuppress
-      ? 'Why is this being suppressed? This is the audit trail.'
+      ? 'Why are these problems being suppressed? This is the audit trail.'
       : 'Optional comment…';
     note.value = '';
     modal.hidden = false;
     (isSuppress ? note : confirmBtn).focus();
+  }
+
+  function openAction(eventid, action, problem){
+    showModal({eventids: [String(eventid)], action: action, problem: problem || ''});
+  }
+
+  function openBulk(action){
+    var ids = window.mcSelectionIds ? window.mcSelectionIds() : [];
+    if(!ids.length) return;
+    showModal({eventids: ids, action: action, bulk: true,
+               problem: ids.length + ' selected problem' + (ids.length === 1 ? '' : 's')});
   }
 
   function closeKebab(){
@@ -335,21 +364,36 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
     if(t && t.closest && t.closest('[data-close]')) close();
   });
 
+  var bulkAck = document.getElementById('mcBulkAck');
+  var bulkSuppress = document.getElementById('mcBulkSuppress');
+  if(bulkAck) bulkAck.addEventListener('click', function(){ openBulk('acknowledge'); });
+  if(bulkSuppress) bulkSuppress.addEventListener('click', function(){ openBulk('suppress'); });
+
   confirmBtn.addEventListener('click', function(){
     if(!pending) return;
     var text = note.value.trim();
     if(pending.action === 'suppress' && text.length < 5){
-      showToast('Write why the problem is being suppressed (at least 5 characters).', 'error');
+      showToast('Write why the problems are being suppressed (at least 5 characters).', 'error');
       note.focus();
       return;
     }
-    form.action = '/monitoring/problems/' +
-      encodeURIComponent(pending.eventid) + '/' +
-      encodeURIComponent(pending.action);
     var oldMsg = form.querySelector('input[name="message"]');
     if(oldMsg) oldMsg.remove();
     var oldDur = form.querySelector('input[name="duration"]');
     if(oldDur) oldDur.remove();
+    var oldIds = form.querySelector('input[name="eventids"]');
+    if(oldIds) oldIds.remove();
+    if(pending.bulk){
+      form.action = '/monitoring/bulk/' + encodeURIComponent(pending.action);
+      var idsInput = document.createElement('input');
+      idsInput.type = 'hidden'; idsInput.name = 'eventids';
+      idsInput.value = pending.eventids.join(',');
+      form.appendChild(idsInput);
+    } else {
+      form.action = '/monitoring/problems/' +
+        encodeURIComponent(pending.eventids[0]) + '/' +
+        encodeURIComponent(pending.action);
+    }
     if(text && pending.action !== 'unacknowledge'){
       var i = document.createElement('input');
       i.type = 'hidden'; i.name = 'message'; i.value = text;
@@ -370,6 +414,59 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
     if(!modal.hidden) close();
   });
   document.addEventListener('scroll', closeKebab, true);
+})();
+
+/* Selection survives the 20s re-render. The Set is the source of truth; the
+   boxes are a view of it, re-applied after every innerHTML replacement. */
+(function(){
+  var pb = document.getElementById('probBody');
+  var bar = document.getElementById('mcBulkBar');
+  var count = document.getElementById('mcBulkCount');
+  var all = document.getElementById('mcCheckAll');
+  if(!pb || !bar) return;
+  var selected = new Set();
+
+  function boxes(){ return Array.prototype.slice.call(pb.querySelectorAll('.mc-check')); }
+
+  function update(){
+    var list = boxes();
+    var live = new Set();
+    list.forEach(function(c){
+      var id = c.dataset.eventid;
+      live.add(id);
+      c.checked = selected.has(id);
+    });
+    selected.forEach(function(id){ if(!live.has(id)) selected.delete(id); });
+    if(count) count.textContent = selected.size + ' selected';
+    bar.hidden = selected.size === 0;
+    if(all){
+      all.checked = list.length > 0 && selected.size === list.length;
+      all.indeterminate = selected.size > 0 && selected.size < list.length;
+    }
+  }
+
+  window.mcSelectionIds = function(){ return Array.from(selected); };
+  window.mcSelectionClear = function(){ selected.clear(); update(); };
+  window.mcSelectionRender = update;
+
+  pb.addEventListener('change', function(e){
+    var c = e.target && e.target.closest ? e.target.closest('.mc-check') : null;
+    if(!c) return;
+    if(c.checked) selected.add(c.dataset.eventid); else selected.delete(c.dataset.eventid);
+    update();
+  });
+  if(all){
+    all.addEventListener('change', function(){
+      boxes().forEach(function(c){
+        c.checked = all.checked;
+        if(all.checked) selected.add(c.dataset.eventid); else selected.delete(c.dataset.eventid);
+      });
+      update();
+    });
+  }
+  var clear = document.getElementById('mcBulkClear');
+  if(clear) clear.addEventListener('click', function(){ window.mcSelectionClear(); });
+  update();
 })();
 
 /* 30s autosync: stat cards + both tables re-render from /monitoring/api/live.
@@ -430,7 +527,10 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
               sup = '<span class="sup-y">Until removed</span>';
             }
           }
-          return '<tr><td style="white-space:nowrap">' + esc(p.clock) + '</td>' +
+          var chk = MC_CAN_ACT
+            ? '<td class="mc-check-cell"><input type="checkbox" class="mc-check" data-eventid="' + esc(p.eventid) + '" aria-label="Select this problem"></td>'
+            : '<td class="mc-check-cell"></td>';
+          return '<tr>' + chk + '<td style="white-space:nowrap">' + esc(p.clock) + '</td>' +
             '<td><span class="sev" style="background:' + esc(p.sev_color || '#97AAB3') + '">' + esc(p.severity_name) + '</span></td>' +
             '<td>' + esc(p.host) + '</td><td>' + esc(p.name) +
               (p.ack_note ? '<div class="mc-note" title="' + attr(p.ack_tip) + '">&rarr; ' +
@@ -439,7 +539,8 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
             '<td>' + (p.acknowledged ? '<span class="ack-y">Yes</span>' : '<span class="ack-n">No</span>') + '</td>' +
             '<td>' + sup + '</td>' +
             '<td>' + act + '</td></tr>';
-        }).join('') || '<tr class="empty-row"><td colspan="7">No active problems.</td></tr>';
+        }).join('') || '<tr class="empty-row"><td colspan="8">No active problems.</td></tr>';
+        if(window.mcSelectionRender) window.mcSelectionRender();
       }
       var hb = document.getElementById('hostBody');
       if(hb){
