@@ -369,6 +369,18 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
 .act-btn.solve:hover{background:#ECFDF5;border-color:#065F46}
 .act-btn.danger{border-color:#FCA5A5;color:#B91C1C}
 .act-btn.danger:hover{background:#FEF2F2;border-color:#B91C1C}
+/* Shared row-action menu. The incidents list and the Monitoring Center
+   both use it; a page-local copy is how .act-btn drifted before. */
+.kebab-wrap{position:relative;text-align:center}
+.kebab-btn{background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:6px;color:#64748B;font-size:16px;line-height:1;letter-spacing:1px}
+.kebab-btn:hover{background:#EEF2FF;color:#012169}
+.kebab-menu{display:none;position:absolute;right:0;top:100%;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:4px;z-index:100;min-width:150px;border:1px solid #EEF1F6}
+.kebab-menu.show{display:block}
+.kebab-menu.floating{position:fixed;top:auto;left:auto;z-index:3000}
+.kebab-item{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:none;width:100%;text-align:left;color:#334155}
+.kebab-item:hover{background:#F8FAFC}
+.kebab-item.solve{color:#065F46}
+.kebab-item.solve:hover{background:#ECFDF5}
 {% block extra_style %}{% endblock %}
 </style>
 </head>

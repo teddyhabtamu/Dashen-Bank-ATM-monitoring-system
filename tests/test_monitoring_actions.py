@@ -154,7 +154,7 @@ def test_the_row_click_opens_a_dialog_instead_of_posting():
     handler = tpl[tpl.index("document.addEventListener('click'"):
                    tpl.index('confirmBtn.addEventListener')]
 
-    assert 'open(b)' in handler
+    assert 'openAction(' in handler
     assert 'form.submit()' not in handler, 'the row click must not post directly'
     assert 'id="mcModal"' in tpl and 'id="mcConfirm"' in tpl
 
@@ -235,8 +235,8 @@ def test_operator_text_is_escaped_for_attributes():
     tpl = _tpl()
 
     assert 'function attr(' in tpl
-    assert tpl.count("data-problem=\"' + attr(p.name)") == 4, (
-        'ack, un-ack, suppress and unsuppress all re-render the name')
+    assert tpl.count("data-problem=\"' + attr(p.name)") == 3, (
+        'the ack pill and the kebab carry the name; menu items read the kebab')
     assert "title=\"' + attr(p.ack_tip)" in tpl
 
 
@@ -336,10 +336,9 @@ def test_the_page_asks_for_and_renders_suppression():
 
 def test_maintenance_suppression_cannot_be_manually_removed():
     """Zabbix will skip a manual unsuppress while a maintenance window is
-    active, so offering the button would lie to the operator."""
+    active, so offering the item would lie to the operator."""
     tpl = _tpl()
-    assert '{% if not p.maintenance %}' in tpl, 'server-rendered action cell'
-    assert 'if(!p.maintenance)' in tpl, 'the 20s re-render'
+    assert "if(!maintenance) addKebab('Unsuppress', 'unsuppress');" in tpl
 
 
 def test_the_duration_options_come_from_the_validated_table():
@@ -369,3 +368,65 @@ def test_time_is_imported_at_module_level():
             imported.update(a.asname or a.name for a in node.names)
 
     assert 'time' in imported, 'time.time() must resolve at module level'
+
+
+# ── kebab menu + GLPI link ─────────────────────────────────────────────────
+def test_the_secondary_action_lives_in_the_kebab_not_a_second_pill():
+    """Two stacked pills doubled every row's height. The primary action stays
+    visible; everything else moves behind the menu."""
+    tpl = _tpl()
+    start = tpl.index('{% for p in problems %}')
+    row = tpl[start:tpl.index('{% endfor %}', start)]
+
+    assert 'class="mc-kebab"' in row
+    assert 'data-action="suppress"' not in row
+    # Exactly one of the two ack branches renders; no second pill exists.
+    assert row.count('data-action="acknowledge"') == 1
+    assert row.count('data-action="unacknowledge"') == 1
+    assert 'data-action="unsuppress"' not in row
+
+    js = tpl[tpl.index('pb.innerHTML'):tpl.index('var hb')]
+    assert 'class="mc-kebab"' in js, 'the 20s re-render must rebuild it'
+    assert "addKebab('Suppress…', 'suppress')" in tpl
+
+
+def _src(rel):
+    return (REPO / 'report-portal' / rel).read_text()
+
+
+def test_the_kebab_menu_is_floating_not_clipped_by_the_table():
+    """The table wrapper scrolls. An absolutely positioned menu would be cut
+    off; the shared .kebab-menu.floating pattern uses fixed positioning."""
+    base = _src('templates/base.html')
+    assert '.kebab-menu{' in base and 'position:absolute' in base
+    assert '.kebab-menu.floating' in base
+
+    tpl = _tpl()
+    assert 'class="kebab-menu floating"' in tpl, (
+        'the JS positions it in viewport coordinates; absolute would drift on scroll')
+    assert 'id="mcKebab"' in tpl
+    assert 'getBoundingClientRect()' in tpl
+
+
+def test_the_kebab_closes_on_scroll_and_escape():
+    tpl = _tpl()
+    assert "document.addEventListener('scroll', closeKebab, true)" in tpl
+    assert 'if(kebab && kebab.classList.contains(\'show\')){ closeKebab(); return; }' in tpl
+    assert 'window.mcCloseKebab = closeKebab' in tpl
+
+
+def test_a_glpi_ticket_is_linked_without_a_second_login():
+    """The webhook tags the event glpi_id only after ticket creation. The link
+    goes to the portal's incident page, not to GLPI."""
+    src = _monitoring_src()
+    assert "'selectTags': 'extend'" in src
+    assert "'ticket_url': ('/incidents/%s' % ticket_id) if ticket_id else ''" in src
+
+    tpl = _tpl()
+    assert "a.textContent = 'Open incident #' + tid" in tpl
+    assert "a.href = url" in tpl
+
+    assert pa.glpi_ticket({'tags': [{'tag': 'glpi_id', 'value': '15'}]}) == '15'
+    assert pa.glpi_ticket({'tags': [{'tag': 'other', 'value': '9'}]}) == ''
+    assert pa.glpi_ticket({'tags': [{'tag': 'glpi_id', 'value': '9 OR 1=1'}]}) == ''
+    assert pa.glpi_ticket({}) == ''

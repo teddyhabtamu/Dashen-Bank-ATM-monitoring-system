@@ -31,7 +31,11 @@
 .mc-note{margin-top:3px;font-size:11px;color:#64748B;font-style:italic;max-width:560px;white-space:normal;line-height:1.35}
 .sup-y{display:inline-block;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:100px;padding:1px 8px;font-size:10px;font-weight:700;white-space:nowrap}
 .sup-m{display:inline-block;background:#E0E7FF;color:#3730A3;border:1px solid #C7D2FE;border-radius:100px;padding:1px 8px;font-size:10px;font-weight:700;white-space:nowrap}
-.mc-actions{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.mc-actions{display:flex;gap:4px;flex-wrap:nowrap;justify-content:flex-end;align-items:center}
+.mc-kebab{height:26px;width:26px;padding:0;border-radius:50%;border:1px solid #CBD5E1;background:#fff;color:#64748B;font-size:15px;line-height:1;cursor:pointer;flex:0 0 auto}
+.mc-kebab:hover{background:#F1F5F9;color:#0F172A}
+.mc-kebab:focus-visible{outline:2px solid #93C5FD;outline-offset:1px}
+.mc-kebab-empty{padding:7px 12px;font-size:11px;color:#64748B;white-space:nowrap}
 .mc-modal{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center}
 .mc-modal[hidden]{display:none}
 .mc-modal-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.45)}
@@ -124,13 +128,11 @@
                 {% else %}
                 <button type="button" class="mc-act primary" data-eventid="{{ p.eventid }}" data-action="acknowledge" data-problem="{{ p.name }}">Acknowledge</button>
                 {% endif %}
-                {% if p.suppressed %}
-                  {% if not p.maintenance %}
-                  <button type="button" class="mc-act" data-eventid="{{ p.eventid }}" data-action="unsuppress" data-problem="{{ p.name }}">Unsuppress</button>
-                  {% endif %}
-                {% else %}
-                <button type="button" class="mc-act" data-eventid="{{ p.eventid }}" data-action="suppress" data-problem="{{ p.name }}">Suppress</button>
-                {% endif %}
+                <button type="button" class="mc-kebab" data-eventid="{{ p.eventid }}" data-problem="{{ p.name }}"
+                        data-suppressed="{{ '1' if p.suppressed else '0' }}"
+                        data-maintenance="{{ '1' if p.maintenance else '0' }}"
+                        data-ticket-id="{{ p.glpi_id }}" data-ticket-url="{{ p.ticket_url }}"
+                        aria-haspopup="menu" aria-expanded="false" title="More actions">&#8942;</button>
               </div>
               {% else %}<span class="mc-muted">&mdash;</span>{% endif %}
             </td>
@@ -170,6 +172,8 @@
   </div>
 
 </div>
+
+<div class="kebab-menu floating" id="mcKebab" role="menu"></div>
 
 <div class="mc-modal" id="mcModal" hidden>
   <div class="mc-modal-backdrop" data-close></div>
@@ -213,6 +217,7 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
 (function(){
   var modal = document.getElementById('mcModal');
   var form = document.getElementById('mcActionForm');
+  var kebab = document.getElementById('mcKebab');
   if(!modal || !form) return;
   var pending = null;
   var title = document.getElementById('mcModalTitle');
@@ -222,15 +227,15 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
   var durationWrap = document.getElementById('mcDurationWrap');
   var noteHint = document.getElementById('mcNoteHint');
   var confirmBtn = document.getElementById('mcConfirm');
+  var kebabBtn = null;
 
   function close(){ modal.hidden = true; pending = null; }
-  function open(btn){
-    pending = {eventid: btn.getAttribute('data-eventid'),
-               action: btn.getAttribute('data-action'),
-               problem: btn.getAttribute('data-problem') || ''};
-    var isAck = pending.action === 'acknowledge';
-    var isSuppress = pending.action === 'suppress';
-    var isUnsuppress = pending.action === 'unsuppress';
+
+  function openAction(eventid, action, problem){
+    pending = {eventid: eventid, action: action, problem: problem || ''};
+    var isAck = action === 'acknowledge';
+    var isSuppress = action === 'suppress';
+    var isUnsuppress = action === 'unsuppress';
     title.textContent = isSuppress ? 'Suppress this problem?'
       : isUnsuppress ? 'Remove the suppression?'
       : isAck ? 'Acknowledge this problem?' : 'Remove the acknowledgement?';
@@ -238,7 +243,7 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
     confirmBtn.textContent = isSuppress ? 'Suppress'
       : isUnsuppress ? 'Unsuppress'
       : isAck ? 'Acknowledge' : 'Un-acknowledge';
-    noteWrap.hidden = pending.action === 'unacknowledge';
+    noteWrap.hidden = action === 'unacknowledge';
     durationWrap.hidden = !isSuppress;
     noteHint.textContent = isSuppress
       ? '(required — stored in Zabbix history)'
@@ -251,11 +256,85 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
     (isSuppress ? note : confirmBtn).focus();
   }
 
+  function closeKebab(){
+    if(!kebab) return;
+    kebab.classList.remove('show');
+    if(kebabBtn){ kebabBtn.setAttribute('aria-expanded', 'false'); kebabBtn = null; }
+  }
+  window.mcCloseKebab = closeKebab;
+
+  function addKebab(label, action){
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'kebab-item';
+    b.textContent = label;
+    b.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      if(!kebabBtn) return;
+      var eid = kebabBtn.getAttribute('data-eventid');
+      var pname = kebabBtn.getAttribute('data-problem') || '';
+      closeKebab();
+      openAction(eid, action, pname);
+    });
+    kebab.appendChild(b);
+  }
+
+  function openKebab(btn){
+    if(!kebab) return;
+    if(kebabBtn === btn && kebab.classList.contains('show')){ closeKebab(); return; }
+    closeKebab();
+    kebabBtn = btn;
+    btn.setAttribute('aria-expanded', 'true');
+    kebab.innerHTML = '';
+    var suppressed = btn.getAttribute('data-suppressed') === '1';
+    var maintenance = btn.getAttribute('data-maintenance') === '1';
+    if(suppressed){
+      if(!maintenance) addKebab('Unsuppress', 'unsuppress');
+    } else {
+      addKebab('Suppress…', 'suppress');
+    }
+    var url = btn.getAttribute('data-ticket-url') || '';
+    var tid = btn.getAttribute('data-ticket-id') || '';
+    if(url && tid){
+      var a = document.createElement('a');
+      a.className = 'kebab-item';
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = 'Open incident #' + tid;
+      a.addEventListener('click', closeKebab);
+      kebab.appendChild(a);
+    }
+    if(!kebab.children.length){
+      var empty = document.createElement('div');
+      empty.className = 'mc-kebab-empty';
+      empty.textContent = 'Suppressed by maintenance';
+      kebab.appendChild(empty);
+    }
+    var r = btn.getBoundingClientRect();
+    kebab.style.top = Math.min(r.bottom + 4, window.innerHeight - 150) + 'px';
+    kebab.style.left = Math.max(8, Math.min(r.right - 178, window.innerWidth - 186)) + 'px';
+    kebab.classList.add('show');
+    var first = kebab.querySelector('.kebab-item');
+    if(first) first.focus();
+  }
+
   document.addEventListener('click', function(e){
-    var b = e.target && e.target.closest ? e.target.closest('.mc-act') : null;
-    if(b && !modal.contains(b)){ open(b); return; }
-    if(e.target && e.target.closest && e.target.closest('[data-close]')) close();
+    var t = e.target;
+    var b = t && t.closest ? t.closest('.mc-act') : null;
+    if(b && !modal.contains(b)){
+      openAction(b.getAttribute('data-eventid'),
+                 b.getAttribute('data-action'),
+                 b.getAttribute('data-problem'));
+      return;
+    }
+    var k = t && t.closest ? t.closest('.mc-kebab') : null;
+    if(k){ e.stopPropagation(); openKebab(k); return; }
+    if(kebab && kebab.contains(t)) return;
+    closeKebab();
+    if(t && t.closest && t.closest('[data-close]')) close();
   });
+
   confirmBtn.addEventListener('click', function(){
     if(!pending) return;
     var text = note.value.trim();
@@ -284,9 +363,13 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
     }
     form.submit();
   });
+
   document.addEventListener('keydown', function(e){
-    if(e.key === 'Escape' && !modal.hidden) close();
+    if(e.key !== 'Escape') return;
+    if(kebab && kebab.classList.contains('show')){ closeKebab(); return; }
+    if(!modal.hidden) close();
   });
+  document.addEventListener('scroll', closeKebab, true);
 })();
 
 /* 30s autosync: stat cards + both tables re-render from /monitoring/api/live.
@@ -321,21 +404,21 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
       setNum('mcProbCount', (d.problems || []).length);
       var pb = document.getElementById('probBody');
       if(pb){
+        if(window.mcCloseKebab) window.mcCloseKebab();
         pb.innerHTML = (d.problems || []).map(function(p){
           var act = '<span class="mc-muted">&mdash;</span>';
           if(MC_CAN_ACT){
             var ackBtn = p.acknowledged
               ? '<button type="button" class="mc-act" data-eventid="' + esc(p.eventid) + '" data-action="unacknowledge" data-problem="' + attr(p.name) + '">Un-acknowledge</button>'
               : '<button type="button" class="mc-act primary" data-eventid="' + esc(p.eventid) + '" data-action="acknowledge" data-problem="' + attr(p.name) + '">Acknowledge</button>';
-            var supBtn = '';
-            if(p.suppressed){
-              if(!p.maintenance){
-                supBtn = '<button type="button" class="mc-act" data-eventid="' + esc(p.eventid) + '" data-action="unsuppress" data-problem="' + attr(p.name) + '">Unsuppress</button>';
-              }
-            } else {
-              supBtn = '<button type="button" class="mc-act" data-eventid="' + esc(p.eventid) + '" data-action="suppress" data-problem="' + attr(p.name) + '">Suppress</button>';
-            }
-            act = '<div class="mc-actions">' + ackBtn + supBtn + '</div>';
+            var keb = '<button type="button" class="mc-kebab" data-eventid="' + esc(p.eventid) +
+              '" data-problem="' + attr(p.name) +
+              '" data-suppressed="' + (p.suppressed ? '1' : '0') +
+              '" data-maintenance="' + (p.maintenance ? '1' : '0') +
+              '" data-ticket-id="' + attr(p.glpi_id || '') +
+              '" data-ticket-url="' + attr(p.ticket_url || '') +
+              '" aria-haspopup="menu" aria-expanded="false" title="More actions">&#8942;</button>';
+            act = '<div class="mc-actions">' + ackBtn + keb + '</div>';
           }
           var sup = '<span class="mc-muted">&mdash;</span>';
           if(p.suppressed){

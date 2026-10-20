@@ -201,3 +201,17 @@ def notes_from(acknowledges):
         })
     out.sort(key=lambda n: n['clock'], reverse=True)
     return out
+
+
+def glpi_ticket(problem):
+    """GLPI ticket id from the event's `glpi_id` tag, or ''.
+
+    The media type sets the tag only after ticket creation succeeded, so its
+    presence is the proof that a ticket exists. The value is interpolated into
+    a portal URL, so anything non-numeric is refused rather than escaped.
+    """
+    for t in (problem or {}).get('tags') or []:
+        if isinstance(t, dict) and t.get('tag') == 'glpi_id':
+            value = str(t.get('value') or '').strip()
+            return value if value.isdigit() else ''
+    return ''

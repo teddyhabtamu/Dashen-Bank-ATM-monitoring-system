@@ -112,6 +112,7 @@ def _problem_get(auth):
         'selectHosts': ['hostid', 'host', 'name'],
         'selectAcknowledges': 'extend',
         'selectSuppressionData': 'extend',
+        'selectTags': 'extend',
         # NB: problem.get allows sorting by eventid only (clock is rejected);
         # eventids grow with time so DESC is newest-first.
         'sortfield': 'eventid',
@@ -124,6 +125,7 @@ def _problem_get(auth):
         # list; the page degrades to no notes and no expiry, not to blank.
         params.pop('selectAcknowledges', None)
         params.pop('selectSuppressionData', None)
+        params.pop('selectTags', None)
         res = _zbx_call('problem.get', params, auth)
     return res
 
@@ -302,12 +304,13 @@ def _collect(severity, ack):
 
     # ── Active problems (summary over ALL cached rows; severity/ack
     # filters apply to the displayed list only) ──
-    from problem_actions import notes_from, suppression_state
+    from problem_actions import glpi_ticket, notes_from, suppression_state
     all_problems = []
     for p in raw_problems:
         host = (p.get('hosts') or [{}])[0]
         notes = notes_from(p.get('acknowledges'))
         suppressed, sup_until, maintenance = suppression_state(p)
+        ticket_id = glpi_ticket(p)
         all_problems.append({
             'eventid': p.get('eventid'),
             'clock': _fmt_clock(p.get('clock')),
@@ -323,6 +326,8 @@ def _collect(severity, ack):
             'suppress_until': sup_until,
             'suppress_until_label': _fmt_short(sup_until) if sup_until else '',
             'maintenance': maintenance,
+            'glpi_id': ticket_id,
+            'ticket_url': ('/incidents/%s' % ticket_id) if ticket_id else '',
         })
     # Resolve any acknowledge author that came back as a bare userid, then
     # format the history once for both the row and its tooltip.
