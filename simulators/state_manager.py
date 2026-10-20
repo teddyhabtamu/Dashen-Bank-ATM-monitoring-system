@@ -53,7 +53,14 @@ def zbx_login():
     try:
         res = zbx_post({'jsonrpc': '2.0', 'method': 'user.login',
                         'params': {'username': ZABBIX_USER, 'password': ZABBIX_PASS}, 'id': 1})
-        return res.get('result')
+        if res.get('result'):
+            return res['result']
+        # Bad credentials come back as an error OBJECT, not an exception, so
+        # this used to return None with no message at all - the state manager
+        # then wrote no Zabbix state and looked merely idle.
+        err = res.get('error') or {}
+        print(f"[ZABBIX] login rejected: {err.get('data') or err.get('message') or err}")
+        return None
     except Exception as e:
         print(f"[ZABBIX] login failed: {e}")
         return None

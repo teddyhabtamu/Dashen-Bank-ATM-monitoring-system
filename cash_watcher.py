@@ -65,9 +65,19 @@ def zbx_post(payload):
 
 def zbx_login():
     try:
-        return zbx_post({'jsonrpc': '2.0', 'method': 'user.login',
-                         'params': {'username': ZBX_USER,
-                                    'password': ZBX_PASS}, 'id': 1}).get('result')
+        res = zbx_post({'jsonrpc': '2.0', 'method': 'user.login',
+                        'params': {'username': ZBX_USER,
+                                   'password': ZBX_PASS}, 'id': 1})
+        if res.get('result'):
+            return res['result']
+        # A REJECTED login is an error response, not an exception, so the
+        # except below never saw it: the watcher returned None and then read
+        # zero levels, which is indistinguishable from an ATM with no cash
+        # items. That is how a wrong API password looks like healthy silence.
+        err = res.get('error') or {}
+        log.warning('Zabbix login rejected: %s',
+                    err.get('data') or err.get('message') or err)
+        return None
     except Exception as e:
         log.warning('Zabbix login failed: %s', e)
         return None
