@@ -8,6 +8,7 @@ Acknowledge / un-acknowledge are the first write actions, OPERATOR and above.
 Suppress, close and severity changes still happen in Zabbix itself.
 """
 import logging
+import time
 from datetime import datetime, timezone, timedelta
 from flask import (Blueprint, flash, jsonify, redirect, render_template,
                    request, session, url_for)
@@ -49,7 +50,6 @@ CACHE_TTL = 20.0
 
 def _cached_zabbix():
     """Return (hosts, problems) raw rows, refreshing at most every CACHE_TTL."""
-    import time
     now = time.time()
     if _cache['hosts'] is not None and now - _cache['ts'] < CACHE_TTL:
         return _cache['hosts'], _cache['problems']

@@ -351,3 +351,21 @@ def test_the_duration_options_come_from_the_validated_table():
 
     tpl = _tpl()
     assert '{% for key, label in suppress_options %}' in tpl
+
+
+def test_time_is_imported_at_module_level():
+    """problem_action() calls time.time() for suppress_until. The module only
+    imported time inside _cached_zabbix(), so every acknowledge still worked
+    and suppression returned 500 with NameError - invisible to a static string
+    test, caught here by looking at the real import table."""
+    import ast
+
+    tree = ast.parse(_monitoring_src())
+    imported = set()
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            imported.update(a.name for a in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            imported.update(a.asname or a.name for a in node.names)
+
+    assert 'time' in imported, 'time.time() must resolve at module level'
