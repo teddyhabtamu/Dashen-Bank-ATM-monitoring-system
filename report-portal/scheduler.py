@@ -12,6 +12,8 @@ from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
 from email import encoders
 from datetime import datetime, date, timezone, timedelta
+from urllib.parse import urlencode
+from report_dates import schedule_period_window
 
 # Bank wall-clock: cron expressions mean EAST AFRICA TIME (no DST there —
 # fixed +3 forever). Evaluating in UTC silently shifted every schedule by
@@ -102,15 +104,26 @@ def init_scheduler_table():
         logger.error('Failed to init scheduler table: %s', e)
 
 
-def _generate_report(report_type, fmt, days=7, atm='all'):
+def _period_slug(period):
+    if not period:
+        return ''
+    slug = ''.join(ch if ch.isalnum() else '_' for ch in period)
+    while '__' in slug:
+        slug = slug.replace('__', '_')
+    return '_' + slug.strip('_')
+
+
+def _generate_report(report_type, fmt, days=7, atm='all', start=None, end=None,
+                     end_now=False, period_label=None):
     buf = io.BytesIO()
     _headers = {'X-Health-Check': '1'}
     if INTERNAL_API_KEY:
         _headers['X-Internal-Key'] = INTERNAL_API_KEY
-    today = date.today().strftime('%Y-%m-%d')
+    today = datetime.now(EAT).strftime('%Y-%m-%d')
     label = REPORT_TYPE_LABELS.get(report_type, report_type.title())
     atm_part = f'_{atm}' if atm and atm != 'all' else ''
-    filename = f'Dashen_Bank_{label.replace(" ", "_")}{atm_part}_{today}.{fmt}'
+    filename = (f'Dashen_Bank_{label.replace(" ", "_")}{atm_part}_{today}'
+                f'{_period_slug(period_label)}.{fmt}')
     # Expected bytes per format: never attach a login page (or any HTML)
     # as a report — a 302→login slipping through used to get emailed out
     # as a fake PDF. Fail loudly instead.
@@ -118,7 +131,16 @@ def _generate_report(report_type, fmt, days=7, atm='all'):
                'excel': 'officedocument.spreadsheetml'}.get(fmt, '')
     timeout = 60 if fmt in ('pdf', 'excel') else 30
     import requests
-    url = f'{_INTERNAL_BASE}/report/{report_type}/{fmt}?days={days}&atm={atm}'
+    query = {'atm': atm}
+    if start:
+        query['start'] = start
+        if end_now:
+            query['end_now'] = '1'
+        elif end:
+            query['end'] = end
+    else:
+        query['days'] = days
+    url = f'{_INTERNAL_BASE}/report/{report_type}/{fmt}?{urlencode(query)}'
     try:
         resp = requests.get(url, timeout=timeout, headers=_headers)
         if resp.status_code != 200:
@@ -212,13 +234,14 @@ REPORT_TYPE_LABELS = {
 }
 
 
-def _email_body(report_type, fmt, days, atm):
+def _email_body(report_type, fmt, days, atm, period_label=None):
     label = REPORT_TYPE_LABELS.get(report_type, report_type.title())
     eat = timezone(timedelta(hours=3))  # fixed +3, no DST in Ethiopia
     now = datetime.now(eat).strftime('%Y-%m-%d %H:%M')
     atm_display = atm if atm and atm != 'all' else 'All ATMs'
+    period_text = period_label or f'Last {days} day{"s" if days != 1 else ""}'
     logo_url = 'cid:dashen-logo'
-    preheader = f'{label} · Last {days} day{"s" if days != 1 else ""} · {atm_display}'
+    preheader = f'{label} · {period_text} · {atm_display}'
     return f'''<!DOCTYPE html>
 <html>
 <head>
@@ -257,7 +280,7 @@ def _email_body(report_type, fmt, days, atm):
                 </td>
                 <td style="width:50%;padding:7px 0">
                   <div style="font-size:11px;font-weight:600;color:#94A3B8;letter-spacing:.6px">PERIOD</div>
-                  <div style="font-size:14px;font-weight:600;color:#0F172A;margin-top:2px">Last {days} day{'s' if days != 1 else ''}</div>
+                  <div style="font-size:14px;font-weight:600;color:#0F172A;margin-top:2px">{period_text}</div>
                 </td>
               </tr>
               <tr>
@@ -326,9 +349,10 @@ def _record_run_status(report_id, ok, error, schedule):
 
 
 def _run_scheduled_report(report_id, report_type, fmt, schedule, recipients, params):
-    today = date.today()
+    today = datetime.now(EAT).date()
     days = 7
     atm = 'all'
+    period = None
     if params:
         try:
             for p in params.split(','):
@@ -336,7 +360,9 @@ def _run_scheduled_report(report_id, report_type, fmt, schedule, recipients, par
                     k, v = p.split('=', 1)
                     if k.strip() == 'days':
                         days = int(v.strip())
-                    if k.strip() == 'atm':
+                    elif k.strip() == 'period':
+                        period = v.strip()
+                    elif k.strip() == 'atm':
                         atm = v.strip() or 'all'
         except (ValueError, AttributeError) as e:
             msg = f'malformed params {params!r}: {e}'
@@ -345,11 +371,30 @@ def _run_scheduled_report(report_id, report_type, fmt, schedule, recipients, par
             _record_run_status(report_id, False, msg, schedule)
             return
 
+    start = end = None
+    end_now = False
+    period_label = None
+    if period:
+        try:
+            window = schedule_period_window(period, today)
+        except ValueError as e:
+            msg = f'unknown reporting period {period!r}: {e}'
+            logger.error('Scheduled report %s bad period: %s', report_id, msg)
+            log_action('SCHEDULED_REPORT_FAILED', f'Report {report_id} ({report_type}/{fmt}) {msg}')
+            _record_run_status(report_id, False, msg, schedule)
+            return
+        start, end, end_now = window.start, window.end, window.end_now
+        period_label = window.label
+    else:
+        period_label = f'Last {days} day{"s" if days != 1 else ""}'
+
     label = REPORT_TYPE_LABELS.get(report_type, report_type.upper())
     subject = f'[ATM Monitor] {label} - {today}'
-    body = _email_body(report_type, fmt, days, atm)
+    body = _email_body(report_type, fmt, days, atm, period_label=period_label)
 
-    filedata, filename, mimetype = _generate_report(report_type, fmt, days, atm)
+    filedata, filename, mimetype = _generate_report(
+        report_type, fmt, days, atm, start=start, end=end,
+        end_now=end_now, period_label=period_label)
     if filedata is None:
         msg = 'report generation failed (portal endpoint unreachable or error)'
         logger.error('Scheduled report %s failed to generate', report_id)

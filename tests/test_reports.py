@@ -88,3 +88,21 @@ def test_reports_route_supplies_eat_defaults():
     assert 'default_start' in PORTAL_BP
     assert 'default_end' in PORTAL_BP
     assert 'timedelta(days=6)' in PORTAL_BP
+
+
+def test_scheduled_reports_support_calendar_presets():
+    sched = (PORTAL / 'scheduler.py').read_text()
+    sched_page = (PORTAL / 'templates' / 'admin_schedules.html').read_text()
+    assert 'schedule_period_window' in sched
+    assert "query['end_now'] = '1'" in sched
+    assert 'urlencode(query)' in sched
+    for period in ('today', 'yesterday', 'this_week', 'last_week',
+                   'this_month', 'last_month'):
+        assert f'value="{period}"' in sched_page
+    assert 'value="1">Last 24 hours' in sched_page
+    assert 'period=' in sched_page
+    assert 'periodParam' in sched_page
+
+
+def test_report_routes_accept_end_now():
+    assert "request.args.get('end_now')" in ROUTES

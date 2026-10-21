@@ -29,6 +29,7 @@ def _window():
             request.args.get('start'),
             request.args.get('end'),
             request.args.get('days'),
+            end_now=request.args.get('end_now') in ('1', 'true', 'yes'),
         )
     except ValueError as exc:
         abort(400, description=str(exc))

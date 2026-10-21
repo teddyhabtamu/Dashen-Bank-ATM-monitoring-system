@@ -16,6 +16,47 @@ class ReportWindow:
     label: str
 
 
+@dataclass(frozen=True)
+class ScheduleWindow:
+    start: str
+    end: str | None
+    end_now: bool
+    label: str
+
+
+SCHEDULE_PERIODS = ('today', 'yesterday', 'this_week', 'last_week',
+                    'this_month', 'last_month')
+
+
+def schedule_period_window(period, today=None):
+    if period not in SCHEDULE_PERIODS:
+        raise ValueError('Unknown scheduled reporting period.')
+    if today is None:
+        today = _eat_today()
+    elif isinstance(today, datetime):
+        today = today.date()
+
+    if period == 'today':
+        return ScheduleWindow(today.isoformat(), None, True, 'Today (to now)')
+    if period == 'yesterday':
+        day = today - timedelta(days=1)
+        return ScheduleWindow(day.isoformat(), day.isoformat(), False, 'Yesterday')
+    if period == 'this_week':
+        start = today - timedelta(days=today.weekday())
+        return ScheduleWindow(start.isoformat(), None, True, 'This week (to now)')
+    if period == 'last_week':
+        start = today - timedelta(days=today.weekday() + 7)
+        end = start + timedelta(days=6)
+        return ScheduleWindow(start.isoformat(), end.isoformat(), False, 'Last week')
+    if period == 'this_month':
+        start = today.replace(day=1)
+        return ScheduleWindow(start.isoformat(), None, True, 'This month (to now)')
+
+    last_day = today.replace(day=1) - timedelta(days=1)
+    start = last_day.replace(day=1)
+    return ScheduleWindow(start.isoformat(), last_day.isoformat(), False, 'Last month')
+
+
 def _eat_today(now=None):
     if now is None:
         now = datetime.now(timezone.utc)
@@ -36,10 +77,33 @@ def _now_utc(now=None):
     raise ValueError('Invalid clock.')
 
 
-def parse_report_window(start=None, end=None, days=None, now=None):
+def parse_report_window(start=None, end=None, days=None, now=None, end_now=False):
     today = _eat_today(now)
     start = str(start or '').strip()
     end = str(end or '').strip()
+
+    if end_now:
+        if not start:
+            raise ValueError('Choose a start date.')
+        try:
+            start_date = date.fromisoformat(start)
+        except ValueError:
+            raise ValueError('Dates must use YYYY-MM-DD.')
+        if start_date > today:
+            raise ValueError('Start date cannot be in the future.')
+        span = (today - start_date).days + 1
+        if span > MAX_REPORT_DAYS:
+            raise ValueError(f'Reporting period cannot exceed {MAX_REPORT_DAYS} days.')
+        start_utc = eat_day_start_utc(start_date.isoformat())
+        end_utc = _now_utc(now)
+        if end_utc < start_utc:
+            raise ValueError('Reporting period is empty.')
+        label = (
+            f'{start_date.isoformat()} (EAT, to now)'
+            if start_date == today else
+            f'{start_date.isoformat()} to {today.isoformat()} (EAT, to now)'
+        )
+        return ReportWindow(start_utc, end_utc, span, label)
 
     if start or end:
         if not start or not end:

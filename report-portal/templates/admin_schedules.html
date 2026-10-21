@@ -278,11 +278,18 @@
         <div class="form-group" id="schedPeriodWrap">
           <label>Reporting Period</label>
           <select id="schedDays">
-            <option value="1">Today</option>
-            <option value="7" selected>Last 7 Days</option>
-            <option value="30">Last 30 Days</option>
-            <option value="90">Last 90 Days</option>
+            <option value="today">Today (so far)</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="this_week">This week (so far)</option>
+            <option value="last_week">Last week</option>
+            <option value="this_month">This month (so far)</option>
+            <option value="last_month">Last month</option>
+            <option value="1">Last 24 hours</option>
+            <option value="7" selected>Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
           </select>
+          <div style="font-size:11px;color:#64748B;margin-top:4px">Calendar presets are calculated in EAT each run; &ldquo;so far&rdquo; ends at the current time.</div>
         </div>
         <div class="form-group">
           <label>ATM</label>
@@ -555,9 +562,11 @@ function describeCron(cron){
 }
 
 function parseSchedParams(str){
-  var out = {days: '7', atm: 'all'};
+  var out = {period: null, days: '7', atm: 'all'};
+  var p = String(str || '').match(/period\s*=\s*([a-z_]+)/);
+  if(p) out.period = p[1];
   var m = String(str || '').match(/days\s*=\s*(\d+)/);
-  if(m && ['1', '7', '30', '90'].indexOf(m[1]) !== -1) out.days = m[1];
+  if(!out.period && m && ['1', '7', '30', '90'].indexOf(m[1]) !== -1) out.days = m[1];
   var a = String(str || '').match(/atm\s*=\s*([^,\s]+)/);
   if(a && a[1]) out.atm = a[1];
   return out;
@@ -566,7 +575,7 @@ function setSchedParams(str){
   var p = parseSchedParams(str);
   var days = document.getElementById('schedDays');
   var atm = document.getElementById('schedAtm');
-  if(days) days.value = p.days;
+  if(days) days.value = (p.period && Array.prototype.some.call(days.options, function(o){ return o.value === p.period; })) ? p.period : p.days;
   if(atm){
     var has = Array.prototype.some.call(atm.options, function(o){ return o.value === p.atm; });
     atm.value = has ? p.atm : 'all';
@@ -578,10 +587,12 @@ function buildSchedParams(){
   var type = typeEl ? typeEl.value : '';
   var daysEl = document.getElementById('schedDays');
   var atmEl = document.getElementById('schedAtm');
-  var days = (daysEl && daysEl.value) || '7';
+  var value = (daysEl && daysEl.value) || '7';
   var atm = (atmEl && atmEl.value) || 'all';
-  if(type === 'outage') days = '1';
-  document.getElementById('schedParams').value = 'days=' + days + ', atm=' + atm;
+  var calendar = ['today', 'yesterday', 'this_week', 'last_week', 'this_month', 'last_month'];
+  var periodParam = calendar.indexOf(value) !== -1 ? 'period=' + value : 'days=' + value;
+  if(type === 'outage') periodParam = 'days=1';
+  document.getElementById('schedParams').value = periodParam + ', atm=' + atm;
 }
 function togglePeriodVisibility(){
   var typeEl = document.getElementById('schedType');
