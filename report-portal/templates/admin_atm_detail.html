@@ -45,6 +45,14 @@ table.txn tbody tr:hover{background:#EEF2FF}
 .auth-badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#ECFDF5;color:#059669;border:1px solid #A7F3D0;white-space:nowrap}
 .auth-cell .st-ERROR,.auth-cell{font-size:12px}
 .no-data{text-align:center;color:#94A3B8;font-size:13px;padding:32px 12px}
+.svc-form{display:flex;flex-direction:column;gap:8px}
+.svc-form label{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#94A3B8;font-weight:600;margin-top:2px}
+.svc-form select,.svc-form input{width:100%;padding:9px 12px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px;color:#0F172A;background:#fff;font-family:inherit}
+.svc-form select:focus,.svc-form input:focus{outline:none;border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.1)}
+.svc-active{display:flex;flex-direction:column;gap:5px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:12px 14px;margin-bottom:12px}
+.svc-active .t{font-size:13px;font-weight:700;color:#92400E}
+.svc-active .m{font-size:12px;color:#78350F;line-height:1.5}
+.svc-muted{font-size:12px;color:#64748B;line-height:1.55;margin:0}
 @media(max-width:980px){.detail-cols{grid-template-columns:1fr}.stat-row{grid-template-columns:repeat(2,1fr)}}
 {% endblock %}
 
@@ -175,6 +183,45 @@ table.txn tbody tr:hover{background:#EEF2FF}
           </div>
         </div>
       </div>
+
+      {% if (atm.status or 'active') == 'active' %}
+      <div class="card">
+        <div class="card-header"><h2>Service mode</h2></div>
+        <div class="card-body">
+          {% if maintenance_error %}
+            <div class="svc-muted">{{ maintenance_error }}</div>
+          {% elif maintenance_active %}
+            <div class="svc-active">
+              <div class="t">In maintenance until {{ maintenance_active.until_label }} EAT</div>
+              <div class="m">{{ maintenance_active.name }}. Problems for this ATM are hidden, not resolved; data collection continues.</div>
+            </div>
+            {% if can_maintain %}
+            <form method="post" action="/atms/{{ atm.atm_id }}/maintenance/end">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-outline" type="submit">End service mode</button>
+            </form>
+            {% endif %}
+          {% elif can_maintain and maintenance_hostid %}
+            <p class="svc-muted" style="margin-bottom:12px">Hide this ATM's problems for a planned visit. Monitoring data keeps being collected.</p>
+            <form class="svc-form" method="post" action="/atms/{{ atm.atm_id }}/maintenance/start">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <label for="svcDuration">Duration</label>
+              <select id="svcDuration" name="duration" required>
+                {% for key, label in maintenance_options %}
+                <option value="{{ key }}"{% if key == '60' %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              <label for="svcReason">Reason</label>
+              <input id="svcReason" name="reason" maxlength="120" minlength="5" required
+                     placeholder="e.g. Cash replenishment — visit #4412">
+              <button class="btn btn-primary" type="submit">Start service mode</button>
+            </form>
+          {% else %}
+            <div class="svc-muted">Only operators and admins can start service mode.</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
 
       {% if cash_outlook %}
       <div class="card">

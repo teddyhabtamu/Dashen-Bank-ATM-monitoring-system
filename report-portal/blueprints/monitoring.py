@@ -44,17 +44,17 @@ EAT = timezone(timedelta(hours=3))
 # can carry fresh numbers (a TTL above the poll interval would make updates
 # land on alternating ticks — burst-y, not rhythmic). Each load costs up to
 # 3 sequential API round-trips; at 20s cadence Zabbix won't feel it.
-_cache = {'ts': 0.0, 'hosts': None, 'problems': None}
+_cache = {'ts': 0.0, 'hosts': None, 'problems': None, 'maintenances': None}
 CACHE_TTL = 20.0
 
 
 def _cached_zabbix():
-    """Return (hosts, problems) raw rows, refreshing at most every CACHE_TTL."""
+    """Return (hosts, problems, maintenances) raw rows, at most every CACHE_TTL."""
     now = time.time()
     if _cache['hosts'] is not None and now - _cache['ts'] < CACHE_TTL:
-        return _cache['hosts'], _cache['problems']
+        return _cache['hosts'], _cache['problems'], _cache['maintenances']
     auth = _zbx_login()
-    hosts, problems = [], None
+    maintenances = []
     if not auth:
         if _cache['hosts'] is None:
             # Cold cache (fresh worker boot) + failed login: one retry —
@@ -66,13 +66,13 @@ def _cached_zabbix():
             auth = _zbx_login()
         if not auth:
             if _cache['hosts'] is None:
-                return None, None  # unreachable, nothing stale to show
-            return _cache['hosts'], _cache['problems']
-    # host.get + problem.get are independent — run them together so a slow
-    # Zabbix costs one timeout window, not two, before stale cache serves.
+                return None, None, []
+            return _cache['hosts'], _cache['problems'], _cache['maintenances']
+    # host.get, problem.get and maintenance.get are independent — run them
+    # together so a slow Zabbix costs one timeout window, not three.
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutureTimeout
     try:
-        with ThreadPoolExecutor(max_workers=2) as ex:
+        with ThreadPoolExecutor(max_workers=3) as ex:
             fh = ex.submit(_zbx_call, 'host.get', {
                 'output': ['hostid', 'host', 'name', 'status', 'available',
                            'snmp_available', 'jmx_available', 'ipmi_available'],
@@ -81,8 +81,20 @@ def _cached_zabbix():
                 'sortfield': 'host',
             }, auth)
             fp = ex.submit(_problem_get, auth)
+            fm = ex.submit(_zbx_call, 'maintenance.get', {
+                'output': ['maintenanceid', 'name', 'active_since', 'active_till',
+                           'maintenance_type'],
+                'selectHosts': ['hostid'],
+            }, auth)
             hosts_raw = fh.result(timeout=12)
             problems = fp.result(timeout=12)
+            try:
+                maintenances = fm.result(timeout=12) or []
+            except _FutureTimeout:
+                # Maintenance is decoration; never let a slow read discard a
+                # healthy host/problem pair.
+                logger.warning('maintenance.get exceeded the 12s budget')
+                maintenances = []
     except _FutureTimeout:
         logger.warning('Zabbix fetch exceeded 12s budget')
         hosts_raw, problems = None, None
@@ -90,13 +102,14 @@ def _cached_zabbix():
         # Either leg failed: prefer a consistent stale pair over mixing a
         # fresh empty with live rows (which reads as "all clear").
         if _cache['hosts'] is not None:
-            return _cache['hosts'], _cache['problems']
+            return _cache['hosts'], _cache['problems'], _cache['maintenances']
         if hosts_raw is None and problems is None:
-            return None, None  # unreachable, nothing stale to show
-        return hosts_raw or [], problems or []
+            return None, None, maintenances  # unreachable, nothing stale to show
+        return hosts_raw or [], problems or [], maintenances
     hosts = hosts_raw
-    _cache.update(ts=now, hosts=hosts, problems=problems or [])
-    return hosts, problems or []
+    _cache.update(ts=now, hosts=hosts, problems=problems or [],
+                  maintenances=maintenances)
+    return hosts, problems or [], maintenances
 
 
 def _problem_get(auth):
@@ -328,10 +341,12 @@ def _collect(severity, ack):
     hosts = []
     summary = {'hosts': 0, 'up': 0, 'down': 0, 'problems': 0, 'unacked': 0}
 
-    raw_hosts, raw_problems = _cached_zabbix()
+    raw_hosts, raw_problems, raw_maintenances = _cached_zabbix()
     if raw_hosts is None:
         error = 'Cannot reach Zabbix API — showing last known state is unavailable. Check that zabbix-web is running.'
         raw_hosts, raw_problems = [], []
+    from maintenance import active_by_host
+    active_maint = active_by_host(raw_maintenances, time.time())
     # ── Hosts ──
     # Interface-aware state: our ATM hosts are SNMP-polled (type 2), so the
     # agent-only `available` field sits at 0/unknown forever. UP if ANY
@@ -344,6 +359,7 @@ def _collect(severity, ack):
         state = ('UP' if '1' in signals
                  else 'DOWN' if '2' in signals else 'UNKNOWN')
         groups = ', '.join(g.get('name', '') for g in (h.get('groups') or []) if g.get('name'))
+        m = active_maint.get(str(h.get('hostid')))
         hosts.append({
             'hostid': h.get('hostid'),
             'host': h.get('host'),
@@ -352,6 +368,8 @@ def _collect(severity, ack):
             'groups': groups or '—',
             'available': signals[0],
             'state': state,
+            'maintenance_name': (m or {}).get('name') or '',
+            'maintenance_until': _fmt_short(m.get('active_till')) if m else '',
         })
     summary['hosts'] = len(hosts)
     summary['up'] = sum(1 for h in hosts if h['state'] == 'UP')

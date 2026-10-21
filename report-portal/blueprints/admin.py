@@ -2,7 +2,7 @@
 blueprints/admin.py
 ATM Admin registration routes.
 """
-import csv, io, re, os, json, logging, secrets, threading, concurrent.futures, urllib.request
+import csv, io, re, os, json, logging, secrets, threading, time, concurrent.futures, urllib.request
 import requests
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response, current_app, abort, session
@@ -599,6 +599,53 @@ def _telemetry_note(metrics):
     return 'Zabbix has no collected reading for this component yet.'
 
 
+def _fmt_epoch(value):
+    """Zabbix epoch → EAT label, matching the rest of the portal."""
+    try:
+        return datetime.fromtimestamp(int(value), tz=timezone.utc).astimezone(
+            timezone(timedelta(hours=3))).strftime('%d %b %H:%M')
+    except (TypeError, ValueError):
+        return '—'
+
+
+def _atm_hostid(atm_id, auth):
+    """Zabbix hostid for an ATM, or None when it was never provisioned."""
+    rows = _zbx_call('host.get', {'output': ['hostid'],
+                                  'filter': {'host': [atm_id]}}, auth)
+    return str(rows[0]['hostid']) if rows else None
+
+
+def _atm_maintenance(atm_id):
+    """(hostid, active_window, error) for the ATM detail page.
+
+    Never raises: the page must render when Zabbix is down. A failed read is
+    returned as an error, never as an empty window - "not in maintenance" is
+    exactly the reading an operator would act on.
+    """
+    try:
+        auth = _zbx_login()
+        if not auth:
+            return None, None, 'Cannot reach the Zabbix API.'
+        hostid = _atm_hostid(atm_id, auth)
+        if not hostid:
+            return None, None, 'No Zabbix host is registered for this ATM.'
+        rows = _zbx_call('maintenance.get', {
+            'hostids': [hostid], 'output': 'extend',
+            'selectHosts': ['hostid']}, auth)
+        if rows is None:
+            return hostid, None, 'Maintenance state is unavailable right now.'
+        from maintenance import active_window
+        active = active_window(rows, hostid, time.time())
+        if active:
+            active = dict(active)
+            active['since_label'] = _fmt_epoch(active.get('active_since'))
+            active['until_label'] = _fmt_epoch(active.get('active_till'))
+        return hostid, active, None
+    except Exception as e:
+        logger.warning('maintenance lookup failed for %s: %s', atm_id, e)
+        return None, None, 'Maintenance state is unavailable right now.'
+
+
 @bp.route('/atms/<atm_id>')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
@@ -687,6 +734,11 @@ def atm_detail(atm_id):
             import logging as _logging
             _logging.getLogger(__name__).warning('cash forecast unavailable: %s', e)
 
+        from maintenance import options as maintenance_options
+        maintenance_hostid, maintenance_active, maintenance_error = _atm_maintenance(atm_id)
+        maintenance_opts = maintenance_options(session.get('role') == ROLE_ADMIN)
+        can_maintain = session.get('role') in (ROLE_OPERATOR, ROLE_ADMIN)
+
         return render_template('admin_atm_detail.html',
                                atm=atm, vendor=vendor, cassettes=cassettes,
                                hardware=hw, hw_source=hw_source,
@@ -695,11 +747,118 @@ def atm_detail(atm_id):
                                telemetry_note=_telemetry_note(metrics),
                                total_txns=total_txns, success_rate=success_rate,
                                cash_today=cash_today, active_faults=active_faults,
-                               txns=txns, cash_outlook=cash_outlook)
+                               txns=txns, cash_outlook=cash_outlook,
+                               maintenance_hostid=maintenance_hostid,
+                               maintenance_active=maintenance_active,
+                               maintenance_error=maintenance_error,
+                               maintenance_options=maintenance_opts,
+                               can_maintain=can_maintain)
     except Exception as e:
         import logging
         logging.getLogger(__name__).error('ATM detail error: %s', e, exc_info=True)
         return render_template('error_500.html'), 500
+
+
+@bp.route('/atms/<atm_id>/maintenance/start', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def atm_maintenance_start(atm_id):
+    """One-host service window: data keeps flowing, alerts are hidden."""
+    from maintenance import active_window, create_params, window
+    back = redirect(url_for('admin.atm_detail', atm_id=atm_id))
+    reason = (request.form.get('reason') or '').strip()
+    duration = request.form.get('duration') or ''
+    if len(reason) < 5:
+        flash('Give a reason of at least 5 characters.', 'error')
+        return back
+    is_admin = session.get('role') == ROLE_ADMIN
+    try:
+        window(duration, time.time(), admin=is_admin)
+    except ValueError as e:
+        flash(str(e), 'error')
+        return back
+
+    auth = _zbx_login()
+    if not auth:
+        flash('Cannot reach the Zabbix API — no service window was started.', 'error')
+        return back
+    hostid = _atm_hostid(atm_id, auth)
+    if not hostid:
+        flash('No Zabbix host is registered for this ATM.', 'error')
+        return back
+
+    # Fail closed: without a readable current state we cannot rule out an
+    # overlapping window, and duplicates are worse than a retry.
+    existing = _zbx_call('maintenance.get', {
+        'hostids': [hostid], 'output': 'extend',
+        'selectHosts': ['hostid']}, auth)
+    if existing is None:
+        flash('Cannot read the current maintenance state — no service window was started.',
+              'error')
+        return back
+    if active_window(existing, hostid, time.time()):
+        flash('This ATM is already in a service window. End it first.', 'error')
+        return back
+
+    try:
+        params = create_params(hostid, atm_id, reason, duration, time.time(),
+                               admin=is_admin, actor=session.get('username'))
+    except ValueError as e:
+        flash(str(e), 'error')
+        return back
+
+    result = _zbx_call('maintenance.create', params, auth)
+    if not result:
+        log_action('MAINTENANCE_START_FAILED',
+                   'atm=%s hostid=%s — %s' % (atm_id, hostid, reason))
+        flash('Zabbix did not accept the service window.', 'error')
+        return back
+    mid = (result.get('maintenanceids') or [None])[0] \
+        if isinstance(result, dict) else None
+    log_action('MAINTENANCE_START',
+               'atm=%s hostid=%s maintenanceid=%s until=%s — %s'
+               % (atm_id, hostid, mid or '?', _fmt_epoch(params['active_till']), reason))
+    flash('Service mode started until %s EAT. Problems for this ATM are hidden; '
+          'data collection continues.' % _fmt_epoch(params['active_till']), 'success')
+    return back
+
+
+@bp.route('/atms/<atm_id>/maintenance/end', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def atm_maintenance_end(atm_id):
+    """End this ATM's active window — never an id supplied by the client."""
+    from maintenance import active_window
+    back = redirect(url_for('admin.atm_detail', atm_id=atm_id))
+    auth = _zbx_login()
+    if not auth:
+        flash('Cannot reach the Zabbix API — the service window was left unchanged.', 'error')
+        return back
+    hostid = _atm_hostid(atm_id, auth)
+    if not hostid:
+        flash('No Zabbix host is registered for this ATM.', 'error')
+        return back
+    rows = _zbx_call('maintenance.get', {
+        'hostids': [hostid], 'output': 'extend',
+        'selectHosts': ['hostid']}, auth)
+    if rows is None:
+        flash('Cannot read the current maintenance state — nothing was changed.', 'error')
+        return back
+    active = active_window(rows, hostid, time.time())
+    if not active:
+        flash('This ATM has no active service window.', 'error')
+        return back
+    mid = str(active.get('maintenanceid'))
+    result = _zbx_call('maintenance.delete', [mid], auth)
+    if not result:
+        log_action('MAINTENANCE_END_FAILED',
+                   'atm=%s hostid=%s maintenanceid=%s' % (atm_id, hostid, mid))
+        flash('Zabbix did not end the service window.', 'error')
+        return back
+    log_action('MAINTENANCE_END',
+               'atm=%s hostid=%s maintenanceid=%s' % (atm_id, hostid, mid))
+    flash('Service mode ended for %s.' % atm_id, 'success')
+    return back
 
 
 @bp.route('/atms/get')
