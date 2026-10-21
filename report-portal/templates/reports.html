@@ -38,6 +38,26 @@
 }
 .hero-actions .btn-white:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.25); }
 
+/* ── SHARED REPORTING PERIOD ── */
+.range-bar { background:#fff; border:1px solid var(--border-light); border-radius:var(--radius); box-shadow:var(--shadow-sm); padding:18px 22px; margin-bottom:20px; display:flex; gap:18px; align-items:flex-end; flex-wrap:wrap; position:relative; z-index:6; }
+.range-copy { flex:1; min-width:220px; }
+.range-title { font-size:13px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:8px; }
+.range-title i { width:16px; height:16px; color:var(--dashen-navy); }
+.range-sub { font-size:11px; color:var(--text-tertiary); margin-top:4px; line-height:1.5; }
+.range-controls { display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; }
+.range-field { display:flex; flex-direction:column; gap:5px; }
+.range-field label { font-size:10px; font-weight:600; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.7px; }
+.range-field input { width:150px; padding:9px 10px; border:1px solid var(--border); border-radius:var(--radius-xs); font-size:12px; font-family:inherit; color:var(--text-primary); background:#fff; cursor:pointer; }
+.range-field input:focus { outline:none; border-color:var(--dashen-navy); box-shadow:0 0 0 3px rgba(1,33,105,.06); }
+.range-sep { font-size:12px; color:var(--text-tertiary); padding-bottom:10px; }
+.range-presets { display:flex; gap:6px; flex-wrap:wrap; padding-bottom:2px; }
+.range-chip { background:#F1F5F9; border:1px solid transparent; color:var(--text-secondary); font-size:11px; font-weight:600; padding:7px 10px; border-radius:100px; cursor:pointer; font-family:inherit; }
+.range-chip:hover { background:#EEF2FF; color:var(--dashen-navy); }
+.range-label { width:100%; font-size:11px; font-weight:600; color:var(--dashen-navy); margin-top:4px; }
+.range-error { width:100%; display:none; font-size:11px; color:#DC2626; font-weight:600; }
+.range-error.show { display:block; }
+@media(max-width:768px){ .range-bar{padding:14px 16px;gap:12px} .range-controls{width:100%} .range-field{flex:1} .range-field input{width:100%} .range-presets{width:100%} .range-chip{flex:1;text-align:center} }
+
 /* ── SECTION TITLE ── */
 .section-title {
   font-size: 13px; font-weight: 700; color: var(--text-secondary);
@@ -151,6 +171,34 @@
 
 <main class="main-container">
 
+  <!-- Shared Reporting Period -->
+  <div class="range-bar">
+    <div class="range-copy">
+      <div class="range-title"><i data-lucide="calendar-range"></i> Reporting period</div>
+      <div class="range-sub">All historical reports use this period. Days are EAT and the end date is inclusive. Maximum span: 90 days. Availability is measured from each ATM&rsquo;s first retained state; the report shows coverage.</div>
+    </div>
+    <div class="range-controls">
+      <div class="range-field">
+        <label for="report-start">Start date</label>
+        <input type="text" id="report-start" class="flatpickr-range" readonly value="{{ default_start }}" autocomplete="off">
+      </div>
+      <span class="range-sep">to</span>
+      <div class="range-field">
+        <label for="report-end">End date</label>
+        <input type="text" id="report-end" class="flatpickr-range" readonly value="{{ default_end }}" autocomplete="off">
+      </div>
+      <div class="range-presets">
+        <button type="button" class="range-chip" data-range="today">Today</button>
+        <button type="button" class="range-chip" data-range="7d">7 days</button>
+        <button type="button" class="range-chip" data-range="30d">30 days</button>
+        <button type="button" class="range-chip" data-range="this-month">This month</button>
+        <button type="button" class="range-chip" data-range="last-month">Last month</button>
+      </div>
+      <div class="range-label" id="range-label"></div>
+      <div class="range-error" id="range-error" role="alert"></div>
+    </div>
+  </div>
+
   <!-- Hero Report Banner -->
   <div class="hero-report">
     <div class="hero-content">
@@ -161,21 +209,11 @@
       </div>
     </div>
     <div class="hero-actions">
-      <div class="form-group" style="min-width:150px;">
-        <label>Reporting Period</label>
-        <div class="custom-select select-white">
-          <select id="full-days">
-            <option value="7" selected>Last 7 Days</option>
-            <option value="30">Last 30 Days</option>
-            <option value="90">Last 90 Days</option>
-          </select>
-        </div>
-      </div>
-      <div style="display:flex;gap:10px;margin-top:14px;">
-        <button class="btn btn-gold" onclick="gen('full','excel','full-days')">
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-gold" onclick="gen('full','excel')">
           <i data-lucide="file-spreadsheet"></i> Excel Workbook
         </button>
-        <button class="btn btn-white" onclick="gen('full','pdf','full-days')">
+        <button class="btn btn-white" onclick="gen('full','pdf')">
           <i data-lucide="file-text"></i> PDF Report
         </button>
       </div>
@@ -203,7 +241,8 @@
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
         <div class="card-body-inner">
-          <p style="font-size:12px;color:#64748B;margin-bottom:12px">One row per down ATM — location, outage days and suspected cause filled automatically (confirmed from the GLPI ticket where one is linked); the team verifies and completes the rest.</p>
+          <p style="font-size:12px;color:#64748B;margin-bottom:8px">One row per down ATM — location, outage days and suspected cause filled automatically (confirmed from the GLPI ticket where one is linked); the team verifies and completes the rest.</p>
+          <p style="font-size:11px;color:#94A3B8;margin-bottom:12px">Current snapshot — the reporting period above does not apply.</p>
           <div class="card-actions">
             <button class="btn btn-primary" onclick="gen('outage','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
             <button class="btn btn-outline" onclick="gen('outage','pdf')"><i data-lucide="file-text"></i> PDF</button>
@@ -227,18 +266,7 @@
         </div>
         <div class="card-body-inner">
           <div class="form-grid">
-            <div class="form-group">
-              <label>Reporting Period</label>
-              <div class="custom-select">
-                <select id="txn-days">
-                  <option value="1">Today</option>
-                  <option value="7" selected>Last 7 Days</option>
-                  <option value="30">Last 30 Days</option>
-                  <option value="90">Last 90 Days</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-group">
+            <div class="form-group full">
               <label>Branch</label>
               <div class="custom-select">
                 <select id="txn-atm">
@@ -248,9 +276,9 @@
             </div>
           </div>
           <div class="card-actions">
-            <button class="btn btn-primary" onclick="gen('transaction','excel','txn-days','txn-atm')"><i data-lucide="file-spreadsheet"></i> Excel</button>
-            <button class="btn btn-outline" onclick="gen('transaction','pdf','txn-days','txn-atm')"><i data-lucide="file-text"></i> PDF</button>
-            <button class="btn btn-outline" onclick="gen('transaction','csv','txn-days','txn-atm')"><i data-lucide="file"></i> CSV</button>
+            <button class="btn btn-primary" onclick="gen('transaction','excel','txn-atm')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('transaction','pdf','txn-atm')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-outline" onclick="gen('transaction','csv','txn-atm')"><i data-lucide="file"></i> CSV</button>
             <div class="loading-wrapper" id="lw-transaction">
               <div class="loading-bar"></div><div class="loading-text">Generating...</div>
             </div>
@@ -269,23 +297,10 @@
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
         <div class="card-body-inner">
-          <div class="form-grid">
-            <div class="form-group full">
-              <label>Reporting Period</label>
-              <div class="custom-select">
-                <select id="cash-days">
-                  <option value="1">Today</option>
-                  <option value="7" selected>Last 7 Days</option>
-                  <option value="30">Last 30 Days</option>
-                  <option value="90">Last 90 Days</option>
-                </select>
-              </div>
-            </div>
-          </div>
           <div class="card-actions">
-            <button class="btn btn-primary" onclick="gen('cash','excel','cash-days')"><i data-lucide="file-spreadsheet"></i> Excel</button>
-            <button class="btn btn-outline" onclick="gen('cash','pdf','cash-days')"><i data-lucide="file-text"></i> PDF</button>
-            <button class="btn btn-outline" onclick="gen('cash','csv','cash-days')"><i data-lucide="file"></i> CSV</button>
+            <button class="btn btn-primary" onclick="gen('cash','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('cash','pdf')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-outline" onclick="gen('cash','csv')"><i data-lucide="file"></i> CSV</button>
             <div class="loading-wrapper" id="lw-cash">
               <div class="loading-bar"></div><div class="loading-text">Generating...</div>
             </div>
@@ -304,22 +319,10 @@
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
         <div class="card-body-inner">
-          <div class="form-grid">
-            <div class="form-group full">
-              <label>Reporting Period</label>
-              <div class="custom-select">
-                <select id="error-days">
-                  <option value="1">Today</option>
-                  <option value="7" selected>Last 7 Days</option>
-                  <option value="30">Last 30 Days</option>
-                </select>
-              </div>
-            </div>
-          </div>
           <div class="card-actions">
-            <button class="btn btn-primary" onclick="gen('error','excel','error-days')"><i data-lucide="file-spreadsheet"></i> Excel</button>
-            <button class="btn btn-outline" onclick="gen('error','pdf','error-days')"><i data-lucide="file-text"></i> PDF</button>
-            <button class="btn btn-outline" onclick="gen('error','csv','error-days')"><i data-lucide="file"></i> CSV</button>
+            <button class="btn btn-primary" onclick="gen('error','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('error','pdf')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-outline" onclick="gen('error','csv')"><i data-lucide="file"></i> CSV</button>
             <div class="loading-wrapper" id="lw-error">
               <div class="loading-bar"></div><div class="loading-text">Generating...</div>
             </div>
@@ -338,22 +341,10 @@
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
         <div class="card-body-inner">
-          <div class="form-grid">
-            <div class="form-group full">
-              <label>Reporting Period</label>
-              <div class="custom-select">
-                <select id="perf-days">
-                  <option value="7" selected>Last 7 Days</option>
-                  <option value="30">Last 30 Days</option>
-                  <option value="90">Last 90 Days</option>
-                </select>
-              </div>
-            </div>
-          </div>
           <div class="card-actions">
-            <button class="btn btn-primary" onclick="gen('performance','excel','perf-days')"><i data-lucide="file-spreadsheet"></i> Excel</button>
-            <button class="btn btn-outline" onclick="gen('performance','pdf','perf-days')"><i data-lucide="file-text"></i> PDF</button>
-            <button class="btn btn-outline" onclick="gen('performance','csv','perf-days')"><i data-lucide="file"></i> CSV</button>
+            <button class="btn btn-primary" onclick="gen('performance','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('performance','pdf')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-outline" onclick="gen('performance','csv')"><i data-lucide="file"></i> CSV</button>
             <div class="loading-wrapper" id="lw-performance">
               <div class="loading-bar"></div><div class="loading-text">Generating...</div>
             </div>
@@ -372,22 +363,10 @@
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
         <div class="card-body-inner">
-          <div class="form-grid">
-            <div class="form-group full">
-              <label>Reporting Period</label>
-              <div class="custom-select">
-                <select id="vendor-days">
-                  <option value="7" selected>Last 7 Days</option>
-                  <option value="30">Last 30 Days</option>
-                  <option value="90">Last 90 Days</option>
-                </select>
-              </div>
-            </div>
-          </div>
           <div class="card-actions">
-            <button class="btn btn-primary" onclick="gen('vendor','excel','vendor-days')"><i data-lucide="file-spreadsheet"></i> Excel</button>
-            <button class="btn btn-outline" onclick="gen('vendor','pdf','vendor-days')"><i data-lucide="file-text"></i> PDF</button>
-            <button class="btn btn-outline" onclick="gen('vendor','csv','vendor-days')"><i data-lucide="file"></i> CSV</button>
+            <button class="btn btn-primary" onclick="gen('vendor','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('vendor','pdf')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-outline" onclick="gen('vendor','csv')"><i data-lucide="file"></i> CSV</button>
             <div class="loading-wrapper" id="lw-vendor">
               <div class="loading-bar"></div><div class="loading-text">Generating...</div>
             </div>
@@ -407,18 +386,7 @@
         </div>
         <div class="card-body-inner">
           <div class="form-grid">
-            <div class="form-group">
-              <label>Reporting Period</label>
-              <div class="custom-select">
-                <select id="avail-days">
-                  <option value="1">Today</option>
-                  <option value="7" selected>Last 7 Days</option>
-                  <option value="30">Last 30 Days</option>
-                  <option value="90">Last 90 Days</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-group">
+            <div class="form-group full">
               <label>Branch</label>
               <div class="custom-select">
                 <select id="avail-atm">
@@ -428,9 +396,9 @@
             </div>
           </div>
           <div class="card-actions">
-            <button class="btn btn-primary" onclick="gen('availability','excel','avail-days','avail-atm')"><i data-lucide="file-spreadsheet"></i> Excel</button>
-            <button class="btn btn-outline" onclick="gen('availability','pdf','avail-days','avail-atm')"><i data-lucide="file-text"></i> PDF</button>
-            <button class="btn btn-outline" onclick="gen('availability','csv','avail-days','avail-atm')"><i data-lucide="file"></i> CSV</button>
+            <button class="btn btn-primary" onclick="gen('availability','excel','avail-atm')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('availability','pdf','avail-atm')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-outline" onclick="gen('availability','csv','avail-atm')"><i data-lucide="file"></i> CSV</button>
             <div class="loading-wrapper" id="lw-availability">
               <div class="loading-bar"></div><div class="loading-text">Generating...</div>
             </div>
@@ -443,6 +411,7 @@
 </main>
 {% endblock %}
 {% block extra_scripts %}
+<script src="/static/flatpickr.min.js"></script>
 <script>
 lucide.createIcons();
 function populateATMSelect(selectId, atms) {
@@ -489,12 +458,118 @@ async function loadATMs() {
   }
 }
 
-function gen(type, fmt, daysId, atmId) {
-  const daysEl = daysId ? document.getElementById(daysId) : null;
-  const days = daysEl ? daysEl.value : 1;
-  const atm  = atmId ? document.getElementById(atmId).value : 'all';
-  const lw   = document.getElementById('lw-'+type);
-  const url  = `/report/${type}/${fmt}?days=${days}&atm=${atm}`;
+function eatToday() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Addis_Ababa' }).format(new Date());
+}
+function addDays(iso, n) {
+  var d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function prevMonthRange(iso) {
+  var y = parseInt(iso.slice(0, 4), 10);
+  var m = parseInt(iso.slice(5, 7), 10);
+  var start = new Date(Date.UTC(y, m - 2, 1));
+  var end = new Date(Date.UTC(y, m - 1, 0));
+  return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)];
+}
+function fmtReportDate(iso) {
+  return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC'
+  });
+}
+var reportStart = document.getElementById('report-start');
+var reportEnd = document.getElementById('report-end');
+var rangeLabel = document.getElementById('range-label');
+var rangeError = document.getElementById('range-error');
+var startPicker = null;
+var endPicker = null;
+function syncPickerBounds() {
+  var s = reportStart.value;
+  var e = reportEnd.value;
+  var today = eatToday();
+  if (startPicker) startPicker.set('maxDate', e || today);
+  if (endPicker) {
+    endPicker.set('minDate', s || null);
+    endPicker.set('maxDate', today);
+  }
+}
+function rangeDays() {
+  var s = reportStart.value;
+  var e = reportEnd.value;
+  if (!s || !e) return 0;
+  return Math.round((new Date(e + 'T00:00:00Z') - new Date(s + 'T00:00:00Z')) / 86400000) + 1;
+}
+function validateRange(showError) {
+  var s = reportStart.value;
+  var e = reportEnd.value;
+  var today = eatToday();
+  var msg = '';
+  if (!s || !e) msg = 'Choose both a start date and an end date.';
+  else if (s > e) msg = 'Start date must be on or before the end date.';
+  else if (e > today) msg = 'End date cannot be in the future.';
+  else if (rangeDays() > 90) msg = 'Reporting period cannot exceed 90 days.';
+  if (rangeError) {
+    rangeError.textContent = msg;
+    rangeError.classList.toggle('show', !!msg);
+  }
+  if (msg && showError) showToast(msg, 'warning');
+  return !msg;
+}
+function refreshRangeLabel() {
+  if (!rangeLabel) return;
+  var s = reportStart.value;
+  var e = reportEnd.value;
+  rangeLabel.textContent = (s && e)
+    ? fmtReportDate(s) + ' \u2013 ' + fmtReportDate(e) + ' (EAT)' : '';
+}
+function setReportRange(start, end) {
+  if (startPicker) startPicker.setDate(start, false);
+  if (endPicker) endPicker.setDate(end, false);
+  reportStart.value = start;
+  reportEnd.value = end;
+  syncPickerBounds();
+  refreshRangeLabel();
+  validateRange(false);
+}
+if (typeof flatpickr !== 'undefined') {
+  startPicker = flatpickr(reportStart, {
+    dateFormat: 'Y-m-d', maxDate: eatToday(), disableMobile: true,
+    allowInput: false, monthSelectorType: 'static',
+    onChange: function(){ syncPickerBounds(); refreshRangeLabel(); validateRange(false); }
+  });
+  endPicker = flatpickr(reportEnd, {
+    dateFormat: 'Y-m-d', maxDate: eatToday(), disableMobile: true,
+    allowInput: false, monthSelectorType: 'static',
+    onChange: function(){ syncPickerBounds(); refreshRangeLabel(); validateRange(false); }
+  });
+}
+syncPickerBounds();
+refreshRangeLabel();
+document.querySelectorAll('.range-chip').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var kind = this.getAttribute('data-range');
+    var today = eatToday();
+    var start = today;
+    var end = today;
+    if (kind === '7d') start = addDays(today, -6);
+    else if (kind === '30d') start = addDays(today, -29);
+    else if (kind === 'this-month') start = today.slice(0, 7) + '-01';
+    else if (kind === 'last-month') { var r = prevMonthRange(today); start = r[0]; end = r[1]; }
+    setReportRange(start, end);
+  });
+});
+
+function gen(type, fmt, atmId) {
+  const atm = atmId ? document.getElementById(atmId).value : 'all';
+  const params = new URLSearchParams({ atm: atm });
+  if (type !== 'outage') {
+    if (!validateRange(true)) return;
+    params.set('start', reportStart.value);
+    params.set('end', reportEnd.value);
+  }
+  const lw = document.getElementById('lw-' + type);
+  const url = `/report/${type}/${fmt}?${params.toString()}`;
   const names = { transaction:'Transaction', cash:'Cash Level', error:'Error & Incident',
                   performance:'Performance', vendor:'Vendor Performance',
                   availability:'Availability', outage:'Daily Outage', full:'Complete Report' };

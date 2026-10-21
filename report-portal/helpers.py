@@ -23,7 +23,7 @@ BORDER_COLOR = 'E2E8F0'
 
 # ─── EXCEL HELPERS ─────────────────────────────────────────────────────────────
 
-def xl_header(ws, title, days, atm, ncols=8, subtitle=None):
+def xl_header(ws, title, days, atm, ncols=8, subtitle=None, period=None):
     """Write the branded header block (rows 1-3) plus a subtitle or spacer row 4."""
     last = get_column_letter(ncols)
     ws.merge_cells(f'A1:{last}1')
@@ -44,8 +44,9 @@ def xl_header(ws, title, days, atm, ncols=8, subtitle=None):
 
     ws.merge_cells(f'A3:{last}3')
     c = ws['A3']
+    period_label = period or f'Last {days} days'
     c.value = (
-        f'Period: Last {days} days  |  '
+        f'Period: {period_label}  |  '
         f'ATM: {"All ATMs" if atm == "all" else atm}  |  '
         f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")} EAT'
     )
@@ -94,7 +95,16 @@ def xl_autosize(ws):
         ws.column_dimensions[get_column_letter(col[0].column)].width = min(mx + 4, 52)
 
 
-def xl_send(wb, name):
+def _period_slug(period):
+    if not period:
+        return ''
+    slug = ''.join(ch if ch.isalnum() else '_' for ch in period)
+    while '__' in slug:
+        slug = slug.replace('__', '_')
+    return '_' + slug.strip('_')
+
+
+def xl_send(wb, name, period=None):
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -102,7 +112,7 @@ def xl_send(wb, name):
         buf,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'Dashen_ATM_{name}_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        download_name=f'Dashen_ATM_{name}_{datetime.now().strftime("%Y%m%d")}{_period_slug(period)}.xlsx'
     )
 
 
@@ -114,10 +124,12 @@ def xl_finalize(ws, header_row, ncols):
     ws.freeze_panes = f'A{header_row + 1}'
 
 
-def xl_build_sheet(wb, sheet_name, title, days, atm, headers, rows, subtitle=None):
+def xl_build_sheet(wb, sheet_name, title, days, atm, headers, rows, subtitle=None,
+                   period=None):
     """Utility: create a fully styled sheet inside an existing workbook."""
     ws = wb.create_sheet(sheet_name)
-    xl_header(ws, title, days, atm, ncols=len(headers), subtitle=subtitle)
+    xl_header(ws, title, days, atm, ncols=len(headers), subtitle=subtitle,
+              period=period)
     ws.append(headers)
     xl_style_row(ws, ws.max_row, len(headers))
     data_start = ws.max_row + 1
@@ -155,7 +167,8 @@ def xl_append_section(ws, section_title, headers, rows):
 
 # ─── CSV HELPERS ───────────────────────────────────────────────────────────────
 
-def csv_send(headers, rows, name, title='', days=0, atm='all', subtitle=''):
+def csv_send(headers, rows, name, title='', days=0, atm='all', subtitle='',
+             period=None):
     """Write a CSV with a branded metadata block at the top."""
     buf = io.StringIO()
     w = csv.writer(buf)
@@ -165,9 +178,9 @@ def csv_send(headers, rows, name, title='', days=0, atm='all', subtitle=''):
         w.writerow([title])
     if subtitle:
         w.writerow([subtitle])
+    period_label = period or (f'Last {days} days' if days else '')
     w.writerow([
-        f'Period: Last {days} days'
-        if days else '',
+        f'Period: {period_label}' if period_label else '',
         f'ATM: {"All ATMs" if atm == "all" else atm}',
         f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")} EAT'
     ])
@@ -181,7 +194,7 @@ def csv_send(headers, rows, name, title='', days=0, atm='all', subtitle=''):
         io.BytesIO(buf.getvalue().encode('utf-8-sig')),  # utf-8-sig for Excel compatibility
         mimetype='text/csv',
         as_attachment=True,
-        download_name=f'Dashen_ATM_{name}_{datetime.now().strftime("%Y%m%d")}.csv'
+        download_name=f'Dashen_ATM_{name}_{datetime.now().strftime("%Y%m%d")}{_period_slug(period)}.csv'
     )
 
 
@@ -235,7 +248,7 @@ def _pdf_kpi_block(story, kpis):
     story.append(Spacer(1, 0.8 * cm))
 
 
-def _pdf_header_block(story, title, days, atm):
+def _pdf_header_block(story, title, days, atm, period=None):
     """Shared PDF header: logo + bank name + gold rule + report title + metadata."""
     if os.path.exists(LOGO_PATH):
         img = Image(LOGO_PATH, width=5 * cm, height=1.5 * cm, kind='proportional')
@@ -254,14 +267,15 @@ def _pdf_header_block(story, title, days, atm):
         Paragraph('<font color="#273274">ATM MONITORING SYSTEM</font>', style_sys),
         HRFlowable(width='70%', thickness=2.5, color=colors.HexColor('#FDD79A'), spaceAfter=10),
         Paragraph(f'<b><font color="#273274">{title}</font></b>', style_title),
-        Paragraph(f'<font color="#64748B">Period: Last {days} days  |  '
+        Paragraph(f'<font color="#64748B">Period: {period or f"Last {days} days"}  |  '
                   f'ATM: {"All ATMs" if atm == "all" else atm}  |  '
                   f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")} EAT</font>', style_meta),
         Spacer(1, 0.2 * cm),
     ]
 
 
-def pdf_send(title, headers, rows, days, atm, name, kpis=None, subtitle=''):
+def pdf_send(title, headers, rows, days, atm, name, kpis=None, subtitle='',
+             period=None):
     """Generate a single-section branded PDF report with optional KPI summary page."""
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
@@ -270,7 +284,7 @@ def pdf_send(title, headers, rows, days, atm, name, kpis=None, subtitle=''):
     P = lambda txt, **kw: Paragraph(txt, ParagraphStyle('_p', **kw))
 
     story = []
-    _pdf_header_block(story, title, days, atm)
+    _pdf_header_block(story, title, days, atm, period=period)
     if subtitle:
         story.append(P(f'<font color="#475569"><i>{subtitle}</i></font>',
                        alignment=TA_CENTER))
@@ -280,7 +294,7 @@ def pdf_send(title, headers, rows, days, atm, name, kpis=None, subtitle=''):
         _pdf_kpi_block(story, kpis)
         story.append(PageBreak())
         # Re-use same header on the data page
-        _pdf_header_block(story, title, days, atm)
+        _pdf_header_block(story, title, days, atm, period=period)
 
     story.append(mktable(headers, rows))
     story.append(Spacer(1, 0.5 * cm))
@@ -292,7 +306,7 @@ def pdf_send(title, headers, rows, days, atm, name, kpis=None, subtitle=''):
     doc.build(story)
     buf.seek(0)
     return send_file(buf, mimetype='application/pdf', as_attachment=True,
-                     download_name=f'Dashen_ATM_{name}_{datetime.now().strftime("%Y%m%d")}.pdf')
+                     download_name=f'Dashen_ATM_{name}_{datetime.now().strftime("%Y%m%d")}{_period_slug(period)}.pdf')
 
 
 def mktable(headers, rows):
