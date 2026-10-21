@@ -31,8 +31,22 @@ def test_historical_sql_uses_absolute_utc_bounds():
 def test_availability_is_coverage_aware():
     assert 'first_state' in ROUTES
     assert 'coverage_pct' in ROUTES
-    assert '"Coverage %"' in ROUTES
+    assert '"Coverage %"' not in ROUTES
+    assert "'Coverage': 'Coverage (%)'" in ROUTES
     assert 'No data' in ROUTES
+
+
+def test_no_literal_percent_signs_in_parameterised_sql():
+    import ast
+    tree = ast.parse(ROUTES)
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+                getattr(t, 'id', None) == '_AVAIL_SQL' for t in node.targets):
+            sql = ast.literal_eval(node.value)
+            assert sql.count('%') == sql.count('%s')
+            break
+    else:
+        raise AssertionError('_AVAIL_SQL not found')
 
 
 def test_helpers_can_show_the_selected_period():

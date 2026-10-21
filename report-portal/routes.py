@@ -39,6 +39,7 @@ def _window():
 _DISPLAY_UNITS = {
     'Success Rate': 'Success Rate (%)',
     'Uptime': 'Uptime (%)',
+    'Coverage': 'Coverage (%)',
 }
 
 _VENDOR_SQL = """
@@ -130,7 +131,7 @@ _AVAIL_SQL = """
             CASE WHEN expected_hours <= 0 THEN 'No data'
                  WHEN active_hours >= expected_hours THEN 'None'
                  ELSE 'No data' END) as "Top Downtime Reason",
-        coverage_pct as "Coverage %"
+        coverage_pct as "Coverage"
     FROM calc ORDER BY uptime_pct ASC NULLS LAST
 """
 
