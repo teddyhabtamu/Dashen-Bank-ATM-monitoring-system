@@ -37,6 +37,8 @@
 .badge-anomaly{display:inline-block;padding:2px 8px;border-radius:100px;font-size:9px;font-weight:600;white-space:nowrap}
 .badge-severity{display:inline-block;padding:2px 8px;border-radius:100px;font-size:9px;font-weight:700;white-space:nowrap}
 .badge-ack{display:inline-block;padding:2px 8px;border-radius:100px;font-size:9px;font-weight:600;white-space:nowrap}
+.load-error{display:flex;align-items:flex-start;gap:10px;margin:16px 24px 0;padding:12px 14px;border:1px solid #FECACA;background:#FEF2F2;border-radius:8px;color:#991B1B;font-size:12px;line-height:1.5}
+.load-error i{flex-shrink:0;margin-top:1px}
 td .detail-preview{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:#64748B;cursor:pointer;transition:all .2s ease}
 td .detail-preview:hover{color:#0F172A}
 td .detail-preview.expanded{overflow:visible;text-overflow:clip;white-space:normal;word-break:break-word;background:#F8FAFC;padding:6px 8px;border-radius:4px;max-width:280px;color:#0F172A;font-size:11px;line-height:1.5;animation:fadeIn .2s ease}
@@ -98,6 +100,7 @@ td .detail-preview.expanded{overflow:visible;text-overflow:clip;white-space:norm
   <div class="card-header">
     <h2>Anomaly Alerts ({{ total }})</h2>
     <form method="get" action="/anomalies" class="search-bar" style="overflow:visible;width:100%">
+      <input type="hidden" name="acknowledged" value="{{ filters.acknowledged }}">
       <div class="filters-wrap">
         <select name="severity" onchange="this.form.submit()">
           <option value="">All Severities</option>
@@ -124,11 +127,18 @@ td .detail-preview.expanded{overflow:visible;text-overflow:clip;white-space:norm
         </div>
         <button type="submit" class="btn btn-primary" style="font-size:11px">Filter</button>
         {% if filters.severity or filters.type or filters.atm_id or filters.from or filters.to %}
-        <a href="/anomalies" class="btn btn-outline" style="font-size:11px">Clear</a>
+        <a href="/anomalies?acknowledged={{ filters.acknowledged }}" class="btn btn-outline" style="font-size:11px">Clear</a>
         {% endif %}
       </div>
     </form>
   </div>
+
+  {% if load_error %}
+  <div class="load-error">
+    <i data-lucide="alert-triangle" style="width:16px;height:16px"></i>
+    <div>{{ load_error }}</div>
+  </div>
+  {% endif %}
 
   <div class="tab-bar">
     <div class="tab-switch">
@@ -205,7 +215,7 @@ td .detail-preview.expanded{overflow:visible;text-overflow:clip;white-space:norm
               <div style="font-size:9px;color:#94A3B8;margin-top:1px">by {{ a.acknowledged_by }}</div>
               {% endif %}
             </td>
-            {% if can_ack and not is_ack_tab %}
+            {% if can_ack %}
             <td>
               {% if a.acknowledged %}
               <button class="btn btn-outline" style="padding:3px 8px;font-size:10px;min-height:26px" onclick="unacknowledge({{ a.id }})" title="Undo acknowledgement">Undo</button>
@@ -217,7 +227,17 @@ td .detail-preview.expanded{overflow:visible;text-overflow:clip;white-space:norm
           </tr>
           {% endfor %}
         {% else %}
-          <tr><td colspan="{% if can_ack and not is_ack_tab %}7{% else %}6{% endif %}" style="padding:48px;text-align:center;color:#94A3B8;font-size:14px">No anomaly alerts found.</td></tr>
+          <tr><td colspan="{% if can_ack %}{% if is_ack_tab %}7{% else %}8{% endif %}{% else %}6{% endif %}" style="padding:48px;text-align:center;color:#94A3B8;font-size:14px">
+            {% if load_error %}
+            Anomaly data is unavailable. See the error above.
+            {% elif is_ack_tab %}
+            No acknowledged anomalies match these filters.
+            {% elif ack_count %}
+            No open anomalies. {{ ack_count }} acknowledged in total — <a href="?acknowledged=yes" style="color:#012169;font-weight:600">view them</a>.
+            {% else %}
+            No anomaly alerts found.
+            {% endif %}
+          </td></tr>
         {% endif %}
       </tbody>
     </table>
@@ -238,7 +258,7 @@ td .detail-preview.expanded{overflow:visible;text-overflow:clip;white-space:norm
             <div class="anomaly-card-atm">{{ a.atm_id }} · {{ a.branch }}</div>
             <div class="anomaly-card-time">{{ a.detected_at }}</div>
           </div>
-          {% if can_ack and not is_ack_tab %}
+          {% if can_ack %}
           <div style="flex-shrink:0">
             {% if a.acknowledged %}
             <button class="btn btn-outline" style="padding:4px 10px;font-size:10px" onclick="unacknowledge({{ a.id }})">Undo</button>
@@ -273,7 +293,17 @@ td .detail-preview.expanded{overflow:visible;text-overflow:clip;white-space:norm
       </div>
       {% endfor %}
     {% else %}
-      <div class="anomaly-card" style="text-align:center;color:#94A3B8;font-size:13px;padding:32px">No anomaly alerts found.</div>
+      <div class="anomaly-card" style="text-align:center;color:#94A3B8;font-size:13px;padding:32px">
+        {% if load_error %}
+        Anomaly data is unavailable. See the error above.
+        {% elif is_ack_tab %}
+        No acknowledged anomalies match these filters.
+        {% elif ack_count %}
+        No open anomalies. {{ ack_count }} acknowledged in total — <a href="?acknowledged=yes" style="color:#012169;font-weight:600">view them</a>.
+        {% else %}
+        No anomaly alerts found.
+        {% endif %}
+      </div>
     {% endif %}
   </div>
 
