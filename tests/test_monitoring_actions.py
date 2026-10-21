@@ -489,3 +489,23 @@ def test_the_bulk_modal_posts_all_ids_to_one_call():
     assert "idsInput.name = 'eventids'" in tpl
     assert "pending.eventids.join(',')" in tpl
     assert 'openBulk(' in tpl
+
+
+def test_bulk_buttons_do_not_fall_through_to_the_row_handler():
+    """The bulk buttons reuse .mc-act for styling. The delegated row handler
+    matches any .mc-act, so a click on bulk Acknowledge opened the bulk dialog
+    and then overwrote it with the row dialog ("Remove the acknowledgement?").
+    The handler must exclude the toolbar, and the toolbar must stop the event."""
+    tpl = _tpl()
+    handler = tpl[tpl.index("document.addEventListener('click'"):tpl.index('var bulkAck')]
+
+    assert "closest('#mcBulkBar')" in handler, (
+        'the row handler must ignore toolbar buttons')
+
+    bulk = tpl[tpl.index('var bulkAck'):tpl.index('confirmBtn.addEventListener')]
+    assert bulk.count('stopPropagation') >= 2, (
+        'bulk Ack and Suppress must not bubble into the row handler')
+
+    clear = tpl[tpl.index('var clear = document.getElementById'):]
+    clear = clear[:clear.index('});') + 3]
+    assert 'stopPropagation' in clear, 'Clear must not open a row dialog'
