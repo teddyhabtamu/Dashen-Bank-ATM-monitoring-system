@@ -186,3 +186,14 @@ def test_hosts_show_an_active_window():
     assert 'active_by_host(raw_maintenances' in MON
     assert "maintenance_until': _fmt_short(m.get('active_till')) if m else ''" in MON
     assert 'colspan="6"' in MC
+
+
+def test_the_routes_can_build_the_detail_url():
+    """url_for was missing from the Flask import, so the start POST raised
+    NameError and returned 500 before it ever reached Zabbix."""
+    import ast
+    names = set()
+    for node in ast.walk(ast.parse(ADMIN)):
+        if isinstance(node, ast.ImportFrom) and node.module == 'flask':
+            names.update(a.name for a in node.names)
+    assert 'url_for' in names
