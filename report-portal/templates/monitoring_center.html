@@ -117,7 +117,7 @@
         <tbody id="probBody">
           {% for p in problems %}
           <tr>
-            <td class="mc-check-cell">{% if can_act %}<input type="checkbox" class="mc-check" data-eventid="{{ p.eventid }}" aria-label="Select this problem">{% endif %}</td>
+            <td class="mc-check-cell">{% if can_act %}<input type="checkbox" class="mc-check" data-eventid="{{ p.eventid }}" data-acked="{{ '1' if p.acknowledged else '0' }}" data-suppressed="{{ '1' if p.suppressed else '0' }}" aria-label="Select this problem">{% endif %}</td>
             <td style="white-space:nowrap">{{ p.clock }}</td>
             <td><span class="sev" style="background:{{ sev_colors.get(p.severity, '#97AAB3') }}">{{ p.severity_name }}</span></td>
             <td>{{ p.host }}</td>
@@ -252,12 +252,19 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
     var isSuppress = action === 'suppress';
     var isUnsuppress = action === 'unsuppress';
     var count = p.eventids.length;
+    var what = count + ' problem' + (count === 1 ? '' : 's');
     title.textContent = isSuppress
-      ? (p.bulk ? 'Suppress ' + count + ' problems?' : 'Suppress this problem?')
+      ? (p.bulk ? 'Suppress ' + what + '?' : 'Suppress this problem?')
       : isUnsuppress ? 'Remove the suppression?'
-      : isAck ? (p.bulk ? 'Acknowledge ' + count + ' problems?' : 'Acknowledge this problem?')
+      : isAck ? (p.bulk ? 'Acknowledge ' + what + '?' : 'Acknowledge this problem?')
       : 'Remove the acknowledgement?';
-    prob.textContent = p.problem || '';
+    var skippedText = '';
+    if(p.bulk && p.skipped){
+      skippedText = p.skipped + (p.skipped === 1 ? ' problem is' : ' problems are') +
+        ' already ' + (isSuppress ? 'suppressed' : 'acknowledged') +
+        ' and will be skipped.';
+    }
+    prob.textContent = p.bulk ? skippedText : (p.problem || '');
     confirmBtn.textContent = isSuppress ? 'Suppress'
       : isUnsuppress ? 'Unsuppress'
       : isAck ? 'Acknowledge' : 'Un-acknowledge';
@@ -279,10 +286,22 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
   }
 
   function openBulk(action){
-    var ids = window.mcSelectionIds ? window.mcSelectionIds() : [];
-    if(!ids.length) return;
-    showModal({eventids: ids, action: action, bulk: true,
-               problem: ids.length + ' selected problem' + (ids.length === 1 ? '' : 's')});
+    var items = window.mcSelectionItems ? window.mcSelectionItems() : [];
+    if(!items.length) return;
+    var ids = [];
+    var skipped = 0;
+    items.forEach(function(it){
+      var already = action === 'acknowledge' ? it.acked
+                  : action === 'suppress' ? it.suppressed : false;
+      if(already) skipped++; else ids.push(it.id);
+    });
+    if(!ids.length){
+      showToast(action === 'acknowledge'
+        ? 'All selected problems are already acknowledged.'
+        : 'All selected problems are already suppressed.', 'warning');
+      return;
+    }
+    showModal({eventids: ids, action: action, bulk: true, skipped: skipped, problem: ''});
   }
 
   function closeKebab(){
@@ -446,6 +465,14 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
   }
 
   window.mcSelectionIds = function(){ return Array.from(selected); };
+  window.mcSelectionItems = function(){
+    return boxes().filter(function(c){ return selected.has(c.dataset.eventid); })
+      .map(function(c){
+        return {id: c.dataset.eventid,
+                acked: c.dataset.acked === '1',
+                suppressed: c.dataset.suppressed === '1'};
+      });
+  };
   window.mcSelectionClear = function(){ selected.clear(); update(); };
   window.mcSelectionRender = update;
 
@@ -528,7 +555,10 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
             }
           }
           var chk = MC_CAN_ACT
-            ? '<td class="mc-check-cell"><input type="checkbox" class="mc-check" data-eventid="' + esc(p.eventid) + '" aria-label="Select this problem"></td>'
+            ? '<td class="mc-check-cell"><input type="checkbox" class="mc-check" data-eventid="' + esc(p.eventid) +
+              '" data-acked="' + (p.acknowledged ? '1' : '0') +
+              '" data-suppressed="' + (p.suppressed ? '1' : '0') +
+              '" aria-label="Select this problem"></td>'
             : '<td class="mc-check-cell"></td>';
           return '<tr>' + chk + '<td style="white-space:nowrap">' + esc(p.clock) + '</td>' +
             '<td><span class="sev" style="background:' + esc(p.sev_color || '#97AAB3') + '">' + esc(p.severity_name) + '</span></td>' +

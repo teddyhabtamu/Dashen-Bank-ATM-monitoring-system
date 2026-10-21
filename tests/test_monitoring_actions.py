@@ -467,6 +467,8 @@ def test_every_row_has_a_selection_box():
 
     assert 'class="mc-check"' in row
     assert 'data-eventid="{{ p.eventid }}"' in row
+    assert 'data-acked=' in row and 'data-suppressed=' in row, (
+        'the bulk filter needs each row\'s current state')
     assert 'id="mcCheckAll"' in tpl
 
     js = tpl[tpl.index('pb.innerHTML'):tpl.index('var hb')]
@@ -509,3 +511,43 @@ def test_bulk_buttons_do_not_fall_through_to_the_row_handler():
     clear = tpl[tpl.index('var clear = document.getElementById'):]
     clear = clear[:clear.index('});') + 3]
     assert 'stopPropagation' in clear, 'Clear must not open a row dialog'
+
+
+def test_bulk_actions_skip_rows_already_in_that_state():
+    """Zabbix silently skips an acknowledge bit on an already-acknowledged
+    event, and a suppress bit on an already-suppressed one. Sending all ids
+    would still append the comment/reason to the skipped events and promise
+    more than happened, so the client filters to the actionable rows."""
+    tpl = _tpl()
+    fn = tpl[tpl.index('function openBulk'):tpl.index('function closeKebab')]
+
+    assert "action === 'acknowledge' ? it.acked" in fn
+    assert "action === 'suppress' ? it.suppressed" in fn
+    assert 'if(already) skipped++; else ids.push(it.id);' in fn
+    assert 'if(!ids.length)' in fn
+    assert 'All selected problems are already acknowledged.' in fn
+    assert 'All selected problems are already suppressed.' in fn
+    assert 'skipped: skipped' in fn
+
+
+def test_the_dialog_reports_how_many_rows_will_be_skipped():
+    tpl = _tpl()
+    assert "p.skipped + (p.skipped === 1 ? ' problem is' : ' problems are')" in tpl
+    assert "' and will be skipped.'" in tpl
+    assert 'prob.textContent = p.bulk ? skippedText' in tpl
+
+
+def test_the_checkbox_carries_the_state_after_the_refresh_too():
+    tpl = _tpl()
+    js = tpl[tpl.index('pb.innerHTML'):tpl.index('var hb')]
+    assert "data-acked=" in js and "data-suppressed=" in js
+    assert 'window.mcSelectionItems = function' in tpl
+    assert "acked: c.dataset.acked === '1'" in tpl
+    assert "suppressed: c.dataset.suppressed === '1'" in tpl
+
+
+def test_a_bulk_dialog_for_one_problem_is_singular():
+    tpl = _tpl()
+    assert "var what = count + ' problem' + (count === 1 ? '' : 's');" in tpl
+    assert "'Acknowledge ' + what + '?'" in tpl
+    assert "'Suppress ' + what + '?'" in tpl
