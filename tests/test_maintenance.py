@@ -197,3 +197,9 @@ def test_the_routes_can_build_the_detail_url():
         if isinstance(node, ast.ImportFrom) and node.module == 'flask':
             names.update(a.name for a in node.names)
     assert 'url_for' in names
+
+
+def test_name_does_not_repeat_the_atm_prefix():
+    p = create_params('1', 'ATM-TEST-NCR', 'Cash replenishment', '30',
+                      1700000000)
+    assert p['name'] == 'ATM-TEST-NCR — Cash replenishment'

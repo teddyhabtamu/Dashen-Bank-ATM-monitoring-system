@@ -62,7 +62,7 @@ def create_params(hostid, atm_id, reason, duration, now, admin=False, actor=''):
     if len(reason) < 5:
         raise ValueError('A reason of at least 5 characters is required.')
     start, till, period = window(duration, now, admin=admin)
-    name = ('ATM %s — %s' % (atm_id, reason))[:128]
+    name = ('%s — %s' % (atm_id, reason))[:128]
     return {
         'name': name,
         'description': 'Service mode started from the ATM Monitoring System by %s.'
