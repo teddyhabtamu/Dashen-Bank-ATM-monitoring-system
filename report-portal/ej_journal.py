@@ -210,6 +210,23 @@ class EjTransaction:
             'vendor': self.vendor,
         }
 
+    def to_shadow_row(self):
+        """Extra fields the quarantined EJ staging table needs.
+
+        Kept separate from to_db_row() so the eventual atm_transactions
+        promotion shape stays exactly what that table expects.
+        """
+        row = self.to_db_row()
+        row.update({
+            'transaction_key': self.transaction_key,
+            'dispensed_amount': self.dispensed_amount,
+            'warnings': list(self.warnings),
+            'confidence': self.confidence,
+            'parser_version': self.parser_version,
+            'raw_ref': self.raw_ref,
+        })
+        return row
+
 
 @dataclass
 class ParseResult:

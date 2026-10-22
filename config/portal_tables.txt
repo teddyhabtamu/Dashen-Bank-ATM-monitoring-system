@@ -42,6 +42,9 @@ atm_network_metrics
 atm_state_history
 atm_transactions
 atm_transactions_visible
+ej_parse_latest
+ej_parse_runs
+ej_transactions
 audit_log
 cash_replenishments
 fault_type_map

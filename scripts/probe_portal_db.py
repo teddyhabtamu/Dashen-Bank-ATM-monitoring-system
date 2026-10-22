@@ -131,6 +131,9 @@ def main():
     # Every relation the list of record claims, read the way the portal reads it.
     counts = [
         ('atm_transactions_visible', 'the view most pages query'),
+        ('ej_parse_latest', 'latest EJ parse per journal'),
+        ('ej_parse_runs', 'EJ parser run history'),
+        ('ej_transactions', 'quarantined EJ transactions'),
         ('atm_transactions', 'raw transactions'),
         ('atm_current_state', 'live device state'),
         ('atm_locations', 'the ATM registry'),

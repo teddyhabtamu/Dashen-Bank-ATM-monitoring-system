@@ -370,6 +370,16 @@ def test_db_row_is_naive_utc_for_the_timestamp_without_time_zone_column():
     assert row['card_masked'] == '923140******5264'
 
 
+def test_shadow_row_carries_dispensed_amount_and_warnings():
+    txn = _one(NCR_APPROVED, 'NCR', terminal_map=MAP)
+    row = txn.to_shadow_row()
+    assert row['transaction_key'] == 'EJ:NCR:NCRT0001:20260909:7748'
+    assert row['dispensed_amount'] == Decimal('3000.00')
+    assert row['warnings'] == []
+    assert row['confidence'] == 'high'
+    assert row['parser_version'] == ej.PARSER_VERSION
+
+
 def test_money_is_not_ingested_until_the_terminal_maps_to_an_atm():
     txn = _one(NCR_APPROVED, 'NCR')
     assert txn.completed is True

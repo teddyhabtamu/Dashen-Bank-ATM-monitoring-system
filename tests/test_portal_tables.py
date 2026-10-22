@@ -868,16 +868,17 @@ def test_the_sidebar_keeps_every_route_and_every_admin_gate():
             routes.append(h)
             if depth > 0:
                 gated.append(h)
-    assert len(routes) == 16, 'expected 16 destinations, found %d' % len(routes)
+    assert len(routes) == 17, 'expected 17 destinations, found %d' % len(routes)
     assert sorted(gated) == sorted([
         '/admin/audit', '/admin/onboard', '/admin/onboard/fleet',
-        '/admin/schedules', '/admin/users', '{{ grafana_url }}',
+        '/admin/schedules', '/admin/users', '/ej-journal',
+        '{{ grafana_url }}',
     ]), 'the admin-gated destinations changed: %s' % sorted(gated)
 
 
 def test_every_sidebar_item_has_a_tooltip():
     """The collapsed rail is icons only, so a missing title attribute is an
-    unlabelled button. Before the regrouping only 6 of 16 items had one."""
+    unlabelled button. Before the regrouping only 6 of the items had one."""
     tpl = (REPO / 'report-portal' / 'templates' / 'base.html').read_text()
     nav = tpl[tpl.index('<nav class="sidebar-nav">'):
               tpl.index('</nav>', tpl.index('<nav class="sidebar-nav">'))]

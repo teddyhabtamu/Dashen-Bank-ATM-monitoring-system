@@ -485,6 +485,13 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
           <i data-lucide="file-search"></i>
           <span>EJ Search</span>
         </a>
+        {% if session.get('role') == 'admin' %}
+        <a href="/ej-journal" class="nav-item {% if request.path.startswith('/ej-journal') %}active{% endif %}"
+           title="EJ Journal — quarantined parser output and reconciliation readiness">
+          <i data-lucide="book-open"></i>
+          <span>EJ Journal</span>
+        </a>
+        {% endif %}
         <a href="/incidents" class="nav-item {% if request.path.startswith('/incidents') %}active{% endif %}"
            title="Incident Management — GLPI tickets">
           <i data-lucide="ticket"></i>
