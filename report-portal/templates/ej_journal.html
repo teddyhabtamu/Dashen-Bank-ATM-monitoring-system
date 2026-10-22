@@ -34,7 +34,7 @@
   <div class="page-header-icon"><i data-lucide="book-open"></i></div>
   <div>
     <h1 class="page-title">EJ Journal</h1>
-    <p class="page-subtitle">Quarantined journal transactions and parser quality. Not yet used by KPIs, reports, cash forecasts or anomalies.</p>
+    <p class="page-subtitle">Quarantined journal transactions and parser quality. Not yet used by KPIs, reports, cash forecasts or anomalies. Auto-refreshes every 60 seconds.</p>
   </div>
 </div>
 <div class="page-content">
@@ -153,4 +153,10 @@
 </div>
 
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  window.setTimeout(function () { window.location.reload(); }, 60000);
+</script>
 {% endblock %}
