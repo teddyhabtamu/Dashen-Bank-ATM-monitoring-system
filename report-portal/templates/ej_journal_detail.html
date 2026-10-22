@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}{{ atm.atm_id if atm else 'EJ Journal' }} — EJ Journal{% endblock %}
+{% block extra_style %}{% include "_ej_journal_style.html" %}{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="book-open"></i></div>
+  <div>
+    <div class="detail-head">
+      <a class="back" href="{{ url_for('ej_journal.ej_journal', days=days) }}">← EJ Journal</a>
+    </div>
+    <h1 class="page-title">{{ atm.atm_id if atm else 'ATM' }} · {{ atm.branch if atm and atm.branch else 'Unknown branch' }}</h1>
+    <p class="page-subtitle">
+      Terminal {{ atm.terminal_id if atm and atm.terminal_id else '—' }} ·
+      EJ host {{ atm.ej_hostname if atm and atm.ej_hostname else '—' }} ·
+      Last {{ days }} day{% if days != 1 %}s{% endif %} · Auto-refreshes every 120 seconds.
+    </p>
+  </div>
+</div>
+<div class="page-content">
+
+{% if setup_error %}
+<div class="banner banner-error"><strong>EJ staging unavailable.</strong> {{ setup_error }}</div>
+{% endif %}
+
+<form method="get" action="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id if atm else '') }}" class="ej-filters">
+  <div class="fg">
+    <label>Period</label>
+    <select name="days">
+      {% for d in [1, 7, 30, 90] %}
+      <option value="{{ d }}"{% if days == d %} selected{% endif %}>Last {{ d }} day{% if d != 1 %}s{% endif %}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="actions"><button class="btn btn-primary" type="submit">Apply</button></div>
+</form>
+
+<div class="stat-row">
+  <div class="stat-card"><div class="num">{{ summary.get('files', 0) }}</div><div class="lbl">Journal files</div></div>
+  <div class="stat-card"><div class="num">{{ summary.get('sessions', 0) }}</div><div class="lbl">Sessions</div></div>
+  <div class="stat-card"><div class="num">{{ summary.get('completed', 0) }}</div><div class="lbl">Completed</div></div>
+  <div class="stat-card"><div class="num">{{ summary.get('staged', 0) }}</div><div class="lbl">Staged transactions</div></div>
+  <div class="stat-card"><div class="num">{{ '{:,.2f}'.format(summary.get('approved_amount', 0)|float) }} <small>ETB</small></div><div class="lbl">Approved amount</div></div>
+  <div class="stat-card {% if summary.get('dispensed', 0)|float == 0 and summary.get('approved', 0) %}warn{% endif %}"><div class="num">{{ '{:,.2f}'.format(summary.get('dispensed', 0)|float) }} <small>ETB</small></div><div class="lbl">Cash dispensed</div></div>
+  <div class="stat-card {% if summary.get('no_cash_evidence', 0) %}warn{% endif %}"><div class="num">{{ summary.get('no_cash_evidence', 0) }}</div><div class="lbl">Approved, no cash evidence</div></div>
+</div>
+
+{% if summary.get('no_cash_evidence', 0) %}
+<div class="banner banner-warn">
+  <strong>{{ summary.get('no_cash_evidence') }} approved transaction(s) have no cash-dispense evidence.</strong>
+  They remain staged and are not counted as dispensed cash.
+</div>
+{% endif %}
+
+<div class="two-col">
+  <div class="card">
+    <div class="card-header"><h2>Staged Transactions</h2></div>
+    <div class="op-table-wrap" style="overflow-x:auto">
+      <table class="ej-table">
+        <thead><tr><th>Recorded (EAT)</th><th>Type</th><th>Status</th><th>Amount</th><th>Dispensed</th><th>Warnings</th></tr></thead>
+        <tbody>
+          {% for t in transactions %}
+          <tr>
+            <td class="mono">{{ t.recorded_at }}</td>
+            <td>{{ t.txn_type or '—' }}</td>
+            <td><span class="pill pill-{{ t.status|lower }}">{{ t.status }}</span></td>
+            <td>{{ '{:,.2f}'.format(t.amount|float) if t.amount is not none else '—' }}</td>
+            <td>{{ '{:,.2f}'.format(t.dispensed_amount|float) if t.dispensed_amount is not none else '—' }}</td>
+            <td>{% for w in t.warnings %}<span class="warn-chip">{{ w }}</span>{% else %}<span style="color:#94A3B8">—</span>{% endfor %}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="ej-empty">No staged transactions in this period.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if total_pages > 1 %}
+    <div class="pager">
+      {% if page > 1 %}<a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id, days=days, page=page-1) }}">Previous</a>{% else %}<span class="off">Previous</span>{% endif %}
+      <span>Page {{ page }} of {{ total_pages }} · {{ total }} transaction(s)</span>
+      {% if page < total_pages %}<a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id, days=days, page=page+1) }}">Next</a>{% else %}<span class="off">Next</span>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="card-header"><h2>Warnings</h2></div>
+      <div style="padding:10px 14px 14px">
+        {% for w in warnings %}
+        <div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid #F1F5F9;font-size:12px">
+          <span class="warn-chip">{{ w.name }}</span><strong>{{ w.rows }}</strong>
+        </div>
+        {% else %}
+        <p style="font-size:12px;color:#94A3B8;margin:0">No transaction warnings in this period.</p>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h2>Parse Health</h2></div>
+      <div style="padding:12px 14px;font-size:12px;color:#475569">
+        <div style="display:flex;justify-content:space-between"><span>Journal files</span><strong>{{ summary.get('files', 0) }}</strong></div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px"><span>Parse failures</span><strong style="color:{{ '#DC2626' if summary.get('parse_errors', 0) else '#166534' }}">{{ summary.get('parse_errors', 0) }}</strong></div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px"><span>No-receipt sessions</span><strong>{{ summary.get('no_receipt', 0) }}</strong></div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px"><span>Declined transactions</span><strong>{{ summary.get('declined', 0) }}</strong></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h2>Journal Files</h2></div>
+  <div class="op-table-wrap" style="overflow-x:auto">
+    <table class="ej-table">
+      <thead><tr><th>Journal date</th><th>File</th><th>Host</th><th>Vendor</th><th>Sessions</th><th>Completed</th><th>Declined</th><th>Unknown</th><th>Status</th><th>Warnings / Error</th></tr></thead>
+      <tbody>
+        {% for r in parse_runs %}
+        <tr>
+          <td class="mono">{{ r.journal_date }}</td>
+          <td class="mono" title="{{ r.file_path }}">{{ r.file_path.split('/')[-1] }}</td>
+          <td class="mono">{{ r.hostname or '—' }}</td>
+          <td>{{ r.vendor }}</td>
+          <td>{{ r.sessions }}</td>
+          <td>{{ r.completed }}</td>
+          <td>{{ r.declined }}</td>
+          <td>{{ r.unknown }}</td>
+          <td><span class="pill pill-{{ 'error' if r.status == 'error' else 'ok' }}">{{ r.status }}</span></td>
+          <td>{% for w in r.warnings %}<span class="warn-chip">{{ w }}</span>{% endfor %}{% if r.error %}<span style="color:#DC2626">{{ r.error }}</span>{% elif not r.warnings %}<span style="color:#94A3B8">—</span>{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="ej-empty">No journal files in this period.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>window.setTimeout(function () { window.location.reload(); }, 120000);</script>
+{% endblock %}

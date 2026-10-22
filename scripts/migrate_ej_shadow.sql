@@ -38,8 +38,40 @@ CREATE TABLE IF NOT EXISTS public.ej_parse_runs (
 COMMENT ON TABLE public.ej_parse_runs IS
   'One row per parsed journal file/hash. Records what the parser saw, including files that failed to parse. Not used by reports.';
 
+-- Fleet UI metadata: a file path alone cannot answer "which ATM is stale?".
+-- journal_date/hostname come from the puller's <date>_<HOST>_EJDATA.log name;
+-- atm_id comes from the terminal mapping or the registered ej_hostname.
+ALTER TABLE public.ej_parse_runs
+    ADD COLUMN IF NOT EXISTS atm_id varchar(20),
+    ADD COLUMN IF NOT EXISTS hostname varchar(64),
+    ADD COLUMN IF NOT EXISTS journal_date date;
+
+UPDATE public.ej_parse_runs
+   SET journal_date = COALESCE(
+           journal_date,
+           (regexp_match(file_path,
+             '([0-9]{4}-[0-9]{2}-[0-9]{2})_[^/]*_EJDATA\.log$'))[1]::date),
+       hostname = COALESCE(
+           hostname,
+           upper((regexp_match(file_path,
+             '[0-9]{4}-[0-9]{2}-[0-9]{2}_([^/]*)_EJDATA\.log$'))[1]))
+ WHERE journal_date IS NULL OR hostname IS NULL;
+
+UPDATE public.ej_parse_runs r
+   SET atm_id = a.atm_id
+  FROM public.atm_locations a
+ WHERE r.atm_id IS NULL
+   AND COALESCE(r.hostname, '') <> ''
+   AND upper(a.ej_hostname) = upper(r.hostname);
+
 CREATE INDEX IF NOT EXISTS idx_ej_parse_runs_parsed_at
     ON public.ej_parse_runs (parsed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ej_parse_runs_atm_date
+    ON public.ej_parse_runs (atm_id, journal_date DESC);
+CREATE INDEX IF NOT EXISTS idx_ej_parse_runs_journal_date
+    ON public.ej_parse_runs (journal_date DESC);
+CREATE INDEX IF NOT EXISTS idx_ej_parse_runs_hostname
+    ON public.ej_parse_runs (hostname);
 
 CREATE OR REPLACE VIEW public.ej_parse_latest AS
     SELECT DISTINCT ON (file_path) *

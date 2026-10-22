@@ -5,6 +5,7 @@ and its SQL must be idempotent. These tests exercise the pure stages without a
 database.
 """
 import sys
+from datetime import date
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -13,6 +14,24 @@ sys.path.insert(0, str(REPO / 'tests'))
 
 import ingest_ej_shadow as ing  # noqa: E402
 from test_ej_journal import MAP, NCR_APPROVED, NCR_DECLINED  # noqa: E402
+
+
+def test_journal_meta_comes_from_the_puller_filename(tmp_path):
+    path = tmp_path / '2026-10-08_TESTMACHINE_EJDATA.log'
+    assert ing._journal_meta(path) == (date(2026, 10, 8), 'TESTMACHINE')
+    assert ing._journal_meta(tmp_path / 'not-a-journal.log') == (None, None)
+
+
+def test_empty_journal_is_still_mapped_by_hostname(tmp_path):
+    path = tmp_path / '2026-10-20_TESTMACHINE_EJDATA.log'
+    path.write_text('POWER-UP/RESET\n')
+    runs, txns, files, errors = ing.collect(
+        [path], {}, {'TESTMACHINE': 'ATM-NCR-1'})
+    assert not errors
+    assert runs[0]['atm_id'] == 'ATM-NCR-1'
+    assert runs[0]['hostname'] == 'TESTMACHINE'
+    assert runs[0]['journal_date'] == '2026-10-20'
+    assert txns == []
 
 
 def test_collect_stages_only_completed_mapped_transactions(tmp_path):
@@ -54,7 +73,8 @@ def test_build_sql_is_idempotent_and_never_targets_atm_transactions():
         'declined': 0, 'unknown': 0, 'incomplete': 0,
         'amount_total': '200.00', 'dispensed_total': '0.00',
         'warnings': {}, 'parser_version': 'ej-journal-1', 'status': 'ok',
-        'error': '',
+        'error': '', 'atm_id': 'ATM-TEST-NCR', 'hostname': 'TESTMACHINE',
+        'journal_date': '2026-10-16',
     }], [{
         'transaction_key': 'EJ:NCR:PATMT003:20261016:1026',
         'parse_file': '/tmp/a.log', 'parse_sha': '0' * 64,
@@ -71,6 +91,7 @@ def test_build_sql_is_idempotent_and_never_targets_atm_transactions():
     assert 'amount_total text' in sql, (
         'parse-run staging must be text: COPY into a numeric temp column '
         'fails on an empty value before NULLIF can run')
+    assert 'journal_date' in sql and 'hostname' in sql
     assert 'ON CONFLICT (file_path, file_sha256) DO UPDATE' in sql
     assert 'INSERT INTO public.atm_transactions' not in sql
     assert 'INSERT INTO public.ej_transactions' in sql

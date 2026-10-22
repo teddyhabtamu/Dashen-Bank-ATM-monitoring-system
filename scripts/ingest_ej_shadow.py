@@ -49,6 +49,7 @@ PARSE_COLUMNS = (
     'sessions', 'completed', 'approved', 'declined', 'unknown',
     'incomplete', 'amount_total', 'dispensed_total', 'warnings',
     'parser_version', 'status', 'error',
+    'atm_id', 'hostname', 'journal_date',
 )
 TXN_COLUMNS = (
     'transaction_key', 'parse_file', 'parse_sha',
@@ -102,21 +103,40 @@ def _resolve_db_name(explicit=None, docker_bin=None):
     return None
 
 
-def _read_terminal_map(db_name, docker_bin=None):
-    """terminal_id -> atm_id from the registry. Empty on failure."""
+def _read_registry_maps(db_name, docker_bin=None):
+    """Return (terminal -> atm_id, ej_hostname -> atm_id) from the registry."""
     if not db_name:
-        return {}
-    sql = ("SELECT terminal_id, atm_id FROM atm_locations "
-           "WHERE COALESCE(terminal_id, '') <> '' ORDER BY terminal_id;")
+        return {}, {}
+    sql = ("SELECT COALESCE(terminal_id, ''), atm_id, COALESCE(ej_hostname, '') "
+           "FROM atm_locations ORDER BY atm_id;")
     proc = _psql(_docker_bin(docker_bin), db_name, sql, query=True, check=False)
     if proc.returncode != 0:
-        raise RuntimeError((proc.stderr or 'terminal map query failed').strip())
-    mapping = {}
+        raise RuntimeError((proc.stderr or 'registry query failed').strip())
+    terminals, hostnames = {}, {}
     for line in (proc.stdout or '').splitlines():
-        terminal, _, atm_id = line.partition('|')
+        terminal, _, rest = line.partition('|')
+        atm_id, _, hostname = rest.partition('|')
         if terminal.strip() and atm_id.strip():
-            mapping[terminal.strip()] = atm_id.strip()
-    return mapping
+            terminals[terminal.strip()] = atm_id.strip()
+        if hostname.strip() and atm_id.strip():
+            hostnames[hostname.strip().upper()] = atm_id.strip()
+    return terminals, hostnames
+
+
+def _journal_meta(path):
+    """(journal_date, hostname) from <date>_<HOST>_EJDATA.log, or (None, None)."""
+    name = Path(path).name
+    prefix, sep, rest = name.partition('_')
+    if not sep:
+        return None, None
+    try:
+        journal_date = datetime.strptime(prefix, '%Y-%m-%d').date()
+    except ValueError:
+        return None, None
+    hostname, sep, suffix = rest.rpartition('_')
+    if not sep or suffix.lower() != 'ejdata.log' or not hostname:
+        return None, None
+    return journal_date, hostname.upper()
 
 
 def _load_json_map(path):
@@ -170,7 +190,7 @@ def _build_sql(parse_runs, transactions):
 INSERT INTO public.ej_parse_runs (
     file_path, file_sha256, vendor, encoding, sessions, completed, approved,
     declined, unknown, incomplete, amount_total, dispensed_total, warnings,
-    parser_version, status, error
+    parser_version, status, error, atm_id, hostname, journal_date
 )
 SELECT file_path, file_sha256, vendor, NULLIF(encoding, ''),
        sessions::integer, completed::integer, approved::integer,
@@ -178,7 +198,9 @@ SELECT file_path, file_sha256, vendor, NULLIF(encoding, ''),
        NULLIF(amount_total, '')::numeric,
        NULLIF(dispensed_total, '')::numeric,
        COALESCE(NULLIF(warnings, '')::jsonb, '{}'::jsonb),
-       parser_version, status, NULLIF(error, '')
+       parser_version, status, NULLIF(error, ''),
+       NULLIF(atm_id, ''), NULLIF(hostname, ''),
+       NULLIF(journal_date, '')::date
   FROM _ej_parse_runs
 ON CONFLICT (file_path, file_sha256) DO UPDATE SET
     vendor = EXCLUDED.vendor,
@@ -195,7 +217,10 @@ ON CONFLICT (file_path, file_sha256) DO UPDATE SET
     parser_version = EXCLUDED.parser_version,
     parsed_at = now(),
     status = EXCLUDED.status,
-    error = EXCLUDED.error;
+    error = EXCLUDED.error,
+    atm_id = EXCLUDED.atm_id,
+    hostname = EXCLUDED.hostname,
+    journal_date = EXCLUDED.journal_date;
 """)
 
     if transactions:
@@ -253,7 +278,7 @@ ON CONFLICT (transaction_key) DO UPDATE SET
     return out.getvalue()
 
 
-def collect(paths, terminal_map):
+def collect(paths, terminal_map, hostname_map=None):
     """Parse journals and return (parse_runs, transactions, per_file_summary).
 
     Invalid/unreadable files are reported to stderr and skipped; a journal that
@@ -262,6 +287,7 @@ def collect(paths, terminal_map):
     """
     parse_runs, transactions, files, errors = [], [], [], []
     seen_runs, seen_txns, seen_files = set(), set(), set()
+    hostname_map = hostname_map or {}
 
     for path in paths:
         try:
@@ -274,6 +300,8 @@ def collect(paths, terminal_map):
         if run_key in seen_runs:
             continue
         seen_runs.add(run_key)
+        journal_date, hostname = _journal_meta(path)
+        run_atm = hostname_map.get(hostname) if hostname else None
         try:
             result = parse_journal_file(path, terminal_map=terminal_map)
         except Exception as exc:  # noqa: BLE001 - one bad file must not stop the batch
@@ -285,6 +313,8 @@ def collect(paths, terminal_map):
                 'incomplete': 0, 'amount_total': '0', 'dispensed_total': '0',
                 'warnings': {}, 'parser_version': PARSER_VERSION,
                 'status': 'error', 'error': str(exc),
+                'atm_id': run_atm, 'hostname': hostname,
+                'journal_date': journal_date.isoformat() if journal_date else '',
             })
             continue
 
@@ -311,6 +341,9 @@ def collect(paths, terminal_map):
             'parser_version': PARSER_VERSION,
             'status': status,
             'error': error,
+            'atm_id': run_atm,
+            'hostname': hostname,
+            'journal_date': journal_date.isoformat() if journal_date else '',
         })
 
         staged = 0
@@ -328,6 +361,9 @@ def collect(paths, terminal_map):
             })
             transactions.append(row)
             staged += 1
+            if run_atm is None:
+                run_atm = row.get('atm_id')
+                parse_runs[-1]['atm_id'] = run_atm
         if str(path) not in seen_files:
             seen_files.add(str(path))
             files.append({
@@ -337,6 +373,7 @@ def collect(paths, terminal_map):
                 'completed': summary['completed'],
                 'staged': staged,
                 'unknown': summary['unknown'],
+                'atm_id': run_atm,
             })
     return parse_runs, transactions, files, errors
 
@@ -383,13 +420,14 @@ def main(argv=None):
         return 2
 
     try:
-        terminal_map = _read_terminal_map(db_name)
+        terminal_map, hostname_map = _read_registry_maps(db_name)
         terminal_map.update(_load_json_map(args.terminal_map))
     except Exception as exc:  # noqa: BLE001
-        print('Terminal mapping failed: %s' % exc, file=sys.stderr)
+        print('Registry mapping failed: %s' % exc, file=sys.stderr)
         return 2
 
-    parse_runs, transactions, files, errors = collect(paths, terminal_map)
+    parse_runs, transactions, files, errors = collect(
+        paths, terminal_map, hostname_map)
 
     if args.json:
         print(json.dumps({
