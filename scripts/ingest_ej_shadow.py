@@ -69,7 +69,7 @@ def _psql(docker_bin, db_name, sql, *, query=False, check=True):
     Returns CompletedProcess. psql reads stdin, which is what lets a COPY
     stream and its data travel in one round trip.
     """
-    cmd = [_docker_bin, 'exec', '-i', DB_CONTAINER, 'psql',
+    cmd = [docker_bin, 'exec', '-i', DB_CONTAINER, 'psql',
            '-U', DB_USER, '-d', db_name, '-v', 'ON_ERROR_STOP=1']
     if query:
         cmd.extend(['-tAF|'])

@@ -72,3 +72,20 @@ def test_build_sql_is_idempotent_and_never_targets_atm_transactions():
     assert 'INSERT INTO public.atm_transactions' not in sql
     assert 'INSERT INTO public.ej_transactions' in sql
     assert 'cash_not_taken' in sql
+
+
+def test_psql_uses_the_resolved_docker_binary(monkeypatch):
+    # Regression: the command list used the _docker_bin function instead of
+    # the resolved string, so every DB call died in subprocess with a
+    # "expected str ... not function" TypeError.
+    import subprocess
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        seen['cmd'] = cmd
+        return subprocess.CompletedProcess(cmd, 0, '', '')
+
+    monkeypatch.setattr(ing.subprocess, 'run', fake_run)
+    ing._psql('/usr/bin/docker', 'portal', 'SELECT 1;')
+    assert seen['cmd'][0] == '/usr/bin/docker'
+    assert seen['cmd'][1] == 'exec'
