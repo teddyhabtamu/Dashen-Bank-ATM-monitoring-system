@@ -106,3 +106,12 @@ def test_scheduled_reports_support_calendar_presets():
 
 def test_report_routes_accept_end_now():
     assert "request.args.get('end_now')" in ROUTES
+
+
+def test_report_timestamps_are_generated_in_eat():
+    assert 'datetime.now().strftime' not in HELPERS
+    assert 'datetime.now().strftime' not in ROUTES
+    assert 'datetime.now(EAT).strftime' in HELPERS
+    assert 'datetime.now(EAT).strftime' in ROUTES
+    assert 'EAT = timezone(timedelta(hours=3))' in HELPERS
+    assert 'EAT = timezone(timedelta(hours=3))' in ROUTES

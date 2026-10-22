@@ -11,7 +11,7 @@ from helpers import (xl_header, xl_style_row, xl_style_data_rows, xl_autosize,
                      xl_build_sheet, xl_append_section, csv_send, pdf_send, mktable,
                      _pdf_header_block, _period_slug, LOGO_PATH)
 import livecache
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
@@ -21,6 +21,7 @@ from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle,
 from reportlab.lib.enums import TA_CENTER
 
 bp = Blueprint('report', __name__)
+EAT = timezone(timedelta(hours=3))
 
 
 def _window():
@@ -930,7 +931,7 @@ def report_outage(fmt):
             ('Down ATMs', str(len(rows))),
             ('Longest Outage', f'{longest}d'),
             ('Avg Outage', f'{avg}d'),
-            ('Generated', datetime.now().strftime('%Y-%m-%d')),
+            ('Generated', datetime.now(EAT).strftime('%Y-%m-%d')),
         ]
         log_action('EXPORT', f'Outage report (pdf) - atm={atm}')
         return pdf_send(title, headers, rows, 1, atm, 'Daily_Outage', kpis=kpis,
@@ -1083,7 +1084,7 @@ def report_full(fmt):
             w = csv.writer(buf)
             w.writerow(['DASHEN BANK S.C. — ATM MONITORING SYSTEM'])
             w.writerow(['COMPLETE MANAGEMENT REPORT'])
-            w.writerow([f'Period: {win.label}', f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")} EAT'])
+            w.writerow([f'Period: {win.label}', f'Generated: {datetime.now(EAT).strftime("%Y-%m-%d %H:%M")} EAT'])
             w.writerow([])
 
             sections = [
@@ -1165,7 +1166,7 @@ def report_full(fmt):
             return send_file(
                 io.BytesIO(buf.getvalue().encode('utf-8-sig')),
                 mimetype='text/csv', as_attachment=True,
-                download_name=f'Dashen_ATM_Complete_Report_{datetime.now().strftime("%Y%m%d")}{_period_slug(win.label)}.csv'
+                download_name=f'Dashen_ATM_Complete_Report_{datetime.now(EAT).strftime("%Y%m%d")}{_period_slug(win.label)}.csv'
             )
 
         else:
@@ -1191,7 +1192,7 @@ def report_full(fmt):
                 Paragraph('<font color="#273274">ATM MONITORING SYSTEM</font>', style_sys),
                 HRFlowable(width='60%', thickness=2.5, color=colors.HexColor('#FDD79A'), spaceAfter=12),
                 Paragraph('<b><font color="#273274">COMPLETE MANAGEMENT REPORT</font></b>', style_full),
-                Paragraph(f'<font color="#64748B">Period: {win.label}  |  Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")} EAT</font>', style_meta),
+                Paragraph(f'<font color="#64748B">Period: {win.label}  |  Generated: {datetime.now(EAT).strftime("%Y-%m-%d %H:%M")} EAT</font>', style_meta),
                 Spacer(1, 1.2 * cm)
             ]
 
@@ -1268,7 +1269,7 @@ def report_full(fmt):
                           Spacer(1, 0.8 * cm)]
 
             story.append(Paragraph(
-                f'<font size="8" color="#64748B">Dashen Bank ATM Monitoring System  |  Confidential Management Report  |  {datetime.now().strftime("%Y-%m-%d")}</font>',
+                f'<font size="8" color="#64748B">Dashen Bank ATM Monitoring System  |  Confidential Management Report  |  {datetime.now(EAT).strftime("%Y-%m-%d")}</font>',
                 style_meta
             ))
 
@@ -1276,7 +1277,7 @@ def report_full(fmt):
             log_action('EXPORT', f'Complete report (pdf) - period={win.label}, atm={atm}')
             doc.build(story); buf.seek(0)
             return send_file(buf, mimetype='application/pdf', as_attachment=True,
-                             download_name=f'Dashen_ATM_Complete_Report_{datetime.now().strftime("%Y%m%d")}{_period_slug(win.label)}.pdf')
+                             download_name=f'Dashen_ATM_Complete_Report_{datetime.now(EAT).strftime("%Y%m%d")}{_period_slug(win.label)}.pdf')
 
 
 

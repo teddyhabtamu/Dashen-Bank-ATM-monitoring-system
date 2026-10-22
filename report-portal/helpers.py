@@ -3,7 +3,7 @@ import openpyxl, csv, io, os
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.styles.differential import DifferentialStyle
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
@@ -13,6 +13,7 @@ from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle,
 from reportlab.lib.enums import TA_CENTER
 
 LOGO_PATH = os.path.join(os.path.dirname(__file__), 'static', 'logo.png')
+EAT = timezone(timedelta(hours=3))
 
 DASHEN_BLUE  = '273274'
 DASHEN_GOLD  = 'FDD79A'
@@ -48,7 +49,7 @@ def xl_header(ws, title, days, atm, ncols=8, subtitle=None, period=None):
     c.value = (
         f'Period: {period_label}  |  '
         f'ATM: {"All ATMs" if atm == "all" else atm}  |  '
-        f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")} EAT'
+        f'Generated: {datetime.now(EAT).strftime("%Y-%m-%d %H:%M")} EAT'
     )
     c.font = Font(size=9, color='64748B', italic=True)
     c.fill = PatternFill('solid', fgColor='FFFDE7')
@@ -112,7 +113,7 @@ def xl_send(wb, name, period=None):
         buf,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'Dashen_ATM_{name}_{datetime.now().strftime("%Y%m%d")}{_period_slug(period)}.xlsx'
+        download_name=f'Dashen_ATM_{name}_{datetime.now(EAT).strftime("%Y%m%d")}{_period_slug(period)}.xlsx'
     )
 
 
@@ -182,7 +183,7 @@ def csv_send(headers, rows, name, title='', days=0, atm='all', subtitle='',
     w.writerow([
         f'Period: {period_label}' if period_label else '',
         f'ATM: {"All ATMs" if atm == "all" else atm}',
-        f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")} EAT'
+        f'Generated: {datetime.now(EAT).strftime("%Y-%m-%d %H:%M")} EAT'
     ])
     w.writerow([])  # blank spacer
     w.writerow(headers)
@@ -194,7 +195,7 @@ def csv_send(headers, rows, name, title='', days=0, atm='all', subtitle='',
         io.BytesIO(buf.getvalue().encode('utf-8-sig')),  # utf-8-sig for Excel compatibility
         mimetype='text/csv',
         as_attachment=True,
-        download_name=f'Dashen_ATM_{name}_{datetime.now().strftime("%Y%m%d")}{_period_slug(period)}.csv'
+        download_name=f'Dashen_ATM_{name}_{datetime.now(EAT).strftime("%Y%m%d")}{_period_slug(period)}.csv'
     )
 
 
@@ -269,7 +270,7 @@ def _pdf_header_block(story, title, days, atm, period=None):
         Paragraph(f'<b><font color="#273274">{title}</font></b>', style_title),
         Paragraph(f'<font color="#64748B">Period: {period or f"Last {days} days"}  |  '
                   f'ATM: {"All ATMs" if atm == "all" else atm}  |  '
-                  f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")} EAT</font>', style_meta),
+                  f'Generated: {datetime.now(EAT).strftime("%Y-%m-%d %H:%M")} EAT</font>', style_meta),
         Spacer(1, 0.2 * cm),
     ]
 
@@ -300,13 +301,13 @@ def pdf_send(title, headers, rows, days, atm, name, kpis=None, subtitle='',
     story.append(Spacer(1, 0.5 * cm))
     story.append(P(
         f'<font size="7" color="#94A3B8">Dashen Bank ATM Monitoring System  |  Confidential  |  '
-        f'{datetime.now().strftime("%Y-%m-%d")}</font>',
+        f'{datetime.now(EAT).strftime("%Y-%m-%d")}</font>',
         alignment=TA_CENTER
     ))
     doc.build(story)
     buf.seek(0)
     return send_file(buf, mimetype='application/pdf', as_attachment=True,
-                     download_name=f'Dashen_ATM_{name}_{datetime.now().strftime("%Y%m%d")}{_period_slug(period)}.pdf')
+                     download_name=f'Dashen_ATM_{name}_{datetime.now(EAT).strftime("%Y%m%d")}{_period_slug(period)}.pdf')
 
 
 def mktable(headers, rows):
