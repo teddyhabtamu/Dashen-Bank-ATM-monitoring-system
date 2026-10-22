@@ -80,6 +80,21 @@ def test_json_output_is_machine_readable(tmp_path):
     assert data[0]['distinct_amounts'] == 1
 
 
+def test_cr_only_journal_is_split_into_logical_lines(tmp_path):
+    """NCR working copies are CR-only until the puller normalizes them.
+
+    Reading them with readlines() produced one enormous line and a garbled
+    profile, which hid the actual transaction shapes. splitlines() handles
+    both CR-only and LF/CRLF journals.
+    """
+    body = (b'POWER-UP/RESET\rSST ON-LINE\r'
+            b'[020t*709*10/14/2026*10:59*ISO8583 WITHDRAWAL AMT=2000.00\r')
+    import json
+    data = json.loads(run(tmp_path, body, '--json'))
+    assert data[0]['lines'] == 3
+    assert any('POWER-UP/RESET' in item['shape'] for item in data[0]['shapes'])
+
+
 def test_empty_input_is_reported_not_crashed(tmp_path):
     out = run(tmp_path, b'\n\n\n')
     assert 'LINE level' in out and 'RECORD level' in out

@@ -130,33 +130,33 @@ def profile(path, min_count=1):
     examples = {}
     n_lines = n_bytes = 0
     with open(path, 'rb') as fh:
-        for raw in fh:
-            n_lines += 1
-            n_bytes += len(raw)
-            line = raw.strip()
-            if not line:
-                continue
-            cls = classify(line)
-            classes[cls] += 1
-            sh = shape(line)
-            shapes[sh] += 1
-            examples.setdefault(sh, line)
-            # A firmware line like "COMPONENT VERSION|0CC 03.00.00" contains
-            # something that looks exactly like an amount. Counting it would
-            # overstate what a parser could extract, so version-ish lines are
-            # skipped rather than quietly inflating the figure.
-            if b'VERSION' in line.upper() or b'COMPONENT' in line.upper():
-                continue
-            for m in AMOUNT_RE.finditer(line):
-                amounts[m.group(1).decode('ascii', 'replace')] += 1
+        data = fh.read()
+    n_bytes = len(data)
+    raw_lines = data.splitlines()
+    for raw in raw_lines:
+        n_lines += 1
+        line = raw.strip()
+        if not line:
+            continue
+        cls = classify(line)
+        classes[cls] += 1
+        sh = shape(line)
+        shapes[sh] += 1
+        examples.setdefault(sh, line)
+        # A firmware line like "COMPONENT VERSION|0CC 03.00.00" contains
+        # something that looks exactly like an amount. Counting it would
+        # overstate what a parser could extract, so version-ish lines are
+        # skipped rather than quietly inflating the figure.
+        if b'VERSION' in line.upper() or b'COMPONENT' in line.upper():
+            continue
+        for m in AMOUNT_RE.finditer(line):
+            amounts[m.group(1).decode('ascii', 'replace')] += 1
 
     # Record-level view: the number that actually answers "can a parser see
     # transactions?", because a transaction can span many lines.
     rec_classes = collections.Counter()
     n_records = 0
-    with open(path, 'rb') as fh:
-        raw = fh.readlines()
-    for rec in group_records(raw):
+    for rec in group_records(raw_lines):
         n_records += 1
         rec_classes[classify(b' '.join(rec))] += 1
 
