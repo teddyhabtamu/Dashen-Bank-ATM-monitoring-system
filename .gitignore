@@ -16,6 +16,10 @@ __pycache__/
 # Logs and Backups
 ej-logs/
 *.log
+
+# Raw live ATM journals may contain card/account data. Keep local copies out
+# of git even when they are handed over as "sample" files in docs/.
+docs/Sample*.txt
 glpi_backup/
 
 # OS and Artifacts
