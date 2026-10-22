@@ -154,9 +154,14 @@ def _build_sql(parse_runs, transactions):
     out = io.StringIO()
     out.write('BEGIN;\n')
 
+    # Every staging column is text here. COPY into a typed temp table would
+    # try to cast an empty journal count/amount before the NULLIF below runs;
+    # that produced: invalid input syntax for type numeric: "". Text in, cast
+    # explicitly after NULLIF.
     out.write(
-        'CREATE TEMP TABLE _ej_parse_runs '
-        '(LIKE public.ej_parse_runs INCLUDING DEFAULTS) ON COMMIT DROP;\n')
+        'CREATE TEMP TABLE _ej_parse_runs ('
+        + ', '.join('%s text' % c for c in PARSE_COLUMNS)
+        + ') ON COMMIT DROP;\n')
     out.write('COPY _ej_parse_runs (%s) FROM STDIN WITH (FORMAT csv);\n'
               % ', '.join(PARSE_COLUMNS))
     out.write(_csv_rows(PARSE_COLUMNS, parse_runs))

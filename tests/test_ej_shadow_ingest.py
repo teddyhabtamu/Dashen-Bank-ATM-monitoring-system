@@ -68,6 +68,9 @@ def test_build_sql_is_idempotent_and_never_targets_atm_transactions():
         'raw_ref': '/tmp/a.log', 'source_file': '/tmp/a.log',
     }])
     assert 'ON CONFLICT (transaction_key) DO UPDATE' in sql
+    assert 'amount_total text' in sql, (
+        'parse-run staging must be text: COPY into a numeric temp column '
+        'fails on an empty value before NULLIF can run')
     assert 'ON CONFLICT (file_path, file_sha256) DO UPDATE' in sql
     assert 'INSERT INTO public.atm_transactions' not in sql
     assert 'INSERT INTO public.ej_transactions' in sql
