@@ -363,6 +363,7 @@ def detect_vendor(text):
 _NCR_HEADER = re.compile(
     r'^\*(\d+)\*(\d{2}/\d{2}/\d{4})\*(\d{2}):(\d{2})\*?')
 _NCR_EVENT = re.compile(r'^(\d{2}):(\d{2}):(\d{2})\s+(.*)$')
+_NCR_RECEIPT_HEADER = re.compile(r'^DASHEN BANK\s*\d*$')
 _RECEIPT_DATE = re.compile(
     r'^(\d{2})/(\d{2})/(\d{2,4})\s+(\d{2}):(\d{2})\s+(\S+)$')
 _RECEIPT_PAN = re.compile(r'^(\d{4,6}\*+\d{4})$')
@@ -747,7 +748,7 @@ def parse_ncr_text(text, *, atm_id=None, terminal_map=None, raw_ref=None):
             continue
         if current is None:
             continue
-        if line == 'DASHEN BANK':
+        if _NCR_RECEIPT_HEADER.match(line):
             if current.in_receipt:
                 _flush_ncr_receipt(current)
             current.in_receipt = True

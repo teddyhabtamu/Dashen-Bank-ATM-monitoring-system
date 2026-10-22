@@ -187,6 +187,23 @@ def test_ncr_approved_amount_cash_and_timestamps():
     assert 'atm_not_mapped' not in txn.warnings
 
 
+def test_ncr_receipt_header_with_branch_suffix_is_parsed():
+    text = NCR_DECLINED.replace('    DASHEN BANK\n', '    DASHEN BANK1\n')
+    txn = _one(text, 'NCR', terminal_map=MAP)
+    assert txn.status == ej.DECLINED
+    assert txn.record_no == '7749'
+    assert txn.amount is None
+
+
+def test_ncr_branch_line_is_not_mistaken_for_a_receipt_header():
+    text = NCR_APPROVED.replace(
+        'TEST BRANCH NCR 001', 'DASHEN BANK HQ 15 FLOOR')
+    txn = _one(text, 'NCR', terminal_map=MAP)
+    assert txn.record_no == '7748'
+    assert txn.branch == 'DASHEN BANK HQ 15 FLOOR'
+    assert txn.amount == Decimal('3000.00')
+
+
 def test_ncr_declined_has_no_amount_and_keeps_error_code():
     txn = _one(NCR_DECLINED, 'NCR', terminal_map=MAP)
     assert txn.status == ej.DECLINED
