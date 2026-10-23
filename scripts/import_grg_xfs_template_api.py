@@ -163,34 +163,47 @@ def ensure_triggers(tid, auth):
             print(f'Created trigger: {desc}')
 
 
-def link_template_to_host(tid, host_name, host_ip, auth):
-    hosts = call('host.get', {'filter': {'host': [host_name]}, 'output': ['hostid'], 'selectInterfaces': ['interfaceid', 'ip', 'port'], 'selectParentTemplates': ['templateid']}, auth)
+def link_template_to_host(tid, target_name, host_ip, auth):
+    # Try finding by technical host name or visible name
+    hosts = call('host.get', {
+        'filter': {'host': [target_name, 'ATM-TEST-GRG', '4 Kilo Test GRG']},
+        'output': ['hostid', 'host', 'name'],
+        'selectParentTemplates': ['templateid', 'name']
+    }, auth)
+    
+    # If not found by filter, search all hosts by name
     if not hosts:
-        # Create host if missing
-        groups = call('hostgroup.get', {'filter': {'name': ['Discovered hosts', 'Linux servers', 'Templates']}, 'output': ['groupid']}, auth)
-        gid = groups[0]['groupid'] if groups else '2'
-        hid = call('host.create', {
-            'host': host_name,
-            'name': host_name,
-            'groups': [{'groupid': gid}],
-            'templates': [{'templateid': tid}],
-            'interfaces': [{
-                'type': 1, 'main': 1, 'useip': 1,
-                'ip': host_ip, 'dns': '', 'port': '10050'
-            }]
-        }, auth)['hostids'][0]
-        print(f'Created and linked host {host_name} ({hid}) to {TEMPLATE_NAME}')
+        all_hosts = call('host.get', {'output': ['hostid', 'host', 'name'], 'selectParentTemplates': ['templateid', 'name']}, auth)
+        hosts = [h for h in all_hosts if h['name'] == target_name or h['host'] == target_name or '4 Kilo Test GRG' in (h['name'], h['host'])]
+
+    # Delete temporary standalone TESTGRG host if it exists and is not the primary portal host
+    temp_hosts = call('host.get', {'filter': {'host': ['TESTGRG']}, 'output': ['hostid', 'host', 'name']}, auth)
+    for th in temp_hosts:
+        if th['name'] != '4 Kilo Test GRG' and th['host'] != 'ATM-TEST-GRG':
+            try:
+                call('host.delete', [th['hostid']], auth)
+                print(f"Cleaned up temporary standalone host {th['host']} ({th['hostid']})")
+            except Exception as e:
+                print(f"Note: could not delete temporary host: {e}")
+
+    if not hosts:
+        print(f"ERROR: Could not find primary host {target_name} or '4 Kilo Test GRG'")
         return
 
-    hid = hosts[0]['hostid']
-    current_templates = hosts[0].get('parentTemplates', [])
+    target = hosts[0]
+    hid = target['hostid']
+    h_display = f"{target['name']} [{target['host']}]"
+    
+    current_templates = target.get('parentTemplates', [])
     tids = {t['templateid'] for t in current_templates}
+    
     if tid not in tids:
+        # Keep existing templates, just append the new XFS template
         new_templates = [{'templateid': t['templateid']} for t in current_templates] + [{'templateid': tid}]
         call('host.update', {'hostid': hid, 'templates': new_templates}, auth)
-        print(f'Successfully linked {TEMPLATE_NAME} to existing host {host_name} ({hid})')
+        print(f"Successfully linked {TEMPLATE_NAME} to portal host {h_display} ({hid})")
     else:
-        print(f'Host {host_name} ({hid}) is already linked to {TEMPLATE_NAME}')
+        print(f"Portal host {h_display} ({hid}) is already linked to {TEMPLATE_NAME}")
 
 
 def main():
