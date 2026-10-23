@@ -1,11 +1,15 @@
-<style>
 .ej-filters{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;background:#fff;border:1px solid #EEF1F6;border-radius:12px;padding:14px 16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(1,33,105,.04)}
-.ej-filters .fg{display:flex;flex-direction:column;gap:4px}
+.ej-filters .fg{display:flex;flex-direction:column;gap:4px;flex:0 0 auto;align-items:flex-start}
 .ej-filters label{font-size:10px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px}
 .ej-filters select,.ej-filters input{border:1px solid #E4E9F1;border-radius:6px;padding:8px 10px;font-size:12px;font-family:inherit;background:#fff;color:#0F172A;min-width:150px}
-.ej-filters input{min-width:220px}
+/* The theme's JS wraps every <select> in .cust-select{width:100%}. Without
+   these overrides the wrappers claim a full flex line and the filter row
+   stacks vertically. Same pattern as the ATM inventory filter bar. */
+.ej-filters select,.ej-filters .cust-select{width:160px;min-width:160px;flex:0 0 auto}
+.ej-filters .cust-trigger{width:100%;min-width:160px}
+.ej-filters input{width:260px;min-width:220px}
 .ej-filters select:focus,.ej-filters input:focus{outline:none;border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
-.ej-filters .actions{display:flex;gap:8px;margin-left:auto}
+.ej-filters .actions{display:flex;gap:8px;margin-left:auto;flex:0 0 auto}
 .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:16px}
 .stat-card{background:#fff;border-radius:12px;border:1px solid #EEF1F6;box-shadow:0 1px 3px rgba(1,33,105,.04);padding:15px 17px}
 .stat-card .num{font-size:24px;font-weight:800;color:#0F172A;line-height:1.1}
@@ -34,8 +38,8 @@
 .banner-note{background:#EFF6FF;border:1px solid #BFDBFE;color:#1E3A8A}
 .banner-error{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B}
 .banner-warn{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E}
-.attention{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:16px}
-.attention .item{background:#fff;border:1px solid #FDE68A;border-radius:10px;padding:11px 13px;font-size:12px;color:#92400E;display:flex;justify-content:space-between;gap:10px}
+.attention{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.attention .item{flex:0 1 auto;min-width:220px;background:#fff;border:1px solid #FDE68A;border-radius:10px;padding:11px 13px;font-size:12px;color:#92400E;display:flex;justify-content:space-between;gap:10px}
 .attention .item strong{font-size:16px;color:#B45309}
 .two-col{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
 .pager{display:flex;align-items:center;gap:8px;justify-content:flex-end;padding:12px 14px;font-size:11px;color:#64748B}
@@ -45,5 +49,10 @@
 .detail-head .back{font-size:11px;font-weight:700;color:#64748B;text-decoration:none}
 .detail-head .back:hover{color:#012169}
 .detail-meta{font-size:12px;color:#64748B;margin-top:3px}
-@media(max-width:980px){.two-col{grid-template-columns:1fr}.ej-filters .actions{margin-left:0}.ej-filters input{min-width:100%}}
-</style>
+@media(max-width:980px){
+  .two-col{grid-template-columns:1fr}
+  .ej-filters .fg{flex:1 1 100%;width:100%;align-items:stretch}
+  .ej-filters select,.ej-filters .cust-select,.ej-filters input{width:100%;min-width:100%}
+  .ej-filters .cust-trigger{width:100%}
+  .ej-filters .actions{width:100%;margin-left:0}
+}
