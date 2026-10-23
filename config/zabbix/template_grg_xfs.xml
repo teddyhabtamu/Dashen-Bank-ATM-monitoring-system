@@ -1,0 +1,812 @@
+<?xml version="1.0" encoding="utf-8"?>
+<zabbix_export>
+    <version>6.4</version>
+    <template_groups>
+        <template_group>
+            <uuid>0e7a1744-8cb3-559d-bd1f-61e892c2a04e</uuid>
+            <name>Templates</name>
+        </template_group>
+    </template_groups>
+    <templates>
+        <template>
+            <uuid>cf9c345b-d078-5e82-a083-dca0174ca680</uuid>
+            <template>Dashen Bank ATM Hardware - GRG XFS</template>
+            <name>Dashen Bank ATM Hardware - GRG XFS</name>
+            <description>Dashen Bank GRG ATM hardware monitoring via 32-bit CEN/XFS 3.0 API. Collects Cash Dispenser (CDM) operational status, safe door status, and per-cassette live currency counts and health.</description>
+            <groups>
+                <group>
+                    <name>Templates</name>
+                </group>
+            </groups>
+            <items>
+                <item>
+                    <uuid>c828d5d4-42b4-52d3-9fae-6b9da2959ddf</uuid>
+                    <name>GRG CDM — full XFS status &amp; cassette inventory</name>
+                    <type>ZABBIX_AGENT</type>
+                    <key>atm.xfs.cdm</key>
+                    <delay>1m</delay>
+                    <history>7d</history>
+                    <trends>0</trends>
+                    <value_type>TEXT</value_type>
+                    <description>Raw single-line JSON payload from C:\monitor\grg-xfs-probe.ps1 -Json querying XFS msxfs.dll</description>
+                </item>
+                <item>
+                    <uuid>2e26090c-adfe-548c-beeb-9d6e469501d5</uuid>
+                    <name>CDM — Device Status</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.device_status</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>CEN/XFS fwDevice: 0=Online, 1=Offline, 4=HwError</description>
+                    <valuemap>
+                        <name>XFS Device Status</name>
+                    </valuemap>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.status.device;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>c9688d6a-fe26-5b65-bf0f-798ba71333a9</uuid>
+                    <name>CDM — Safe Door Status</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.safe_door</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>CEN/XFS fwSafeDoor: 2=Door Open, 3=Door Closed, 4=Door Locked</description>
+                    <valuemap>
+                        <name>XFS Safe Door Status</name>
+                    </valuemap>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.status.safe_door;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>6c014fce-6238-5f2f-8700-1c390236a994</uuid>
+                    <name>CDM — Dispenser State</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.dispenser</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>CEN/XFS fwDispenser: 0=OK, 2=Stop</description>
+                    <valuemap>
+                        <name>XFS Dispenser Status</name>
+                    </valuemap>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.status.dispenser;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>f310fdb7-da7c-54a2-8bca-7313a4049fa2</uuid>
+                    <name>CDM — Intermediate Stacker</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.stacker</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>CEN/XFS fwIntermediateStacker: 0=Empty, 1=NotEmpty</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.status.intermediate_stacker;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>b4e287b3-85b4-5ee8-9c59-bf7b13ba33fe</uuid>
+                    <name>CDM Summary — Total Dispensable Cash</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.total_amount</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>FLOAT</value_type>
+                    <units>ETB</units>
+                    <description>Total currency value in all active dispense cassettes</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.summary.total_amount;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>67e8feea-4eb8-5544-be6c-372551cf1fe5</uuid>
+                    <name>CDM Summary — Total Notes</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.total_notes</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Total banknote count across all dispense cassettes</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.summary.total_notes;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>3abec757-9d7a-5690-af97-6a1e809c9167</uuid>
+                    <name>CDM Summary — Reject Notes Count</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.reject_count</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Current rejected note count in reject bin</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.summary.reject_count;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>53bc8fe0-c838-5182-8bc1-ce9ca5cb966f</uuid>
+                    <name>CDM Summary — Retract Notes Count</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.retract_count</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Current retracted note count in retract bin</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.summary.retract_count;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>bdfaa73c-bf5d-59d4-b4fa-6d1d401a4db4</uuid>
+                    <name>CDM Summary — Has Low Cassette</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.has_low</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>1 if any active dispense cassette is below its minimum threshold, else 0</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.summary.has_low;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>96a84d47-66a9-51a4-9e3d-045318db40bb</uuid>
+                    <name>CDM Summary — Has Empty Cassette</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.has_empty</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>1 if any active dispense cassette count is 0, else 0</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.summary.has_empty;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>623439e6-fe84-5f40-a35f-ea819662057d</uuid>
+                    <name>Cassette Rej01 — Reject Cassette 1 Count</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.cassette.count[Rej01]</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Banknote count in Reject Cassette 1</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.cassettes["Rej01"] ? j.cdm.cassettes["Rej01"].count : 0;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>878ff6c4-1a92-563b-9a48-842270dd7a6f</uuid>
+                    <name>Cassette Rej01 — Reject Cassette 1 Status</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.cassette.status[Rej01]</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Operational status for Reject Cassette 1</description>
+                    <valuemap>
+                        <name>XFS Cassette Status</name>
+                    </valuemap>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.cassettes["Rej01"] ? j.cdm.cassettes["Rej01"].status : 5;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>68ad93cb-b3e1-5e26-a60d-c0529d3c52a0</uuid>
+                    <name>Cassette Rct01 — Retract Cassette 2 Count</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.cassette.count[Rct01]</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Banknote count in Retract Cassette 2</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.cassettes["Rct01"] ? j.cdm.cassettes["Rct01"].count : 0;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>d6fe78aa-d576-5d66-a3ee-84ec0a9fc68a</uuid>
+                    <name>Cassette Rct01 — Retract Cassette 2 Status</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.cassette.status[Rct01]</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Operational status for Retract Cassette 2</description>
+                    <valuemap>
+                        <name>XFS Cassette Status</name>
+                    </valuemap>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.cassettes["Rct01"] ? j.cdm.cassettes["Rct01"].status : 5;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>4fdb3119-a1b7-5ea0-bca4-d8a1ef96ebfe</uuid>
+                    <name>Cassette 0050A — Dispense Cassette 3 (ETB 50) Count</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.cassette.count[0050A]</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Banknote count in Dispense Cassette 3 (ETB 50)</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.cassettes["0050A"] ? j.cdm.cassettes["0050A"].count : 0;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>36a39d88-b27b-5868-b7a5-c337a892fc62</uuid>
+                    <name>Cassette 0050A — Dispense Cassette 3 (ETB 50) Status</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.cassette.status[0050A]</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Operational status for Dispense Cassette 3 (ETB 50)</description>
+                    <valuemap>
+                        <name>XFS Cassette Status</name>
+                    </valuemap>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.cassettes["0050A"] ? j.cdm.cassettes["0050A"].status : 5;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>ff27e4db-35a0-5390-b1d5-bc9a508b8b3d</uuid>
+                    <name>Cassette 0050A — Dispense Cassette 3 (ETB 50) Reject Count</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.cassette.reject[0050A]</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Reject count associated with Dispense Cassette 3 (ETB 50)</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.cassettes["0050A"] ? j.cdm.cassettes["0050A"].reject_count : 0;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>03f90760-b6bf-5118-8fec-b64db422f980</uuid>
+                    <name>Cassette 0100A — Dispense Cassette 4 (ETB 100) Count</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.cassette.count[0100A]</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Banknote count in Dispense Cassette 4 (ETB 100)</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.cassettes["0100A"] ? j.cdm.cassettes["0100A"].count : 0;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>12fbf295-a226-5381-80bb-69e1605e6bca</uuid>
+                    <name>Cassette 0100A — Dispense Cassette 4 (ETB 100) Status</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.cassette.status[0100A]</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Operational status for Dispense Cassette 4 (ETB 100)</description>
+                    <valuemap>
+                        <name>XFS Cassette Status</name>
+                    </valuemap>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.cassettes["0100A"] ? j.cdm.cassettes["0100A"].status : 5;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>4f56f4d3-e7fc-5544-a950-7f2df22c1598</uuid>
+                    <name>Cassette 0100A — Dispense Cassette 4 (ETB 100) Reject Count</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.cassette.reject[0100A]</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Reject count associated with Dispense Cassette 4 (ETB 100)</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.cassettes["0100A"] ? j.cdm.cassettes["0100A"].reject_count : 0;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>4a123e74-297c-5026-9d32-d17e7fc26f1c</uuid>
+                    <name>Cassette 0100B — Dispense Cassette 5 (ETB 100) Count</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.cassette.count[0100B]</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Banknote count in Dispense Cassette 5 (ETB 100)</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.cassettes["0100B"] ? j.cdm.cassettes["0100B"].count : 0;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>5fdb7b58-e52d-53ca-b1d7-2eb1e9389280</uuid>
+                    <name>Cassette 0100B — Dispense Cassette 5 (ETB 100) Status</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.cassette.status[0100B]</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Operational status for Dispense Cassette 5 (ETB 100)</description>
+                    <valuemap>
+                        <name>XFS Cassette Status</name>
+                    </valuemap>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.cassettes["0100B"] ? j.cdm.cassettes["0100B"].status : 5;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>36e9ffda-d7cb-5a50-b08e-59ee7f511210</uuid>
+                    <name>Cassette 0100B — Dispense Cassette 5 (ETB 100) Reject Count</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.cassette.reject[0100B]</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Reject count associated with Dispense Cassette 5 (ETB 100)</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.cassettes["0100B"] ? j.cdm.cassettes["0100B"].reject_count : 0;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>c8c44c66-83eb-563b-93aa-72124d7ea560</uuid>
+                    <name>Cassette 0200A — Dispense Cassette 6 (ETB 200) Count</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.cassette.count[0200A]</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Banknote count in Dispense Cassette 6 (ETB 200)</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.cassettes["0200A"] ? j.cdm.cassettes["0200A"].count : 0;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>d56f6630-67c8-54ef-9b2d-d1fe30fc1ba6</uuid>
+                    <name>Cassette 0200A — Dispense Cassette 6 (ETB 200) Status</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.cassette.status[0200A]</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Operational status for Dispense Cassette 6 (ETB 200)</description>
+                    <valuemap>
+                        <name>XFS Cassette Status</name>
+                    </valuemap>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.cassettes["0200A"] ? j.cdm.cassettes["0200A"].status : 5;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>c3c0ef22-7f93-5aa5-8ef6-17b1fb93eef2</uuid>
+                    <name>Cassette 0200A — Dispense Cassette 6 (ETB 200) Reject Count</name>
+                    <type>DEPENDENT</type>
+                    <key>atm.xfs.cdm.cassette.reject[0200A]</key>
+                    <delay>0</delay>
+                    <history>7d</history>
+                    <trends>30d</trends>
+                    <value_type>UNSIGNED</value_type>
+                    <description>Reject count associated with Dispense Cassette 6 (ETB 200)</description>
+                    <master_item>
+                        <key>atm.xfs.cdm</key>
+                    </master_item>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>var j = JSON.parse(value);
+return j.cdm.cassettes["0200A"] ? j.cdm.cassettes["0200A"].reject_count : 0;</params>
+                        </step>
+                    </preprocessing>
+                </item>
+            </items>
+            <triggers>
+                <trigger>
+                    <uuid>d64e8154-db27-5ea0-8b09-b69faeb29bbd</uuid>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.cdm.device_status)&lt;&gt;0</expression>
+                    <name>CDM — Cash Dispenser Hardware Fault on {HOST.NAME}</name>
+                    <priority>HIGH</priority>
+                    <description>The cash dispenser hardware is reporting an error or offline state.</description>
+                </trigger>
+                <trigger>
+                    <uuid>6d3962d2-28df-5942-87ad-d5e6bfb5706d</uuid>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.cdm.safe_door)=2</expression>
+                    <name>CDM — Safe Door Open on {HOST.NAME}</name>
+                    <priority>HIGH</priority>
+                    <description>The ATM safe / vault door is currently open.</description>
+                </trigger>
+                <trigger>
+                    <uuid>b3040333-8968-52ba-813c-fb8cb88f11ca</uuid>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.cdm.dispenser)=2</expression>
+                    <name>CDM — Dispenser Stopped on {HOST.NAME}</name>
+                    <priority>HIGH</priority>
+                    <description>The cash dispenser mechanism is halted / in stop state.</description>
+                </trigger>
+                <trigger>
+                    <uuid>629ef78b-d510-5b12-92cf-4b9e289bf4ae</uuid>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.cdm.total_amount)=0</expression>
+                    <name>CDM — Out of Cash on {HOST.NAME}</name>
+                    <priority>DISASTER</priority>
+                    <description>All cash cassettes are empty; ATM cannot dispense cash.</description>
+                </trigger>
+                <trigger>
+                    <uuid>4f5d6f6e-6c61-5369-95a2-f674514dcfeb</uuid>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.cdm.total_amount)&lt;50000 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.cdm.total_amount)&gt;0</expression>
+                    <name>CDM — Total Cash Low (&lt; 50,000 ETB) on {HOST.NAME}</name>
+                    <priority>AVERAGE</priority>
+                    <description>Dispensable cash on the ATM is below 50,000 ETB threshold. Replenishment recommended.</description>
+                </trigger>
+                <trigger>
+                    <uuid>da7b6e9a-4e20-5c31-9f9f-074900aee697</uuid>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.cdm.reject_count)&gt;=250</expression>
+                    <name>CDM — Reject Cassette Nearly Full on {HOST.NAME}</name>
+                    <priority>AVERAGE</priority>
+                    <description>Reject cassette Rej01 has 250 or more rejected bills (max capacity ~300).</description>
+                </trigger>
+                <trigger>
+                    <uuid>22adbb65-4f76-5fa7-bb89-53e77a28186f</uuid>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.cdm.cassette.count[0050A])=0</expression>
+                    <name>CDM — Cassette 0050A (50 ETB) Empty on {HOST.NAME}</name>
+                    <priority>WARNING</priority>
+                    <description>Dispense Cassette 3 (ETB 50) note count has reached 0.</description>
+                </trigger>
+                <trigger>
+                    <uuid>f5f3e9ab-4228-568b-944a-8ba5743b2026</uuid>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.cdm.cassette.count[0100A])=0</expression>
+                    <name>CDM — Cassette 0100A (100 ETB) Empty on {HOST.NAME}</name>
+                    <priority>WARNING</priority>
+                    <description>Dispense Cassette 4 (ETB 100) note count has reached 0.</description>
+                </trigger>
+                <trigger>
+                    <uuid>bc10d9fa-eb52-51f7-bd55-90d235804593</uuid>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.cdm.cassette.count[0100B])=0</expression>
+                    <name>CDM — Cassette 0100B (100 ETB) Empty on {HOST.NAME}</name>
+                    <priority>WARNING</priority>
+                    <description>Dispense Cassette 5 (ETB 100) note count has reached 0.</description>
+                </trigger>
+                <trigger>
+                    <uuid>c7c5cb19-94cf-5fa3-80b7-4f95e5eeea89</uuid>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.cdm.cassette.count[0200A])=0</expression>
+                    <name>CDM — Cassette 0200A (200 ETB) Empty on {HOST.NAME}</name>
+                    <priority>WARNING</priority>
+                    <description>Dispense Cassette 6 (ETB 200) note count has reached 0.</description>
+                </trigger>
+            </triggers>
+            <valuemaps>
+                <valuemap>
+                    <uuid>c538cb98-c3e0-5a39-bd78-3db4c8cb2441</uuid>
+                    <name>XFS Device Status</name>
+                    <mappings>
+                        <mapping>
+                            <value>0</value>
+                            <newvalue>Online</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>1</value>
+                            <newvalue>Offline</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>2</value>
+                            <newvalue>Power Off</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>3</value>
+                            <newvalue>No Device</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>4</value>
+                            <newvalue>Hardware Error</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>5</value>
+                            <newvalue>User Error</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>6</value>
+                            <newvalue>Busy</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>7</value>
+                            <newvalue>Fraud Attempt</newvalue>
+                        </mapping>
+                    </mappings>
+                </valuemap>
+                <valuemap>
+                    <uuid>22680d7a-7b3c-5353-90d5-6ff83df96b86</uuid>
+                    <name>XFS Safe Door Status</name>
+                    <mappings>
+                        <mapping>
+                            <value>1</value>
+                            <newvalue>Door Not Supported</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>2</value>
+                            <newvalue>Door Open</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>3</value>
+                            <newvalue>Door Closed</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>4</value>
+                            <newvalue>Door Locked</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>5</value>
+                            <newvalue>Door Unknown</newvalue>
+                        </mapping>
+                    </mappings>
+                </valuemap>
+                <valuemap>
+                    <uuid>a04f2918-a621-5079-ae20-22129ba0209f</uuid>
+                    <name>XFS Dispenser Status</name>
+                    <mappings>
+                        <mapping>
+                            <value>0</value>
+                            <newvalue>OK</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>1</value>
+                            <newvalue>State Unknown</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>2</value>
+                            <newvalue>Stop</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>3</value>
+                            <newvalue>Unknown</newvalue>
+                        </mapping>
+                    </mappings>
+                </valuemap>
+                <valuemap>
+                    <uuid>7cbf1068-d0df-56eb-8e05-2bf8ca3dbb72</uuid>
+                    <name>XFS Cassette Status</name>
+                    <mappings>
+                        <mapping>
+                            <value>0</value>
+                            <newvalue>OK</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>1</value>
+                            <newvalue>Full</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>2</value>
+                            <newvalue>High</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>3</value>
+                            <newvalue>Low</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>4</value>
+                            <newvalue>Empty</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>5</value>
+                            <newvalue>Inoperative</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>6</value>
+                            <newvalue>Missing</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>7</value>
+                            <newvalue>No Values Available</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>8</value>
+                            <newvalue>No Reference Value</newvalue>
+                        </mapping>
+                    </mappings>
+                </valuemap>
+            </valuemaps>
+        </template>
+    </templates>
+</zabbix_export>

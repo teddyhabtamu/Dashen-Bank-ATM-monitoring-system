@@ -27,6 +27,23 @@ function Safe-Line($line) {
   }
   return $line
 }
+function Get-PeMachine([string]$path) {
+  try {
+    $fs = [IO.File]::Open($path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+    $br = New-Object IO.BinaryReader($fs)
+    $fs.Position = 0x3C
+    $peOffset = $br.ReadInt32()
+    $fs.Position = $peOffset + 4
+    $machine = $br.ReadUInt16()
+    $br.Close(); $fs.Close()
+    switch ($machine) {
+      0x014c { 'x86' }
+      0x8664 { 'x64' }
+      0xaa64 { 'ARM64' }
+      default { '0x{0:X4}' -f $machine }
+    }
+  } catch { 'unknown' }
+}
 
 Write-Output "GRG/XFS reconnaissance - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Write-Output "Computer: $env:COMPUTERNAME   User: $(whoami)   PS: $($PSVersionTable.PSVersion)   64-bit: $([Environment]::Is64BitProcess)"
@@ -121,7 +138,7 @@ foreach ($dll in @(
   'C:\Program Files (x86)\GrgBanking\GRGXFSSP5.0\GrgSp5.exe'
 )) {
   if (Test-Path $dll) {
-    Get-Item $dll | Select-Object FullName, Length, @{n='Version';e={$_.VersionInfo.FileVersion}}, @{n='Product';e={$_.VersionInfo.ProductName}}
+    Get-Item $dll | Select-Object FullName, Length, @{n='Machine';e={Get-PeMachine $_.FullName}}, @{n='Version';e={$_.VersionInfo.FileVersion}}, @{n='Product';e={$_.VersionInfo.ProductName}}
   } else {
     Write-Output "Not found: $dll"
   }
@@ -156,6 +173,57 @@ foreach ($root in @(
   }
 }
 
+Head 'XFS - MANAGER / LOGICAL SERVICES (REGISTRY)'
+foreach ($root in @('HKLM:\SOFTWARE\XFS', 'HKLM:\SOFTWARE\WOW6432Node\XFS')) {
+  if (-not (Test-Path $root)) { continue }
+  Write-Output "`nRoot: $root"
+  $rootProps = Get-ItemProperty $root
+  $rootProps.PSObject.Properties | Where-Object { $_.Name -notmatch '^PS' } | ForEach-Object {
+    Write-Output "  $($_.Name) = $($_.Value)"
+  }
+  Get-ChildItem $root -Recurse -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -match '(?i)LOGICAL|MANAGEMENT|MANAGER|CONFIG|XFS_MANAGER' } |
+    ForEach-Object {
+      Write-Output "`n### $($_.Name)"
+      $p = Get-ItemProperty $_.PSPath
+      $p.PSObject.Properties | Where-Object { $_.Name -notmatch '^PS' } | ForEach-Object {
+        Write-Output "  $($_.Name) = $($_.Value)"
+      }
+    }
+}
+
+Head 'XFS - MSXFS.INI / MANAGER CONFIG FILES'
+$iniCandidates = @(
+  'C:\Windows\msxfs.ini',
+  'C:\Windows\System32\msxfs.ini',
+  'C:\Windows\SysWOW64\msxfs.ini',
+  'C:\ProgramData\msxfs.ini',
+  'C:\netxms\etc\msxfs.ini'
+)
+foreach ($p in $iniCandidates) {
+  if (Test-Path $p) {
+    Write-Output "`n### $p"
+    Get-Content $p | ForEach-Object { Safe-Line $_ }
+  }
+}
+Get-ChildItem -Path 'C:\Windows', 'C:\ProgramData', 'C:\Program Files (x86)\GrgBanking', 'C:\NetXMS' -Recurse -Depth 3 -File -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -match '(?i)^(msxfs|xfs).*\.ini$' } |
+  Select-Object -First 20 FullName, Length | Format-Table -AutoSize
+
+Head 'XFS - XFSDIAG TOOL (STRINGS ONLY)'
+$diag = 'C:\NetXMS\bin\xfsdiag.exe'
+if (Test-Path $diag) {
+  Get-Item $diag | Select-Object FullName, Length, @{n='Machine';e={Get-PeMachine $_.FullName}}, @{n='Version';e={$_.VersionInfo.FileVersion}}
+  $text = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($diag))
+  [regex]::Matches($text, '[ -~]{5,}') |
+    ForEach-Object { $_.Value } |
+    Where-Object { $_ -match '(?i)usage|option|logical|service|command|list|open|xfs' } |
+    Sort-Object -Unique |
+    Select-Object -First 80
+} else {
+  Write-Output "Not found: $diag"
+}
+
 Head 'XFS - GRG REGISTRY KEYS (NAMES ONLY)'
 foreach ($key in @(
   'HKLM:\SOFTWARE\WOW6432Node\GrgBanking',
@@ -172,19 +240,22 @@ Head 'XFS - ATM APPLICATION FILES / CONFIG'
 $appDirs = @(
   'D:\Program Files\DTATMW',
   'C:\GrgBanking',
-  'C:\Program Files (x86)\GrgBanking'
+  'C:\Program Files (x86)\GrgBanking',
+  'C:\ProgramData\GRGAV'
 )
-$configExt = @('.ini', '.xml', '.cfg', '.conf', '.json', '.properties', '.dat')
+$configExt = @('.ini', '.xml', '.cfg', '.conf', '.json', '.properties', '.dat', '.yaml', '.yml', '.reg')
 foreach ($dir in $appDirs) {
   if (-not (Test-Path $dir)) { continue }
   Write-Output "`n### $dir"
   Get-ChildItem $dir -Directory -Recurse -Depth 2 | Select-Object -ExpandProperty FullName
-  $files = Get-ChildItem $dir -Recurse -File -Depth 4 |
-    Where-Object { $configExt -contains $_.Extension.ToLower() -and $_.Length -lt 2MB }
-  $files | Select-Object FullName, Length | Format-Table -AutoSize
+  $files = Get-ChildItem $dir -Recurse -File -Depth 6 -ErrorAction SilentlyContinue |
+    Where-Object { $configExt -contains $_.Extension.ToLower() -and $_.Length -lt 2MB } |
+    Sort-Object FullName
+  Write-Output "Config files: $(@($files).Count)"
+  $files | Select-Object -First 200 FullName, Length | Format-Table -AutoSize
   foreach ($f in $files) {
-    $hits = Select-String -Path $f.FullName -Pattern 'XFS|CDM|CIM|IDC|CRD|PIN|SIU|TTU|CashUnit|Cassette|LogicalService|ServiceProvider|Dispenser' |
-      Select-Object -First 20
+    $hits = Select-String -Path $f.FullName -Pattern 'XFS|CDM|CIM|IDC|CRD|PIN|SIU|TTU|PTR|CashUnit|Cassette|LogicalService|Logical Service|ServiceProvider|Dispenser|NMD|CAM|VDM' |
+      Select-Object -First 25
     if ($hits) {
       Write-Output "`n--- $($f.FullName) ---"
       $hits | ForEach-Object { Safe-Line $_.Line.Trim() }
