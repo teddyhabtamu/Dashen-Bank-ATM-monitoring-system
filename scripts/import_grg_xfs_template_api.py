@@ -275,7 +275,8 @@ def main():
             item_payload['valuemapid'] = vmid
 
         if key in have:
-            call('item.update', {'itemid': have[key]['itemid'], **item_payload}, auth)
+            upd_payload = {k: v for k, v in item_payload.items() if k != 'hostid'}
+            call('item.update', {'itemid': have[key]['itemid'], **upd_payload}, auth)
             updated += 1
         else:
             call('item.create', item_payload, auth)
