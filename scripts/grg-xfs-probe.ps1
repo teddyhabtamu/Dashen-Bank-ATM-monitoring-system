@@ -11,7 +11,7 @@
 #>
 param([switch]$Json)
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'SilentlyContinue'
 
 if ([Environment]::Is64BitProcess) {
   $ps32 = Join-Path $env:WINDIR 'SysWOW64\WindowsPowerShell\v1.0\powershell.exe'
@@ -21,6 +21,7 @@ if ([Environment]::Is64BitProcess) {
   exit $LASTEXITCODE
 }
 
+if (-not ('XfsNative' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -185,6 +186,7 @@ public static class XfsNative
     public static extern int WFSCleanUp();
 }
 '@
+}
 
 function Get-LogicalServices {
   $roots = @(
@@ -255,210 +257,233 @@ foreach ($v in $startupCandidates) {
 }
 
 if ($null -ne $startupVersion) {
-  $cdmServices = @($services | Where-Object { $_.Class -eq 'CDM' } | Sort-Object Name)
-  foreach ($s in $cdmServices) {
-    $svcVer = New-XfsVersion
-    $spiVer = New-XfsVersion
-    [uint16]$hService = 0
-    $openHr = [XfsNative]::WFSOpen($s.Name, [IntPtr]::Zero, 'ZabbixATM', 0, 5000,
-      [uint32]$startupVersion, [ref]$svcVer, [ref]$spiVer, [ref]$hService)
-    if ($openHr -ne 0) {
+  # Query CDM (Cash Dispenser)
+  try {
+    $cdmServices = @($services | Where-Object { $_.Class -eq 'CDM' } | Sort-Object Name)
+    foreach ($s in $cdmServices) {
+      $svcVer = New-XfsVersion
+      $spiVer = New-XfsVersion
+      [uint16]$hService = 0
+      $openHr = [XfsNative]::WFSOpen($s.Name, [IntPtr]::Zero, 'ZabbixATM', 0, 1500,
+        [uint32]$startupVersion, [ref]$svcVer, [ref]$spiVer, [ref]$hService)
+      if ($openHr -ne 0) {
+        $result.cdm = New-Object PSObject -Property @{
+          service = $s.Name
+          open_hresult = $openHr
+          error = 'WFSOpen failed'
+        }
+        continue
+      }
+
+      $resPtr = [IntPtr]::Zero
+      $statusHr = [XfsNative]::WFSGetInfo($hService, 301, [IntPtr]::Zero, 1500, [ref]$resPtr)
+      $statusObj = $null
+      if ($statusHr -eq 0 -and $resPtr -ne [IntPtr]::Zero) {
+        try {
+          $res = [Runtime.InteropServices.Marshal]::PtrToStructure($resPtr, [type][XfsResult])
+          if ($res.hResult -eq 0 -and $res.lpBuffer -ne [IntPtr]::Zero) {
+            $st = [Runtime.InteropServices.Marshal]::PtrToStructure($res.lpBuffer, [type][XfsCdmStatus])
+            $statusObj = New-Object PSObject -Property @{
+              device = $st.fwDevice
+              safe_door = $st.fwSafeDoor
+              dispenser = $st.fwDispenser
+              intermediate_stacker = $st.fwIntermediateStacker
+              device_position = $st.wDevicePosition
+              power_save_recovery_time = $st.usPowerSaveRecoveryTime
+            }
+          }
+        } catch {}
+        [void][XfsNative]::WFSFreeResult($resPtr)
+      }
+
+      $resPtr = [IntPtr]::Zero
+      $cuHr = [XfsNative]::WFSGetInfo($hService, 303, [IntPtr]::Zero, 1500, [ref]$resPtr)
+      $units = @()
+      if ($cuHr -eq 0 -and $resPtr -ne [IntPtr]::Zero) {
+        try {
+          $res = [Runtime.InteropServices.Marshal]::PtrToStructure($resPtr, [type][XfsResult])
+          if ($res.hResult -eq 0 -and $res.lpBuffer -ne [IntPtr]::Zero) {
+            $info = [Runtime.InteropServices.Marshal]::PtrToStructure($res.lpBuffer, [type][XfsCdmCuInfo])
+            for ($i = 0; $i -lt $info.usCount; $i++) {
+              $unitPtr = [Runtime.InteropServices.Marshal]::ReadIntPtr($info.lppList, $i * [IntPtr]::Size)
+              if ($unitPtr -eq [IntPtr]::Zero) { continue }
+              $u = [Runtime.InteropServices.Marshal]::PtrToStructure($unitPtr, [type][XfsCdmCashUnit])
+              $units += New-Object PSObject -Property @{
+                number = $u.usNumber
+                type = $u.usType
+                name = [Runtime.InteropServices.Marshal]::PtrToStringAnsi($u.lpszCashUnitName)
+                unit_id = Convert-Bytes $u.cUnitID
+                currency = Convert-Bytes $u.cCurrencyID
+                values = $u.ulValues
+                count = $u.ulCount
+                initial = $u.ulInitialCount
+                reject = $u.ulRejectCount
+                minimum = $u.ulMinimum
+                maximum = $u.ulMaximum
+                app_lock = ($u.bAppLock -ne 0)
+                status = $u.usStatus
+                physical_count = $u.usNumPhysicalCUs
+                dispensed = $u.ulDispensedCount
+                presented = $u.ulPresentedCount
+                retracted = $u.ulRetractedCount
+              }
+            }
+          }
+        } catch {}
+        [void][XfsNative]::WFSFreeResult($resPtr)
+      }
+
       $result.cdm = New-Object PSObject -Property @{
         service = $s.Name
+        service_version = $svcVer.szDescription
+        provider_version = $spiVer.szDescription
         open_hresult = $openHr
-        error = 'WFSOpen failed'
+        status_hresult = $statusHr
+        cash_unit_hresult = $cuHr
+        status = $statusObj
+        cash_units = $units
       }
-      continue
+      [void][XfsNative]::WFSClose($hService)
+      if ($statusHr -eq 0 -or $cuHr -eq 0) { break }
     }
-
-    $resPtr = [IntPtr]::Zero
-    $statusHr = [XfsNative]::WFSGetInfo($hService, 301, [IntPtr]::Zero, 5000, [ref]$resPtr)
-    $statusObj = $null
-    if ($statusHr -eq 0 -and $resPtr -ne [IntPtr]::Zero) {
-      $res = [Runtime.InteropServices.Marshal]::PtrToStructure($resPtr, [type][XfsResult])
-      if ($res.hResult -eq 0 -and $res.lpBuffer -ne [IntPtr]::Zero) {
-        $st = [Runtime.InteropServices.Marshal]::PtrToStructure($res.lpBuffer, [type][XfsCdmStatus])
-        $statusObj = New-Object PSObject -Property @{
-          device = $st.fwDevice
-          safe_door = $st.fwSafeDoor
-          dispenser = $st.fwDispenser
-          intermediate_stacker = $st.fwIntermediateStacker
-          device_position = $st.wDevicePosition
-          power_save_recovery_time = $st.usPowerSaveRecoveryTime
-        }
-      }
-      [void][XfsNative]::WFSFreeResult($resPtr)
-    }
-
-    $resPtr = [IntPtr]::Zero
-    $cuHr = [XfsNative]::WFSGetInfo($hService, 303, [IntPtr]::Zero, 5000, [ref]$resPtr)
-    $units = @()
-    if ($cuHr -eq 0 -and $resPtr -ne [IntPtr]::Zero) {
-      $res = [Runtime.InteropServices.Marshal]::PtrToStructure($resPtr, [type][XfsResult])
-      if ($res.hResult -eq 0 -and $res.lpBuffer -ne [IntPtr]::Zero) {
-        $info = [Runtime.InteropServices.Marshal]::PtrToStructure($res.lpBuffer, [type][XfsCdmCuInfo])
-        for ($i = 0; $i -lt $info.usCount; $i++) {
-          $unitPtr = [Runtime.InteropServices.Marshal]::ReadIntPtr($info.lppList, $i * [IntPtr]::Size)
-          if ($unitPtr -eq [IntPtr]::Zero) { continue }
-          $u = [Runtime.InteropServices.Marshal]::PtrToStructure($unitPtr, [type][XfsCdmCashUnit])
-          $units += New-Object PSObject -Property @{
-            number = $u.usNumber
-            type = $u.usType
-            name = [Runtime.InteropServices.Marshal]::PtrToStringAnsi($u.lpszCashUnitName)
-            unit_id = Convert-Bytes $u.cUnitID
-            currency = Convert-Bytes $u.cCurrencyID
-            values = $u.ulValues
-            count = $u.ulCount
-            initial = $u.ulInitialCount
-            reject = $u.ulRejectCount
-            minimum = $u.ulMinimum
-            maximum = $u.ulMaximum
-            app_lock = ($u.bAppLock -ne 0)
-            status = $u.usStatus
-            physical_count = $u.usNumPhysicalCUs
-            dispensed = $u.ulDispensedCount
-            presented = $u.ulPresentedCount
-            retracted = $u.ulRetractedCount
-          }
-        }
-      }
-      [void][XfsNative]::WFSFreeResult($resPtr)
-    }
-
-    $result.cdm = New-Object PSObject -Property @{
-      service = $s.Name
-      service_version = $svcVer.szDescription
-      provider_version = $spiVer.szDescription
-      open_hresult = $openHr
-      status_hresult = $statusHr
-      cash_unit_hresult = $cuHr
-      status = $statusObj
-      cash_units = $units
-    }
-    [void][XfsNative]::WFSClose($hService)
-    if ($statusHr -eq 0 -or $cuHr -eq 0) { break }
-  }
+  } catch {}
 
   # Query Card Reader (IDC)
-  $idcServices = @($services | Where-Object { ($_.Class -eq 'IDC' -or $_.Name -match '(?i)CardReader|IDC') -and $_.Provider -ne 'NODEVICE' -and $_.Provider -ne '' } | Sort-Object Name)
-  foreach ($s in $idcServices) {
-    $svcVer = New-XfsVersion
-    $spiVer = New-XfsVersion
-    [uint16]$hService = 0
-    $openHr = [XfsNative]::WFSOpen($s.Name, [IntPtr]::Zero, 'ZabbixATM', 0, 3000, [uint32]$startupVersion, [ref]$svcVer, [ref]$spiVer, [ref]$hService)
-    if ($openHr -eq 0) {
-      $resPtr = [IntPtr]::Zero
-      $hr = [XfsNative]::WFSGetInfo($hService, 401, [IntPtr]::Zero, 3000, [ref]$resPtr)
-      if ($hr -eq 0 -and $resPtr -ne [IntPtr]::Zero) {
-        $res = [Runtime.InteropServices.Marshal]::PtrToStructure($resPtr, [type][XfsResult])
-        if ($res.hResult -eq 0 -and $res.lpBuffer -ne [IntPtr]::Zero) {
-          $st = [Runtime.InteropServices.Marshal]::PtrToStructure($res.lpBuffer, [type][XfsIdcStatus])
-          $result.idc = New-Object PSObject -Property @{
-            service = $s.Name
-            device = [int]$st.fwDevice
-            media = [int]$st.fwMedia
-            retain_bin = [int]$st.fwRetainBin
-            security = [int]$st.fwSecurity
-            cards = [int]$st.usCards
-          }
+  try {
+    $idcServices = @($services | Where-Object { ($_.Class -eq 'IDC' -or $_.Name -match '(?i)CardReader|IDC') -and $_.Provider -ne 'NODEVICE' -and $_.Provider -ne '' } | Sort-Object Name)
+    foreach ($s in $idcServices) {
+      $svcVer = New-XfsVersion
+      $spiVer = New-XfsVersion
+      [uint16]$hService = 0
+      $openHr = [XfsNative]::WFSOpen($s.Name, [IntPtr]::Zero, 'ZabbixATM', 0, 500, [uint32]$startupVersion, [ref]$svcVer, [ref]$spiVer, [ref]$hService)
+      if ($openHr -eq 0) {
+        $resPtr = [IntPtr]::Zero
+        $hr = [XfsNative]::WFSGetInfo($hService, 401, [IntPtr]::Zero, 500, [ref]$resPtr)
+        if ($hr -eq 0 -and $resPtr -ne [IntPtr]::Zero) {
+          try {
+            $res = [Runtime.InteropServices.Marshal]::PtrToStructure($resPtr, [type][XfsResult])
+            if ($res.hResult -eq 0 -and $res.lpBuffer -ne [IntPtr]::Zero) {
+              $st = [Runtime.InteropServices.Marshal]::PtrToStructure($res.lpBuffer, [type][XfsIdcStatus])
+              $result.idc = New-Object PSObject -Property @{
+                service = $s.Name
+                device = [int]$st.fwDevice
+                media = [int]$st.fwMedia
+                retain_bin = [int]$st.fwRetainBin
+                security = [int]$st.fwSecurity
+                cards = [int]$st.usCards
+              }
+            }
+          } catch {}
+          [void][XfsNative]::WFSFreeResult($resPtr)
         }
-        [void][XfsNative]::WFSFreeResult($resPtr)
+        [void][XfsNative]::WFSClose($hService)
+        if ($null -ne $result.idc) { break }
       }
-      [void][XfsNative]::WFSClose($hService)
-      if ($null -ne $result.idc) { break }
     }
-  }
+  } catch {}
 
   # Query Receipt Printer (PTR)
-  $ptrServices = @($services | Where-Object { ($_.Class -eq 'PTR' -or $_.Name -match '(?i)ReceiptPrinter|PTR') -and $_.Provider -ne 'NODEVICE' -and $_.Provider -ne '' } | Sort-Object Name)
-  foreach ($s in $ptrServices) {
-    $svcVer = New-XfsVersion
-    $spiVer = New-XfsVersion
-    [uint16]$hService = 0
-    $openHr = [XfsNative]::WFSOpen($s.Name, [IntPtr]::Zero, 'ZabbixATM', 0, 3000, [uint32]$startupVersion, [ref]$svcVer, [ref]$spiVer, [ref]$hService)
-    if ($openHr -eq 0) {
-      $resPtr = [IntPtr]::Zero
-      $hr = [XfsNative]::WFSGetInfo($hService, 101, [IntPtr]::Zero, 3000, [ref]$resPtr)
-      if ($hr -eq 0 -and $resPtr -ne [IntPtr]::Zero) {
-        $res = [Runtime.InteropServices.Marshal]::PtrToStructure($resPtr, [type][XfsResult])
-        if ($res.hResult -eq 0 -and $res.lpBuffer -ne [IntPtr]::Zero) {
-          $st = [Runtime.InteropServices.Marshal]::PtrToStructure($res.lpBuffer, [type][XfsPtrStatus])
-          $paper0 = if ($st.fwPaper -and $st.fwPaper.Length -gt 0) { [int]$st.fwPaper[0] } else { 3 }
-          $result.ptr = New-Object PSObject -Property @{
-            service = $s.Name
-            device = [int]$st.fwDevice
-            media = [int]$st.fwMedia
-            paper = $paper0
-            toner = [int]$st.fwToner
-          }
+  try {
+    $ptrServices = @($services | Where-Object { ($_.Class -eq 'PTR' -or $_.Name -match '(?i)ReceiptPrinter|PTR') -and $_.Provider -ne 'NODEVICE' -and $_.Provider -ne '' } | Sort-Object Name)
+    foreach ($s in $ptrServices) {
+      $svcVer = New-XfsVersion
+      $spiVer = New-XfsVersion
+      [uint16]$hService = 0
+      $openHr = [XfsNative]::WFSOpen($s.Name, [IntPtr]::Zero, 'ZabbixATM', 0, 500, [uint32]$startupVersion, [ref]$svcVer, [ref]$spiVer, [ref]$hService)
+      if ($openHr -eq 0) {
+        $resPtr = [IntPtr]::Zero
+        $hr = [XfsNative]::WFSGetInfo($hService, 101, [IntPtr]::Zero, 500, [ref]$resPtr)
+        if ($hr -eq 0 -and $resPtr -ne [IntPtr]::Zero) {
+          try {
+            $res = [Runtime.InteropServices.Marshal]::PtrToStructure($resPtr, [type][XfsResult])
+            if ($res.hResult -eq 0 -and $res.lpBuffer -ne [IntPtr]::Zero) {
+              $st = [Runtime.InteropServices.Marshal]::PtrToStructure($res.lpBuffer, [type][XfsPtrStatus])
+              $paper0 = if ($st.fwPaper -and $st.fwPaper.Length -gt 0) { [int]$st.fwPaper[0] } else { 3 }
+              $result.ptr = New-Object PSObject -Property @{
+                service = $s.Name
+                device = [int]$st.fwDevice
+                media = [int]$st.fwMedia
+                paper = $paper0
+                toner = [int]$st.fwToner
+              }
+            }
+          } catch {}
+          [void][XfsNative]::WFSFreeResult($resPtr)
         }
-        [void][XfsNative]::WFSFreeResult($resPtr)
+        [void][XfsNative]::WFSClose($hService)
+        if ($null -ne $result.ptr) { break }
       }
-      [void][XfsNative]::WFSClose($hService)
-      if ($null -ne $result.ptr) { break }
     }
-  }
+  } catch {}
 
   # Query PIN Pad (PIN)
-  $pinServices = @($services | Where-Object { ($_.Class -eq 'PIN' -or $_.Name -match '(?i)PIN|Encryptor') -and $_.Provider -ne 'NODEVICE' -and $_.Provider -ne '' } | Sort-Object Name)
-  foreach ($s in $pinServices) {
-    $svcVer = New-XfsVersion
-    $spiVer = New-XfsVersion
-    [uint16]$hService = 0
-    $openHr = [XfsNative]::WFSOpen($s.Name, [IntPtr]::Zero, 'ZabbixATM', 0, 3000, [uint32]$startupVersion, [ref]$svcVer, [ref]$spiVer, [ref]$hService)
-    if ($openHr -eq 0) {
-      $resPtr = [IntPtr]::Zero
-      $hr = [XfsNative]::WFSGetInfo($hService, 601, [IntPtr]::Zero, 3000, [ref]$resPtr)
-      if ($hr -eq 0 -and $resPtr -ne [IntPtr]::Zero) {
-        $res = [Runtime.InteropServices.Marshal]::PtrToStructure($resPtr, [type][XfsResult])
-        if ($res.hResult -eq 0 -and $res.lpBuffer -ne [IntPtr]::Zero) {
-          $st = [Runtime.InteropServices.Marshal]::PtrToStructure($res.lpBuffer, [type][XfsPinStatus])
-          $result.pin = New-Object PSObject -Property @{
-            service = $s.Name
-            device = [int]$st.fwDevice
-            enc_stat = [int]$st.fwEncStat
-          }
+  try {
+    $pinServices = @($services | Where-Object { ($_.Class -eq 'PIN' -or $_.Name -match '(?i)PIN|Encryptor') -and $_.Provider -ne 'NODEVICE' -and $_.Provider -ne '' } | Sort-Object Name)
+    foreach ($s in $pinServices) {
+      $svcVer = New-XfsVersion
+      $spiVer = New-XfsVersion
+      [uint16]$hService = 0
+      $openHr = [XfsNative]::WFSOpen($s.Name, [IntPtr]::Zero, 'ZabbixATM', 0, 500, [uint32]$startupVersion, [ref]$svcVer, [ref]$spiVer, [ref]$hService)
+      if ($openHr -eq 0) {
+        $resPtr = [IntPtr]::Zero
+        $hr = [XfsNative]::WFSGetInfo($hService, 601, [IntPtr]::Zero, 500, [ref]$resPtr)
+        if ($hr -eq 0 -and $resPtr -ne [IntPtr]::Zero) {
+          try {
+            $res = [Runtime.InteropServices.Marshal]::PtrToStructure($resPtr, [type][XfsResult])
+            if ($res.hResult -eq 0 -and $res.lpBuffer -ne [IntPtr]::Zero) {
+              $st = [Runtime.InteropServices.Marshal]::PtrToStructure($res.lpBuffer, [type][XfsPinStatus])
+              $result.pin = New-Object PSObject -Property @{
+                service = $s.Name
+                device = [int]$st.fwDevice
+                enc_stat = [int]$st.fwEncStat
+              }
+            }
+          } catch {}
+          [void][XfsNative]::WFSFreeResult($resPtr)
         }
-        [void][XfsNative]::WFSFreeResult($resPtr)
+        [void][XfsNative]::WFSClose($hService)
+        if ($null -ne $result.pin) { break }
       }
-      [void][XfsNative]::WFSClose($hService)
-      if ($null -ne $result.pin) { break }
     }
-  }
+  } catch {}
 
   # Query Sensors & Indicators (SIU)
-  $siuServices = @($services | Where-Object { ($_.Class -eq 'SIU' -or $_.Name -match '(?i)Sensors|Doors|SIU') -and $_.Provider -ne 'NODEVICE' -and $_.Provider -ne '' } | Sort-Object Name)
-  foreach ($s in $siuServices) {
-    $svcVer = New-XfsVersion
-    $spiVer = New-XfsVersion
-    [uint16]$hService = 0
-    $openHr = [XfsNative]::WFSOpen($s.Name, [IntPtr]::Zero, 'ZabbixATM', 0, 3000, [uint32]$startupVersion, [ref]$svcVer, [ref]$spiVer, [ref]$hService)
-    if ($openHr -eq 0) {
-      $resPtr = [IntPtr]::Zero
-      $hr = [XfsNative]::WFSGetInfo($hService, 801, [IntPtr]::Zero, 3000, [ref]$resPtr)
-      if ($hr -eq 0 -and $resPtr -ne [IntPtr]::Zero) {
-        $res = [Runtime.InteropServices.Marshal]::PtrToStructure($resPtr, [type][XfsResult])
-        if ($res.hResult -eq 0 -and $res.lpBuffer -ne [IntPtr]::Zero) {
-          $st = [Runtime.InteropServices.Marshal]::PtrToStructure($res.lpBuffer, [type][XfsSiuStatus])
-          $opDoor = if ($st.fwDoors -and $st.fwDoors.Length -gt 0) { [int]$st.fwDoors[0] } else { 1 }
-          $safeDoor = if ($st.fwDoors -and $st.fwDoors.Length -gt 1) { [int]$st.fwDoors[1] } else { 1 }
-          $supSwitch = if ($st.fwSensors -and $st.fwSensors.Length -gt 0) { [int]$st.fwSensors[0] } else { 0 }
-          $tamper = if ($st.fwSensors -and $st.fwSensors.Length -gt 1) { [int]$st.fwSensors[1] } else { 0 }
-          $result.siu = New-Object PSObject -Property @{
-            service = $s.Name
-            device = [int]$st.fwDevice
-            cabinet_door = $opDoor
-            safe_door = $safeDoor
-            supervisor_switch = $supSwitch
-            tamper_sensor = $tamper
-          }
+  try {
+    $siuServices = @($services | Where-Object { ($_.Class -eq 'SIU' -or $_.Name -match '(?i)Sensors|Doors|SIU') -and $_.Provider -ne 'NODEVICE' -and $_.Provider -ne '' } | Sort-Object Name)
+    foreach ($s in $siuServices) {
+      $svcVer = New-XfsVersion
+      $spiVer = New-XfsVersion
+      [uint16]$hService = 0
+      $openHr = [XfsNative]::WFSOpen($s.Name, [IntPtr]::Zero, 'ZabbixATM', 0, 500, [uint32]$startupVersion, [ref]$svcVer, [ref]$spiVer, [ref]$hService)
+      if ($openHr -eq 0) {
+        $resPtr = [IntPtr]::Zero
+        $hr = [XfsNative]::WFSGetInfo($hService, 801, [IntPtr]::Zero, 500, [ref]$resPtr)
+        if ($hr -eq 0 -and $resPtr -ne [IntPtr]::Zero) {
+          try {
+            $res = [Runtime.InteropServices.Marshal]::PtrToStructure($resPtr, [type][XfsResult])
+            if ($res.hResult -eq 0 -and $res.lpBuffer -ne [IntPtr]::Zero) {
+              $st = [Runtime.InteropServices.Marshal]::PtrToStructure($res.lpBuffer, [type][XfsSiuStatus])
+              $opDoor = if ($st.fwDoors -and $st.fwDoors.Length -gt 0) { [int]$st.fwDoors[0] } else { 1 }
+              $safeDoor = if ($st.fwDoors -and $st.fwDoors.Length -gt 1) { [int]$st.fwDoors[1] } else { 1 }
+              $supSwitch = if ($st.fwSensors -and $st.fwSensors.Length -gt 0) { [int]$st.fwSensors[0] } else { 0 }
+              $tamper = if ($st.fwSensors -and $st.fwSensors.Length -gt 1) { [int]$st.fwSensors[1] } else { 0 }
+              $result.siu = New-Object PSObject -Property @{
+                service = $s.Name
+                device = [int]$st.fwDevice
+                cabinet_door = $opDoor
+                safe_door = $safeDoor
+                supervisor_switch = $supSwitch
+                tamper_sensor = $tamper
+              }
+            }
+          } catch {}
+          [void][XfsNative]::WFSFreeResult($resPtr)
         }
-        [void][XfsNative]::WFSFreeResult($resPtr)
+        [void][XfsNative]::WFSClose($hService)
+        if ($null -ne $result.siu) { break }
       }
-      [void][XfsNative]::WFSClose($hService)
-      if ($null -ne $result.siu) { break }
     }
-  }
+  } catch {}
 
   [void][XfsNative]::WFSCleanUp()
 }
