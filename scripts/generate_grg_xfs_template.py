@@ -176,6 +176,47 @@ def build_template():
                     f'j.cdm.cassettes["{cid}"] ? j.cdm.cassettes["{cid}"].reject_count : 0',
                     desc=f"Reject count associated with {cname}")
 
+    # 4. Card Reader (IDC)
+    add_dep("Card Reader — Device Status", "atm.xfs.idc.device_status",
+            "(j.idc && j.idc.device !== undefined) ? j.idc.device : -1",
+            valuemap="XFS Device Status", desc="IDC fwDevice: 0=Online, 1=Offline, 4=HwError")
+    add_dep("Card Reader — Media Status", "atm.xfs.idc.media_status",
+            "(j.idc && j.idc.media !== undefined) ? j.idc.media : -1",
+            valuemap="XFS IDC Media Status", desc="Card present / jammed / empty")
+    add_dep("Card Reader — Retained Cards Bin", "atm.xfs.idc.retain_bin",
+            "(j.idc && j.idc.retain_bin !== undefined) ? j.idc.retain_bin : -1",
+            valuemap="XFS IDC Retain Bin", desc="Retain bin status")
+    add_dep("Card Reader — Retained Cards Count", "atm.xfs.idc.cards",
+            "(j.idc && j.idc.cards !== undefined) ? j.idc.cards : 0",
+            desc="Captured / retained card count")
+
+    # 5. Receipt Printer (PTR)
+    add_dep("Receipt Printer — Device Status", "atm.xfs.ptr.device_status",
+            "(j.ptr && j.ptr.device !== undefined) ? j.ptr.device : -1",
+            valuemap="XFS Device Status", desc="PTR fwDevice: 0=Online, 1=Offline, 4=HwError")
+    add_dep("Receipt Printer — Paper Status", "atm.xfs.ptr.paper_status",
+            "(j.ptr && j.ptr.paper !== undefined) ? j.ptr.paper : -1",
+            valuemap="XFS PTR Paper Status", desc="Paper full / low / out")
+
+    # 6. PIN Pad (EPP)
+    add_dep("PIN Pad — Device Status", "atm.xfs.pin.device_status",
+            "(j.pin && j.pin.device !== undefined) ? j.pin.device : -1",
+            valuemap="XFS Device Status", desc="PIN fwDevice: 0=Online, 1=Offline, 4=HwError")
+
+    # 7. SIU Sensors & Enclosures
+    add_dep("SIU — Cabinet Door Status", "atm.xfs.siu.cabinet_door",
+            "(j.siu && j.siu.cabinet_door !== undefined) ? j.siu.cabinet_door : -1",
+            valuemap="XFS Safe Door Status", desc="Upper fascia / operator door: 2=Open, 3=Closed")
+    add_dep("SIU — Safe Door Status", "atm.xfs.siu.safe_door",
+            "(j.siu && j.siu.safe_door !== undefined) ? j.siu.safe_door : -1",
+            valuemap="XFS Safe Door Status", desc="Lower safe / vault door: 2=Open, 3=Closed")
+    add_dep("SIU — Supervisor Mode Switch", "atm.xfs.siu.supervisor_mode",
+            "(j.siu && j.siu.supervisor_switch !== undefined) ? j.siu.supervisor_switch : 0",
+            desc="0=Normal Run, 1=Supervisor / Maintenance Mode")
+    add_dep("SIU — Tamper Alarm Sensor", "atm.xfs.siu.tamper",
+            "(j.siu && j.siu.tamper_sensor !== undefined) ? j.siu.tamper_sensor : 0",
+            desc="0=OK, 1=Tamper Alarm Active")
+
     # Triggers
     triggers = _el(t, "triggers")
 
@@ -214,9 +255,41 @@ def build_template():
 
     for cid, cname, ctype, denom, cur in CASSETTES:
         if ctype == "dispense":
-            add_trig(f"CDM — Cassette {cid} ({denom} {cur}) Empty on {HOST.NAME}",
+            add_trig(f"CDM — Cassette {cid} ({denom} {cur}) Empty on {{HOST.NAME}}",
                      f"last(/{TEMPLATE_NAME}/atm.xfs.cdm.cassette.count[{cid}])=0",
                      "WARNING", f"{cname} note count has reached 0.")
+
+    add_trig("Card Reader — Hardware Error on {HOST.NAME}",
+             f"last(/{TEMPLATE_NAME}/atm.xfs.idc.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.idc.device_status)<>-1",
+             "HIGH", "The card reader hardware is reporting a failure.")
+
+    add_trig("Card Reader — Card Jammed on {HOST.NAME}",
+             f"last(/{TEMPLATE_NAME}/atm.xfs.idc.media_status)=3",
+             "HIGH", "A customer card is jammed inside the card reader.")
+
+    add_trig("Receipt Printer — Paper Out on {HOST.NAME}",
+             f"last(/{TEMPLATE_NAME}/atm.xfs.ptr.paper_status)=2",
+             "AVERAGE", "Receipt printer is out of paper. Receipts cannot be printed.")
+
+    add_trig("Receipt Printer — Paper Low on {HOST.NAME}",
+             f"last(/{TEMPLATE_NAME}/atm.xfs.ptr.paper_status)=1",
+             "WARNING", "Receipt printer paper roll is low.")
+
+    add_trig("PIN Pad — Hardware Error on {HOST.NAME}",
+             f"last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>-1",
+             "HIGH", "PIN Pad / EPP module is reporting a failure.")
+
+    add_trig("SIU — Cabinet / Fascia Door Open on {HOST.NAME}",
+             f"last(/{TEMPLATE_NAME}/atm.xfs.siu.cabinet_door)=2",
+             "AVERAGE", "The upper cabinet / fascia service door is open.")
+
+    add_trig("SIU — Supervisor / Maintenance Mode on {HOST.NAME}",
+             f"last(/{TEMPLATE_NAME}/atm.xfs.siu.supervisor_mode)=1",
+             "WARNING", "ATM has been switched into Supervisor / Maintenance mode.")
+
+    add_trig("SIU — Tamper Alarm on {HOST.NAME}",
+             f"last(/{TEMPLATE_NAME}/atm.xfs.siu.tamper)=1",
+             "DISASTER", "Security tamper sensor triggered on the ATM!")
 
     # Value Maps
     valuemaps = _el(t, "valuemaps")
@@ -267,6 +340,29 @@ def build_template():
         (6, "Missing"),
         (7, "No Values Available"),
         (8, "No Reference Value"),
+    ])
+
+    add_vm("XFS IDC Media Status", [
+        (1, "Media Present"),
+        (2, "Media Not Present"),
+        (3, "Media Jammed"),
+        (4, "Not Supported"),
+        (5, "Unknown"),
+    ])
+
+    add_vm("XFS IDC Retain Bin", [
+        (1, "OK"),
+        (2, "Full"),
+        (3, "High"),
+        (4, "Not Supported"),
+    ])
+
+    add_vm("XFS PTR Paper Status", [
+        (0, "Full / OK"),
+        (1, "Paper Low"),
+        (2, "Paper Out"),
+        (3, "Not Supported"),
+        (4, "Unknown"),
     ])
 
     # Pretty print XML

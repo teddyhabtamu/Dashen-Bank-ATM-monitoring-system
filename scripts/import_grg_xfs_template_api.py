@@ -75,6 +75,16 @@ def ensure_valuemaps(tid, auth):
         "XFS Cassette Status": [
             (0, "OK"), (1, "Full"), (2, "High"), (3, "Low"), (4, "Empty"),
             (5, "Inoperative"), (6, "Missing"), (7, "No Values Available"), (8, "No Reference Value")
+        ],
+        "XFS IDC Media Status": [
+            (1, "Media Present"), (2, "Media Not Present"), (3, "Media Jammed"),
+            (4, "Not Supported"), (5, "Unknown")
+        ],
+        "XFS IDC Retain Bin": [
+            (1, "OK"), (2, "Full"), (3, "High"), (4, "Not Supported")
+        ],
+        "XFS PTR Paper Status": [
+            (0, "Full / OK"), (1, "Paper Low"), (2, "Paper Out"), (3, "Not Supported"), (4, "Unknown")
         ]
     }
     existing = {vm['name']: vm['valuemapid'] for vm in
@@ -96,7 +106,7 @@ def wanted_items():
     # Master item (None for js_param)
     yield ("GRG CDM — full XFS status & cassette inventory", "atm.xfs.cdm", 4, None, None, None, "Master XFS JSON")
 
-    # Statuses
+    # CDM Statuses
     yield ("CDM — Device Status", "atm.xfs.cdm.device_status", 3,
            "var j = JSON.parse(value);\nreturn j.cdm.status.device;", "XFS Device Status", None, "fwDevice")
     yield ("CDM — Safe Door Status", "atm.xfs.cdm.safe_door", 3,
@@ -106,7 +116,7 @@ def wanted_items():
     yield ("CDM — Intermediate Stacker", "atm.xfs.cdm.stacker", 3,
            "var j = JSON.parse(value);\nreturn j.cdm.status.intermediate_stacker;", None, None, "fwStacker")
 
-    # Summaries
+    # CDM Summaries
     yield ("CDM Summary — Total Dispensable Cash", "atm.xfs.cdm.total_amount", 0,
            "var j = JSON.parse(value);\nreturn j.cdm.summary.total_amount;", None, "ETB", "Total currency value")
     yield ("CDM Summary — Total Notes", "atm.xfs.cdm.total_notes", 3,
@@ -133,6 +143,36 @@ def wanted_items():
                    f'var j = JSON.parse(value);\nreturn j.cdm.cassettes["{cid}"] ? j.cdm.cassettes["{cid}"].reject_count : 0;',
                    None, None, f"Reject count for {cname}")
 
+    # IDC (Card Reader)
+    yield ("Card Reader — Device Status", "atm.xfs.idc.device_status", 3,
+           "var j = JSON.parse(value);\nreturn (j.idc && j.idc.device !== undefined) ? j.idc.device : -1;", "XFS Device Status", None, "IDC fwDevice")
+    yield ("Card Reader — Media Status", "atm.xfs.idc.media_status", 3,
+           "var j = JSON.parse(value);\nreturn (j.idc && j.idc.media !== undefined) ? j.idc.media : -1;", "XFS IDC Media Status", None, "Card present / jammed / empty")
+    yield ("Card Reader — Retained Cards Bin", "atm.xfs.idc.retain_bin", 3,
+           "var j = JSON.parse(value);\nreturn (j.idc && j.idc.retain_bin !== undefined) ? j.idc.retain_bin : -1;", "XFS IDC Retain Bin", None, "Retain bin full/ok")
+    yield ("Card Reader — Retained Cards Count", "atm.xfs.idc.cards", 3,
+           "var j = JSON.parse(value);\nreturn (j.idc && j.idc.cards !== undefined) ? j.idc.cards : 0;", None, None, "Captured card count")
+
+    # PTR (Receipt Printer)
+    yield ("Receipt Printer — Device Status", "atm.xfs.ptr.device_status", 3,
+           "var j = JSON.parse(value);\nreturn (j.ptr && j.ptr.device !== undefined) ? j.ptr.device : -1;", "XFS Device Status", None, "PTR fwDevice")
+    yield ("Receipt Printer — Paper Status", "atm.xfs.ptr.paper_status", 3,
+           "var j = JSON.parse(value);\nreturn (j.ptr && j.ptr.paper !== undefined) ? j.ptr.paper : -1;", "XFS PTR Paper Status", None, "Paper full / low / out")
+
+    # PIN (PIN Pad / EPP)
+    yield ("PIN Pad — Device Status", "atm.xfs.pin.device_status", 3,
+           "var j = JSON.parse(value);\nreturn (j.pin && j.pin.device !== undefined) ? j.pin.device : -1;", "XFS Device Status", None, "PIN fwDevice")
+
+    # SIU (Sensors & Enclosures)
+    yield ("SIU — Cabinet Door Status", "atm.xfs.siu.cabinet_door", 3,
+           "var j = JSON.parse(value);\nreturn (j.siu && j.siu.cabinet_door !== undefined) ? j.siu.cabinet_door : -1;", "XFS Safe Door Status", None, "Upper fascia / operator door")
+    yield ("SIU — Safe Door Status", "atm.xfs.siu.safe_door", 3,
+           "var j = JSON.parse(value);\nreturn (j.siu && j.siu.safe_door !== undefined) ? j.siu.safe_door : -1;", "XFS Safe Door Status", None, "Lower safe / vault door")
+    yield ("SIU — Supervisor Mode Switch", "atm.xfs.siu.supervisor_mode", 3,
+           "var j = JSON.parse(value);\nreturn (j.siu && j.siu.supervisor_switch !== undefined) ? j.siu.supervisor_switch : 0;", None, None, "0=Normal Run, 1=Supervisor")
+    yield ("SIU — Tamper Alarm Sensor", "atm.xfs.siu.tamper", 3,
+           "var j = JSON.parse(value);\nreturn (j.siu && j.siu.tamper_sensor !== undefined) ? j.siu.tamper_sensor : 0;", None, None, "0=OK, 1=Tamper Alarm")
+
 
 def ensure_triggers(tid, auth):
     wanted = [
@@ -148,6 +188,22 @@ def ensure_triggers(tid, auth):
          f"last(/{TEMPLATE_NAME}/atm.xfs.cdm.total_amount)<50000 and last(/{TEMPLATE_NAME}/atm.xfs.cdm.total_amount)>0", 3),
         ("CDM — Reject Cassette Nearly Full on {HOST.NAME}",
          f"last(/{TEMPLATE_NAME}/atm.xfs.cdm.reject_count)>=250", 3),
+        ("Card Reader — Hardware Error on {HOST.NAME}",
+         f"last(/{TEMPLATE_NAME}/atm.xfs.idc.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.idc.device_status)<>-1", 4),
+        ("Card Reader — Card Jammed on {HOST.NAME}",
+         f"last(/{TEMPLATE_NAME}/atm.xfs.idc.media_status)=3", 4),
+        ("Receipt Printer — Paper Out on {HOST.NAME}",
+         f"last(/{TEMPLATE_NAME}/atm.xfs.ptr.paper_status)=2", 3),
+        ("Receipt Printer — Paper Low on {HOST.NAME}",
+         f"last(/{TEMPLATE_NAME}/atm.xfs.ptr.paper_status)=1", 2),
+        ("PIN Pad — Hardware Error on {HOST.NAME}",
+         f"last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>-1", 4),
+        ("SIU — Cabinet / Fascia Door Open on {HOST.NAME}",
+         f"last(/{TEMPLATE_NAME}/atm.xfs.siu.cabinet_door)=2", 3),
+        ("SIU — Supervisor / Maintenance Mode on {HOST.NAME}",
+         f"last(/{TEMPLATE_NAME}/atm.xfs.siu.supervisor_mode)=1", 2),
+        ("SIU — Tamper Alarm on {HOST.NAME}",
+         f"last(/{TEMPLATE_NAME}/atm.xfs.siu.tamper)=1", 5),
     ]
     for cid, cname, ctype, denom, cur in CASSETTES:
         if ctype == "dispense":
