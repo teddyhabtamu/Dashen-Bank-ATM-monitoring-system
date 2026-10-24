@@ -25,8 +25,14 @@ def test_status_categories_match_the_cen_xfs_service_classes():
     assert 'SIU = 801' in PROBE
 
 
-def test_peripherals_use_an_app_handle_and_isolated_children():
+def test_peripherals_use_an_app_handle_in_one_session():
     assert 'WFSCreateAppHandle' in PROBE
-    assert "Invoke-ChildProbe 'IDC'" in PROBE
-    assert "Invoke-ChildProbe 'SIU'" in PROBE
+    assert "Get-PeripheralStatus 'IDC'" in PROBE
+    assert "Get-PeripheralStatus 'SIU'" in PROBE
+    assert 'Invoke-ChildProbe' not in PROBE
     assert 'WFS_ERR_INVALID_SERVPROV' not in PROBE
+
+
+def test_siu_door_values_match_the_observed_closed_raw_value():
+    assert '1 { return 3 }' in PROBE
+    assert '2 { return 2 }' in PROBE

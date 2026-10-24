@@ -230,8 +230,8 @@ def build_template():
             _el(tr, "description", desc)
 
     add_trig("CDM — Cash Dispenser Hardware Fault on {HOST.NAME}",
-             f"last(/{TEMPLATE_NAME}/atm.xfs.cdm.device_status)<>0",
-             "HIGH", "The cash dispenser hardware is reporting an error or offline state.")
+             f"last(/{TEMPLATE_NAME}/atm.xfs.cdm.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.cdm.device_status)<>6 and last(/{TEMPLATE_NAME}/atm.xfs.cdm.device_status)<>255",
+             "HIGH", "The cash dispenser hardware is reporting an error or offline state (Busy is excluded).")
 
     add_trig("CDM — Safe Door Open on {HOST.NAME}",
              f"last(/{TEMPLATE_NAME}/atm.xfs.cdm.safe_door)=2",
@@ -260,16 +260,16 @@ def build_template():
                      "WARNING", f"{cname} note count has reached 0.")
 
     add_trig("Card Reader — Hardware Error on {HOST.NAME}",
-             f"last(/{TEMPLATE_NAME}/atm.xfs.idc.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.idc.device_status)<>255",
-             "HIGH", "The card reader hardware is reporting a failure.")
+             f"last(/{TEMPLATE_NAME}/atm.xfs.idc.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.idc.device_status)<>6 and last(/{TEMPLATE_NAME}/atm.xfs.idc.device_status)<>255",
+             "HIGH", "The card reader hardware is reporting a failure (Busy is excluded).")
 
     add_trig("Card Reader — Card Jammed on {HOST.NAME}",
              f"last(/{TEMPLATE_NAME}/atm.xfs.idc.media_status)=3",
              "HIGH", "A customer card is jammed inside the card reader.")
 
     add_trig("Printer — Hardware Error on {HOST.NAME}",
-             f"last(/{TEMPLATE_NAME}/atm.xfs.ptr.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.ptr.device_status)<>255",
-             "HIGH", "The XFS printer is reporting an offline or hardware error state.")
+             f"last(/{TEMPLATE_NAME}/atm.xfs.ptr.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.ptr.device_status)<>6 and last(/{TEMPLATE_NAME}/atm.xfs.ptr.device_status)<>255",
+             "HIGH", "The XFS printer is reporting an offline or hardware error state (Busy is excluded).")
 
     add_trig("Printer — Paper Out on {HOST.NAME}",
              f"last(/{TEMPLATE_NAME}/atm.xfs.ptr.paper_status)=2",
@@ -280,8 +280,8 @@ def build_template():
              "WARNING", "Printer paper roll is low.")
 
     add_trig("PIN Pad — Hardware Error on {HOST.NAME}",
-             f"last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>255",
-             "HIGH", "PIN Pad / EPP module is reporting a failure.")
+             f"last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>6 and last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>255",
+             "HIGH", "PIN Pad / EPP module is reporting a failure (Busy is excluded).")
 
     add_trig("SIU — Cabinet / Fascia Door Open on {HOST.NAME}",
              f"last(/{TEMPLATE_NAME}/atm.xfs.siu.cabinet_door)=2",

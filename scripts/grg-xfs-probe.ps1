@@ -7,8 +7,8 @@
   - lists logical services from HKEY_USERS\.DEFAULT\XFS\LOGICAL_SERVICES
   - negotiates WFSStartUp with the manager
   - opens a CDM service and prints status + cash units
-  - opens CardReader, CheckPrinter, Encryptor and SIU in isolated child
-    processes so one bad service provider cannot take down the collector
+  - opens CardReader, CheckPrinter, Encryptor and SIU in the same read-only
+    XFS session; use -Class IDC|PTR|PIN|SIU to isolate one during diagnosis
   No writes, no dispense, no reset.
 #>
 param(
@@ -197,8 +197,8 @@ function Get-PeripheralService([string]$class) {
 
 function Convert-SiuDoor([int]$value) {
   switch ($value) {
-    1 { return 2 }
-    2 { return 3 }
+    1 { return 3 }
+    2 { return 2 }
     0 { return 1 }
     default { return 5 }
   }
@@ -216,17 +216,76 @@ function Convert-SiuTamper([int]$value) {
   return 255
 }
 
-function Invoke-ChildProbe([string]$class) {
-  $ps = Join-Path $env:WINDIR 'SysWOW64\WindowsPowerShell\v1.0\powershell.exe'
-  $childArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath,
-                 '-Class', $class, '-Json')
-  $childOut = @(& $ps @childArgs 2>$null)
-  if ($LASTEXITCODE -ne 0 -or $childOut.Count -eq 0) { return $null }
-  try {
-    return (($childOut -join "`n") | ConvertFrom-Json)
-  } catch {
-    return $null
+function Get-PeripheralStatus([string]$class, [IntPtr]$hApp) {
+  $svc = Get-PeripheralService $class
+  $payload = @{
+    class = $class
+    service = if ($svc) { $svc.Name } else { '' }
+    open_hresult = -1
+    status_hresult = -1
+    error = if ($svc) { '' } else { 'service not found' }
   }
+  if (-not $svc) { return $payload }
+
+  $svcVer = New-XfsVersion
+  $spiVer = New-XfsVersion
+  [uint16]$hService = 0
+  $openHr = [XfsNative]::WFSOpen($svc.Name, $hApp, 'ZabbixATM', 0, 1500,
+    [uint32]$startupVersion, [ref]$svcVer, [ref]$spiVer, [ref]$hService)
+  $payload.open_hresult = $openHr
+  if ($openHr -ne 0) { return $payload }
+
+  $category = @{ IDC = 201; PTR = 101; PIN = 401; SIU = 801 }[$class]
+  $resPtr = [IntPtr]::Zero
+  $statusHr = [XfsNative]::WFSGetInfo($hService, [uint32]$category, [IntPtr]::Zero, 1500, [ref]$resPtr)
+  $payload.status_hresult = $statusHr
+  if ($statusHr -eq 0 -and $resPtr -ne [IntPtr]::Zero) {
+    try {
+      $res = [Runtime.InteropServices.Marshal]::PtrToStructure($resPtr, [type][XfsResult])
+      if ($res.hResult -eq 0 -and $res.lpBuffer -ne [IntPtr]::Zero) {
+        $buf = $res.lpBuffer
+        if ($class -eq 'IDC') {
+          $payload.device = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 0)
+          $payload.media = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 2)
+          $payload.retain_bin = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 4)
+          $payload.security = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 6)
+          $payload.cards = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 8)
+          $payload.chip_power = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 10)
+        } elseif ($class -eq 'PTR') {
+          $payload.device = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 0)
+          $payload.media = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 2)
+          $payload.paper = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 4)
+          $payload.paper_levels = @()
+          for ($i = 0; $i -lt 16; $i++) {
+            $payload.paper_levels += [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 4 + ($i * 2))
+          }
+          $payload.toner = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 36)
+          $payload.ink = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 38)
+          $payload.lamp = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 40)
+        } elseif ($class -eq 'PIN') {
+          $payload.device = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 0)
+          $payload.enc_stat = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 2)
+        } elseif ($class -eq 'SIU') {
+          $payload.device = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 0)
+          $payload.operator_switch_raw = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 2)
+          $payload.tamper_sensor_raw = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 8)
+          $payload.cabinet_door_raw = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 66)
+          $payload.safe_door_raw = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 68)
+          $payload.supervisor_switch = Convert-SiuOperator $payload.operator_switch_raw
+          $payload.tamper_sensor = Convert-SiuTamper $payload.tamper_sensor_raw
+          $payload.cabinet_door = Convert-SiuDoor $payload.cabinet_door_raw
+          $payload.safe_door = Convert-SiuDoor $payload.safe_door_raw
+        }
+      } else {
+        $payload.error = "WFSGetInfo hResult=$($res.hResult)"
+      }
+    } catch {
+      $payload.error = 'status parse failed'
+    }
+    [void][XfsNative]::WFSFreeResult($resPtr)
+  }
+  [void][XfsNative]::WFSClose($hService)
+  return $payload
 }
 
 $services = @(Get-LogicalServices | Sort-Object Class, Name)
@@ -274,74 +333,7 @@ if ($null -ne $startupVersion) {
   if ($appHr -ne 0) { $hApp = [IntPtr]::Zero }
 
   if ($Class) {
-    $svc = Get-PeripheralService $Class
-    $payload = @{
-      class = $Class
-      service = if ($svc) { $svc.Name } else { '' }
-      open_hresult = -1
-      status_hresult = -1
-      error = if ($svc) { '' } else { 'service not found' }
-    }
-    if ($svc) {
-      $svcVer = New-XfsVersion
-      $spiVer = New-XfsVersion
-      [uint16]$hService = 0
-      $openHr = [XfsNative]::WFSOpen($svc.Name, $hApp, 'ZabbixATM', 0, 1500,
-        [uint32]$startupVersion, [ref]$svcVer, [ref]$spiVer, [ref]$hService)
-      $payload.open_hresult = $openHr
-      if ($openHr -eq 0) {
-        $category = @{ IDC = 201; PTR = 101; PIN = 401; SIU = 801 }[$Class]
-        $resPtr = [IntPtr]::Zero
-        $statusHr = [XfsNative]::WFSGetInfo($hService, [uint32]$category, [IntPtr]::Zero, 1500, [ref]$resPtr)
-        $payload.status_hresult = $statusHr
-        if ($statusHr -eq 0 -and $resPtr -ne [IntPtr]::Zero) {
-          try {
-            $res = [Runtime.InteropServices.Marshal]::PtrToStructure($resPtr, [type][XfsResult])
-            if ($res.hResult -eq 0 -and $res.lpBuffer -ne [IntPtr]::Zero) {
-              $buf = $res.lpBuffer
-              if ($Class -eq 'IDC') {
-                $payload.device = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 0)
-                $payload.media = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 2)
-                $payload.retain_bin = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 4)
-                $payload.security = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 6)
-                $payload.cards = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 8)
-                $payload.chip_power = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 10)
-              } elseif ($Class -eq 'PTR') {
-                $payload.device = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 0)
-                $payload.media = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 2)
-                $payload.paper = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 4)
-                $payload.paper_levels = @()
-                for ($i = 0; $i -lt 16; $i++) {
-                  $payload.paper_levels += [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 4 + ($i * 2))
-                }
-                $payload.toner = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 36)
-                $payload.ink = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 38)
-                $payload.lamp = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 40)
-              } elseif ($Class -eq 'PIN') {
-                $payload.device = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 0)
-                $payload.enc_stat = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 2)
-              } elseif ($Class -eq 'SIU') {
-                $payload.device = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 0)
-                $payload.operator_switch_raw = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 2)
-                $payload.tamper_sensor_raw = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 8)
-                $payload.cabinet_door_raw = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 66)
-                $payload.safe_door_raw = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 68)
-                $payload.supervisor_switch = Convert-SiuOperator $payload.operator_switch_raw
-                $payload.tamper_sensor = Convert-SiuTamper $payload.tamper_sensor_raw
-                $payload.cabinet_door = Convert-SiuDoor $payload.cabinet_door_raw
-                $payload.safe_door = Convert-SiuDoor $payload.safe_door_raw
-              }
-            } else {
-              $payload.error = "WFSGetInfo hResult=$($res.hResult)"
-            }
-          } catch {
-            $payload.error = 'status parse failed'
-          }
-          [void][XfsNative]::WFSFreeResult($resPtr)
-        }
-        [void][XfsNative]::WFSClose($hService)
-      }
-    }
+    $payload = Get-PeripheralStatus $Class $hApp
     try { [void][XfsNative]::WFSDestroyAppHandle($hApp) } catch {}
     [void][XfsNative]::WFSCleanUp()
     [Console]::WriteLine((ConvertTo-Json -InputObject $payload -Depth 5 -Compress))
@@ -439,15 +431,16 @@ if ($null -ne $startupVersion) {
     }
   } catch {}
 
+  $result.idc = Get-PeripheralStatus 'IDC' $hApp
+  $result.ptr = Get-PeripheralStatus 'PTR' $hApp
+  $result.pin = Get-PeripheralStatus 'PIN' $hApp
+  $result.siu = Get-PeripheralStatus 'SIU' $hApp
+
   try { [void][XfsNative]::WFSDestroyAppHandle($hApp) } catch {}
   [void][XfsNative]::WFSCleanUp()
 }
 
 if ($Json) {
-  $result.idc = Invoke-ChildProbe 'IDC'
-  $result.ptr = Invoke-ChildProbe 'PTR'
-  $result.pin = Invoke-ChildProbe 'PIN'
-  $result.siu = Invoke-ChildProbe 'SIU'
   $cassettes = @{}
   $totalAmount = 0
   $totalNotes = 0

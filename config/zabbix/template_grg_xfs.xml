@@ -863,10 +863,10 @@ return (j.siu &amp;&amp; j.siu.tamper_sensor !== undefined) ? j.siu.tamper_senso
             <triggers>
                 <trigger>
                     <uuid>f1b342f8-8be1-53b0-80eb-d293fffdad39</uuid>
-                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.cdm.device_status)&lt;&gt;0</expression>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.cdm.device_status)&lt;&gt;0 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.cdm.device_status)&lt;&gt;6 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.cdm.device_status)&lt;&gt;255</expression>
                     <name>CDM — Cash Dispenser Hardware Fault on {HOST.NAME}</name>
                     <priority>HIGH</priority>
-                    <description>The cash dispenser hardware is reporting an error or offline state.</description>
+                    <description>The cash dispenser hardware is reporting an error or offline state (Busy is excluded).</description>
                 </trigger>
                 <trigger>
                     <uuid>0d87a01a-1e5b-5afd-8566-d3c56ba2168f</uuid>
@@ -933,10 +933,10 @@ return (j.siu &amp;&amp; j.siu.tamper_sensor !== undefined) ? j.siu.tamper_senso
                 </trigger>
                 <trigger>
                     <uuid>b672927d-0ff5-5130-b20d-779ee956692e</uuid>
-                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.idc.device_status)&lt;&gt;0 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.idc.device_status)&lt;&gt;255</expression>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.idc.device_status)&lt;&gt;0 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.idc.device_status)&lt;&gt;6 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.idc.device_status)&lt;&gt;255</expression>
                     <name>Card Reader — Hardware Error on {HOST.NAME}</name>
                     <priority>HIGH</priority>
-                    <description>The card reader hardware is reporting a failure.</description>
+                    <description>The card reader hardware is reporting a failure (Busy is excluded).</description>
                 </trigger>
                 <trigger>
                     <uuid>085d938f-2057-5934-9f7d-1b9d7cc56b60</uuid>
@@ -947,10 +947,10 @@ return (j.siu &amp;&amp; j.siu.tamper_sensor !== undefined) ? j.siu.tamper_senso
                 </trigger>
                 <trigger>
                     <uuid>a461a58f-5cda-5abb-9fbd-1646f1cdecc1</uuid>
-                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.ptr.device_status)&lt;&gt;0 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.ptr.device_status)&lt;&gt;255</expression>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.ptr.device_status)&lt;&gt;0 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.ptr.device_status)&lt;&gt;6 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.ptr.device_status)&lt;&gt;255</expression>
                     <name>Printer — Hardware Error on {HOST.NAME}</name>
                     <priority>HIGH</priority>
-                    <description>The XFS printer is reporting an offline or hardware error state.</description>
+                    <description>The XFS printer is reporting an offline or hardware error state (Busy is excluded).</description>
                 </trigger>
                 <trigger>
                     <uuid>027d7268-15f7-5fb8-89f7-5e938e6f272f</uuid>
@@ -968,10 +968,10 @@ return (j.siu &amp;&amp; j.siu.tamper_sensor !== undefined) ? j.siu.tamper_senso
                 </trigger>
                 <trigger>
                     <uuid>c61e03a8-ffb0-59ea-af4b-4410c86b5ca7</uuid>
-                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.pin.device_status)&lt;&gt;0 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.pin.device_status)&lt;&gt;255</expression>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.pin.device_status)&lt;&gt;0 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.pin.device_status)&lt;&gt;6 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.pin.device_status)&lt;&gt;255</expression>
                     <name>PIN Pad — Hardware Error on {HOST.NAME}</name>
                     <priority>HIGH</priority>
-                    <description>PIN Pad / EPP module is reporting a failure.</description>
+                    <description>PIN Pad / EPP module is reporting a failure (Busy is excluded).</description>
                 </trigger>
                 <trigger>
                     <uuid>1482049f-e866-5249-91e1-82c7c0bd2dc3</uuid>
