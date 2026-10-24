@@ -11,6 +11,9 @@ helpers always did this; the SNMP branch did not, and it produced the portal's
 oldest lie — four red "Fault" chips on ATMs nobody had ever measured.
 """
 
+from zabbix_modules.xfs_metrics import DISPENSE_UNITS, is_xfs
+
+
 def _wmi_chip(m, *part_names):
     """Worst-of chip status across WMI part instances.
 
@@ -120,8 +123,77 @@ def build_part_rows(m):
             for r in rows]
 
 
+def _xfs_num(m, key):
+    try:
+        value = int(float(m.get(key)))
+    except (TypeError, ValueError):
+        return None
+    return None if value in (-1, 255, 65535) else value
+
+
+XFS_DEVICE_WORDS = {
+    0: ('Online', 'ok'), 1: ('Offline', 'error'), 2: ('Power off', 'error'),
+    3: ('No device', 'error'), 4: ('Hardware error', 'error'),
+    5: ('User error', 'error'), 6: ('Busy', 'warn'), 7: ('Fraud attempt', 'error'),
+}
+XFS_DOOR_WORDS = {
+    1: ('Not supported', 'unknown'), 2: ('Open', 'warn'),
+    3: ('Closed', 'ok'), 4: ('Locked', 'ok'), 5: ('Unknown', 'unknown'),
+}
+XFS_PAPER_WORDS = {
+    0: ('OK', 'ok'), 1: ('Low', 'warn'), 2: ('Out', 'error'),
+    3: ('Not supported', 'unknown'), 4: ('Unknown', 'unknown'),
+}
+
+
+def _xfs_rows(m):
+    rows = []
+
+    def add(name, word, css):
+        rows.append({'name': name, 'word': word, 'css': css, 'rank': _RANK[css]})
+
+    def add_code(name, key, words):
+        if key not in m:
+            return
+        code = _xfs_num(m, key)
+        if code is None:
+            add(name, 'Not queried', 'unknown')
+            return
+        word, css = words.get(code, ('Unknown', 'unknown'))
+        add(name, word, css)
+
+    add_code('Cash dispenser', 'atm.xfs.cdm.device_status', XFS_DEVICE_WORDS)
+    add_code('Safe door', 'atm.xfs.cdm.safe_door', XFS_DOOR_WORDS)
+    add_code('Card reader', 'atm.xfs.idc.device_status', XFS_DEVICE_WORDS)
+    add_code('Printer', 'atm.xfs.ptr.device_status', XFS_DEVICE_WORDS)
+    add_code('Printer paper', 'atm.xfs.ptr.paper_status', XFS_PAPER_WORDS)
+    add_code('PIN pad', 'atm.xfs.pin.device_status', XFS_DEVICE_WORDS)
+    add_code('Cabinet door', 'atm.xfs.siu.cabinet_door', XFS_DOOR_WORDS)
+    add_code('Supervisor mode', 'atm.xfs.siu.supervisor_mode',
+             {0: ('Normal run', 'ok'), 1: ('Supervisor', 'warn')})
+    add_code('Tamper sensor', 'atm.xfs.siu.tamper',
+             {0: ('OK', 'ok'), 1: ('Alarm', 'error')})
+
+    for unit in DISPENSE_UNITS:
+        key = f'atm.xfs.cdm.cassette.count[{unit}]'
+        if key not in m:
+            continue
+        count = _xfs_num(m, key)
+        if count is None:
+            add(f'Cassette {unit}', 'Not queried', 'unknown')
+        elif count == 0:
+            add(f'Cassette {unit}', 'Empty', 'error')
+        else:
+            add(f'Cassette {unit}', f'{count} notes', 'ok')
+
+    rows.sort(key=lambda r: (-r['rank'], r['name']))
+    return [{'name': r['name'], 'word': r['word'], 'css': r['css']} for r in rows]
+
+
 def build_device_rows(m):
-    """Every WMI device as (name, word, css), faults-first. See above."""
+    """Every live device as (name, word, css), faults-first. See above."""
+    if is_xfs(m):
+        return _xfs_rows(m)
     rows = []
     for k in sorted(m):
         if not (k.startswith('atm.device.status[') and k.endswith(']')):
@@ -137,6 +209,63 @@ def build_device_rows(m):
             for r in rows]
 
 
+def _xfs_device_chip(m, key):
+    code = _xfs_num(m, key)
+    if code is None:
+        return 'unknown'
+    return 'ok' if code in (0, 6) else 'error'
+
+
+def _xfs_door_chip(m, key):
+    code = _xfs_num(m, key)
+    if code is None:
+        return 'unknown'
+    if code in (3, 4):
+        return 'ok'
+    return 'warn' if code == 2 else 'unknown'
+
+
+def _xfs_paper_chip(m):
+    code = _xfs_num(m, 'atm.xfs.ptr.paper_status')
+    if code is None:
+        return 'unknown'
+    return {0: 'ok', 1: 'warn', 2: 'error'}.get(code, 'unknown')
+
+
+def _xfs_hardware(m):
+    cash = _xfs_device_chip(m, 'atm.xfs.cdm.device_status')
+    if _xfs_num(m, 'atm.xfs.cdm.dispenser') == 2:
+        cash = _worst(cash, 'error')
+
+    card = _xfs_device_chip(m, 'atm.xfs.idc.device_status')
+    if _xfs_num(m, 'atm.xfs.idc.media_status') == 3:
+        card = _worst(card, 'error')
+    if _xfs_num(m, 'atm.xfs.idc.retain_bin') == 2:
+        card = _worst(card, 'warn')
+
+    printer = _worst(_xfs_device_chip(m, 'atm.xfs.ptr.device_status'),
+                     _xfs_paper_chip(m))
+    pin = _xfs_device_chip(m, 'atm.xfs.pin.device_status')
+
+    rejects = _xfs_num(m, 'atm.xfs.cdm.reject_count')
+    reject = 'unknown' if rejects is None else ('warn' if rejects >= 250 else 'ok')
+
+    net = _xfs_num(m, 'atm.net.link')
+    network = 'unknown' if net is None else ('ok' if net == 1 else 'error')
+
+    comps = [
+        ('Cash dispenser', cash),
+        ('Safe door', _xfs_door_chip(m, 'atm.xfs.cdm.safe_door')),
+        ('Card reader', card),
+        ('Printer', printer),
+        ('PIN pad', pin),
+        ('Reject bin', reject),
+        ('Network', network),
+        ('UPS', 'unknown'),
+    ]
+    return ([{'name': name, 'status': status} for name, status in comps], 'XFS')
+
+
 def build_hardware(vendor, m):
     """Hardware component status pills. ok=green, warn=amber, error=red.
 
@@ -146,8 +275,11 @@ def build_hardware(vendor, m):
 
     NCR agent hosts: WMI dependents are authoritative (SNMP OIDs are
     unmapped simulator roots on real hardware) — returns (chips, 'WMI').
+    GRG XFS hosts: XFS-dependent items are authoritative — returns 'XFS'.
     Otherwise the legacy SNMP mapping — returns (chips, 'SNMP').
     """
+    if is_xfs(m):
+        return _xfs_hardware(m)
     if m.get('atm.parts') not in (None, ""):
         comps = [
             ('Card reader', _wmi_chip(m, 'Card Reader', 'Smart Card Reader')),

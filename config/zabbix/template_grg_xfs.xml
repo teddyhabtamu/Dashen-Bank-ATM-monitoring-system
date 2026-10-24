@@ -624,7 +624,7 @@ return j.cdm.cassettes["0200A"] ? j.cdm.cassettes["0200A"].reject_count : 0;</pa
                         <step>
                             <type>JAVASCRIPT</type>
                             <params>var j = JSON.parse(value);
-return (j.idc &amp;&amp; j.idc.device !== undefined) ? j.idc.device : -1;</params>
+return (j.idc &amp;&amp; j.idc.device !== undefined) ? j.idc.device : 255;</params>
                         </step>
                     </preprocessing>
                 </item>
@@ -648,7 +648,7 @@ return (j.idc &amp;&amp; j.idc.device !== undefined) ? j.idc.device : -1;</param
                         <step>
                             <type>JAVASCRIPT</type>
                             <params>var j = JSON.parse(value);
-return (j.idc &amp;&amp; j.idc.media !== undefined) ? j.idc.media : -1;</params>
+return (j.idc &amp;&amp; j.idc.media !== undefined) ? j.idc.media : 255;</params>
                         </step>
                     </preprocessing>
                 </item>
@@ -672,7 +672,7 @@ return (j.idc &amp;&amp; j.idc.media !== undefined) ? j.idc.media : -1;</params>
                         <step>
                             <type>JAVASCRIPT</type>
                             <params>var j = JSON.parse(value);
-return (j.idc &amp;&amp; j.idc.retain_bin !== undefined) ? j.idc.retain_bin : -1;</params>
+return (j.idc &amp;&amp; j.idc.retain_bin !== undefined) ? j.idc.retain_bin : 255;</params>
                         </step>
                     </preprocessing>
                 </item>
@@ -717,7 +717,7 @@ return (j.idc &amp;&amp; j.idc.cards !== undefined) ? j.idc.cards : 0;</params>
                         <step>
                             <type>JAVASCRIPT</type>
                             <params>var j = JSON.parse(value);
-return (j.ptr &amp;&amp; j.ptr.device !== undefined) ? j.ptr.device : -1;</params>
+return (j.ptr &amp;&amp; j.ptr.device !== undefined) ? j.ptr.device : 255;</params>
                         </step>
                     </preprocessing>
                 </item>
@@ -741,7 +741,7 @@ return (j.ptr &amp;&amp; j.ptr.device !== undefined) ? j.ptr.device : -1;</param
                         <step>
                             <type>JAVASCRIPT</type>
                             <params>var j = JSON.parse(value);
-return (j.ptr &amp;&amp; j.ptr.paper !== undefined) ? j.ptr.paper : -1;</params>
+return (j.ptr &amp;&amp; j.ptr.paper !== undefined) ? j.ptr.paper : 255;</params>
                         </step>
                     </preprocessing>
                 </item>
@@ -765,7 +765,7 @@ return (j.ptr &amp;&amp; j.ptr.paper !== undefined) ? j.ptr.paper : -1;</params>
                         <step>
                             <type>JAVASCRIPT</type>
                             <params>var j = JSON.parse(value);
-return (j.pin &amp;&amp; j.pin.device !== undefined) ? j.pin.device : -1;</params>
+return (j.pin &amp;&amp; j.pin.device !== undefined) ? j.pin.device : 255;</params>
                         </step>
                     </preprocessing>
                 </item>
@@ -789,7 +789,7 @@ return (j.pin &amp;&amp; j.pin.device !== undefined) ? j.pin.device : -1;</param
                         <step>
                             <type>JAVASCRIPT</type>
                             <params>var j = JSON.parse(value);
-return (j.siu &amp;&amp; j.siu.cabinet_door !== undefined) ? j.siu.cabinet_door : -1;</params>
+return (j.siu &amp;&amp; j.siu.cabinet_door !== undefined) ? j.siu.cabinet_door : 255;</params>
                         </step>
                     </preprocessing>
                 </item>
@@ -813,7 +813,7 @@ return (j.siu &amp;&amp; j.siu.cabinet_door !== undefined) ? j.siu.cabinet_door 
                         <step>
                             <type>JAVASCRIPT</type>
                             <params>var j = JSON.parse(value);
-return (j.siu &amp;&amp; j.siu.safe_door !== undefined) ? j.siu.safe_door : -1;</params>
+return (j.siu &amp;&amp; j.siu.safe_door !== undefined) ? j.siu.safe_door : 255;</params>
                         </step>
                     </preprocessing>
                 </item>
@@ -834,7 +834,7 @@ return (j.siu &amp;&amp; j.siu.safe_door !== undefined) ? j.siu.safe_door : -1;<
                         <step>
                             <type>JAVASCRIPT</type>
                             <params>var j = JSON.parse(value);
-return (j.siu &amp;&amp; j.siu.supervisor_switch !== undefined) ? j.siu.supervisor_switch : 0;</params>
+return (j.siu &amp;&amp; j.siu.supervisor_switch !== undefined) ? j.siu.supervisor_switch : 255;</params>
                         </step>
                     </preprocessing>
                 </item>
@@ -855,7 +855,7 @@ return (j.siu &amp;&amp; j.siu.supervisor_switch !== undefined) ? j.siu.supervis
                         <step>
                             <type>JAVASCRIPT</type>
                             <params>var j = JSON.parse(value);
-return (j.siu &amp;&amp; j.siu.tamper_sensor !== undefined) ? j.siu.tamper_sensor : 0;</params>
+return (j.siu &amp;&amp; j.siu.tamper_sensor !== undefined) ? j.siu.tamper_sensor : 255;</params>
                         </step>
                     </preprocessing>
                 </item>
@@ -933,7 +933,7 @@ return (j.siu &amp;&amp; j.siu.tamper_sensor !== undefined) ? j.siu.tamper_senso
                 </trigger>
                 <trigger>
                     <uuid>b672927d-0ff5-5130-b20d-779ee956692e</uuid>
-                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.idc.device_status)&lt;&gt;0 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.idc.device_status)&lt;&gt;-1</expression>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.idc.device_status)&lt;&gt;0 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.idc.device_status)&lt;&gt;255</expression>
                     <name>Card Reader — Hardware Error on {HOST.NAME}</name>
                     <priority>HIGH</priority>
                     <description>The card reader hardware is reporting a failure.</description>
@@ -961,7 +961,7 @@ return (j.siu &amp;&amp; j.siu.tamper_sensor !== undefined) ? j.siu.tamper_senso
                 </trigger>
                 <trigger>
                     <uuid>c61e03a8-ffb0-59ea-af4b-4410c86b5ca7</uuid>
-                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.pin.device_status)&lt;&gt;0 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.pin.device_status)&lt;&gt;-1</expression>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.pin.device_status)&lt;&gt;0 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.pin.device_status)&lt;&gt;255</expression>
                     <name>PIN Pad — Hardware Error on {HOST.NAME}</name>
                     <priority>HIGH</priority>
                     <description>PIN Pad / EPP module is reporting a failure.</description>
@@ -1025,6 +1025,10 @@ return (j.siu &amp;&amp; j.siu.tamper_sensor !== undefined) ? j.siu.tamper_senso
                             <value>7</value>
                             <newvalue>Fraud Attempt</newvalue>
                         </mapping>
+                        <mapping>
+                            <value>255</value>
+                            <newvalue>Not queried</newvalue>
+                        </mapping>
                     </mappings>
                 </valuemap>
                 <valuemap>
@@ -1050,6 +1054,10 @@ return (j.siu &amp;&amp; j.siu.tamper_sensor !== undefined) ? j.siu.tamper_senso
                         <mapping>
                             <value>5</value>
                             <newvalue>Door Unknown</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>255</value>
+                            <newvalue>Not queried</newvalue>
                         </mapping>
                     </mappings>
                 </valuemap>
@@ -1141,6 +1149,10 @@ return (j.siu &amp;&amp; j.siu.tamper_sensor !== undefined) ? j.siu.tamper_senso
                             <value>5</value>
                             <newvalue>Unknown</newvalue>
                         </mapping>
+                        <mapping>
+                            <value>255</value>
+                            <newvalue>Not queried</newvalue>
+                        </mapping>
                     </mappings>
                 </valuemap>
                 <valuemap>
@@ -1162,6 +1174,10 @@ return (j.siu &amp;&amp; j.siu.tamper_sensor !== undefined) ? j.siu.tamper_senso
                         <mapping>
                             <value>4</value>
                             <newvalue>Not Supported</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>255</value>
+                            <newvalue>Not queried</newvalue>
                         </mapping>
                     </mappings>
                 </valuemap>
@@ -1188,6 +1204,10 @@ return (j.siu &amp;&amp; j.siu.tamper_sensor !== undefined) ? j.siu.tamper_senso
                         <mapping>
                             <value>4</value>
                             <newvalue>Unknown</newvalue>
+                        </mapping>
+                        <mapping>
+                            <value>255</value>
+                            <newvalue>Not queried</newvalue>
                         </mapping>
                     </mappings>
                 </valuemap>

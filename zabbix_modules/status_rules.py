@@ -18,9 +18,14 @@ Device branch (NCR_Device sweep, added 2026-10-12; DeviceStatus 0 OK,
 1 Warning, 2 Unavailable): CASH-cluster Unavailable → OUT_OF_SERVICE
 (dispenser down means no cash — reasoned policy, no guessing: the prefix
 is the cluster by construction); other-device Unavailable → HARDWARE_FAULT.
+
+GRG XFS path: atm.xfs.* is translated by xfs_metrics.normalize() before the
+same precedence rules are applied.
 """
 import json
 import os
+
+from zabbix_modules.xfs_metrics import is_xfs, normalize
 
 _PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "status_map.json")
 
@@ -112,6 +117,8 @@ def interpret_state(vendor, m):
     """Return ATM state from a metrics dict keyed by Zabbix item keys."""
     if not m:
         return 'UNREACHABLE'
+    if is_xfs(m):
+        m = normalize(m)
     if m.get(WMI_MASTER_KEY) not in (None, ""):
         # NCR agent path live: WMI authoritative, SNMP ignored for host.
         devs = wmi_device_unavail(m)
@@ -139,8 +146,9 @@ def interpret_state(vendor, m):
 
     status = _to_int(m.get('atm.status'), None)
     net = _to_int(m.get('atm.net.link'), None)
-    cash1 = _to_int(m.get('atm.cash.cassette1'), 0)
-    cash2 = _to_int(m.get('atm.cash.cassette2'), 0)
+    cash1 = _to_int(m.get('atm.cash.cassette1'), None)
+    cash2 = _to_int(m.get('atm.cash.cassette2'), None)
+    total_notes = _to_int(m.get('atm.cash.total_notes'), None)
     cash_jam = _to_int(m.get('atm.cash.jam'), 0)
     card = _to_int(m.get('atm.card.reader'), 0)
 
@@ -150,7 +158,10 @@ def interpret_state(vendor, m):
         return 'OUT_OF_SERVICE'
     if status == SUPERVISOR:
         return 'IN_SUPERVISOR'
-    if cash1 == 0 and cash2 == 0:
+    if total_notes is not None:
+        if total_notes == 0:
+            return 'OUT_OF_CASH'
+    elif cash1 is not None and cash2 is not None and cash1 == 0 and cash2 == 0:
         return 'OUT_OF_CASH'
     if cash_jam == JAM or card == CARD:
         return 'HARDWARE_FAULT'

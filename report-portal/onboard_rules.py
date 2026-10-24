@@ -21,9 +21,9 @@ DISTRICTS = sorted({
     'MEKELLE', 'Kirkos',
 })
 # TCP-probeable port per vendor path (read-only connect, 3s budget).
-# GRG speaks UDP/SNMP — no TCP equivalent exists, so its reachability is
-# STATIC until provision (stated on screen, never faked).
-PROBE_PORT = {'NCR': 10050}
+# NCR WMI and GRG XFS both ride the Zabbix agent on TCP/10050; legacy GRG
+# SNMP is UDP/161 and cannot be probed this way.
+PROBE_PORT = {'NCR': 10050, 'GRG': 10050}
 
 ATM_ID_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]*$')
 

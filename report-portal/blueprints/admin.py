@@ -11,6 +11,7 @@ from blueprints.auth import login_required, role_required, ROLE_ADMIN, ROLE_OPER
 from db import get_db
 from audit import log_action
 from scheduler import REPORT_TYPE_LABELS
+from zabbix_modules.xfs_metrics import DISPENSE_UNITS, is_xfs, normalize
 
 logger = logging.getLogger(__name__)
 
@@ -321,8 +322,9 @@ def _fetch_zabbix_metrics(atm_id):
             return None
         # lastclock "0" = never collected (Zabbix still reports lastvalue "0"):
         # map to None so the detail page shows grey no-data instead of fake zeros.
-        return {it['key_']: (it.get('lastvalue') if str(it.get('lastclock')) != '0' else None)
-                for it in items}
+        raw = {it['key_']: (it.get('lastvalue') if str(it.get('lastclock')) != '0' else None)
+               for it in items}
+        return normalize(raw)
     except Exception as e:
         # Silence here is why the first diagnosis produced an empty log: every
         # failure path in this function returned None without saying so.
@@ -432,7 +434,16 @@ def build_cassettes(vendor, m, capacity=CASSETTE_MAX):
             x = VX + c * (cw + gap)
             y = VY + r * (ch + gap)
             out.append(slot(k, lbl, x, y, cw, ch))
-    else:  # GRG — three module bays side by side
+    elif is_xfs(m):
+        gap = 10
+        cw = (VW - gap) / 2
+        ch = (VH - gap) / 2
+        for i, unit in enumerate(DISPENSE_UNITS):
+            r, c = divmod(i, 2)
+            x = VX + c * (cw + gap)
+            y = VY + r * (ch + gap)
+            out.append(slot(f'atm.cash.cassette{i + 1}', unit, x, y, cw, ch))
+    else:  # GRG SNMP — three module bays side by side
         keys = ['atm.cash.cassette1', 'atm.cash.cassette2', 'atm.cash.cassette3']
         labels = ['Module 1', 'Module 2', 'Module 3']
         gap = 14

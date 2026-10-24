@@ -86,6 +86,28 @@ def test_composite_error_dominates():
     assert part_display(None, None) == ('Unknown', 'unknown')
 
 
+def test_grg_xfs_host_reads_in_service():
+    m = {
+        'atm.xfs.cdm': '{}',
+        'atm.xfs.cdm.device_status': '0',
+        'atm.xfs.cdm.total_notes': '3140',
+        'atm.xfs.cdm.cassette.count[0050A]': '100',
+        'atm.xfs.cdm.cassette.count[0100A]': '100',
+    }
+    assert interpret_state('GRG', m) == 'IN_SERVICE'
+
+
+def test_grg_xfs_host_with_no_disposable_notes_is_out_of_cash():
+    m = {
+        'atm.xfs.cdm': '{}',
+        'atm.xfs.cdm.device_status': '0',
+        'atm.xfs.cdm.total_notes': '0',
+        'atm.xfs.cdm.cassette.count[0050A]': '0',
+        'atm.xfs.cdm.cassette.count[0100A]': '0',
+    }
+    assert interpret_state('GRG', m) == 'OUT_OF_CASH'
+
+
 def test_snmp_only_host_unchanged():
     # GRG has no WMI keys — legacy SNMP path must behave exactly as before.
     assert interpret_state('NCR', {'atm.status': '1', 'atm.net.link': '1',

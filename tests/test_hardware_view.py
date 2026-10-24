@@ -11,7 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'report-portal'))
 
-from hardware_view import build_hardware  # noqa: E402
+from hardware_view import build_device_rows, build_hardware  # noqa: E402
 
 # An NCR host linked only to the SNMP template: WMI item absent, every SNMP
 # item present but never collected -> fetch_zabbix_maps those to None.

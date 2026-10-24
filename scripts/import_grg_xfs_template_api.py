@@ -63,11 +63,11 @@ def ensure_valuemaps(tid, auth):
     wanted = {
         "XFS Device Status": [
             (0, "Online"), (1, "Offline"), (2, "Power Off"), (3, "No Device"),
-            (4, "Hardware Error"), (5, "User Error"), (6, "Busy"), (7, "Fraud Attempt")
+            (4, "Hardware Error"), (5, "User Error"), (6, "Busy"), (7, "Fraud Attempt"), (255, "Not queried")
         ],
         "XFS Safe Door Status": [
             (1, "Door Not Supported"), (2, "Door Open"), (3, "Door Closed"),
-            (4, "Door Locked"), (5, "Door Unknown")
+            (4, "Door Locked"), (5, "Door Unknown"), (255, "Not queried")
         ],
         "XFS Dispenser Status": [
             (0, "OK"), (1, "State Unknown"), (2, "Stop"), (3, "Unknown")
@@ -78,23 +78,24 @@ def ensure_valuemaps(tid, auth):
         ],
         "XFS IDC Media Status": [
             (1, "Media Present"), (2, "Media Not Present"), (3, "Media Jammed"),
-            (4, "Not Supported"), (5, "Unknown")
+            (4, "Not Supported"), (5, "Unknown"), (255, "Not queried")
         ],
         "XFS IDC Retain Bin": [
-            (1, "OK"), (2, "Full"), (3, "High"), (4, "Not Supported")
+            (1, "OK"), (2, "Full"), (3, "High"), (4, "Not Supported"), (255, "Not queried")
         ],
         "XFS PTR Paper Status": [
-            (0, "Full / OK"), (1, "Paper Low"), (2, "Paper Out"), (3, "Not Supported"), (4, "Unknown")
+            (0, "Full / OK"), (1, "Paper Low"), (2, "Paper Out"), (3, "Not Supported"), (4, "Unknown"), (255, "Not queried")
         ]
     }
     existing = {vm['name']: vm['valuemapid'] for vm in
                 call('valuemap.get', {'hostids': [tid], 'output': ['valuemapid', 'name']}, auth)}
     vm_ids = {}
     for name, mappings in wanted.items():
+        maps = [{'value': str(v), 'newvalue': t} for v, t in mappings]
         if name in existing:
             vm_ids[name] = existing[name]
+            call('valuemap.update', {'valuemapid': existing[name], 'mappings': maps}, auth)
         else:
-            maps = [{'value': str(v), 'newvalue': t} for v, t in mappings]
             vid = call('valuemap.create', {'hostid': tid, 'name': name, 'mappings': maps}, auth)['valuemapids'][0]
             vm_ids[name] = vid
             print(f'Created valuemap: {name} ({vid})')
@@ -145,33 +146,33 @@ def wanted_items():
 
     # IDC (Card Reader)
     yield ("Card Reader — Device Status", "atm.xfs.idc.device_status", 3,
-           "var j = JSON.parse(value);\nreturn (j.idc && j.idc.device !== undefined) ? j.idc.device : -1;", "XFS Device Status", None, "IDC fwDevice")
+           "var j = JSON.parse(value);\nreturn (j.idc && j.idc.device !== undefined) ? j.idc.device : 255;", "XFS Device Status", None, "IDC fwDevice")
     yield ("Card Reader — Media Status", "atm.xfs.idc.media_status", 3,
-           "var j = JSON.parse(value);\nreturn (j.idc && j.idc.media !== undefined) ? j.idc.media : -1;", "XFS IDC Media Status", None, "Card present / jammed / empty")
+           "var j = JSON.parse(value);\nreturn (j.idc && j.idc.media !== undefined) ? j.idc.media : 255;", "XFS IDC Media Status", None, "Card present / jammed / empty")
     yield ("Card Reader — Retained Cards Bin", "atm.xfs.idc.retain_bin", 3,
-           "var j = JSON.parse(value);\nreturn (j.idc && j.idc.retain_bin !== undefined) ? j.idc.retain_bin : -1;", "XFS IDC Retain Bin", None, "Retain bin full/ok")
+           "var j = JSON.parse(value);\nreturn (j.idc && j.idc.retain_bin !== undefined) ? j.idc.retain_bin : 255;", "XFS IDC Retain Bin", None, "Retain bin full/ok")
     yield ("Card Reader — Retained Cards Count", "atm.xfs.idc.cards", 3,
            "var j = JSON.parse(value);\nreturn (j.idc && j.idc.cards !== undefined) ? j.idc.cards : 0;", None, None, "Captured card count")
 
     # PTR (Receipt Printer)
     yield ("Receipt Printer — Device Status", "atm.xfs.ptr.device_status", 3,
-           "var j = JSON.parse(value);\nreturn (j.ptr && j.ptr.device !== undefined) ? j.ptr.device : -1;", "XFS Device Status", None, "PTR fwDevice")
+           "var j = JSON.parse(value);\nreturn (j.ptr && j.ptr.device !== undefined) ? j.ptr.device : 255;", "XFS Device Status", None, "PTR fwDevice")
     yield ("Receipt Printer — Paper Status", "atm.xfs.ptr.paper_status", 3,
-           "var j = JSON.parse(value);\nreturn (j.ptr && j.ptr.paper !== undefined) ? j.ptr.paper : -1;", "XFS PTR Paper Status", None, "Paper full / low / out")
+           "var j = JSON.parse(value);\nreturn (j.ptr && j.ptr.paper !== undefined) ? j.ptr.paper : 255;", "XFS PTR Paper Status", None, "Paper full / low / out")
 
     # PIN (PIN Pad / EPP)
     yield ("PIN Pad — Device Status", "atm.xfs.pin.device_status", 3,
-           "var j = JSON.parse(value);\nreturn (j.pin && j.pin.device !== undefined) ? j.pin.device : -1;", "XFS Device Status", None, "PIN fwDevice")
+           "var j = JSON.parse(value);\nreturn (j.pin && j.pin.device !== undefined) ? j.pin.device : 255;", "XFS Device Status", None, "PIN fwDevice")
 
     # SIU (Sensors & Enclosures)
     yield ("SIU — Cabinet Door Status", "atm.xfs.siu.cabinet_door", 3,
-           "var j = JSON.parse(value);\nreturn (j.siu && j.siu.cabinet_door !== undefined) ? j.siu.cabinet_door : -1;", "XFS Safe Door Status", None, "Upper fascia / operator door")
+           "var j = JSON.parse(value);\nreturn (j.siu && j.siu.cabinet_door !== undefined) ? j.siu.cabinet_door : 255;", "XFS Safe Door Status", None, "Upper fascia / operator door")
     yield ("SIU — Safe Door Status", "atm.xfs.siu.safe_door", 3,
-           "var j = JSON.parse(value);\nreturn (j.siu && j.siu.safe_door !== undefined) ? j.siu.safe_door : -1;", "XFS Safe Door Status", None, "Lower safe / vault door")
+           "var j = JSON.parse(value);\nreturn (j.siu && j.siu.safe_door !== undefined) ? j.siu.safe_door : 255;", "XFS Safe Door Status", None, "Lower safe / vault door")
     yield ("SIU — Supervisor Mode Switch", "atm.xfs.siu.supervisor_mode", 3,
-           "var j = JSON.parse(value);\nreturn (j.siu && j.siu.supervisor_switch !== undefined) ? j.siu.supervisor_switch : 0;", None, None, "0=Normal Run, 1=Supervisor")
+           "var j = JSON.parse(value);\nreturn (j.siu && j.siu.supervisor_switch !== undefined) ? j.siu.supervisor_switch : 255;", None, None, "0=Normal Run, 1=Supervisor")
     yield ("SIU — Tamper Alarm Sensor", "atm.xfs.siu.tamper", 3,
-           "var j = JSON.parse(value);\nreturn (j.siu && j.siu.tamper_sensor !== undefined) ? j.siu.tamper_sensor : 0;", None, None, "0=OK, 1=Tamper Alarm")
+           "var j = JSON.parse(value);\nreturn (j.siu && j.siu.tamper_sensor !== undefined) ? j.siu.tamper_sensor : 255;", None, None, "0=OK, 1=Tamper Alarm")
 
 
 def ensure_triggers(tid, auth):
@@ -189,7 +190,7 @@ def ensure_triggers(tid, auth):
         ("CDM — Reject Cassette Nearly Full on {HOST.NAME}",
          f"last(/{TEMPLATE_NAME}/atm.xfs.cdm.reject_count)>=250", 3),
         ("Card Reader — Hardware Error on {HOST.NAME}",
-         f"last(/{TEMPLATE_NAME}/atm.xfs.idc.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.idc.device_status)<>-1", 4),
+         f"last(/{TEMPLATE_NAME}/atm.xfs.idc.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.idc.device_status)<>255", 4),
         ("Card Reader — Card Jammed on {HOST.NAME}",
          f"last(/{TEMPLATE_NAME}/atm.xfs.idc.media_status)=3", 4),
         ("Receipt Printer — Paper Out on {HOST.NAME}",
@@ -197,7 +198,7 @@ def ensure_triggers(tid, auth):
         ("Receipt Printer — Paper Low on {HOST.NAME}",
          f"last(/{TEMPLATE_NAME}/atm.xfs.ptr.paper_status)=1", 2),
         ("PIN Pad — Hardware Error on {HOST.NAME}",
-         f"last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>-1", 4),
+         f"last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>255", 4),
         ("SIU — Cabinet / Fascia Door Open on {HOST.NAME}",
          f"last(/{TEMPLATE_NAME}/atm.xfs.siu.cabinet_door)=2", 3),
         ("SIU — Supervisor / Maintenance Mode on {HOST.NAME}",
@@ -214,7 +215,10 @@ def ensure_triggers(tid, auth):
                 call('trigger.get', {'templateids': [tid], 'output': ['triggerid', 'description']}, auth)}
 
     for desc, expr, prio in wanted:
-        if desc not in existing:
+        if desc in existing:
+            call('trigger.update', {'triggerid': existing[desc], 'expression': expr,
+                                    'priority': prio, 'status': 0}, auth)
+        else:
             call('trigger.create', {'description': desc, 'expression': expr, 'priority': prio, 'status': 0}, auth)
             print(f'Created trigger: {desc}')
 

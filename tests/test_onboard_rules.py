@@ -56,6 +56,6 @@ def test_required_fields():
 
 
 def test_probe_map_ncr_only():
-    assert PROBE_PORT == {'NCR': 10050}
+    assert PROBE_PORT == {'NCR': 10050, 'GRG': 10050}
     assert set(VENDORS) == {'NCR', 'GRG'}
     assert 'Kirkos' in DISTRICTS

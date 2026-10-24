@@ -61,6 +61,12 @@ def test_grg_snmp_only():
     assert group == 'ATM-GRG'
 
 
+def test_grg_prefers_xfs_when_available():
+    tids, group = sync.select_templates('GRG', 'ncr-tid', 'grg-tid', 'wmi-tid', 'grg-xfs-tid')
+    assert tids == ['grg-xfs-tid']
+    assert group == 'ATM-GRG'
+
+
 def test_unknown_vendor_skips():
     assert sync.select_templates('HYOSUNG', 'n', 'g', 'w') == (None, None)
     assert sync.select_templates('', 'n', 'g', 'w') == (None, None)

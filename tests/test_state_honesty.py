@@ -76,6 +76,13 @@ def test_interface_availability_is_actually_requested():
     assert 'selectInterfaces' in src and 'available' in src
 
 
+def test_xfs_keys_are_fetched_and_normalized():
+    text = STATE_MANAGER.read_text()
+    src = _src('fetch_host_metrics')
+    assert 'XFS_STATE_KEYS' in text, 'GRG XFS items must be part of the state read'
+    assert 'normalize' in src, 'XFS keys must be translated before interpretation'
+
+
 def test_unknown_and_not_provisioned_are_not_rendered_red():
     """The visual half. These two states previously fell into an
     `else -> red` branch, which is how 'we cannot tell' started looking like

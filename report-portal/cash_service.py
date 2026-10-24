@@ -15,6 +15,7 @@ import logging
 from datetime import datetime, timedelta
 
 from cash_forecast import DEFAULT_WINDOW_DAYS, forecast
+from zabbix_modules.xfs_metrics import is_xfs
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ def _cassette_notes(atm_id):
         from blueprints.admin import fetch_zabbix_metrics
         metrics = fetch_zabbix_metrics(atm_id) or {}
         vendor = _atm_vendor(atm_id)
-        count = 4 if vendor == 'NCR' else 3
+        count = 4 if vendor == 'NCR' or is_xfs(metrics) else 3
         out, seen = [], False
         for n in range(1, count + 1):
             raw = metrics.get(f'atm.cash.cassette{n}')

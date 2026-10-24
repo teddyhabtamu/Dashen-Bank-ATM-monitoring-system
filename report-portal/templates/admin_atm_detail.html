@@ -286,7 +286,8 @@ table.txn tbody tr:hover{background:#EEF2FF}
         <div class="card-body">
           {% if metrics_online and (part_rows or device_rows) %}
           <div class="atm-cap" style="margin-bottom:10px">Every live reading, faults first — the detail behind the chips above.</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px">
+            {% if part_rows %}
             <div>
               <div class="atm-cap">Parts ({{ part_rows|length }})</div>
               <div style="max-height:320px;overflow-y:auto">
@@ -298,6 +299,8 @@ table.txn tbody tr:hover{background:#EEF2FF}
               {% endfor %}
               </div>
             </div>
+            {% endif %}
+            {% if device_rows %}
             <div>
               <div class="atm-cap">Devices ({{ device_rows|length }})</div>
               <div style="max-height:320px;overflow-y:auto">
@@ -309,6 +312,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
               {% endfor %}
               </div>
             </div>
+            {% endif %}
           </div>
           {% else %}
           <div class="no-data">Live parts data unavailable. {{ telemetry_note }}</div>

@@ -10,6 +10,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 from zabbix_modules.status_rules import interpret_state
+from zabbix_modules.xfs_metrics import XFS_STATE_KEYS, normalize
 
 DB_HOST = os.environ.get('DB_HOST', 'postgres')
 DB_NAME = os.environ.get('DB_NAME', 'zabbix')
@@ -25,7 +26,7 @@ POLL_INTERVAL = int(os.environ.get('STATE_POLL_INTERVAL', '30'))
 STATE_KEYS = [
     'atm.status', 'atm.cash.cassette1', 'atm.cash.cassette2',
     'atm.cash.jam', 'atm.card.reader', 'atm.net.link',
-]
+] + list(XFS_STATE_KEYS)
 
 
 def get_db():
@@ -122,7 +123,7 @@ def fetch_host_metrics(auth, host):
     deps = zbx_call('item.get', {'output': ['key_', 'lastvalue', 'lastclock'], 'hostids': [hostid],
                                  'search': {'key_': 'atm.part.'}}, auth) or []
     merged.update(_fresh_values(wmi + deps))
-    return merged, avail
+    return normalize(merged), avail
 
 
 def determine_state(m, vendor='NCR', availability=None):

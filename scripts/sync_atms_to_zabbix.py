@@ -26,6 +26,7 @@ TEMPLATE_WMI_PATH = "config/zabbix/template_atm_wmi.xml"
 
 TEMPLATE_NCR_NAME = "Dashen Bank ATM Hardware"
 TEMPLATE_GRG_NAME = "Dashen Bank ATM Hardware - GRG"
+TEMPLATE_GRG_XFS_NAME = "Dashen Bank ATM Hardware - GRG XFS"
 # Must match generate_wmi_template.TEMPLATE_NAME (note: shared "Dashen" typo
 # is deliberate consistency — renaming is post-UAT cleanup, see runbook).
 TEMPLATE_WMI_NAME = "Dashen Bank ATM WMI Parts"
@@ -72,16 +73,19 @@ def resolve_host_key(row):
            (row.get('terminal_id', '') or '').strip()
 
 
-def select_templates(vendor, ncr_tid, grg_tid, wmi_tid):
+def select_templates(vendor, ncr_tid, grg_tid, wmi_tid, grg_xfs_tid=None):
     """(template_ids, vendor_group_name) for a row, or (None, None) to skip.
 
-    NCR hosts take the WMI Parts template alongside SNMP (agent items);
-    GRG is SNMP-only. Unknown vendor or missing vendor template → skip.
+    NCR hosts take the WMI Parts template alongside SNMP (agent items).
+    GRG prefers the XFS template and falls back to SNMP while old hosts are
+    being migrated. Unknown vendor or missing vendor template → skip.
     """
     if vendor == 'NCR' and ncr_tid:
         return ([ncr_tid] + ([wmi_tid] if wmi_tid else []), 'ATM-NCR')
-    if vendor == 'GRG' and grg_tid:
-        return ([grg_tid], 'ATM-GRG')
+    if vendor == 'GRG':
+        grg = grg_xfs_tid or grg_tid
+        if grg:
+            return ([grg], 'ATM-GRG')
     return (None, None)
 
 
@@ -298,12 +302,14 @@ def do_apply(atms, import_templates=False):
     # Step 2: Verify templates exist
     ncr_tid = z.get_template_id(TEMPLATE_NCR_NAME)
     grg_tid = z.get_template_id(TEMPLATE_GRG_NAME)
+    grg_xfs_tid = z.get_template_id(TEMPLATE_GRG_XFS_NAME)
     wmi_tid = z.get_template_id(TEMPLATE_WMI_NAME)
     print(f"  NCR template: {'found (' + ncr_tid + ')' if ncr_tid else 'NOT FOUND'}")
     print(f"  GRG template: {'found (' + grg_tid + ')' if grg_tid else 'NOT FOUND'}")
+    print(f"  GRG XFS template: {'found (' + grg_xfs_tid + ')' if grg_xfs_tid else 'NOT FOUND (run import_grg_xfs_template_api.py)'}")
     print(f"  WMI template: {'found (' + wmi_tid + ')' if wmi_tid else 'NOT FOUND (run import_wmi_template_api.py)'}")
 
-    if not ncr_tid and not grg_tid:
+    if not ncr_tid and not grg_tid and not grg_xfs_tid:
         print("  ERROR: No ATM templates found. Use --import-templates or import manually.")
         return
 
@@ -379,7 +385,7 @@ def do_apply(atms, import_templates=False):
         # Select template and vendor group (pure helper — see tests).
         # NCR hosts also take the WMI Parts template (agent items) — without
         # it bulk-created NCR hosts would silently miss all 41 part items.
-        template_ids, vgroup_name = select_templates(vendor, ncr_tid, grg_tid, wmi_tid)
+        template_ids, vgroup_name = select_templates(vendor, ncr_tid, grg_tid, wmi_tid, grg_xfs_tid)
         if template_ids is None:
             skipped += 1
             continue

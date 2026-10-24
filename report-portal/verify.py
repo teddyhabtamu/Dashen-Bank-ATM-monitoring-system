@@ -43,10 +43,14 @@ EAT = timezone(timedelta(hours=3))  # the system reports everything in EAT
 # how this gate reported a dead ATM as OK on its first UAT run.
 # These key sets mirror zabbix_modules/status_rules.py:
 #   NCR  -> WMI master item (atm.parts), the authoritative hardware feed
-#   GRG  -> the three core SNMP keys interpret_state() itself relies on
+#   GRG  -> XFS CDM status + cassette inventory, with the legacy SNMP keys
+#           accepted while old GRG hosts are still being migrated
 AUTHORITATIVE_KEYS = {
-    'NCR': ['atm.parts'],
-    'GRG': ['atm.status', 'atm.net.link', 'atm.cash.cassette1'],
+    'NCR': [['atm.parts']],
+    'GRG': [
+        ['atm.xfs.cdm.device_status', 'atm.xfs.cdm.cassette.count[0050A]'],
+        ['atm.status', 'atm.net.link', 'atm.cash.cassette1'],
+    ],
 }
 
 
@@ -365,7 +369,8 @@ def verify_atm(atm_id, window_minutes=15, client=None, db_facts=None,
     age_txt = f'{age // 60} min' if age is not None else 'never'
 
     # The decisive check: the vendor's own keys must be arriving.
-    wanted = AUTHORITATIVE_KEYS.get(vendor) or AUTHORITATIVE_KEYS['NCR']
+    groups = AUTHORITATIVE_KEYS.get(vendor) or AUTHORITATIVE_KEYS['NCR']
+    wanted = max(groups, key=lambda group: sum(1 for k in group if z['key_clocks'].get(k)))
     seen = [k for k in wanted if z['key_clocks'].get(k)]
     auth_ok = len(seen) == len(wanted)
     if z['items_internal'] and not z['items_reporting']:
@@ -378,12 +383,15 @@ def verify_atm(atm_id, window_minutes=15, client=None, db_facts=None,
                              f"Vendor telemetry arriving ({', '.join(seen)}), newest {age_auth // 60} min ago."))
     else:
         missing = [k for k in wanted if k not in z['key_clocks']]
+        if vendor == 'NCR':
+            cause = ('NCR: the Zabbix agent on the box is not answering on 10050, '
+                     'or atm-wmi-collector.ps1 is not installed.')
+        elif any(k.startswith('atm.xfs.') for k in missing):
+            cause = 'GRG: no XFS data — check the Zabbix agent and grg-xfs-probe.ps1.'
+        else:
+            cause = 'GRG: no SNMP data — check the UDP/161 firewall and community.'
         checks.append(_check('telemetry', 'fail',
-                             f"Vendor telemetry never arrived: {', '.join(missing)}. "
-                             + ('NCR: the Zabbix agent on the box is not answering on 10050, '
-                                'or atm-wmi-collector.ps1 is not installed.'
-                                if vendor == 'NCR' else
-                                'GRG: no SNMP data — check the UDP/161 firewall and community.')))
+                             f"Vendor telemetry never arrived: {', '.join(missing)}. " + cause))
         blockers.append(f"No {vendor} telemetry ({', '.join(missing)} never collected).")
 
     if total == 0:

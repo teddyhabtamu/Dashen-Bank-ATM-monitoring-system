@@ -18,11 +18,12 @@ logger = logging.getLogger(__name__)
 
 TEMPLATE_NCR_NAME = "Dashen Bank ATM Hardware"
 TEMPLATE_GRG_NAME = "Dashen Bank ATM Hardware - GRG"
+TEMPLATE_GRG_XFS_NAME = "Dashen Bank ATM Hardware - GRG XFS"
 # NCR hardware facts come from WMI through the Zabbix agent, not from SNMP:
 # the NCR SNMP OIDs are unmapped simulator-era roots (see admin.build_hardware).
 # So an NCR host needs this template AND an agent interface, or its parts items
 # sit unsupported forever — proven on the pilot host, which needed the agent
-# row added by hand before Latest data flowed. GRG stays SNMP-only.
+# row added by hand before Latest data flowed. GRG prefers XFS, falling back to SNMP.
 TEMPLATE_WMI_NAME = "Dashen Bank ATM WMI Parts"
 AGENT_PORT = "10050"
 SNMP_PORT = "161"
@@ -83,7 +84,7 @@ class _Client:
 
 def _template_ids(z):
     out = {}
-    for name in (TEMPLATE_NCR_NAME, TEMPLATE_GRG_NAME, TEMPLATE_WMI_NAME):
+    for name in (TEMPLATE_NCR_NAME, TEMPLATE_GRG_XFS_NAME, TEMPLATE_GRG_NAME, TEMPLATE_WMI_NAME):
         res = z.call("template.get", {"output": ["templateid"], "filter": {"name": [name]}})
         out[name] = res[0]["templateid"] if res else None
     return out
@@ -205,9 +206,14 @@ def _snmp_interface(ip, community, version):
 
 def _templates_for(vendor, tids):
     """Template ids an ATM of this vendor must be linked to. NCR carries the
-    WMI Parts template too; GRG is SNMP-only."""
-    names = [TEMPLATE_NCR_NAME] if vendor == "NCR" else \
-            [TEMPLATE_GRG_NAME] if vendor == "GRG" else []
+    WMI Parts template too; GRG prefers XFS and falls back to SNMP."""
+    if vendor == "NCR":
+        names = [TEMPLATE_NCR_NAME]
+    elif vendor == "GRG":
+        names = [TEMPLATE_GRG_XFS_NAME if tids.get(TEMPLATE_GRG_XFS_NAME)
+                 else TEMPLATE_GRG_NAME]
+    else:
+        names = []
     ids = [tids.get(n) for n in names]
     if vendor == "NCR" and tids.get(TEMPLATE_WMI_NAME):
         ids.append(tids.get(TEMPLATE_WMI_NAME))
@@ -370,7 +376,8 @@ def _build_plans(atm_dicts, create_groups=True, max_batch=MAX_BATCH):
                                   for r in rows]
             return summary, plans, z
         tids = _template_ids(z)
-        if not tids.get(TEMPLATE_NCR_NAME) and not tids.get(TEMPLATE_GRG_NAME):
+        if (not tids.get(TEMPLATE_NCR_NAME) and not tids.get(TEMPLATE_GRG_XFS_NAME)
+                and not tids.get(TEMPLATE_GRG_NAME)):
             summary["failed"] = len(rows)
             summary["details"] = [{"atm_id": r.get("atm_id"), "error": "ATM templates not found in Zabbix"}
                                   for r in rows]

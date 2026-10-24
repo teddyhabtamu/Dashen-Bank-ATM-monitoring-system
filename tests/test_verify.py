@@ -71,6 +71,11 @@ def grg_core(age_seconds=60, **kw):
             for k in ('atm.status', 'atm.net.link', 'atm.cash.cassette1')]
 
 
+def grg_xfs(age_seconds=60, **kw):
+    return [item(int(time.time()) - age_seconds, key=k, **kw)
+            for k in ('atm.xfs.cdm.device_status', 'atm.xfs.cdm.cassette.count[0050A]')]
+
+
 def internal_item(hostid=None):
     return item(int(time.time()), key='zabbix[host,agent,available]', hostid=hostid, type='0')
 
@@ -160,11 +165,19 @@ def test_ncr_without_agent_interface_is_blocked():
     assert any('agent interface' in b for b in r['blockers'])
 
 
-def test_grg_snmp_only_is_fine():
+def test_grg_legacy_snmp_is_still_accepted():
     snmp_only = [{'type': '2', 'port': '161', 'ip': '10.0.0.1'}]
     z = FakeZabbix([host(interfaces=snmp_only)], items=grg_core(60))
     r = verify.verify_atm('ATM-0001', client=z, db_facts=db(vendor='GRG'))
     assert r['verdict'] == 'reporting' and r['ok'] is True
+
+
+def test_grg_xfs_is_reporting():
+    snmp_only = [{'type': '2', 'port': '161', 'ip': '10.0.0.1'}]
+    z = FakeZabbix([host(interfaces=snmp_only)], items=grg_xfs(60))
+    r = verify.verify_atm('ATM-0001', client=z, db_facts=db(vendor='GRG'))
+    assert r['verdict'] == 'reporting' and r['ok'] is True
+    assert any('atm.xfs.cdm' in c['detail'] for c in r['checks'] if c['name'] == 'telemetry')
 
 
 def test_a_userparameter_master_item_is_not_mistaken_for_internal():
@@ -217,7 +230,7 @@ def test_ncr_grg_silence_names_the_right_cause():
     ncr_detail = [c['detail'] for c in ncr['checks'] if c['name'] == 'telemetry'][0]
     grg_detail = [c['detail'] for c in grg['checks'] if c['name'] == 'telemetry'][0]
     assert '10050' in ncr_detail and 'atm-wmi-collector' in ncr_detail
-    assert 'UDP/161' in grg_detail
+    assert 'XFS' in grg_detail
 
 
 # ── evidence gaps must not be mistaken for good news ─────────────────────
