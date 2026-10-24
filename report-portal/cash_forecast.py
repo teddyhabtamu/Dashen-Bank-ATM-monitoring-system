@@ -139,17 +139,30 @@ def forecast(cassettes, withdrawals, now, loads=None, window_days=DEFAULT_WINDOW
     cassettes = list(cassettes or [])
     notes_by_cassette = {int(c.get('cassette')): int(c.get('notes') or 0)
                          for c in cassettes}
+    value_by_cassette = {int(c.get('cassette')): c.get('value')
+                         for c in cassettes}
+    denom_by_cassette = {int(c.get('cassette')): int(c.get('denomination') or 0)
+                         for c in cassettes}
+    has_value = bool(cassettes) and all(v is not None for v in value_by_cassette.values())
     total_notes = sum(notes_by_cassette.values())
+    total_value = (sum(int(v or 0) for v in value_by_cassette.values())
+                   if has_value else None)
 
     rate = burn_rate(withdrawals, now, window_days)
 
     base = {'per_day': None, 'confidence': rate['confidence'], 'samples': rate['samples'],
-            'total_notes': total_notes, 'runway_days': None, 'depletes_at': None,
+            'total_notes': total_notes, 'total_value': total_value,
+            'value_unit': 'ETB' if has_value else 'notes',
+            'runway_days': None, 'depletes_at': None,
             'depletes_in': None, 'per_cassette': [], 'actions': []}
 
     source = 'measured cassette levels'
     if total_notes <= 0:
         # No telemetry: fall back to the ledger, clearly labelled.
+        has_value = False
+        total_value = None
+        base['total_value'] = None
+        base['value_unit'] = 'notes'
         book = book_cash(loads, withdrawals, now, window_days)
         if book['notes'] is None:
             return dict(base, status='unknown', source='none',
@@ -184,21 +197,38 @@ def forecast(cassettes, withdrawals, now, loads=None, window_days=DEFAULT_WINDOW
     # already "loads minus withdrawals" - adding the loads again counted them
     # twice and produced "0 notes" next to "2.5 days runway".
     added = 0
+    added_value = 0
     if not level_detail:
-        added = sum(int(l.get('notes_added') or 0) for l in (loads or [])
-                    if _parse(l.get('recorded_at')) and
-                    _parse(l.get('recorded_at')) >= now - timedelta(days=window_days))
+        for l in (loads or []):
+            when = _parse(l.get('recorded_at'))
+            if not when or when < now - timedelta(days=window_days):
+                continue
+            notes_added = int(l.get('notes_added') or 0)
+            added += notes_added
+            denom = denom_by_cassette.get(int(l.get('cassette') or 0), 0)
+            if denom:
+                added_value += notes_added * denom
 
-    effective = total_notes + added
+    if has_value:
+        effective = (total_value or 0) + added_value
+        unit = 'ETB'
+    else:
+        effective = total_notes + added
+        unit = 'notes'
     runway = effective / rate['per_day']
     depletes_at = now + timedelta(days=runway)
 
     per_cassette = []
     for cassette, notes in sorted(notes_by_cassette.items()):
         # (empty when the numbers came from the ledger, not from cassettes)
-        share = (notes / effective) if effective else 0
-        c_runway = runway * share if share else 0.0
+        if has_value:
+            c_value = int(value_by_cassette.get(cassette) or 0)
+            c_runway = c_value / rate['per_day']
+        else:
+            share = (notes / effective) if effective else 0
+            c_runway = runway * share if share else 0.0
         per_cassette.append({'cassette': cassette, 'notes': notes,
+                             'value': value_by_cassette.get(cassette),
                              'runway_days': round(c_runway, 1),
                              'depletes_at': (now + timedelta(days=c_runway)).isoformat()
                              if c_runway else None})
@@ -210,7 +240,9 @@ def forecast(cassettes, withdrawals, now, loads=None, window_days=DEFAULT_WINDOW
         actions.append(f'Empty in about {runway:.0f} day(s) — plan the CIT visit today.')
     else:
         actions.append(f'About {runway:.0f} days of cash left at the current rate.')
-    if added:
+    if added_value:
+        actions.append(f'Includes {added_value:,} ETB loaded in the last {window_days} days.')
+    elif added:
         actions.append(f'Includes {added:,} notes loaded in the last {window_days} days.')
     if not level_detail and not total_notes:
         actions.append('The ledger says this ATM is already empty — check it on '
@@ -227,7 +259,7 @@ def forecast(cassettes, withdrawals, now, loads=None, window_days=DEFAULT_WINDOW
     return dict(base, status='ok', reason='', source=source, per_day=rate['per_day'],
                 runway_days=round(runway, 1), depletes_at=depletes_at.isoformat(),
                 depletes_in=_human(runway), per_cassette=per_cassette, actions=actions,
-                total_notes=total_notes)
+                total_notes=total_notes, total_value=total_value, value_unit=unit)
 
 
 def _human(days):

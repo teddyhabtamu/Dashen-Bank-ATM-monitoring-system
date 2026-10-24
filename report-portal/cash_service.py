@@ -11,11 +11,12 @@ Sources:
 If a source cannot be read the forecast says so. A cash team acting on a
 number that was half-derived is worse off than one told "cannot tell".
 """
+import json
 import logging
 from datetime import datetime, timedelta
 
 from cash_forecast import DEFAULT_WINDOW_DAYS, forecast
-from zabbix_modules.xfs_metrics import is_xfs
+from zabbix_modules.xfs_metrics import DISPENSE_UNITS, is_xfs
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +38,30 @@ def _atm_vendor(atm_id):
         return 'NCR'
 
 
+def _xfs_denominations(metrics):
+    """Map cassette number -> denomination from the GRG XFS master JSON."""
+    raw = metrics.get('atm.xfs.cdm')
+    if not raw:
+        return {}
+    try:
+        payload = json.loads(raw) if isinstance(raw, str) else raw
+        units = ((payload.get('cdm') or {}).get('cassettes') or {})
+    except (TypeError, ValueError):
+        return {}
+    out = {}
+    for n, unit_id in enumerate(DISPENSE_UNITS, 1):
+        unit = units.get(unit_id) or {}
+        try:
+            denom = int(unit.get('denomination') or 0)
+        except (TypeError, ValueError):
+            denom = 0
+        if denom:
+            out[n] = denom
+    return out
+
+
 def _cassette_notes(atm_id):
-    """Notes per cassette, from the same Zabbix items the vault graphic uses.
+    """Notes and cash value per cassette, from the vault's Zabbix items.
 
     Returns (levels, reason). An ATM with levels that were never collected gets
     an empty list plus a reason - the forecast then says "unknown" instead of
@@ -49,6 +72,7 @@ def _cassette_notes(atm_id):
         metrics = fetch_zabbix_metrics(atm_id) or {}
         vendor = _atm_vendor(atm_id)
         count = 4 if vendor == 'NCR' or is_xfs(metrics) else 3
+        denoms = _xfs_denominations(metrics) if is_xfs(metrics) else {}
         out, seen = [], False
         for n in range(1, count + 1):
             raw = metrics.get(f'atm.cash.cassette{n}')
@@ -56,9 +80,13 @@ def _cassette_notes(atm_id):
                 continue
             seen = True
             try:
-                out.append({'cassette': n, 'notes': int(float(raw))})
+                notes = int(float(raw))
             except (TypeError, ValueError):
                 continue
+            denom = denoms.get(n)
+            out.append({'cassette': n, 'notes': notes,
+                        'denomination': denom,
+                        'value': notes * denom if denom else None})
         if not seen:
             return [], 'No cassette levels are being collected for this ATM.'
         if not out:

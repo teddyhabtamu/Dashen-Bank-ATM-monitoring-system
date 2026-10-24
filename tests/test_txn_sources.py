@@ -495,11 +495,13 @@ def test_status_donut_joins_the_fleet():
     atm_locations, so every deleted ATM left a row behind that still counted.
     """
     routes = (REPO / 'report-portal' / 'routes.py').read_text()
-    block = routes[routes.index('STATUS = """'):routes.index('VENDOR = """')]
-    assert 'JOIN atm_locations' in block, (
-        'the status chart must join the fleet, or deleted ATMs keep being counted')
+    block = routes[routes.index('STATUS_ATMS = """'):routes.index('VENDOR = """')]
+    assert 'FROM atm_locations l' in block, (
+        'the status chart must read from the fleet, or deleted ATMs keep being counted')
     assert 'atm_current_state s' in block
     assert "COALESCE(l.status, 'active')" in block, 'inactive ATMs are not fleet'
+    assert 'batch_fetch_live_states' in routes, (
+        'the donut must overlay live state, like ATM Registration does')
 
 
 def test_machine_counting_charts_join_the_fleet():
@@ -511,9 +513,12 @@ def test_machine_counting_charts_join_the_fleet():
     deleted still happened. Filtering those by the current roster would silently
     restate history.
     """
-    status = chart_sql('STATUS')
+    status = chart_sql('STATUS_ATMS')
     assert 'atm_locations' in status, (
         'the status distribution must join atm_locations')
+    routes = (REPO / 'report-portal' / 'routes.py').read_text()
+    assert 'batch_fetch_live_states' in routes, (
+        'the status distribution must overlay live state')
     for name in ('TXN_VOL', 'CASH'):
         assert 'atm_current_state' not in chart_sql(name)
 
@@ -523,7 +528,7 @@ def test_fleet_scoped_charts_filter_to_active_atms():
     live - the same class of mistake as counting deleted ones."""
     # Only the charts that already join the fleet need filtering; SR measures
     # success rate over time and does not count machines.
-    for name in ('STATUS', 'VENDOR'):
+    for name in ('STATUS_ATMS', 'VENDOR'):
         sql = chart_sql(name)
         assert 'atm_locations' in sql, '%s should be fleet-scoped' % name
         assert "COALESCE(l.status, 'active')" in sql or "status = 'active'" in sql, \

@@ -4,6 +4,7 @@ The failure this module must never have: telling a cash team an ATM will run
 dry on a date invented from three transactions, or from none at all. Every
 test below is one of those two mistakes.
 """
+import json
 import os
 import sys
 from datetime import datetime, timedelta
@@ -113,6 +114,39 @@ def test_an_old_load_outside_the_window_is_ignored():
     assert old['runway_days'] < 10
 
 
+def test_cash_service_reads_xfs_denominations_from_the_master_item():
+    import cash_service
+    payload = {'cdm': {'cassettes': {
+        '0050A': {'denomination': 50}, '0100A': {'denomination': 100},
+        '0100B': {'denomination': 100}, '0200A': {'denomination': 200}}}}
+    assert cash_service._xfs_denominations({'atm.xfs.cdm': json.dumps(payload)}) == {
+        1: 50, 2: 100, 3: 100, 4: 200}
+
+
+def test_cash_value_uses_denominations_for_runway():
+    hist = steady_history(n=200, amount=20000, span_days=10)  # 400,000 ETB/day
+    out = cf.forecast([{'cassette': 1, 'notes': 10000, 'denomination': 100,
+                        'value': 1000000}], hist, NOW)
+    assert out['total_notes'] == 10000
+    assert out['total_value'] == 1000000
+    assert out['value_unit'] == 'ETB'
+    assert out['runway_days'] == 2.5
+    assert out['per_cassette'][0]['value'] == 1000000
+
+
+def test_cash_value_loads_are_converted_with_the_cassette_denomination():
+    hist = steady_history(n=200, amount=20000, span_days=10)  # 400,000 ETB/day
+    out = cf.forecast(
+        [{'cassette': 1, 'notes': 1000, 'denomination': 100, 'value': 100000}],
+        hist, NOW,
+        loads=[{'cassette': 1,
+                'recorded_at': (NOW - timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S'),
+                'notes_added': 5000}])
+    assert out['total_value'] == 100000
+    assert out['runway_days'] == 1.5
+    assert any('500,000 ETB loaded' in a for a in out['actions'])
+
+
 def test_per_cassette_split_proportions_and_sums_to_the_whole():
     out = cf.forecast([{'cassette': 1, 'notes': 300000}, {'cassette': 2, 'notes': 100000}],
                       steady_history(), NOW)
@@ -120,6 +154,20 @@ def test_per_cassette_split_proportions_and_sums_to_the_whole():
     assert rows[1]['runway_days'] > rows[2]['runway_days'], 'more notes, more runway'
     assert abs(sum(r['runway_days'] for r in out['per_cassette'])
                - out['runway_days']) < 1.0
+
+
+def test_empty_measured_cassettes_fall_back_to_the_ledger_not_zero_value():
+    out = cf.forecast(
+        [{'cassette': 1, 'notes': 0, 'denomination': 100, 'value': 0}],
+        steady_history(), NOW,
+        loads=[{'cassette': 1,
+                'recorded_at': (NOW - timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S'),
+                'notes_added': 5000000}])
+    assert out['status'] == 'ok'
+    assert out['source'].startswith('book estimate')
+    assert out['value_unit'] == 'notes'
+    assert out['total_value'] is None
+    assert out['total_notes'] == 1000000
 
 
 def test_an_empty_cassette_gets_no_runway_rather_than_zero_days():

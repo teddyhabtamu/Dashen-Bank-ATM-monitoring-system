@@ -222,18 +222,16 @@ def api_charts():
             GROUP BY DATE(recorded_at AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa')
             ORDER BY day
         """
-        # Joined to atm_locations on purpose. This counted rows in
-        # atm_current_state directly, so an ATM deleted from atm_locations kept
-        # its state row (UAT has no foreign key on that table) and the dashboard
-        # reported 4 unreachable while the ATM list showed 3 machines. A fleet
-        # chart must count the fleet, so it joins the fleet.
-        STATUS = """
-            SELECT COALESCE(s.state, 'UNKNOWN') as state, COUNT(*) as cnt
-            FROM atm_current_state s
-            JOIN atm_locations l ON l.atm_id = s.atm_id
+        # The chart must agree with the ATM list, which overlays live Zabbix
+        # state on the persisted state. Reading only atm_current_state made a
+        # GRG that was live HARDWARE_FAULT appear as stale UNREACHABLE in the
+        # doughnut. Fetch the fleet, then overlay live state below.
+        STATUS_ATMS = """
+            SELECT l.atm_id, COALESCE(l.vendor, 'NCR') as vendor,
+                   COALESCE(s.state, 'UNKNOWN') as state
+            FROM atm_locations l
+            LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id
             WHERE LOWER(COALESCE(l.status, 'active')) = 'active'
-            GROUP BY s.state
-            ORDER BY cnt DESC
         """
         VENDOR = """
             SELECT COALESCE(l.vendor, 'Unknown') as vendor,
@@ -257,15 +255,32 @@ def api_charts():
         with ThreadPoolExecutor(max_workers=5) as ex:
             f_txn = ex.submit(_fetch_query, TXN_VOL)
             f_sr = ex.submit(_fetch_query, SR)
-            f_status = ex.submit(_fetch_query, STATUS)
+            f_status = ex.submit(_fetch_query, STATUS_ATMS)
             f_vendor = ex.submit(_fetch_query, VENDOR)
             f_cash = ex.submit(_fetch_query, CASH)
 
         txn_rows = f_txn.result()
         sr_rows = f_sr.result()
-        status_rows = f_status.result()
+        status_atms = f_status.result()
         vendor_rows = f_vendor.result()
         cash_rows = f_cash.result()
+
+        def _status_payload():
+            live = {}
+            try:
+                from blueprints.admin import batch_fetch_live_states
+                live = batch_fetch_live_states(
+                    [{'atm_id': r[0], 'vendor': r[1]} for r in status_atms])
+            except Exception as e:
+                print(f"[CHARTS] live status overlay failed: {e!r}")
+            counts = {}
+            for atm_id, _vendor, stored in status_atms:
+                hit = live.get(atm_id)
+                state = hit[0] if hit else (stored or 'UNKNOWN')
+                counts[state] = counts.get(state, 0) + 1
+            rows = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+            return {'labels': [f'{s} ({n})' for s, n in rows],
+                    'data': [n for _s, n in rows]}
 
         # Shared across viewers (25s TTL under the 30s chart poll).
         return jsonify(livecache.get_or_compute('api_charts', 25, lambda: {
@@ -277,10 +292,7 @@ def api_charts():
                 'labels': [str(r[0]) for r in sr_rows],
                 'data': [float(r[1]) for r in sr_rows],
             },
-            'atm_status': {
-                'labels': [f'{r[0]} ({int(r[1])})' for r in status_rows],
-                'data': [int(r[1]) for r in status_rows],
-            },
+            'atm_status': _status_payload(),
             'vendor_comparison': {
                 'labels': [str(r[0]) for r in vendor_rows],
                 'data': [float(r[1]) for r in vendor_rows],
