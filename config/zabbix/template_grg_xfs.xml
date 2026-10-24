@@ -12,7 +12,7 @@
             <uuid>66fdc5cc-f4bb-5bc6-a803-3e17b9be8bbd</uuid>
             <template>Dashen Bank ATM Hardware - GRG XFS</template>
             <name>Dashen Bank ATM Hardware - GRG XFS</name>
-            <description>Dashen Bank GRG ATM hardware monitoring via 32-bit CEN/XFS 3.0 API. Collects Cash Dispenser (CDM) operational status, safe door status, and per-cassette live currency counts and health.</description>
+            <description>Dashen Bank GRG ATM hardware monitoring via 32-bit CEN/XFS 3.0 API. Collects Cash Dispenser (CDM) status and cash inventory plus Card Reader, Printer, PIN Pad and SIU sensor status through isolated XFS calls.</description>
             <groups>
                 <group>
                     <name>Templates</name>
@@ -21,7 +21,7 @@
             <items>
                 <item>
                     <uuid>7b8bf04d-a34b-5d3c-bf14-b3a4c724ed63</uuid>
-                    <name>GRG CDM — full XFS status &amp; cassette inventory</name>
+                    <name>GRG XFS — full status &amp; cassette inventory</name>
                     <type>ZABBIX_AGENT</type>
                     <key>atm.xfs.cdm</key>
                     <delay>1m</delay>
@@ -699,7 +699,7 @@ return (j.idc &amp;&amp; j.idc.cards !== undefined) ? j.idc.cards : 0;</params>
                 </item>
                 <item>
                     <uuid>d4a9870a-b5ba-58bc-9b46-1ddb1b7d4b65</uuid>
-                    <name>Receipt Printer — Device Status</name>
+                    <name>Printer — Device Status</name>
                     <type>DEPENDENT</type>
                     <key>atm.xfs.ptr.device_status</key>
                     <delay>0</delay>
@@ -723,7 +723,7 @@ return (j.ptr &amp;&amp; j.ptr.device !== undefined) ? j.ptr.device : 255;</para
                 </item>
                 <item>
                     <uuid>8f45c218-d884-52ca-9047-a3e33a44ea0e</uuid>
-                    <name>Receipt Printer — Paper Status</name>
+                    <name>Printer — Paper Status</name>
                     <type>DEPENDENT</type>
                     <key>atm.xfs.ptr.paper_status</key>
                     <delay>0</delay>
@@ -946,18 +946,25 @@ return (j.siu &amp;&amp; j.siu.tamper_sensor !== undefined) ? j.siu.tamper_senso
                     <description>A customer card is jammed inside the card reader.</description>
                 </trigger>
                 <trigger>
-                    <uuid>e73afc49-080c-5572-8e1e-650ad9ffdd47</uuid>
-                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.ptr.paper_status)=2</expression>
-                    <name>Receipt Printer — Paper Out on {HOST.NAME}</name>
-                    <priority>AVERAGE</priority>
-                    <description>Receipt printer is out of paper. Receipts cannot be printed.</description>
+                    <uuid>a461a58f-5cda-5abb-9fbd-1646f1cdecc1</uuid>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.ptr.device_status)&lt;&gt;0 and last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.ptr.device_status)&lt;&gt;255</expression>
+                    <name>Printer — Hardware Error on {HOST.NAME}</name>
+                    <priority>HIGH</priority>
+                    <description>The XFS printer is reporting an offline or hardware error state.</description>
                 </trigger>
                 <trigger>
-                    <uuid>b10b1a2f-096c-5403-a923-fdab9d6cff4b</uuid>
+                    <uuid>027d7268-15f7-5fb8-89f7-5e938e6f272f</uuid>
+                    <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.ptr.paper_status)=2</expression>
+                    <name>Printer — Paper Out on {HOST.NAME}</name>
+                    <priority>AVERAGE</priority>
+                    <description>Printer is out of paper. Receipts cannot be printed.</description>
+                </trigger>
+                <trigger>
+                    <uuid>bb216f48-92dd-5ef3-a4ef-d5fd00217b62</uuid>
                     <expression>last(/Dashen Bank ATM Hardware - GRG XFS/atm.xfs.ptr.paper_status)=1</expression>
-                    <name>Receipt Printer — Paper Low on {HOST.NAME}</name>
+                    <name>Printer — Paper Low on {HOST.NAME}</name>
                     <priority>WARNING</priority>
-                    <description>Receipt printer paper roll is low.</description>
+                    <description>Printer paper roll is low.</description>
                 </trigger>
                 <trigger>
                     <uuid>c61e03a8-ffb0-59ea-af4b-4410c86b5ca7</uuid>

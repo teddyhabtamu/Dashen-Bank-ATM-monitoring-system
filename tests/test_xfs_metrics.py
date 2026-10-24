@@ -102,6 +102,15 @@ def test_offline_or_error_cdm_is_out_of_service():
     assert interpret_state('GRG', live_xfs(**{'atm.xfs.cdm.device_status': '4'})) == 'OUT_OF_SERVICE'
 
 
+def test_siu_supervisor_switch_sets_supervisor_state():
+    assert interpret_state('GRG', live_xfs(**{'atm.xfs.siu.supervisor_mode': '1'})) == 'IN_SUPERVISOR'
+
+
+def test_printer_or_pin_error_is_hardware_fault():
+    assert interpret_state('GRG', live_xfs(**{'atm.xfs.ptr.device_status': '4'})) == 'HARDWARE_FAULT'
+    assert interpret_state('GRG', live_xfs(**{'atm.xfs.pin.device_status': '4'})) == 'HARDWARE_FAULT'
+
+
 def test_card_jam_and_paper_out_are_visible_when_present():
     m = live_xfs(**{
         'atm.xfs.idc.device_status': '0',

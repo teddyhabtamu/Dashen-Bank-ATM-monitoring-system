@@ -7,9 +7,14 @@
   - lists logical services from HKEY_USERS\.DEFAULT\XFS\LOGICAL_SERVICES
   - negotiates WFSStartUp with the manager
   - opens a CDM service and prints status + cash units
+  - opens CardReader, CheckPrinter, Encryptor and SIU in isolated child
+    processes so one bad service provider cannot take down the collector
   No writes, no dispense, no reset.
 #>
-param([switch]$Json)
+param(
+  [switch]$Json,
+  [ValidateSet('IDC','PTR','PIN','SIU')] [string]$Class
+)
 
 $ErrorActionPreference = 'SilentlyContinue'
 
@@ -17,6 +22,7 @@ if ([Environment]::Is64BitProcess) {
   $ps32 = Join-Path $env:WINDIR 'SysWOW64\WindowsPowerShell\v1.0\powershell.exe'
   $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
   if ($Json) { $argList += '-Json' }
+  if ($Class) { $argList += @('-Class', $Class) }
   & $ps32 @argList
   exit $LASTEXITCODE
 }
@@ -115,6 +121,12 @@ public static class XfsNative
     [DllImport("msxfs.dll", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
     public static extern int WFSStartUp(uint dwVersionsRequired, ref XfsVersion lpWFSVersion);
 
+    [DllImport("msxfs.dll", CallingConvention = CallingConvention.StdCall)]
+    public static extern int WFSCreateAppHandle(out IntPtr lphApp);
+
+    [DllImport("msxfs.dll", CallingConvention = CallingConvention.StdCall)]
+    public static extern int WFSDestroyAppHandle(IntPtr hApp);
+
     [DllImport("msxfs.dll", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
     public static extern int WFSOpen(string lpszLogicalName, IntPtr hApp, string lpszAppID,
         uint dwTraceLevel, uint dwTimeOut, uint dwSrvcVersionsRequired,
@@ -170,6 +182,53 @@ function New-XfsVersion {
   return $v
 }
 
+function Get-PeripheralService([string]$class) {
+  $exact = @{ IDC = 'CardReader'; PTR = 'CheckPrinter'; PIN = 'Encryptor'; SIU = 'SIU' }
+  $name = $exact[$class]
+  $svc = @($services | Where-Object { $_.Name -eq $name } | Select-Object -First 1)
+  if ($svc.Count -gt 0) { return $svc[0] }
+  if ($class -eq 'PTR') { return $null }
+  $svc = @($services | Where-Object {
+    $_.Class -eq $class -and $_.Provider -and $_.Provider -ne 'NODEVICE'
+  } | Sort-Object Name | Select-Object -First 1)
+  if ($svc.Count -gt 0) { return $svc[0] }
+  return $null
+}
+
+function Convert-SiuDoor([int]$value) {
+  switch ($value) {
+    1 { return 2 }
+    2 { return 3 }
+    0 { return 1 }
+    default { return 5 }
+  }
+}
+
+function Convert-SiuOperator([int]$value) {
+  if ($value -eq 1) { return 0 }
+  if ($value -eq 2) { return 1 }
+  return 255
+}
+
+function Convert-SiuTamper([int]$value) {
+  if ($value -eq 2) { return 1 }
+  if ($value -eq 1) { return 0 }
+  return 255
+}
+
+function Invoke-ChildProbe([string]$class) {
+  $ps = Join-Path $env:WINDIR 'SysWOW64\WindowsPowerShell\v1.0\powershell.exe'
+  $childArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath,
+                 '-Class', $class, '-Json')
+  $childOut = @(& $ps @childArgs 2>$null)
+  if ($LASTEXITCODE -ne 0 -or $childOut.Count -eq 0) { return $null }
+  try {
+    return (($childOut -join "`n") | ConvertFrom-Json)
+  } catch {
+    return $null
+  }
+}
+
 $services = @(Get-LogicalServices | Sort-Object Class, Name)
 $result = New-Object PSObject -Property @{
   ts = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss')
@@ -177,6 +236,10 @@ $result = New-Object PSObject -Property @{
   services = $services
   startup = $null
   cdm = $null
+  idc = $null
+  ptr = $null
+  pin = $null
+  siu = $null
 }
 
 $startupCandidates = @(3, 0x00030000, 0x00030203, 0x00030003, 0x00010001)
@@ -205,6 +268,86 @@ foreach ($v in $startupCandidates) {
 }
 
 if ($null -ne $startupVersion) {
+  [IntPtr]$hApp = [IntPtr]::Zero
+  $appHr = -1
+  try { $appHr = [XfsNative]::WFSCreateAppHandle([ref]$hApp) } catch {}
+  if ($appHr -ne 0) { $hApp = [IntPtr]::Zero }
+
+  if ($Class) {
+    $svc = Get-PeripheralService $Class
+    $payload = @{
+      class = $Class
+      service = if ($svc) { $svc.Name } else { '' }
+      open_hresult = -1
+      status_hresult = -1
+      error = if ($svc) { '' } else { 'service not found' }
+    }
+    if ($svc) {
+      $svcVer = New-XfsVersion
+      $spiVer = New-XfsVersion
+      [uint16]$hService = 0
+      $openHr = [XfsNative]::WFSOpen($svc.Name, $hApp, 'ZabbixATM', 0, 1500,
+        [uint32]$startupVersion, [ref]$svcVer, [ref]$spiVer, [ref]$hService)
+      $payload.open_hresult = $openHr
+      if ($openHr -eq 0) {
+        $category = @{ IDC = 201; PTR = 101; PIN = 401; SIU = 801 }[$Class]
+        $resPtr = [IntPtr]::Zero
+        $statusHr = [XfsNative]::WFSGetInfo($hService, [uint32]$category, [IntPtr]::Zero, 1500, [ref]$resPtr)
+        $payload.status_hresult = $statusHr
+        if ($statusHr -eq 0 -and $resPtr -ne [IntPtr]::Zero) {
+          try {
+            $res = [Runtime.InteropServices.Marshal]::PtrToStructure($resPtr, [type][XfsResult])
+            if ($res.hResult -eq 0 -and $res.lpBuffer -ne [IntPtr]::Zero) {
+              $buf = $res.lpBuffer
+              if ($Class -eq 'IDC') {
+                $payload.device = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 0)
+                $payload.media = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 2)
+                $payload.retain_bin = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 4)
+                $payload.security = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 6)
+                $payload.cards = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 8)
+                $payload.chip_power = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 10)
+              } elseif ($Class -eq 'PTR') {
+                $payload.device = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 0)
+                $payload.media = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 2)
+                $payload.paper = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 4)
+                $payload.paper_levels = @()
+                for ($i = 0; $i -lt 16; $i++) {
+                  $payload.paper_levels += [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 4 + ($i * 2))
+                }
+                $payload.toner = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 36)
+                $payload.ink = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 38)
+                $payload.lamp = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 40)
+              } elseif ($Class -eq 'PIN') {
+                $payload.device = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 0)
+                $payload.enc_stat = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 2)
+              } elseif ($Class -eq 'SIU') {
+                $payload.device = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 0)
+                $payload.operator_switch_raw = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 2)
+                $payload.tamper_sensor_raw = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 8)
+                $payload.cabinet_door_raw = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 66)
+                $payload.safe_door_raw = [int][Runtime.InteropServices.Marshal]::ReadInt16($buf, 68)
+                $payload.supervisor_switch = Convert-SiuOperator $payload.operator_switch_raw
+                $payload.tamper_sensor = Convert-SiuTamper $payload.tamper_sensor_raw
+                $payload.cabinet_door = Convert-SiuDoor $payload.cabinet_door_raw
+                $payload.safe_door = Convert-SiuDoor $payload.safe_door_raw
+              }
+            } else {
+              $payload.error = "WFSGetInfo hResult=$($res.hResult)"
+            }
+          } catch {
+            $payload.error = 'status parse failed'
+          }
+          [void][XfsNative]::WFSFreeResult($resPtr)
+        }
+        [void][XfsNative]::WFSClose($hService)
+      }
+    }
+    try { [void][XfsNative]::WFSDestroyAppHandle($hApp) } catch {}
+    [void][XfsNative]::WFSCleanUp()
+    [Console]::WriteLine((ConvertTo-Json -InputObject $payload -Depth 5 -Compress))
+    exit 0
+  }
+
   # Query CDM (Cash Dispenser)
   try {
     $cdmServices = @($services | Where-Object { $_.Class -eq 'CDM' } | Sort-Object Name)
@@ -212,7 +355,7 @@ if ($null -ne $startupVersion) {
       $svcVer = New-XfsVersion
       $spiVer = New-XfsVersion
       [uint16]$hService = 0
-      $openHr = [XfsNative]::WFSOpen($s.Name, [IntPtr]::Zero, 'ZabbixATM', 0, 1500,
+      $openHr = [XfsNative]::WFSOpen($s.Name, $hApp, 'ZabbixATM', 0, 1500,
         [uint32]$startupVersion, [ref]$svcVer, [ref]$spiVer, [ref]$hService)
       if ($openHr -ne 0) {
         $result.cdm = New-Object PSObject -Property @{
@@ -296,10 +439,15 @@ if ($null -ne $startupVersion) {
     }
   } catch {}
 
+  try { [void][XfsNative]::WFSDestroyAppHandle($hApp) } catch {}
   [void][XfsNative]::WFSCleanUp()
 }
 
 if ($Json) {
+  $result.idc = Invoke-ChildProbe 'IDC'
+  $result.ptr = Invoke-ChildProbe 'PTR'
+  $result.pin = Invoke-ChildProbe 'PIN'
+  $result.siu = Invoke-ChildProbe 'SIU'
   $cassettes = @{}
   $totalAmount = 0
   $totalNotes = 0

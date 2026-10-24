@@ -67,8 +67,8 @@ def build_template():
     _el(t, "name", TEMPLATE_NAME)
     _el(t, "description",
         "Dashen Bank GRG ATM hardware monitoring via 32-bit CEN/XFS 3.0 API. "
-        "Collects Cash Dispenser (CDM) operational status, safe door status, "
-        "and per-cassette live currency counts and health.")
+        "Collects Cash Dispenser (CDM) status and cash inventory plus Card Reader, "
+        "Printer, PIN Pad and SIU sensor status through isolated XFS calls.")
 
     groups = _el(t, "groups")
     g = _el(groups, "group")
@@ -80,7 +80,7 @@ def build_template():
     master_key = "atm.xfs.cdm"
     m = _el(items, "item")
     _el(m, "uuid", make_uuid(f"item:{master_key}"))
-    _el(m, "name", "GRG CDM — full XFS status & cassette inventory")
+    _el(m, "name", "GRG XFS — full status & cassette inventory")
     _el(m, "type", "ZABBIX_AGENT")
     _el(m, "key", master_key)
     _el(m, "delay", "1m")
@@ -191,10 +191,10 @@ def build_template():
             desc="Captured / retained card count")
 
     # 5. Receipt Printer (PTR)
-    add_dep("Receipt Printer — Device Status", "atm.xfs.ptr.device_status",
+    add_dep("Printer — Device Status", "atm.xfs.ptr.device_status",
             "(j.ptr && j.ptr.device !== undefined) ? j.ptr.device : 255",
             valuemap="XFS Device Status", desc="PTR fwDevice: 0=Online, 1=Offline, 4=HwError")
-    add_dep("Receipt Printer — Paper Status", "atm.xfs.ptr.paper_status",
+    add_dep("Printer — Paper Status", "atm.xfs.ptr.paper_status",
             "(j.ptr && j.ptr.paper !== undefined) ? j.ptr.paper : 255",
             valuemap="XFS PTR Paper Status", desc="Paper full / low / out")
 
@@ -267,13 +267,17 @@ def build_template():
              f"last(/{TEMPLATE_NAME}/atm.xfs.idc.media_status)=3",
              "HIGH", "A customer card is jammed inside the card reader.")
 
-    add_trig("Receipt Printer — Paper Out on {HOST.NAME}",
-             f"last(/{TEMPLATE_NAME}/atm.xfs.ptr.paper_status)=2",
-             "AVERAGE", "Receipt printer is out of paper. Receipts cannot be printed.")
+    add_trig("Printer — Hardware Error on {HOST.NAME}",
+             f"last(/{TEMPLATE_NAME}/atm.xfs.ptr.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.ptr.device_status)<>255",
+             "HIGH", "The XFS printer is reporting an offline or hardware error state.")
 
-    add_trig("Receipt Printer — Paper Low on {HOST.NAME}",
+    add_trig("Printer — Paper Out on {HOST.NAME}",
+             f"last(/{TEMPLATE_NAME}/atm.xfs.ptr.paper_status)=2",
+             "AVERAGE", "Printer is out of paper. Receipts cannot be printed.")
+
+    add_trig("Printer — Paper Low on {HOST.NAME}",
              f"last(/{TEMPLATE_NAME}/atm.xfs.ptr.paper_status)=1",
-             "WARNING", "Receipt printer paper roll is low.")
+             "WARNING", "Printer paper roll is low.")
 
     add_trig("PIN Pad — Hardware Error on {HOST.NAME}",
              f"last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>255",

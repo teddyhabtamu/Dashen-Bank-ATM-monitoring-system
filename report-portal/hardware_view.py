@@ -213,7 +213,9 @@ def _xfs_device_chip(m, key):
     code = _xfs_num(m, key)
     if code is None:
         return 'unknown'
-    return 'ok' if code in (0, 6) else 'error'
+    if code == 0:
+        return 'ok'
+    return 'warn' if code == 6 else 'error'
 
 
 def _xfs_door_chip(m, key):
@@ -230,6 +232,13 @@ def _xfs_paper_chip(m):
     if code is None:
         return 'unknown'
     return {0: 'ok', 1: 'warn', 2: 'error'}.get(code, 'unknown')
+
+
+def _xfs_alarm_chip(m, key):
+    code = _xfs_num(m, key)
+    if code is None:
+        return 'unknown'
+    return 'error' if code == 1 else 'ok'
 
 
 def _xfs_hardware(m):
@@ -256,6 +265,8 @@ def _xfs_hardware(m):
     comps = [
         ('Cash dispenser', cash),
         ('Safe door', _xfs_door_chip(m, 'atm.xfs.cdm.safe_door')),
+        ('Cabinet door', _xfs_door_chip(m, 'atm.xfs.siu.cabinet_door')),
+        ('Tamper', _xfs_alarm_chip(m, 'atm.xfs.siu.tamper')),
         ('Card reader', card),
         ('Printer', printer),
         ('PIN pad', pin),

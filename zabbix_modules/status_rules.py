@@ -151,6 +151,9 @@ def interpret_state(vendor, m):
     total_notes = _to_int(m.get('atm.cash.total_notes'), None)
     cash_jam = _to_int(m.get('atm.cash.jam'), 0)
     card = _to_int(m.get('atm.card.reader'), 0)
+    printer = _to_int(m.get('atm.printer.receipt'), 0)
+    pinpad = _to_int(m.get('atm.hw.pinpad'), 0)
+    alarm = _to_int(m.get('atm.security.alarm'), 0)
 
     if net == OFFLINE_NET:
         return 'OFFLINE'
@@ -158,12 +161,14 @@ def interpret_state(vendor, m):
         return 'OUT_OF_SERVICE'
     if status == SUPERVISOR:
         return 'IN_SUPERVISOR'
+    if _to_int(m.get('atm.op.supervisor'), 0) == 1:
+        return 'IN_SUPERVISOR'
     if total_notes is not None:
         if total_notes == 0:
             return 'OUT_OF_CASH'
     elif cash1 is not None and cash2 is not None and cash1 == 0 and cash2 == 0:
         return 'OUT_OF_CASH'
-    if cash_jam == JAM or card == CARD:
+    if cash_jam == JAM or card == CARD or printer == 2 or pinpad == 2 or alarm == 1:
         return 'HARDWARE_FAULT'
     if status == IN_SERVICE:
         return 'IN_SERVICE'

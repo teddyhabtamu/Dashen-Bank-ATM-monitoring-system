@@ -105,7 +105,7 @@ def ensure_valuemaps(tid, auth):
 def wanted_items():
     """Yields (name, key, value_type, js_param, valuemap_name, units, desc)"""
     # Master item (None for js_param)
-    yield ("GRG CDM — full XFS status & cassette inventory", "atm.xfs.cdm", 4, None, None, None, "Master XFS JSON")
+    yield ("GRG XFS — full status & cassette inventory", "atm.xfs.cdm", 4, None, None, None, "Master XFS JSON (CDM + IDC/PTR/PIN/SIU status)")
 
     # CDM Statuses
     yield ("CDM — Device Status", "atm.xfs.cdm.device_status", 3,
@@ -155,9 +155,9 @@ def wanted_items():
            "var j = JSON.parse(value);\nreturn (j.idc && j.idc.cards !== undefined) ? j.idc.cards : 0;", None, None, "Captured card count")
 
     # PTR (Receipt Printer)
-    yield ("Receipt Printer — Device Status", "atm.xfs.ptr.device_status", 3,
+    yield ("Printer — Device Status", "atm.xfs.ptr.device_status", 3,
            "var j = JSON.parse(value);\nreturn (j.ptr && j.ptr.device !== undefined) ? j.ptr.device : 255;", "XFS Device Status", None, "PTR fwDevice")
-    yield ("Receipt Printer — Paper Status", "atm.xfs.ptr.paper_status", 3,
+    yield ("Printer — Paper Status", "atm.xfs.ptr.paper_status", 3,
            "var j = JSON.parse(value);\nreturn (j.ptr && j.ptr.paper !== undefined) ? j.ptr.paper : 255;", "XFS PTR Paper Status", None, "Paper full / low / out")
 
     # PIN (PIN Pad / EPP)
@@ -193,9 +193,11 @@ def ensure_triggers(tid, auth):
          f"last(/{TEMPLATE_NAME}/atm.xfs.idc.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.idc.device_status)<>255", 4),
         ("Card Reader — Card Jammed on {HOST.NAME}",
          f"last(/{TEMPLATE_NAME}/atm.xfs.idc.media_status)=3", 4),
-        ("Receipt Printer — Paper Out on {HOST.NAME}",
+        ("Printer — Hardware Error on {HOST.NAME}",
+         f"last(/{TEMPLATE_NAME}/atm.xfs.ptr.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.ptr.device_status)<>255", 4),
+        ("Printer — Paper Out on {HOST.NAME}",
          f"last(/{TEMPLATE_NAME}/atm.xfs.ptr.paper_status)=2", 3),
-        ("Receipt Printer — Paper Low on {HOST.NAME}",
+        ("Printer — Paper Low on {HOST.NAME}",
          f"last(/{TEMPLATE_NAME}/atm.xfs.ptr.paper_status)=1", 2),
         ("PIN Pad — Hardware Error on {HOST.NAME}",
          f"last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>0 and last(/{TEMPLATE_NAME}/atm.xfs.pin.device_status)<>255", 4),
