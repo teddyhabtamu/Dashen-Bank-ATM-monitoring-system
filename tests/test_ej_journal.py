@@ -147,6 +147,17 @@ GRG_CARDLESS = (
     "2026-10-12 09:48:37.282 <---- TRANSACTION END\n"
 )
 
+GRG_TIMEOUT = (
+    "2026-10-20 09:27:40.000 ----> TRANSACTION START\n"
+    "2026-10-20 09:27:42.000 CARD INSERTED. PAN: 4583********6018\n"
+    "2026-10-20 09:27:48.000 PIN ENTERED\n"
+    "2026-10-20 09:27:49.000 TRANSACTION REQUEST C C A\n"
+    "2026-10-20 09:27:57.000 WAITING MSG TIME OUT.\n"
+    "2026-10-20 09:27:58.000 EMV Completion with AAC:<AABBCCDD>.\n"
+    "2026-10-20 09:28:00.000 CARD TAKEN\n"
+    "2026-10-20 09:28:00.500 <---- TRANSACTION END\n"
+)
+
 GRG_PIPE = (
     "2026-07-09 16:18:15 | GRG-001 | TID006 | VENDOR=GRG | "
     "TXN_CODE=WITHDRAWAL | SEQ=795552 | ACCT_NO=************5678 | "
@@ -264,6 +275,15 @@ def test_ncr_session_without_receipt_is_unknown_not_approved():
     assert txn.record_no is None
     assert 'no_receipt' in txn.warnings
     assert txn.completed is False
+
+
+def test_grg_host_timeout_is_timeout_not_unknown():
+    txn = _one(GRG_TIMEOUT, 'GRG', atm_id='ATM-GRG-X')
+    assert txn.status == ej.TIMEOUT
+    assert txn.completed is True
+    assert 'host_timeout' in txn.warnings
+    assert 'no_receipt' in txn.warnings
+    assert txn.card_masked == '4583******6018'
 
 
 def test_grg_pipe_journal_is_not_silently_empty():

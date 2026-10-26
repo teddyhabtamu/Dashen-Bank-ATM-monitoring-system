@@ -806,6 +806,7 @@ _GRG_START = re.compile(r'^-+>\s*TRANSACTION START\b(.*)$')
 _GRG_END = re.compile(r'^<-+\s*TRANSACTION END')
 _GRG_PIPE_LINE = re.compile(
     r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)\s*\|')
+_GRG_TIMEOUT = re.compile(r'\bTIME\s*OUT\b')
 
 
 def _grg_timestamp(value):
@@ -837,6 +838,7 @@ class _GrgSession:
     present_success: bool = False
     money_taken: bool = False
     dispensed_amount: Decimal | None = None
+    timed_out: bool = False
     notes: dict[int, int] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
@@ -868,7 +870,10 @@ def _finalise_grg(session, atm_id, terminal_map, raw_ref):
     branch = receipt.branch if receipt else None
     record = receipt.record_no if receipt else None
     account = receipt.account_masked if receipt else None
-    card = receipt.card_masked if receipt else None
+    # A no-receipt/timeout session still has the card that was inserted. Keep
+    # the masked PAN as evidence instead of dropping it with the missing
+    # receipt.
+    card = receipt.card_masked if receipt else session.card_masked
     entry_mode = session.entry_mode
     if entry_mode == 'NOCARD':
         card = None
@@ -887,6 +892,9 @@ def _finalise_grg(session, atm_id, terminal_map, raw_ref):
         status = INCOMPLETE
     elif receipt is None:
         warnings.append('no_receipt')
+        if session.timed_out:
+            status = TIMEOUT
+            warnings.append('host_timeout')
     elif receipt.status == DECLINED:
         status = DECLINED
     elif receipt.status == TIMEOUT:
@@ -1144,6 +1152,8 @@ def parse_grg_text(text, *, atm_id=None, terminal_map=None, raw_ref=None):
                 current.money_taken = True
             if 'MODULE STATUS ERROR' in message or 'ERROR!!!' in message:
                 current.warnings.append('module_error')
+            if _GRG_TIMEOUT.search(message):
+                current.timed_out = True
             m = _GRG_PAN.search(message)
             if m:
                 current.card_masked = scrub_pan(m.group(1))
