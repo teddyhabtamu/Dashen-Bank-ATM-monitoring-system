@@ -419,7 +419,8 @@ def verify_atm(atm_id, window_minutes=15, client=None, db_facts=None,
                              f"EJ pull configured for {db['row']['ej_hostname']} (hourly)."))
     else:
         checks.append(_check('journal', 'skip',
-                             'No EJ hostname set — no journal pull (fine for GRG, optional for NCR).'))
+                             'No EJ hostname set — no journal pull. Set it in ATM Registration; '
+                             'it names the local evidence file for NCR and GRG.'))
     if z['problems']:
         checks.append(_check('problems', 'info',
                              f"{len(z['problems'])} firing trigger(s): " + '; '.join(z['problems'][:3])))

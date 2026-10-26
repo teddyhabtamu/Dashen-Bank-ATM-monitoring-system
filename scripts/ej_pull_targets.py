@@ -19,19 +19,24 @@ Sources, first hit wins:
                            than "nothing".
 
 An ATM is only a pull target when all of these hold:
-  vendor = NCR (GRG exposes no journal over TCP; it is SNMP/UDP only),
+  vendor = the requested vendor (NCR or GRG),
   status = active,
   ip_address present (needed for the Zabbix agent call),
-  ej_hostname present (the journal file is <date>_<HOSTNAME>_EJDATA.log, so
-  without the machine hostname the filename cannot be built — skip loudly
-  rather than guessing).
+  ej_hostname present (it names the local evidence file and maps it back to
+  the ATM: <date>_<HOSTNAME>_EJDATA.log). Skip loudly rather than guessing.
+
+NCR journals live in E:\\EJLogs and are named <date>_<HOST>_EJDATA.log on the
+box. GRG's application journal is D:\\Program Files\\DTATMW\\Bin\\ATMAPP\\Log\\
+EJ<yymmdd>.log; the puller renames it to the same canonical local form so the
+existing ingest/metadata path does not need a second dialect.
 
 Output: one `ATM-ID:IP:HOSTNAME` line per target on stdout, so the caller can
 `while IFS=: read -r ...`. Diagnostics go to stderr, keeping stdout parseable.
 
 Usage:
-  scripts/ej_pull_targets.py            # list targets
-  scripts/ej_pull_targets.py --explain  # also print why others were skipped
+  scripts/ej_pull_targets.py                    # NCR targets (default)
+  scripts/ej_pull_targets.py --vendor GRG        # GRG targets
+  scripts/ej_pull_targets.py --explain           # print skip reasons
 Stdlib only, like every other helper in scripts/.
 """
 
@@ -99,6 +104,7 @@ def _resolve_db_name(docker_bin=None):
 
 # Same predicate as the DB query below — kept identical on purpose so the CSV
 # fallback and the live DB can never disagree about who is eligible.
+JOURNAL_VENDORS = ('NCR', 'GRG')
 NCR_ACTIVE = ('NCR', 'active')
 
 
@@ -119,22 +125,25 @@ def normalize(atm_id, ip, hostname):
     return atm_id, ip, hostname
 
 
-def eligible(row):
+def eligible(row, vendor='NCR'):
     """Pure predicate — unit-tested; mirrors the SQL WHERE clause."""
-    vendor = (row.get('vendor') or '').strip().upper()
+    want = (vendor or 'NCR').strip().upper()
+    if want not in JOURNAL_VENDORS:
+        return False, f'unsupported journal vendor {want!r}'
+    row_vendor = (row.get('vendor') or '').strip().upper()
     status = (row.get('status') or 'active').strip().lower()
-    if vendor != NCR_ACTIVE[0]:
-        return False, f'vendor {vendor or "?"} has no journal pull path'
+    if row_vendor != want:
+        return False, f'vendor {row_vendor or "?"} is not a {want} journal target'
     if status != NCR_ACTIVE[1]:
         return False, 'ATM is not active'
     if not (row.get('ip_address') or '').strip():
         return False, 'no IP address recorded'
     if not (row.get('ej_hostname') or '').strip():
-        return False, 'no EJ hostname recorded (file is <date>_<HOST>_EJDATA.log)'
+        return False, 'no EJ hostname recorded (used to name <date>_<HOST>_EJDATA.log)'
     return True, ''
 
 
-def targets_from_rows(rows, already_filtered=False):
+def targets_from_rows(rows, already_filtered=False, vendor='NCR'):
     """rows: iterable of dicts. Returns (targets, skips) — skips is diagnostic.
 
     already_filtered=True when the source already applied the eligibility rule
@@ -143,7 +152,7 @@ def targets_from_rows(rows, already_filtered=False):
     targets, skips = [], []
     for row in rows:
         if not already_filtered:
-            ok, why = eligible(row)
+            ok, why = eligible(row, vendor=vendor)
             if not ok:
                 if (row.get('atm_id') or '').strip():
                     skips.append((row['atm_id'].strip(), why))
@@ -174,15 +183,20 @@ def from_override(raw):
 
 
 # ── source 2: the portal database ─────────────────────────────────────────
-DB_QUERY = (
-    "SELECT atm_id, ip_address, ej_hostname FROM atm_locations "
-    "WHERE UPPER(vendor) = 'NCR' AND LOWER(COALESCE(status,'active')) = 'active' "
-    "AND COALESCE(ip_address,'') <> '' AND COALESCE(ej_hostname,'') <> '' "
-    "ORDER BY atm_id"
-)
+def db_query(vendor='NCR'):
+    """Fleet query for one journal dialect; vendor is whitelisted, not interpolated."""
+    vendor = (vendor or 'NCR').strip().upper()
+    if vendor not in JOURNAL_VENDORS:
+        raise ValueError(f'unsupported journal vendor {vendor!r}')
+    return (
+        "SELECT atm_id, ip_address, ej_hostname FROM atm_locations "
+        f"WHERE UPPER(vendor) = '{vendor}' AND LOWER(COALESCE(status,'active')) = 'active' "
+        "AND COALESCE(ip_address,'') <> '' AND COALESCE(ej_hostname,'') <> '' "
+        "ORDER BY atm_id"
+    )
 
 
-def from_db(docker_bin=None):
+def from_db(docker_bin=None, vendor='NCR'):
     """Read targets via the repo's established DB access pattern.
 
     Returns None (not []) when the DB could not be read — the caller must then
@@ -198,7 +212,7 @@ def from_db(docker_bin=None):
                          'holds the portal tables; using the CSV snapshot\n')
         return None
     cmd = [_docker_bin(explicit=docker_bin), 'exec', DB_CONTAINER, 'psql',
-           '-U', DB_USER, '-d', db_name, '-tAF|', '-c', DB_QUERY]
+           '-U', DB_USER, '-d', db_name, '-tAF|', '-c', db_query(vendor)]
     try:
         out = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError) as e:
@@ -215,11 +229,11 @@ def from_db(docker_bin=None):
             continue
         rows.append({'atm_id': parts[0], 'ip_address': parts[1], 'ej_hostname': parts[2]})
     # The WHERE clause above already applied eligible() in SQL.
-    return targets_from_rows(rows, already_filtered=True)
+    return targets_from_rows(rows, already_filtered=True, vendor=vendor)
 
 
 # ── source 3: nightly CSV snapshot ────────────────────────────────────────
-def from_csv(path=CSV_PATH):
+def from_csv(path=CSV_PATH, vendor='NCR'):
     if not os.path.exists(path):
         return None
     try:
@@ -230,11 +244,14 @@ def from_csv(path=CSV_PATH):
         return None
     if not rows:
         return None
-    return targets_from_rows(rows)
+    return targets_from_rows(rows, vendor=vendor)
 
 
-def resolve(explain=False, csv_path=CSV_PATH, docker_bin=None):
+def resolve(explain=False, csv_path=CSV_PATH, docker_bin=None, vendor='NCR'):
     """Returns (targets, source_name, skips). Never raises."""
+    vendor = (vendor or 'NCR').strip().upper()
+    if vendor not in JOURNAL_VENDORS:
+        return [], 'none', []
     db_bin = _docker_bin(explicit=docker_bin)
     override = os.environ.get('EJ_ATMS')
     if override and override.strip():
@@ -248,8 +265,8 @@ def resolve(explain=False, csv_path=CSV_PATH, docker_bin=None):
     # the result.
     for name, getter in (
             ('database ' + (os.environ.get('DB_NAME') or _resolve_db_name(db_bin) or '?'),
-             lambda: from_db(db_bin)),
-                         ('CSV snapshot', lambda: from_csv(csv_path))):
+             lambda: from_db(db_bin, vendor=vendor)),
+                         ('CSV snapshot', lambda: from_csv(csv_path, vendor=vendor))):
         result = getter()
         if result is None:
             continue
@@ -259,7 +276,7 @@ def resolve(explain=False, csv_path=CSV_PATH, docker_bin=None):
                 for atm_id, why in skips:
                     sys.stderr.write(f'  skipped {atm_id}: {why}\n')
             return targets, name, skips
-        sys.stderr.write(f'ej_pull_targets: {name} yielded no eligible ATMs'
+        sys.stderr.write(f'ej_pull_targets: {name} yielded no eligible {vendor} ATMs'
                          + (' (snapshot predates the ej_hostname column — run '
                             'scripts/migrate_ej_hostname.sql)' if name == 'CSV snapshot' else '')
                          + '\n')
@@ -269,7 +286,13 @@ def resolve(explain=False, csv_path=CSV_PATH, docker_bin=None):
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     explain = '--explain' in argv
-    targets, source, skips = resolve(explain=explain)
+    vendor = 'NCR'
+    for i, arg in enumerate(argv):
+        if arg == '--vendor' and i + 1 < len(argv):
+            vendor = argv[i + 1].upper()
+        elif arg.startswith('--vendor='):
+            vendor = arg.split('=', 1)[1].upper()
+    targets, source, skips = resolve(explain=explain, vendor=vendor)
     sys.stderr.write(f'ej_pull_targets: {len(targets)} target(s) from {source}\n')
     for atm_id, ip, hostname in targets:
         print(f'{atm_id}:{ip}:{hostname}')

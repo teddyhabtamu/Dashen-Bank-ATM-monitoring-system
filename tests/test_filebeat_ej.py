@@ -33,6 +33,14 @@ def test_rule_loads():
     assert _rule() is not None
 
 
+def test_only_real_pulled_journals_are_shipped():
+    doc = yaml.safe_load(BEAT.read_text())
+    ej = next(i for i in doc["filebeat.inputs"]
+              if "/var/log/atm-ej/" in str(i.get("paths", [])))
+    assert ej["paths"] == ["/var/log/atm-ej/*_EJDATA.log"], (
+        'filebeat must not index local demo/fixture files such as GRG-001.log')
+
+
 def test_full_marker_splits():
     assert _split(["[020t*571*10/08/2026*14:59*"]) == ["split"]
     assert _split(["[020t*566*10/08/2026*14:56*"]) == ["split"]
@@ -50,7 +58,13 @@ def test_continuation_marker_glues():
 def test_plain_lines_glue():
     assert _split([" 11:32:41 ATR RECEIVED T=0"]) == ["glue"]
     assert _split(["    WITHDRAWAL"]) == ["glue"]
-    assert _split(["2026-10-13T00:00:00 | ATM-TEST-NCR | TID | TXN | WITHDRAWAL | SEQ=1 | STATUS=APPROVED"]) == ["glue"]
+
+
+def test_grg_timestamp_starts_a_record():
+    assert _split(["2026-10-24 10:00:00 | GRG-001 | TID006 | VENDOR=GRG | "
+                   "TXN_CODE=WITHDRAWAL | SEQ=1 | RESP_CODE=APPROVED"]) == ["split"]
+    assert _split(["2026-10-24 10:00:00.123 TRANSACTION START"]) == ["split"]
+    assert _split(["    10:00:01 continuation"]) == ["glue"]
 
 
 def test_sequence_splits_records():

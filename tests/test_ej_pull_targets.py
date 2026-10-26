@@ -22,11 +22,30 @@ def test_ncr_active_with_hostname_is_a_target():
     assert skips == []
 
 
-def test_grg_has_no_journal_pull_path():
+def test_ncr_run_does_not_pull_grg_rows():
     row = dict(OK_ROW, vendor='GRG')
     targets, skips = ept.targets_from_rows([row])
     assert targets == []
-    assert 'journal pull' in skips[0][1]
+    assert 'not a NCR journal target' in skips[0][1]
+
+
+def test_grg_active_with_hostname_is_a_target_when_requested():
+    row = dict(OK_ROW, vendor='GRG', ej_hostname='TESTGRG')
+    targets, skips = ept.targets_from_rows([row], vendor='GRG')
+    assert targets == [('ATM-0001', '10.41.30.114', 'TESTGRG')]
+    assert skips == []
+
+
+def test_grg_query_is_vendor_scoped_and_whitelisted():
+    sql = ept.db_query('GRG')
+    assert "UPPER(vendor) = 'GRG'" in sql
+    assert "UPPER(vendor) = 'NCR'" not in sql
+    try:
+        ept.db_query("GRG'; DROP TABLE atm_locations; --")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('unsupported vendor must not reach SQL')
 
 
 def test_inactive_atm_is_skipped():

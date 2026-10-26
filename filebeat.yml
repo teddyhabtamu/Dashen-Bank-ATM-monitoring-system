@@ -8,15 +8,19 @@ filebeat.inputs:
   - type: log
     enabled: true
     paths:
-      - /var/log/atm-ej/*.log
+      # Only real pulled journals use this canonical name. Local demo/fixture
+      # files such as GRG-001.log must never reach the EJ index.
+      - /var/log/atm-ej/*_EJDATA.log
     fields:
       log_type: atm_ej
     fields_under_root: true
-    multiline.pattern: '\[020t\s*\*[^*]*\*\d{2}/\d{2}/\d{4}\*'
+    multiline.pattern: '(\[020t\s*\*[^*]*\*\d{2}/\d{2}/\d{4}\*|^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'
     multiline.negate: true
     multiline.match: after
     # NDC record split (proven live 2026-10-13, corrected same day): a NEW
     # event starts ONLY at a full marker — [020t*SEQ*MM/DD/YYYY*HH:MM*.
+    # GRG's pipe/verbose journal starts every record with an ISO timestamp;
+    # without that alternative every GRG line glued into one giant event.
     # Spaced/partial markers ([020t CARD ..., [020t *1177* supervisor key
     # echoes) carry no date and MUST glue onto the running record, or the
     # index fills with dateless fragments stamped ingest time (815 rows of

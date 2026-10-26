@@ -13,7 +13,9 @@ sys.path.insert(0, str(REPO / 'scripts'))
 sys.path.insert(0, str(REPO / 'tests'))
 
 import ingest_ej_shadow as ing  # noqa: E402
-from test_ej_journal import MAP, NCR_APPROVED, NCR_DECLINED  # noqa: E402
+from test_ej_journal import (  # noqa: E402
+    GRG_PIPE, MAP, NCR_APPROVED, NCR_DECLINED,
+)
 
 
 def test_journal_meta_comes_from_the_puller_filename(tmp_path):
@@ -45,6 +47,19 @@ def test_collect_stages_only_completed_mapped_transactions(tmp_path):
     assert {t['status'] for t in txns} == {'APPROVED', 'DECLINED'}
     assert all(t['atm_id'] == 'ATM-NCR-1' for t in txns)
     assert all(t['source_file'] == str(journal) for t in txns)
+
+
+def test_grg_journal_maps_transactions_by_hostname(tmp_path):
+    journal = tmp_path / '2026-10-24_TESTGRG_EJDATA.log'
+    journal.write_text(GRG_PIPE)
+    runs, txns, files, errors = ing.collect(
+        [journal], {}, {'TESTGRG': 'ATM-TEST-GRG'})
+    assert not errors
+    assert runs[0]['atm_id'] == 'ATM-TEST-GRG'
+    assert len(txns) == 1
+    assert txns[0]['atm_id'] == 'ATM-TEST-GRG'
+    assert txns[0]['vendor'] == 'GRG'
+    assert txns[0]['amount'] == 200.00
 
 
 def test_collect_does_not_stage_a_badly_named_empty_file(tmp_path):

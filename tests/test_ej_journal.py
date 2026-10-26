@@ -147,6 +147,17 @@ GRG_CARDLESS = (
     "2026-10-12 09:48:37.282 <---- TRANSACTION END\n"
 )
 
+GRG_PIPE = (
+    "2026-07-09 16:18:15 | GRG-001 | TID006 | VENDOR=GRG | "
+    "TXN_CODE=WITHDRAWAL | SEQ=795552 | ACCT_NO=************5678 | "
+    "AMOUNT=200.00 | CURRENCY=ETB | RESP_CODE=APPROVED | AUTH_CODE=19\n"
+)
+
+GRG_PIPE_FAULT = (
+    "2026-07-09 17:00:00 | GRG-001 | TID006 | VENDOR=GRG | "
+    "EVENT=FAULT | FAULT_CODE=CM001 | FAULT_DESC=CASH_MODULE_ERROR\n"
+)
+
 GRG_UNKNOWN = (
     "2026-10-12 00:00:01.629 PIN ENTERED\n"
     "2026-10-12 00:00:10.460 TRANSACTION REQUEST AAC    B\n"
@@ -253,6 +264,39 @@ def test_ncr_session_without_receipt_is_unknown_not_approved():
     assert txn.record_no is None
     assert 'no_receipt' in txn.warnings
     assert txn.completed is False
+
+
+def test_grg_pipe_journal_is_not_silently_empty():
+    txn = _one(GRG_PIPE, 'GRG', terminal_map={'TID006': 'ATM-GRG-1'})
+    assert txn.vendor == 'GRG'
+    assert txn.atm_id == 'ATM-GRG-1'
+    assert txn.terminal_id == 'TID006'
+    assert txn.txn_type == 'WITHDRAWAL'
+    assert txn.status == ej.APPROVED
+    assert txn.amount == Decimal('200.00')
+    assert txn.dispensed_amount == Decimal('200.00')
+    assert txn.card_masked == '******5678'
+    assert txn.serial == '795552'
+    assert txn.recorded_at == datetime(2026, 7, 9, 13, 18, 15, tzinfo=UTC)
+    assert txn.confidence == 'high'
+
+
+def test_grg_pipe_journal_file_decodes_utf16(tmp_path):
+    path = tmp_path / 'ej.log'
+    path.write_bytes(GRG_PIPE.encode('utf-16'))
+    result = ej.parse_journal_file(path, terminal_map={'TID006': 'ATM-GRG-1'})
+    assert result.vendor == 'GRG'
+    assert result.encoding == 'utf-16'
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount == Decimal('200.00')
+
+
+def test_grg_pipe_fault_is_evidence_not_a_silent_drop():
+    txn = _one(GRG_PIPE_FAULT, 'GRG', terminal_map={'TID006': 'ATM-GRG-1'})
+    assert txn.txn_type == 'FAULT'
+    assert txn.status == ej.ERROR
+    assert txn.error_code == 'CM001'
+    assert txn.eligible_for_ingest is True
 
 
 def test_grg_approved_receipt_and_dispense_amount_agree():

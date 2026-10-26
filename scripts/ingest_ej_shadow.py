@@ -2,10 +2,9 @@
 """Load parsed EJ journals into the portal's quarantined staging tables.
 
 This is deliberately NOT the path into atm_transactions. The parser has been
-validated against real TESTMACHINE journals, but the EJ feed still has
-unresolved gaps (no-receipt test sessions, a missing cash-dispense sample and
-no real GRG journal). Rows here are visible for reconciliation and never feed
-KPIs, cash forecasts or anomalies.
+validated against NCR and GRG sample journals; the EJ feed still has unresolved
+gaps (no-receipt test sessions, a missing cash-dispense sample). Rows here are
+visible for reconciliation and never feed KPIs, cash forecasts or anomalies.
 
 Usage on the UAT host:
 
@@ -303,7 +302,11 @@ def collect(paths, terminal_map, hostname_map=None):
         journal_date, hostname = _journal_meta(path)
         run_atm = hostname_map.get(hostname) if hostname else None
         try:
-            result = parse_journal_file(path, terminal_map=terminal_map)
+            # Pass the hostname-resolved ATM as well: GRG's compact journal
+            # carries a terminal id that may not be in the registry, but the
+            # file name already identifies the box.
+            result = parse_journal_file(
+                path, atm_id=run_atm, terminal_map=terminal_map)
         except Exception as exc:  # noqa: BLE001 - one bad file must not stop the batch
             errors.append(f'{path}: {exc}')
             parse_runs.append({

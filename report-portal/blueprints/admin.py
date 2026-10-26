@@ -2181,11 +2181,14 @@ def _guide_page(data):
   </ul>
 
   <h2>Real ATM (production) <span class="badge-warn">&#9888; Action required</span></h2>
-  <p>NCR boxes: journals are fetched hourly from the box through the Zabbix agent
-  (<code>scripts/pull_ej_logs.sh</code>). The pull list comes from this record, so set
-  <strong>EJ Hostname</strong> to the machine name in the box's
-  <code>E:\\EJLogs\\&lt;date&gt;_&lt;HOST&gt;_EJDATA.log</code> filenames — no script editing.
-  GRG boxes: no journal pull exists; their data comes over SNMP/UDP, so nothing to do here.</p>
+  <p>Journals are fetched hourly through the Zabbix agent. The pull list comes
+  from this record, so set <strong>EJ Hostname</strong> to the machine name used
+  in the local evidence filename — no script editing.</p>
+  <p>NCR: <code>scripts/pull_ej_logs.sh</code> reads
+  <code>E:\\EJLogs\\&lt;date&gt;_&lt;HOST&gt;_EJDATA.log</code>. GRG:
+  <code>scripts/pull_grg_ej_logs.py</code> reads
+  <code>D:\\Program Files\\DTATMW\\Bin\\ATMAPP\\Log\\EJ&lt;yymmdd&gt;.log</code>
+  and stores it under the same canonical local name.</p>
 
   <a href="/atms" class="btn">&#8592; Back to ATM Management</a>
 </div></body></html>"""

@@ -12,7 +12,7 @@
 ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS ej_hostname character varying(64);
 
 COMMENT ON COLUMN atm_locations.ej_hostname IS
-  'Machine hostname as it appears in the NCR journal filename <date>_<HOST>_EJDATA.log. Set by an admin; empty means "no journal pull for this ATM".';
+  'Machine hostname used to name the local EJ evidence file <date>_<HOST>_EJDATA.log for NCR and GRG. Set by an admin; empty means "no journal pull for this ATM".';
 
 -- Seed the UAT pilot box so the proven hourly pull keeps working the moment
 -- this migration lands (no-ops on any host that does not have it).

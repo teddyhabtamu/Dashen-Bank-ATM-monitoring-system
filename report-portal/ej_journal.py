@@ -1,7 +1,8 @@
 """Canonical parser for ATM electronic-journal files (NCR and GRG).
 
 The journal is terminal-side evidence, not a switch ledger. This module turns
-the two real journal dialects into a common, auditable transaction shape so a
+the real journal dialects (NCR APTRA, GRG XFS verbose, and GRG's compact
+pipe-delimited application log) into a common, auditable transaction shape so a
 shadow ingestion job can compare EJ counts with the switch before anything is
 written to `atm_transactions`.
 
@@ -78,6 +79,9 @@ def _normalise_type(value):
         'BALANCE ENQUIRY': 'BALANCE_INQ',
         'MINI STATEMENT': 'MINI_STATEMENT',
         'MINI-STATEMENT': 'MINI_STATEMENT',
+        'MINI_STMT': 'MINI_STATEMENT',
+        'FUND TRANSFER': 'TRANSFER',
+        'FUND_TRANSFER': 'TRANSFER',
         'CARDLESS': 'CARDLESS_TXN',
         'CARDLESS TRANSACTION': 'CARDLESS_TXN',
     }
@@ -800,6 +804,8 @@ _GRG_CASH = re.compile(
     r'\[CAS\s+([^\]]+)\]\s+OUT:\s*(\d+),\s*REJECT:\s*(\d+),\s+DENO:\s*(\d+)')
 _GRG_START = re.compile(r'^-+>\s*TRANSACTION START\b(.*)$')
 _GRG_END = re.compile(r'^<-+\s*TRANSACTION END')
+_GRG_PIPE_LINE = re.compile(
+    r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)\s*\|')
 
 
 def _grg_timestamp(value):
@@ -980,6 +986,105 @@ def _finalise_grg(session, atm_id, terminal_map, raw_ref):
     )
 
 
+def _grg_pipe_atm(terminal, terminal_map, atm_id):
+    """Map TID006 (or its bare 006 form) through the registry."""
+    if terminal:
+        candidates = [terminal]
+        if terminal.upper().startswith('TID') and len(terminal) > 3:
+            candidates.append(terminal[3:])
+        for candidate in candidates:
+            mapped = (terminal_map or {}).get(candidate)
+            if mapped:
+                return mapped
+    return atm_id
+
+
+def parse_grg_pipe_text(text, *, atm_id=None, terminal_map=None, raw_ref=None):
+    """Parse GRG's pipe-delimited application journal.
+
+    This is the compact form written by GRG's ATM application:
+
+        2026-07-09 16:18:15 | GRG-001 | TID006 | VENDOR=GRG |
+        TXN_CODE=WITHDRAWAL | SEQ=795552 | ACCT_NO=... | AMOUNT=200.00 |
+        CURRENCY=ETB | RESP_CODE=APPROVED
+
+    It is a different dialect from the verbose XFS journal handled by
+    parse_grg_text(); both are real GRG outputs, so the parser accepts either
+    rather than making the puller guess which box it is talking to.
+    """
+    transactions = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or '|' not in line:
+            continue
+        match = _GRG_PIPE_LINE.match(line)
+        if not match:
+            continue
+        parts = [part.strip() for part in line.split('|')]
+        if len(parts) < 4:
+            continue
+        kv = {}
+        for part in parts[3:]:
+            key, sep, value = part.partition('=')
+            if sep:
+                kv[key.strip().upper()] = value.strip()
+        if kv.get('VENDOR', '').upper() != 'GRG':
+            continue
+
+        timestamp = _grg_timestamp(match.group(1))
+        terminal = parts[2] or None
+        mapped_atm = _grg_pipe_atm(terminal, terminal_map, atm_id)
+        txn_code = kv.get('TXN_CODE')
+        event = kv.get('EVENT')
+        if event:
+            txn_type = 'FAULT' if event.upper() == 'FAULT' else _normalise_type(event)
+        else:
+            txn_type = _normalise_type(txn_code)
+        response = (kv.get('RESP_CODE') or kv.get('STATUS') or '').upper()
+        if event and event.upper() == 'FAULT':
+            status = ERROR
+        elif response in (APPROVED, DECLINED, TIMEOUT, ERROR):
+            status = response
+        elif response in ('SUCCESS', 'OK'):
+            status = APPROVED
+        else:
+            status = UNKNOWN
+        amount = _money(kv.get('AMOUNT'))
+        account = kv.get('ACCT_NO') or kv.get('CARD')
+        card = scrub_pan(account)
+        serial = kv.get('SEQ')
+        auth_code = kv.get('AUTH_CODE') or kv.get('AUTH') or None
+        currency = kv.get('CURRENCY') or 'ETB'
+        dispensed = amount if status == APPROVED and txn_type in CASH_TYPES else None
+
+        warnings = []
+        if not terminal:
+            warnings.append('no_terminal')
+        if mapped_atm is None:
+            warnings.append('atm_not_mapped')
+        if txn_type in CASH_TYPES and amount is None:
+            warnings.append('amount_missing')
+        if status == UNKNOWN:
+            warnings.append('unknown_status')
+
+        txn = EjTransaction(
+            vendor='GRG', atm_id=mapped_atm, terminal_id=terminal,
+            branch=None, txn_type=txn_type, receipt_type=txn_type,
+            amount=amount, currency=currency, status=status,
+            error_code=kv.get('FAULT_CODE') or kv.get('ERROR_CODE'),
+            card_masked=card, account_masked=card,
+            auth_code=auth_code, requested_amount=amount,
+            dispensed_amount=dispensed,
+            serial=serial, reply_code=response or None,
+            recorded_at=timestamp, started_at=timestamp, ended_at=timestamp,
+            receipt_at=timestamp, raw_ref=raw_ref,
+            confidence='high' if terminal and status in _COMPLETED_STATUSES else 'medium',
+            warnings=warnings,
+        )
+        transactions.append(txn)
+    return transactions
+
+
 def parse_grg_text(text, *, atm_id=None, terminal_map=None, raw_ref=None):
     transactions = []
     current = None
@@ -1094,8 +1199,13 @@ def parse_journal_text(text, *, vendor=None, path='<memory>', atm_id=None,
         transactions = parse_ncr_text(
             text, atm_id=atm_id, terminal_map=terminal_map, raw_ref=path)
     elif detected == 'GRG':
-        transactions = parse_grg_text(
-            text, atm_id=atm_id, terminal_map=terminal_map, raw_ref=path)
+        if any(_GRG_PIPE_LINE.match(line.strip())
+               for line in text.splitlines() if line.strip()):
+            transactions = parse_grg_pipe_text(
+                text, atm_id=atm_id, terminal_map=terminal_map, raw_ref=path)
+        else:
+            transactions = parse_grg_text(
+                text, atm_id=atm_id, terminal_map=terminal_map, raw_ref=path)
     else:
         raise ValueError(f'Unsupported journal vendor: {detected}')
     return ParseResult(path=path, vendor=detected, encoding='text',
@@ -1116,5 +1226,6 @@ __all__ = [
     'EjTransaction', 'ParseResult', 'PARSER_VERSION', 'APPROVED', 'DECLINED',
     'TIMEOUT', 'ERROR', 'UNKNOWN', 'INCOMPLETE', 'decode_journal',
     'detect_vendor', 'parse_journal_file', 'parse_journal_text',
-    'parse_ncr_text', 'parse_grg_text', 'scrub_pan', 'summarize',
+    'parse_ncr_text', 'parse_grg_text', 'parse_grg_pipe_text',
+    'scrub_pan', 'summarize',
 ]

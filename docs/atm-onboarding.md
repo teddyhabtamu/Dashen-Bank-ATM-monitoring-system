@@ -130,19 +130,24 @@ calling an ATM live.
       any ERROR/UNAVAILABLE row names a real fault — call the custodian,
       not the monitoring team.
 
-## Step 5 — Journals for disputes (NCR: same day; GRG: when SNMP lands)
+## Step 5 — Journals for disputes (NCR and GRG)
 
 - [ ] Nothing to edit. The pull list is data, not code: open portal →
       ATM Registration → the new ATM → set **EJ Hostname** to the machine
-      name that appears in `E:\EJLogs` filenames on the box (the middle
-      part of `<date>_<HOST>_EJDATA.log`) and save.
+      name used in the local evidence file (`<date>_<HOST>_EJDATA.log`) and
+      save. For NCR it is the middle part of the `E:\EJLogs` filename. For
+      GRG it is the box hostname (the journal itself is `EJ<yymmdd>.log`).
 - [ ] Confirm the resolver agrees, on the pull host:
-      `python3 scripts/ej_pull_targets.py --explain`
-      → prints `ATM-ID:IP:HOSTNAME` for every eligible box plus the reason
-      any active NCR box was skipped. Skip reason `no EJ hostname recorded`
-      means step one above is not done.
-- [ ] After the next hour, open portal → EJ Search → filter the ATM:
-      journal rows with masked cards must appear. Empty result with a
+      `python3 scripts/ej_pull_targets.py --vendor GRG --explain`
+      (use no `--vendor` for the NCR list).
+      → prints `ATM-ID:IP:HOSTNAME` for every eligible box plus skip reasons.
+      `no EJ hostname recorded` means step one above is not done.
+- [ ] Pull GRG journals:
+      `python3 scripts/pull_grg_ej_logs.py --days 3`
+      → writes `ej-logs/<date>_<HOST>_EJDATA.log` and raw evidence under
+      `ej-logs/raw/`. NCR uses `scripts/pull_ej_logs.sh` as before.
+- [ ] After the next hour, open portal → EJ Journal or EJ Search → filter the
+      ATM: journal rows with masked cards must appear. Empty result with a
       working pull means the box writes no journals (check with custodian).
 
 ## Step 6 — Portal, dashboards, reports (click-through)
