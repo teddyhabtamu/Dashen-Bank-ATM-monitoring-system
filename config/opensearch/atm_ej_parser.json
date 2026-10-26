@@ -44,6 +44,16 @@
     },
     {
       "grok": {
+        "if": "ctx.event_time == null",
+        "field": "message",
+        "patterns": [
+          "^%{TIMESTAMP_ISO8601:event_time}"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "grok": {
         "field": "ndc.text",
         "patterns": [
           "[\\s\\S]*?(?<transaction.status>APPROVED|DECLINED|TIMEOUT|ERROR)[\\s\\S]*"
@@ -222,6 +232,8 @@
         "target_field": "@timestamp",
         "timezone": "Africa/Addis_Ababa",
         "formats": [
+          "yyyy-MM-dd HH:mm:ss,SSS",
+          "yyyy-MM-dd HH:mm:ss.SSS",
           "yyyy-MM-dd'T'HH:mm:ss",
           "yyyy-MM-dd HH:mm:ss",
           "MM/dd/yyyy'*'HH:mm"

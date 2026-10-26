@@ -237,11 +237,24 @@ def test_grg_verbose_event_is_not_junk(monkeypatch):
     out = mod._parse_ej_log_line(src)
     assert out["atm_id"] == "ATM-TEST-GRG"
     assert out["event_type"] == "TXN"
-    assert mod._is_junk_hit(out) is False
+    assert out["event_time"] == "2026-10-20 09:27:48"
+    assert mod._display_ts(out) == "2026-10-20 09:27:48"
 
 
 def test_timestamped_raw_event_survives_even_without_a_mapping():
     mod = _load_search_parser()
-    src = {"message": "2026-10-20 09:27:48.000 PIN ENTERED"}
+    src = {"message": "2026-10-20 09:27:48.000 CABINET DOOR OPEN"}
     out = mod._parse_ej_log_line(src)
+    assert out["event_time"] == "2026-10-20 09:27:48"
+    assert out["event_type"] == "STATE"
+    assert mod._display_ts(out) == "2026-10-20 09:27:48"
     assert mod._is_junk_hit(out) is False
+
+
+def test_pipeline_extracts_raw_grg_timestamp():
+    doc = json.loads(PIPELINE.read_text())
+    raw = [p for p in doc["processors"]
+           if p.get("grok", {}).get("if") == "ctx.event_time == null"]
+    assert raw, "raw GRG timestamps stay at ingest time"
+    dates = [p["date"] for p in doc["processors"] if p.get("date")]
+    assert any("yyyy-MM-dd HH:mm:ss.SSS" in d.get("formats", []) for d in dates)

@@ -106,10 +106,18 @@ def _raw_event_fields(src):
     if not msg:
         return src
     upper = msg.upper()
+    stamp = _GRG_TS.match(msg)
+    existing = src.get('event_type')
+    if stamp:
+        src.setdefault('event_time', stamp.group(0))
     if any(marker in upper for marker in _GRG_MARKERS):
-        src.setdefault('event_type', 'TXN' if any(
+        wanted = 'TXN' if any(
             k in upper for k in ('TRANSACTION', 'CARD INSERTED', 'PIN ENTERED',
-                                 'DISPENSE', 'WITHDRAWAL')) else 'STATE')
+                                 'DISPENSE', 'WITHDRAWAL')) else 'STATE'
+        if not existing or (wanted == 'TXN' and existing == 'STATE'):
+            src['event_type'] = wanted
+    elif stamp and not existing:
+        src['event_type'] = 'STATE'
     match = re.search(r'\b(APPROVED|DECLINED|TIMEOUT|ERROR)\b', upper)
     if match:
         src.setdefault('status', match.group(1))
@@ -357,6 +365,17 @@ def _build_must(keyword, card, date_from, date_to, atm_id,
 
 EAT = timezone(timedelta(hours=3))
 
+def _display_ts(src):
+    """Prefer the journal's own clock over filebeat's ingest time."""
+    raw = src.get('event_time')
+    if raw:
+        match = re.match(r'^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})',
+                         str(raw))
+        if match:
+            return f'{match.group(1)} {match.group(2)}'
+    return _fmt_ts(src.get('@timestamp', ''))
+
+
 def _fmt_ts(ts):
     if ts and 'T' in ts:
         try:
@@ -435,7 +454,7 @@ def ej_search():
                             skipped += 1
                             continue
                         results.append({
-                            'timestamp':   _fmt_ts(src.get('@timestamp', '')),
+                            'timestamp':   _display_ts(src),
                             'atm_id':      src.get('atm_id', ''),
                             'txn_type':    src.get('sub_type', src.get('event_type', '')),
                             'card':        src.get('card_masked', ''),
@@ -546,7 +565,7 @@ def ej_search_csv():
                     if _is_junk_hit(src):
                         continue
                     rows.append([
-                        _fmt_ts(src.get('@timestamp', '')),
+                        _display_ts(src),
                         src.get('atm_id', ''),
                         src.get('sub_type', src.get('event_type', '')),
                         _scrub_pan(src.get('card_masked', '')),
