@@ -69,6 +69,34 @@ def test_missing_two_digit_name_falls_back_to_four_digit(monkeypatch, tmp_path):
     assert calls and calls[0].endswith('.log')
 
 
+def test_force_refetches_a_closed_day_after_a_late_transaction(monkeypatch, tmp_path):
+    day = dt.date.today() - dt.timedelta(days=1)
+    out = tmp_path / 'ej-logs'
+    raw = tmp_path / 'ej-logs' / 'raw'
+    raw.mkdir(parents=True)
+    name = p.local_name(day, 'TESTGRG')
+    (out / name).write_text('old\n')
+    (raw / name).write_bytes(b'old\n')
+    calls = []
+
+    def fake_fetch(ip, remote):
+        calls.append(remote)
+        return ('2026-10-24 10:00:00 | GRG | TID1 | VENDOR=GRG\n').encode('utf-8'), None
+
+    monkeypatch.setattr(p, 'OUTDIR', out)
+    monkeypatch.setattr(p, 'RAWDIR', raw)
+    monkeypatch.setattr(p, 'zabbix_fetch', fake_fetch)
+
+    status, _, _ = p.pull_one('ATM-1', '10.0.0.1', 'TESTGRG', day,
+                              r'D:\Log', force=False)
+    assert status == 'skipped'
+    assert calls == []
+    status, _, _ = p.pull_one('ATM-1', '10.0.0.1', 'TESTGRG', day,
+                              r'D:\Log', force=True)
+    assert status == 'ok'
+    assert calls
+
+
 def test_append_only_avoids_the_filebeat_truncation_duplicate(tmp_path):
     path = tmp_path / 'j.log'
     assert p.write_append_only(path, b'one\n') == 'replaced'

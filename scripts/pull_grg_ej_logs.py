@@ -125,12 +125,12 @@ def zabbix_fetch(ip: str, remote: str):
 
 
 def pull_one(atm_id: str, ip: str, host: str, day: dt.date,
-             source_dir: str, dry_run: bool = False):
+             source_dir: str, dry_run: bool = False, force: bool = False):
     name = local_name(day, host)
     existing_raw = RAWDIR / name
     # A frozen (closed) day already in evidence is not re-fetched.  The live
     # file is today's; re-fetch it because it is still growing.
-    if (day < dt.date.today() and existing_raw.exists()
+    if (not force and day < dt.date.today() and existing_raw.exists()
             and existing_raw.stat().st_size and (OUTDIR / name).exists()):
         return ('skipped', name, 'closed day already held')
 
@@ -162,6 +162,8 @@ def main(argv=None):
                     help='GRG Log directory on the ATM (default: %(default)s)')
     ap.add_argument('--dry-run', action='store_true',
                     help='print what would be fetched; no agent calls or writes')
+    ap.add_argument('--force', action='store_true',
+                    help='re-fetch a closed day (use after a late transaction)')
     args = ap.parse_args(argv)
 
     if args.days < 1:
@@ -191,7 +193,8 @@ def main(argv=None):
         for offset in range(args.days):
             day = today - dt.timedelta(days=offset)
             status, name, detail = pull_one(
-                atm_id, ip, host, day, args.source_dir, dry_run=args.dry_run)
+                atm_id, ip, host, day, args.source_dir,
+                dry_run=args.dry_run, force=args.force)
             print(f'  {atm_id} {day} {name}: {detail}' if status == 'ok'
                   else f'  {atm_id} {day} {status}: {detail}')
             if status == 'absent' and detail not in (
