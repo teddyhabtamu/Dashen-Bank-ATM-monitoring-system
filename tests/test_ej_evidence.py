@@ -199,6 +199,7 @@ def test_atm_detail_has_admin_only_evidence_card():
     assert 'can_view_ej' in template
     assert "url_for('ej_journal.ej_raw_download'" in template
     assert 'Open full EJ Journal' in template
+    assert 'sessions in latest file' in template
 
 
 def test_ej_journal_detail_has_raw_download_column():
