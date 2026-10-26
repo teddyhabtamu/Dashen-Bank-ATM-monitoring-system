@@ -15,9 +15,11 @@ query reads staging data.
 import logging
 from datetime import datetime, time, timedelta, timezone
 
-from flask import Blueprint, abort, render_template, request
+from flask import Blueprint, abort, render_template, request, send_file
 from werkzeug.exceptions import HTTPException
 from db import get_db
+from audit import log_action
+from evidence import raw_info, raw_path, sha256_file
 from blueprints.auth import login_required, role_required, ROLE_ADMIN
 
 logger = logging.getLogger(__name__)
@@ -419,7 +421,7 @@ def ej_journal_detail(atm_id):
             cur.execute("""
                 SELECT file_path, hostname, journal_date, vendor, sessions,
                        completed, approved, declined, unknown, warnings,
-                       parsed_at, status, error
+                       parsed_at, status, error, id
                   FROM ej_parse_runs
                  WHERE atm_id = %s
                    AND COALESCE(journal_date, parsed_at::date) >= %s
@@ -432,8 +434,10 @@ def ej_journal_detail(atm_id):
                 'vendor': r[3], 'sessions': r[4], 'completed': r[5],
                 'approved': r[6], 'declined': r[7], 'unknown': r[8],
                 'warnings': _warnings(r[9]), 'parsed_at': _eat(r[10]),
-                'status': r[11], 'error': r[12],
+                'status': r[11], 'error': r[12], 'id': r[13],
             } for r in cur.fetchall()]
+            for run in parse_runs:
+                run.update(raw_info(run['file_path']))
 
             cur.execute("""
                 SELECT count(*)
@@ -501,3 +505,54 @@ def ej_journal_detail(atm_id):
         total=total,
         total_pages=total_pages,
     )
+
+
+@bp.route('/ej-journal/<atm_id>/raw/<int:run_id>')
+@login_required
+@role_required(ROLE_ADMIN)
+def ej_raw_download(atm_id, run_id):
+    """Download the byte-identical raw journal for one parse run.
+
+    The database id is the only path input. The evidence helper rejects
+    non-canonical names, symlinks and anything outside EVIDENCE_RAW_DIR.
+    """
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT file_path
+                  FROM ej_parse_runs
+                 WHERE id = %s AND atm_id = %s
+            """, (run_id, atm_id))
+            row = cur.fetchone()
+            cur.close()
+    except Exception as exc:  # noqa: BLE001 - do not leak DB detail to the browser
+        logger.warning('raw EJ lookup failed: %s', exc)
+        abort(404)
+
+    if not row:
+        abort(404)
+    path = raw_path(row[0])
+    if not path:
+        abort(404)
+
+    try:
+        size = path.stat().st_size
+        digest = sha256_file(path)
+    except OSError as exc:
+        logger.warning('raw EJ read failed: %s', exc)
+        abort(404)
+
+    log_action(
+        'EJ_RAW_DOWNLOAD',
+        f'ATM {atm_id} file {path.name} bytes {size} sha256 {digest}',
+    )
+    response = send_file(
+        path,
+        mimetype='application/octet-stream',
+        as_attachment=True,
+        download_name=path.name,
+        max_age=0,
+    )
+    response.headers['Cache-Control'] = 'no-store'
+    return response

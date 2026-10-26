@@ -10,6 +10,7 @@ from werkzeug.security import generate_password_hash
 from blueprints.auth import login_required, role_required, ROLE_ADMIN, ROLE_OPERATOR, ROLE_VIEWER, password_error
 from db import get_db
 from audit import log_action
+from evidence import raw_info
 from scheduler import REPORT_TYPE_LABELS
 from zabbix_modules.xfs_metrics import DISPENSE_UNITS, is_xfs, normalize
 
@@ -733,6 +734,37 @@ def atm_detail(atm_id):
                 LIMIT 20
             """, (atm_id,))
             txns = cur.fetchall()
+
+            ej_runs = []
+            ej_evidence_note = ''
+            if session.get('role') == ROLE_ADMIN:
+                try:
+                    cur.execute("""
+                        SELECT id, file_path, journal_date, parsed_at, sessions,
+                               status, error
+                          FROM ej_parse_runs
+                         WHERE atm_id = %s
+                         ORDER BY journal_date DESC NULLS LAST, parsed_at DESC
+                         LIMIT 5
+                    """, (atm_id,))
+                    for r in cur.fetchall():
+                        info = raw_info(r[1])
+                        ej_runs.append({
+                            'id': r[0],
+                            'file_label': os.path.basename(
+                                str(r[1]).replace('\\', '/')),
+                            'journal_date': r[2].isoformat() if r[2] else '—',
+                            'parsed_at': to_eat(r[3], '%Y-%m-%d %H:%M'),
+                            'sessions': r[4] or 0,
+                            'status': r[5] or '—',
+                            'error': r[6] or '',
+                            **info,
+                        })
+                except Exception as exc:  # noqa: BLE001 - EJ staging is optional here
+                    logger.warning('ATM detail EJ evidence unavailable: %s', exc)
+                    ej_evidence_note = (
+                        'EJ evidence is unavailable until the staging schema is applied.'
+                    )
             cur.close()
 
         # BRD 5.3 depletion forecast. Best-effort: the page must render even
@@ -763,7 +795,10 @@ def atm_detail(atm_id):
                                maintenance_active=maintenance_active,
                                maintenance_error=maintenance_error,
                                maintenance_options=maintenance_opts,
-                               can_maintain=can_maintain)
+                               can_maintain=can_maintain,
+                               ej_runs=ej_runs,
+                               ej_evidence_note=ej_evidence_note,
+                               can_view_ej=session.get('role') == ROLE_ADMIN)
     except Exception as e:
         import logging
         logging.getLogger(__name__).error('ATM detail error: %s', e, exc_info=True)

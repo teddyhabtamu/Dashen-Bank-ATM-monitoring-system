@@ -202,6 +202,7 @@ services:
       ZABBIX_UI_URL: "${ZABBIX_UI_URL}"
       GLPI_UI_URL: "${GLPI_UI_URL}"
       REPORT_PORTAL_PORT: "8888"
+      EVIDENCE_RAW_DIR: "/app/evidence/raw"
       BASE_URL: "${BASE_URL:-http://localhost:8888}"
       ES_HOST: "${DATA_VM_IP}:9200"
       ES_INDEX: "atm-ej-live-*,atm-electronic-journal"
@@ -237,6 +238,7 @@ services:
       GLPI_API_PASSWORD: "${GLPI_API_PASSWORD:-}"
     volumes:
       - ./report-portal:/app:rw
+      - ./ej-logs/raw:/app/evidence/raw:ro
       - ./zabbix_modules:/app/zabbix_modules:ro
       - ./config/status_map.json:/app/config/status_map.json:ro
       - ./config/cassette_capacity.json:/app/config/cassette_capacity.json:ro
