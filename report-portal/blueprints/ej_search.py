@@ -19,6 +19,7 @@ ES_HOST  = os.environ.get('ES_HOST', 'opensearch:9200')
 ES_INDEX = os.environ.get('ES_INDEX', 'atm-ej-live-*,atm-electronic-journal')
 
 _TID_CACHE = {'at': 0.0, 'map': {}}
+_HOST_CACHE = {'at': 0.0, 'map': {}}
 
 
 def _terminal_map(ttl=300):
@@ -43,6 +44,76 @@ def _terminal_map(ttl=300):
         logger.warning('terminal map refresh failed: %s', e)
     _TID_CACHE.update(at=now, map=mapping)
     return mapping
+
+
+def _hostname_map(ttl=300):
+    """ej_hostname -> atm_id, cached. Used when the pipeline did not
+    populate atm.id (GRG documents were arriving with only the filename)."""
+    import time
+    now = time.time()
+    if now - _HOST_CACHE['at'] < ttl:
+        return _HOST_CACHE['map']
+    mapping = {}
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT ej_hostname, atm_id FROM atm_locations "
+                        "WHERE COALESCE(ej_hostname,'') <> ''")
+            mapping = {str(h).strip().upper(): a for h, a in cur.fetchall()}
+            cur.close()
+    except Exception as e:
+        logger.warning('hostname map refresh failed: %s', e)
+    _HOST_CACHE.update(at=now, map=mapping)
+    return mapping
+
+
+_GRG_TS = re.compile(r'^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}')
+_GRG_MARKERS = ('TRANSACTION START', 'TRANSACTION END', 'CARD INSERTED',
+                'RFCARD INSERTED', 'PIN ENTERED', 'DISPENSE', 'WITHDRAWAL',
+                'BALANCE', 'FAULT', 'CASSETTE', 'CABINET DOOR')
+
+
+def _atm_from_source(src):
+    """Best-effort ATM identity for reachable raw EJ docs.
+
+    The OpenSearch pipeline only maps a couple of test hostnames today; the
+    canonical pulled filename is still a reliable identity because it is
+    <date>_<HOST>_EJDATA.log. Use the registry, never the filename as an ATM id.
+    """
+    atm = src.get('atm') if isinstance(src.get('atm'), dict) else {}
+    if atm.get('id'):
+        return atm.get('id')
+    candidates = []
+    log = src.get('log') if isinstance(src.get('log'), dict) else {}
+    fileinfo = log.get('file') if isinstance(log.get('file'), dict) else {}
+    if fileinfo.get('path'):
+        candidates.append(fileinfo['path'])
+    if atm.get('host'):
+        candidates.append(atm['host'])
+    for value in candidates:
+        match = re.search(r'([0-9]{4}-[0-9]{2}-[0-9]{2})_([^/]+)_EJDATA\.log$',
+                          str(value))
+        if match:
+            mapped = _hostname_map().get(match.group(2).upper())
+            if mapped:
+                return mapped
+    return None
+
+
+def _raw_event_fields(src):
+    """Give unparsed NCR/GRG verbose events a displayable shape."""
+    msg = src.get('message') or ''
+    if not msg:
+        return src
+    upper = msg.upper()
+    if any(marker in upper for marker in _GRG_MARKERS):
+        src.setdefault('event_type', 'TXN' if any(
+            k in upper for k in ('TRANSACTION', 'CARD INSERTED', 'PIN ENTERED',
+                                 'DISPENSE', 'WITHDRAWAL')) else 'STATE')
+    match = re.search(r'\b(APPROVED|DECLINED|TIMEOUT|ERROR)\b', upper)
+    if match:
+        src.setdefault('status', match.group(1))
+    return src
 
 
 def _scrub_pan(text):
@@ -79,6 +150,10 @@ def _parse_ej_log_line(src):
     """
     # ── Generation 1: nested schema ──
     atm_obj = src.get('atm') if isinstance(src.get('atm'), dict) else {}
+    if not atm_obj.get('id'):
+        derived_atm = _atm_from_source(src)
+        if derived_atm:
+            src['atm_id'] = derived_atm
     if atm_obj.get('id'):
         txn   = src.get('transaction') if isinstance(src.get('transaction'), dict) else {}
         card  = src.get('card')        if isinstance(src.get('card'), dict) else {}
@@ -104,19 +179,21 @@ def _parse_ej_log_line(src):
         src['currency']    = txn.get('currency')
         src['auth_code']   = txn.get('auth_code')
         src['error_code']  = fault.get('code')
-        return src
+        return _raw_event_fields(src)
 
     # ── Generation 2: flat pipeline fields already present ──
     if src.get('atm_id'):
-        return src
+        return _raw_event_fields(src)
 
     # ── Generation 3: parse raw message ──
     msg = src.get('message', '')
-    if not msg or '|' not in msg:
+    if not msg:
         return src
+    if '|' not in msg:
+        return _raw_event_fields(src)
     parts = [p.strip() for p in msg.split('|')]
     if len(parts) < 4:
-        return src
+        return _raw_event_fields(src)
     is_grg = any(p.upper().startswith('VENDOR=') for p in parts)
     src['atm_id'] = parts[1]
     if is_grg:
@@ -169,7 +246,14 @@ def _is_junk_hit(src):
     """
     if src.get('atm_id'):
         return False
-    return '|' not in (src.get('message') or '')
+    msg = src.get('message') or ''
+    if '|' in msg:
+        return False
+    if _GRG_TS.match(msg) or '[020t' in msg:
+        return False
+    if any(marker in msg.upper() for marker in _GRG_MARKERS):
+        return False
+    return True
 
 
 def _clean_contains(value, limit=64):

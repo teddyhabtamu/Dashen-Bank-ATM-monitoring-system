@@ -112,6 +112,11 @@ def test_pipeline_has_trim_processors():
     assert "card.masked" in trimmed, "no trim processor for card.masked"
 
 
+def test_pipeline_maps_the_grg_test_hostname():
+    blob = json.dumps(json.loads(PIPELINE.read_text()))
+    assert "ATM-TEST-GRG" in blob, "GRG docs would keep atm.id empty"
+
+
 def test_amount_converted_to_float():
     """transaction.amount must index numeric (template formats it with
     :,.2f — a string amount 500s the whole EJ Search page, seen live
@@ -206,3 +211,37 @@ def test_parser_function_if_importable():
     assert out.get("transaction", {}).get("status") == "APPROVED"
     assert " " not in out.get("transaction", {}).get("status", "")
     assert out.get("card", {}).get("masked") == "************0123"
+
+
+def _load_search_parser():
+    import importlib.util
+    import pytest
+    spec = importlib.util.spec_from_file_location(
+        "ej_search_standalone", REPO / "report-portal" / "blueprints" / "ej_search.py")
+    mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(mod)
+    except Exception as exc:  # Flask is not installed in the minimal test venv
+        pytest.skip(f"EJ search module not importable here ({exc})")
+    return mod
+
+
+def test_grg_verbose_event_is_not_junk(monkeypatch):
+    mod = _load_search_parser()
+    monkeypatch.setattr(mod, "_hostname_map",
+                        lambda: {"TESTGRG": "ATM-TEST-GRG"})
+    src = {
+        "message": "2026-10-20 09:27:48.000 CARD INSERTED. PAN: 037991******1425",
+        "log": {"file": {"path": "/var/log/atm-ej/2026-10-20_TESTGRG_EJDATA.log"}},
+    }
+    out = mod._parse_ej_log_line(src)
+    assert out["atm_id"] == "ATM-TEST-GRG"
+    assert out["event_type"] == "TXN"
+    assert mod._is_junk_hit(out) is False
+
+
+def test_timestamped_raw_event_survives_even_without_a_mapping():
+    mod = _load_search_parser()
+    src = {"message": "2026-10-20 09:27:48.000 PIN ENTERED"}
+    out = mod._parse_ej_log_line(src)
+    assert mod._is_junk_hit(out) is False

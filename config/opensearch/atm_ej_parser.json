@@ -1,5 +1,5 @@
 {
-      "description": "Parse ATM Electronic Journal log lines (NCR + GRG, legacy and current shapes) into a structured nested schema: atm.id, terminal.id, transaction.*, card.masked, fault.*, event.category. Referenced by filebeat.yml (output.elasticsearch.pipeline). NDC records (ESC-led [020t*SEQ*MM/DD/YYYY*HH:MM*TEXT, proven live 2026-10-13) are split by filebeat multiline, then grokked here. Control bytes are stripped and PANs scrubbed (first6******last4) BEFORE storage, so raw PANs never rest at rest — portal display-scrub is defense in depth. Real (non-simulator) EJ lines that do not match the grok patterns are retained verbatim in `ej_raw` and tagged `ej_parsed:false` so they can be tuned later without data loss.",
+  "description": "Parse ATM Electronic Journal log lines (NCR + GRG, legacy and current shapes) into a structured nested schema: atm.id, terminal.id, transaction.*, card.masked, fault.*, event.category. Referenced by filebeat.yml (output.elasticsearch.pipeline). NDC records (ESC-led [020t*SEQ*MM/DD/YYYY*HH:MM*TEXT, proven live 2026-10-13) are split by filebeat multiline, then grokked here. Control bytes are stripped and PANs scrubbed (first6******last4) BEFORE storage, so raw PANs never rest at rest — portal display-scrub is defense in depth. Real (non-simulator) EJ lines that do not match the grok patterns are retained verbatim in `ej_raw` and tagged `ej_parsed:false` so they can be tuned later without data loss.",
   "processors": [
     {
       "gsub": {
@@ -124,6 +124,13 @@
         "if": "ctx.atm?.host != null && ctx.atm.host.contains('TESTMACHINE')",
         "field": "atm.id",
         "value": "ATM-TEST-NCR"
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.atm?.host != null && ctx.atm.host.contains('TESTGRG')",
+        "field": "atm.id",
+        "value": "ATM-TEST-GRG"
       }
     },
     {
