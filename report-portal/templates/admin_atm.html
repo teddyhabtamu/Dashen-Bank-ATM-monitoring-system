@@ -162,7 +162,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
 
 <div class="summary-grid">
   <div class="summary-card"><div class="sc-val">{{ summary.registered }}</div><div class="sc-lbl">Registered ATMs</div></div>
-  <div class="summary-card"><div class="sc-val" style="color:#059669">{{ summary.in_service }}</div><div class="sc-lbl">In Service</div></div>
+  <div class="summary-card"><div class="sc-val" style="color:#059669">{{ summary.in_service }}</div><div class="sc-lbl" title="Live Zabbix state for ATMs shown on this page; last known state for the rest.">In Service</div></div>
   <div class="summary-card"><div class="sc-val" style="color:#1D4ED8">{{ summary.ncr }}</div><div class="sc-lbl">NCR ATMs</div></div>
   <div class="summary-card"><div class="sc-val" style="color:#7C3AED">{{ summary.grg }}</div><div class="sc-lbl">GRG ATMs</div></div>
 </div>
@@ -227,7 +227,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
         <th style="width:36px;padding:8px 6px;text-align:center"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" style="cursor:pointer;width:15px;height:15px"></th>
         {% endif %}
         <th>ATM ID</th><th>Name</th><th>Branch</th><th>City</th><th>Vendor</th><th>Model</th>
-         <th>Monitored</th><th>Current State</th><th>Last Seen</th>{% if session.get('role') in ('admin', 'operator') %}<th></th>{% endif %}
+         <th>Monitored</th><th title="Live Zabbix state when available; otherwise last known state.">Current State</th><th>Last Seen</th>{% if session.get('role') in ('admin', 'operator') %}<th></th>{% endif %}
       </tr></thead>
       <tbody>
         {% if atms %}

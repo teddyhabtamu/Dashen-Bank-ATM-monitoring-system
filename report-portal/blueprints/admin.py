@@ -11,6 +11,7 @@ from blueprints.auth import login_required, role_required, ROLE_ADMIN, ROLE_OPER
 from db import get_db
 from audit import log_action
 from evidence import raw_info
+from state_summary import merge_live_in_service
 from scheduler import REPORT_TYPE_LABELS
 from zabbix_modules.xfs_metrics import DISPENSE_UNITS, is_xfs, normalize
 
@@ -562,6 +563,7 @@ def atm_list():
     # Override state/last_seen with live sim-engine data (parallel fetch)
     live_states = batch_fetch_live_states(atms)
     for atm in atms:
+        atm['stored_state'] = atm.get('state')
         ls = live_states.get(atm['atm_id'])
         if ls:
             atm['state'] = ls[0]
@@ -587,6 +589,8 @@ def atm_list():
                    'ncr': int(s[2] or 0), 'grg': int(s[3] or 0)}
     except Exception:
         summary = {'registered': total, 'in_service': 0, 'ncr': 0, 'grg': 0}
+
+    summary['in_service'] = merge_live_in_service(summary['in_service'], atms)
 
     return render_template('admin_atm.html', atms=atms, atm_count=total,
                            page=page, total_pages=total_pages,
