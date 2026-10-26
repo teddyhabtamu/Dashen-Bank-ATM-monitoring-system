@@ -61,6 +61,7 @@ import time
 JOBS = (
     # name,             log path,                     schedule seconds,   grace x
     ('ej_pull',         'logs/ej-pull.log',            60,                 6),
+    ('grg_ej_pull',     'logs/grg-ej-pull.log',        300,                 6),
     ('reconcile_glpi',  'logs/reconcile.log',          86400,              2),
     ('backup_db',       '$HOME/atm-backup_db.log',     86400,              2),
     ('backup_configs',  '$HOME/atm-backup_configs.log', 86400,             2),

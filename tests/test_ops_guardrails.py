@@ -115,6 +115,7 @@ def test_the_reconcile_failure_we_actually_had_is_detected(tmp_path):
 def test_healthy_repo_reports_nothing_and_exits_zero(tmp_path):
     _make_repo(tmp_path, {
         'logs/ej-pull.log': 30,
+        'logs/grg-ej-pull.log': 30,
         'logs/reconcile.log': 600,
         '$HOME/atm-backup_db.log': 600,
         '$HOME/atm-backup_configs.log': 600,
@@ -159,6 +160,8 @@ def test_grace_is_generous_enough_not_to_be_noisy(tmp_path):
     import check_jobs
     ej = [j for j in check_jobs.JOBS if j[0] == 'ej_pull'][0]
     assert ej[3] >= 3, 'grace multiplier too tight - this will cry wolf'
+    grg = [j for j in check_jobs.JOBS if j[0] == 'grg_ej_pull'][0]
+    assert grg[2] == 300 and grg[3] >= 3, 'GRG pull must be monitored'
     reconcile = [j for j in check_jobs.JOBS if j[0] == 'reconcile_glpi'][0]
     assert reconcile[2] == 86400, 'reconcile is a daily job'
 
@@ -340,3 +343,11 @@ def test_missing_log_message_names_the_resolved_path(tmp_path):
     assert 'backup_db' in problems
     assert str(tmp_path / 'home') in problems['backup_db']['log'], \
         problems['backup_db']['log']
+
+
+def test_grg_pull_cron_installer_is_idempotent_and_marked():
+    text = (REPO / "scripts" / "install_grg_pull_cron.sh").read_text()
+    assert "grg-ej-pull" in text
+    assert "pull_grg_ej_logs.py --days 3" in text
+    assert "crontab -l" in text and "crontab \"$tmp\"" in text
+    assert "--remove" in text

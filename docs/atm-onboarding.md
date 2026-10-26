@@ -146,6 +146,10 @@ calling an ATM live.
       `python3 scripts/pull_grg_ej_logs.py --days 3`
       → writes `ej-logs/<date>_<HOST>_EJDATA.log` and raw evidence under
       `ej-logs/raw/`. NCR uses `scripts/pull_ej_logs.sh` as before.
+- [ ] Make the GRG pull automatic (every 5 minutes):
+      `./scripts/install_grg_pull_cron.sh`
+      → logs to `logs/grg-ej-pull.log`; remove with `--remove`.
+      The separate ingest cron and filebeat run automatically after the pull.
 - [ ] After the next hour, open portal → EJ Journal or EJ Search → filter the
       ATM: journal rows with masked cards must appear. Empty result with a
       working pull means the box writes no journals (check with custodian).
