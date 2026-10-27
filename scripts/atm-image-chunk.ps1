@@ -108,7 +108,11 @@ function Get-AllowedRoots {
         if ($value.StartsWith('\\')) { Fail 'E_CONFIG' }
         if ($value -match '(^|[\\/])\.\.([\\/]|$)') { Fail 'E_CONFIG' }
 
-        $full = [IO.Path]::GetFullPath($value)
+        try {
+            $full = [IO.Path]::GetFullPath($value)
+        } catch {
+            Fail 'E_CONFIG'
+        }
         if ($full.StartsWith('\\')) { Fail 'E_CONFIG' }
         if ($full -match '^[A-Za-z]:\\$') { Fail 'E_CONFIG' }
         if ($full.IndexOf([char]':', 2) -ge 0) { Fail 'E_CONFIG' }
@@ -161,7 +165,11 @@ function Resolve-AllowedPath([string]$Value) {
     if ($Value.StartsWith('\\')) { Fail 'E_ROOT' }
     if (-not [IO.Path]::IsPathRooted($Value)) { Fail 'E_PATH' }
 
-    $full = [IO.Path]::GetFullPath($Value)
+    try {
+        $full = [IO.Path]::GetFullPath($Value)
+    } catch {
+        Fail 'E_PATH'
+    }
     if ($full.StartsWith('\\')) { Fail 'E_ROOT' }
     if ($full.IndexOf([char]':', 2) -ge 0) { Fail 'E_PATH' }   # alternate data streams
 
