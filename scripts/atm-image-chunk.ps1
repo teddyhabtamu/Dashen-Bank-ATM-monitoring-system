@@ -243,6 +243,13 @@ function Resolve-AllowedDirectory([string]$Value) {
     $full = $full -replace '[\\/]+$', ''
     if ($full -match '^[A-Za-z]:$') { Fail 'E_ROOT' }
 
+    $leaf = [IO.Path]::GetFileName($full)
+    if ([string]::IsNullOrEmpty($leaf)) { Fail 'E_PATH' }
+    $first = $leaf.Split('.')[0].TrimEnd([char[]]@(' ', '.'))
+    if ($first -match '^(?i:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$') {
+        Fail 'E_PATH'
+    }
+
     $matched = $null
     foreach ($root in (Get-AllowedRoots)) {
         $rootPath = $root -replace '[\\/]+$', ''

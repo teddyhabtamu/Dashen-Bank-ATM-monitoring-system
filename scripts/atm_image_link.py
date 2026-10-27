@@ -145,6 +145,8 @@ def rank_grg_candidates(rows: Sequence[dict],
     strong.  Everything else inside the interval is supporting evidence.
     The card field is shown but never used for the link.
     """
+    if start.tzinfo is not None or end.tzinfo is not None:
+        raise LinkError('E_TZ')
     if end < start:
         raise LinkError('E_RANGE')
     if pre_window < 0 or post_window < 0 or anchor_window < 0:
@@ -247,6 +249,8 @@ def select_ncr_zips(rows: Sequence[dict], day: dt.date) -> dict:
     """
     if not isinstance(day, dt.date):
         raise LinkError('E_ARGS')
+    if isinstance(day, dt.datetime):
+        day = day.date()
 
     found: list[dict] = []
     unparsed = 0

@@ -189,6 +189,13 @@ def test_a_non_numeric_size_is_refused():
     assert str(exc.value) == 'E_ROWS'
 
 
+def test_timezone_aware_session_times_are_refused():
+    aware = SESSION_START.replace(tzinfo=dt.timezone.utc)
+    with pytest.raises(link.LinkError) as exc:
+        link.rank_grg_candidates(rows(CARD_INSERTED), aware, SESSION_END)
+    assert str(exc.value) == 'E_TZ'
+
+
 # ---------------------------------------------------------------------------
 # NCR day container
 # ---------------------------------------------------------------------------

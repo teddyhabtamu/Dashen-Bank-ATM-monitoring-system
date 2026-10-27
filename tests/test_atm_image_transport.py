@@ -667,6 +667,11 @@ def test_directory_listing_is_non_recursive_and_paged():
     assert 'DirLimit' in PS1
 
 
+def test_directory_resolver_rejects_reserved_device_names():
+    # The file resolver and the directory resolver must share the check.
+    assert PS1.count('$first -match') == 2
+
+
 def test_read_only_codes_are_documented():
     for code in ('E_MISSING', 'E_REPARSE', 'E_ROOT', 'E_EXT',
                  'E_CONFIG', 'E_ZIP_BUSY', 'E_COUNT'):
