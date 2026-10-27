@@ -65,6 +65,38 @@ def local_name(day: dt.date, host: str):
     return f'{day:%Y-%m-%d}_{host}_EJDATA.log'
 
 
+def latest_evidence_day(host: str, outdir: Path | None = None):
+    """Newest journal date already held for this ATM, or None.
+
+    The GRG clock/journal date can lag the server date.  The normal --days
+    window starts at today and therefore stops asking for the newest file
+    exactly when the ATM falls behind — the puller looks healthy while the
+    portal stays stale.  Include the day we already hold and treat it as live.
+    """
+    outdir = Path(outdir or OUTDIR)
+    suffix = f'_{host}_EJDATA.log'
+    days = []
+    for path in outdir.glob('*_EJDATA.log'):
+        if not path.name.endswith(suffix):
+            continue
+        try:
+            days.append(dt.date.fromisoformat(path.name[:10]))
+        except ValueError:
+            continue
+    return max(days) if days else None
+
+
+def days_for_target(host: str, days: int, today: dt.date | None = None,
+                    outdir: Path | None = None):
+    """Return (newest-first day list, newest held day) for one ATM."""
+    today = today or dt.datetime.now(dt.timezone.utc).date()
+    day_list = [today - dt.timedelta(days=offset) for offset in range(days)]
+    latest = latest_evidence_day(host, outdir=outdir)
+    if latest and latest not in day_list:
+        day_list.append(latest)
+    return sorted(set(day_list), reverse=True), latest
+
+
 def decode_text(raw: bytes) -> str:
     """Decode GRG's UTF-16 journal, with an 8-bit fallback for older boxes."""
     if raw.startswith(codecs.BOM_UTF16_LE) or raw.startswith(codecs.BOM_UTF16_BE):
@@ -190,11 +222,15 @@ def main(argv=None):
     today = dt.datetime.now(dt.timezone.utc).date()
     failed = 0
     for atm_id, ip, host in targets:
-        for offset in range(args.days):
-            day = today - dt.timedelta(days=offset)
+        target_days, latest = days_for_target(host, args.days, today=today)
+        for day in target_days:
+            # The newest held day may still be the ATM's live journal even
+            # though it is older than the server date.  Do not let the normal
+            # "closed day" shortcut hide it.
+            force = args.force or day == latest
             status, name, detail = pull_one(
                 atm_id, ip, host, day, args.source_dir,
-                dry_run=args.dry_run, force=args.force)
+                dry_run=args.dry_run, force=force)
             print(f'  {atm_id} {day} {name}: {detail}' if status == 'ok'
                   else f'  {atm_id} {day} {status}: {detail}')
             if status == 'absent' and detail not in (

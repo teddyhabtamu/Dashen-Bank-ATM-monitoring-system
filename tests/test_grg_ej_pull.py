@@ -105,3 +105,20 @@ def test_append_only_avoids_the_filebeat_truncation_duplicate(tmp_path):
     assert p.write_append_only(path, b'one\ntwo\n') == 'unchanged'
     assert p.write_append_only(path, b'three\n') == 'replaced'
     assert path.read_bytes() == b'three\n'
+
+
+def test_latest_evidence_day_includes_the_lagging_live_journal(tmp_path):
+    out = tmp_path / 'ej-logs'
+    out.mkdir()
+    for day, host in ((dt.date(2026, 10, 23), 'TESTGRG'),
+                      (dt.date(2026, 10, 24), 'TESTGRG'),
+                      (dt.date(2026, 10, 24), 'OTHER')):
+        (out / p.local_name(day, host)).write_text('x\n')
+
+    assert p.latest_evidence_day('TESTGRG', outdir=out) == dt.date(2026, 10, 24)
+
+    days, latest = p.days_for_target(
+        'TESTGRG', 3, today=dt.date(2026, 10, 27), outdir=out)
+    assert latest == dt.date(2026, 10, 24)
+    assert days == [dt.date(2026, 10, 27), dt.date(2026, 10, 26),
+                    dt.date(2026, 10, 25), dt.date(2026, 10, 24)]
