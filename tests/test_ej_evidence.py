@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -87,6 +88,47 @@ def test_raw_dir_reads_env_each_call(monkeypatch, tmp_path):
     assert evidence.raw_dir() == tmp_path / 'two'
 
 
+def test_read_text_lines_decodes_utf8_and_crlf(tmp_path):
+    path = _write(
+        tmp_path / '2026-10-25_TESTGRG_EJDATA.log',
+        b'alpha\r\nbeta\r\n',
+    )
+    result = evidence.read_text_lines(path)
+    assert result['lines'] == ['alpha', 'beta']
+    assert result['too_large'] is False
+    assert result['binary'] is False
+
+
+def test_read_text_lines_refuses_binary_and_oversize(tmp_path):
+    binary = _write(
+        tmp_path / '2026-10-25_BINARY_EJDATA.log', b'abc\x00def')
+    assert evidence.read_text_lines(binary)['binary'] is True
+
+    larger = _write(
+        tmp_path / '2026-10-25_LARGE_EJDATA.log', b'0123456789')
+    result = evidence.read_text_lines(larger, max_bytes=3)
+    assert result['too_large'] is True
+    assert result['lines'] == []
+
+
+def test_paginate_lines_is_case_insensitive_and_keeps_line_numbers():
+    lines = ['Card OK', 'transaction APPROVED', 'card declined', 'tail']
+    result = evidence.paginate_lines(lines, query='CARD', page=1, per_page=1)
+    assert result['total'] == 2
+    assert result['pages'] == 2
+    assert result['lines'] == [{'number': 1, 'text': 'Card OK'}]
+
+    result = evidence.paginate_lines(lines, query='CARD', page=2, per_page=1)
+    assert result['lines'] == [{'number': 3, 'text': 'card declined'}]
+
+
+def test_paginate_lines_clamps_page_and_handles_empty_search():
+    result = evidence.paginate_lines(['one', 'two'], query='missing', page=9)
+    assert result['page'] == 1
+    assert result['total'] == 0
+    assert result['lines'] == []
+
+
 class _Cursor:
     def __init__(self, row):
         self._row = row
@@ -126,7 +168,20 @@ def _app(monkeypatch, row, tmp_path):
 
     app = Flask(__name__, template_folder=str(ROOT / 'report-portal' / 'templates'))
     app.secret_key = 'test'
+    app.jinja_env.globals['csrf_token'] = lambda: 'test'
     app.register_blueprint(ejb.bp)
+
+    # The raw viewer links back to the ATM detail page. A stub keeps this
+    # route test focused on evidence access instead of booting the admin
+    # blueprint and all of its Zabbix/database dependencies.
+    from flask import Blueprint
+    admin = Blueprint('admin', __name__)
+
+    @admin.route('/atms/<atm_id>')
+    def atm_detail(atm_id):
+        return 'atm'
+
+    app.register_blueprint(admin)
     return app, calls
 
 
@@ -187,22 +242,137 @@ def test_raw_download_rejects_missing_archive(monkeypatch, tmp_path):
     assert calls == []
 
 
-def test_raw_download_route_is_admin_only():
+def _view_row(file_path='/data/ej-logs/2026-10-25_TESTGRG_EJDATA.log'):
+    return (
+        file_path,
+        datetime(2026, 10, 25).date(),
+        datetime(2026, 10, 26, 16, 20, tzinfo=timezone.utc),
+        'ok',
+        None,
+        2,
+        'TESTGRG',
+        '4 Kilo Branch',
+    )
+
+
+def test_raw_view_renders_and_searches_archived_file(monkeypatch, tmp_path):
+    raw = tmp_path / 'raw'
+    _write(
+        raw / '2026-10-25_TESTGRG_EJDATA.log',
+        b'line one\r\nCard APPROVED\r\nline three\r\n',
+    )
+    app, calls = _app(monkeypatch, _view_row(), tmp_path)
+    client = app.test_client()
+    _admin_session(client)
+
+    response = client.post(
+        '/ej-journal/ATM-GRG-1/raw/7/view',
+        data={'q': 'approved'},
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert response.headers['Cache-Control'] == 'no-store'
+    assert 'Card APPROVED' in body
+    assert 'line one' not in body
+    assert 'matching line' in body
+    assert 'q_len 8' in calls[0][1]
+    assert 'approved' not in calls[0][1].lower()
+    assert calls[0][0] == 'EJ_RAW_VIEW'
+
+
+def test_raw_view_is_forbidden_for_non_admin(monkeypatch, tmp_path):
+    raw = tmp_path / 'raw'
+    _write(raw / '2026-10-25_TESTGRG_EJDATA.log', b'evidence')
+    app, calls = _app(monkeypatch, _view_row(), tmp_path)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['logged_in'] = True
+        sess['role'] = 'viewer'
+        sess['username'] = 'viewer'
+
+    assert client.get('/ej-journal/ATM-GRG-1/raw/7/view').status_code == 403
+    assert calls == []
+
+
+def test_raw_view_paginates_and_clamps_page(monkeypatch, tmp_path):
+    raw = tmp_path / 'raw'
+    _write(
+        raw / '2026-10-25_TESTGRG_EJDATA.log',
+        b'\n'.join(('line %d' % n).encode() for n in range(1, 252)),
+    )
+    app, _calls = _app(monkeypatch, _view_row(), tmp_path)
+    client = app.test_client()
+    _admin_session(client)
+
+    response = client.post(
+        '/ej-journal/ATM-GRG-1/raw/7/view',
+        data={'page': '2'},
+    )
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'Page 2 of 2' in body
+    assert 'line 201' in body
+    assert 'line 1<' not in body
+
+    response = client.post(
+        '/ej-journal/ATM-GRG-1/raw/7/view',
+        data={'page': '99'},
+    )
+    body = response.get_data(as_text=True)
+    assert 'Page 2 of 2' in body
+
+
+def test_raw_view_refuses_binary_archive(monkeypatch, tmp_path):
+    raw = tmp_path / 'raw'
+    _write(raw / '2026-10-25_TESTGRG_EJDATA.log', b'abc\x00def')
+    app, calls = _app(monkeypatch, _view_row(), tmp_path)
+    client = app.test_client()
+    _admin_session(client)
+
+    response = client.get('/ej-journal/ATM-GRG-1/raw/7/view')
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'not plain text' in body
+    assert 'Download raw file' in body
+    assert calls[0][0] == 'EJ_RAW_VIEW'
+
+
+def test_raw_view_refuses_traversal_and_missing_file(monkeypatch, tmp_path):
+    app, calls = _app(monkeypatch, _view_row('../../etc/passwd'), tmp_path)
+    client = app.test_client()
+    _admin_session(client)
+    assert client.get('/ej-journal/ATM-GRG-1/raw/7/view').status_code == 404
+    assert calls == []
+
+    app, calls = _app(monkeypatch, _view_row(), tmp_path)
+    client = app.test_client()
+    _admin_session(client)
+    assert client.get('/ej-journal/ATM-GRG-1/raw/7/view').status_code == 404
+    assert calls == []
+
+
+def test_raw_routes_are_admin_only():
     source = (ROOT / 'report-portal' / 'blueprints' / 'ej_journal.py').read_text()
-    start = source.index("@bp.route('/ej-journal/<atm_id>/raw/<int:run_id>')")
-    assert '@role_required(ROLE_ADMIN)' in source[start:source.index('def ej_raw_download')]
+    for function in ('def ej_raw_download', 'def ej_raw_view'):
+        start = source.index(function)
+        decorators = source[max(0, start - 500):start]
+        assert '@role_required(ROLE_ADMIN)' in decorators
+    assert "/raw/<int:run_id>/view" in source
 
 
 def test_atm_detail_has_admin_only_evidence_card():
     template = (ROOT / 'report-portal' / 'templates' / 'admin_atm_detail.html').read_text()
     assert 'EJ Evidence' in template
     assert 'can_view_ej' in template
+    assert "url_for('ej_journal.ej_raw_view'" in template
     assert "url_for('ej_journal.ej_raw_download'" in template
     assert 'Open full EJ Journal' in template
     assert 'sessions in latest file' in template
 
 
-def test_ej_journal_detail_has_raw_download_column():
+def test_ej_journal_detail_has_raw_view_and_download_links():
     template = (ROOT / 'report-portal' / 'templates' / 'ej_journal_detail.html').read_text()
     assert '<th>Raw</th>' in template
+    assert "url_for('ej_journal.ej_raw_view'" in template
     assert "url_for('ej_journal.ej_raw_download'" in template

@@ -124,7 +124,7 @@
           <td>{{ r.declined }}</td>
           <td>{{ r.unknown }}</td>
           <td><span class="pill pill-{{ 'error' if r.status == 'error' else 'ok' }}">{{ r.status }}</span></td>
-          <td>{% if r.raw_available %}<a href="{{ url_for('ej_journal.ej_raw_download', atm_id=atm.atm_id, run_id=r.id) }}" title="Download raw evidence ({{ r.raw_size_label }})">Download</a><div class="mono" style="color:#94A3B8;font-size:10px">{{ r.raw_size_label }}</div>{% else %}<span style="color:#94A3B8">Not archived</span>{% endif %}</td>
+          <td>{% if r.raw_available %}<a href="{{ url_for('ej_journal.ej_raw_view', atm_id=atm.atm_id, run_id=r.id) }}" title="View raw evidence">View</a> · <a href="{{ url_for('ej_journal.ej_raw_download', atm_id=atm.atm_id, run_id=r.id) }}" title="Download raw evidence ({{ r.raw_size_label }})">Download</a><div class="mono" style="color:#94A3B8;font-size:10px">{{ r.raw_size_label }}</div>{% else %}<span style="color:#94A3B8">Not archived</span>{% endif %}</td>
           <td>{% for w in r.warnings %}<span class="warn-chip">{{ w }}</span>{% endfor %}{% if r.error %}<span style="color:#DC2626">{{ r.error }}</span>{% elif not r.warnings %}<span style="color:#94A3B8">—</span>{% endif %}</td>
         </tr>
         {% else %}

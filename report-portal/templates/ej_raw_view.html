@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}{{ atm_id }} raw EJ · {{ file_label }}{% endblock %}
+{% block extra_style %}
+{% include "_ej_journal_style.html" %}
+<style>
+.raw-meta{display:flex;flex-wrap:wrap;gap:8px 22px;background:#fff;border:1px solid #EEF1F6;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:#64748B;box-shadow:0 1px 3px rgba(1,33,105,.04)}
+.raw-meta b{color:#0F172A}
+.raw-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;color:#64748B}
+.raw-toolbar .raw-count b{color:#0F172A}
+.raw-toolbar .raw-actions{display:flex;gap:8px;flex-wrap:wrap}
+.raw-shell{background:#0F172A;border-radius:12px;overflow:auto;max-height:72vh;border:1px solid #1E293B}
+.raw-lines{width:100%;border-collapse:collapse;table-layout:fixed}
+.raw-lines th{position:sticky;top:0;z-index:1;text-align:left;background:#1E293B;color:#94A3B8;font-size:10px;text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;border-bottom:1px solid #334155}
+.raw-lines th.ln{width:72px}
+.raw-lines td{padding:4px 12px;border-bottom:1px solid #1E293B;vertical-align:top;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;line-height:1.6}
+.raw-lines td.ln{width:72px;color:#64748B;text-align:right;user-select:none;background:#111827;font-size:10.5px;padding-top:5px}
+.raw-lines td.code{color:#E2E8F0;white-space:pre-wrap;word-break:break-word}
+.raw-lines tbody tr:hover td{background:#1E293B}
+.raw-lines tbody tr:hover td.ln{background:#172033}
+.raw-empty{padding:32px 20px;text-align:center;color:#94A3B8;font-size:13px}
+.raw-notice{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.55;margin-bottom:14px}
+@media(max-width:640px){.raw-lines th.ln,.raw-lines td.ln{width:48px}.raw-lines td,.raw-lines th{padding-left:8px;padding-right:8px}}
+</style>
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="file-text"></i></div>
+  <div>
+    <div class="detail-head">
+      <a class="back" href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm_id) }}">← EJ Journal</a>
+      <a class="back" href="{{ url_for('admin.atm_detail', atm_id=atm_id) }}">ATM detail</a>
+    </div>
+    <h1 class="page-title">{{ atm_id }} · Raw EJ file</h1>
+    <p class="page-subtitle">{{ file_label }} · {{ file_size }} · {{ journal_date }} · admin only</p>
+  </div>
+</div>
+
+<div class="page-content">
+  <div class="banner banner-note">
+    Raw journal from the evidence archive. It may contain card data, so viewing is admin-only and audited.
+    The page reads the archived file only; it does not contact the ATM.
+  </div>
+
+  <div class="raw-meta">
+    <span>ATM <b>{{ atm_id }}</b></span>
+    <span>Branch <b>{{ branch or '—' }}</b></span>
+    <span>Host <b>{{ hostname or '—' }}</b></span>
+    <span>Journal date <b>{{ journal_date }}</b></span>
+    <span>Parsed <b>{{ parsed_at }}</b></span>
+    <span>Sessions <b>{{ sessions if sessions is not none else '—' }}</b></span>
+    <span>Status <b>{{ status or '—' }}</b></span>
+    <span>Size <b>{{ file_size }}</b></span>
+  </div>
+
+  {% if error %}
+  <div class="raw-notice"><strong>Parser note:</strong> {{ error }}</div>
+  {% endif %}
+
+  {% if not too_large and not binary %}
+  <form method="post" action="{{ url_for('ej_journal.ej_raw_view', atm_id=atm_id, run_id=run_id) }}" class="ej-filters">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="fg">
+      <label for="raw-q">Search this file</label>
+      <input id="raw-q" name="q" value="{{ q }}" maxlength="200" placeholder="Case-insensitive substring, e.g. terminal ID or response code">
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary" type="submit">Search</button>
+      {% if q %}<button class="btn btn-outline" type="submit" name="clear" value="1">Clear</button>{% endif %}
+      <a class="btn btn-outline" href="{{ url_for('ej_journal.ej_raw_download', atm_id=atm_id, run_id=run_id) }}">Download raw</a>
+    </div>
+  </form>
+  {% endif %}
+
+  {% if too_large %}
+  <div class="card">
+    <div class="raw-notice">
+      This file is larger than {{ view_max_mb }} MB, the safe text-viewer limit.
+      Download the raw file to inspect it in full; the portal will not show a partial file that looks searchable.
+    </div>
+    <div style="padding:0 16px 16px">
+      <a class="btn btn-primary" href="{{ url_for('ej_journal.ej_raw_download', atm_id=atm_id, run_id=run_id) }}">Download raw file</a>
+    </div>
+  </div>
+  {% elif binary %}
+  <div class="card">
+    <div class="raw-notice">
+      This archive is not plain text. Download the raw file instead of rendering it in the browser.
+    </div>
+    <div style="padding:0 16px 16px">
+      <a class="btn btn-primary" href="{{ url_for('ej_journal.ej_raw_download', atm_id=atm_id, run_id=run_id) }}">Download raw file</a>
+    </div>
+  </div>
+  {% else %}
+  <div class="raw-toolbar">
+    <div class="raw-count">
+      {% if q %}
+        <b>{{ view.total }}</b> matching line{% if view.total != 1 %}s{% endif %} for “{{ q }}”
+      {% else %}
+        <b>{{ view.total }}</b> line{% if view.total != 1 %}s{% endif %}
+      {% endif %}
+      {% if view.total %}
+        · showing {{ (view.page - 1) * view.per_page + 1 }}–{{ [view.page * view.per_page, view.total]|min }}
+      {% endif %}
+    </div>
+    <div class="raw-actions">
+      <a class="btn btn-outline" href="{{ url_for('ej_journal.ej_raw_download', atm_id=atm_id, run_id=run_id) }}">Download raw</a>
+    </div>
+  </div>
+
+  <div class="raw-shell">
+    <table class="raw-lines">
+      <thead><tr><th class="ln">Line</th><th>Content</th></tr></thead>
+      <tbody>
+        {% for line in view.lines %}
+        <tr><td class="ln">{{ line.number }}</td><td class="code">{{ line.text }}</td></tr>
+        {% else %}
+        <tr><td colspan="2" class="raw-empty">{% if q %}No lines match this search.{% else %}The journal file is empty.{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if view.pages > 1 %}
+  <form method="post" action="{{ url_for('ej_journal.ej_raw_view', atm_id=atm_id, run_id=run_id) }}" class="pager">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="q" value="{{ q }}">
+    {% if view.page > 1 %}
+    <button type="submit" name="page" value="{{ view.page-1 }}">Previous</button>
+    {% else %}<span class="off">Previous</span>{% endif %}
+    <span>Page {{ view.page }} of {{ view.pages }}</span>
+    {% if view.page < view.pages %}
+    <button type="submit" name="page" value="{{ view.page+1 }}">Next</button>
+    {% else %}<span class="off">Next</span>{% endif %}
+  </form>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

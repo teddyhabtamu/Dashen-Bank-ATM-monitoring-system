@@ -15,11 +15,12 @@ query reads staging data.
 import logging
 from datetime import datetime, time, timedelta, timezone
 
-from flask import Blueprint, abort, render_template, request, send_file
+from flask import Blueprint, abort, make_response, render_template, request, send_file
 from werkzeug.exceptions import HTTPException
 from db import get_db
 from audit import log_action
-from evidence import raw_info, raw_path, sha256_file
+from evidence import (VIEW_MAX_BYTES, VIEW_PAGE_SIZE, paginate_lines, raw_info,
+                      raw_path, read_text_lines, sha256_file)
 from blueprints.auth import login_required, role_required, ROLE_ADMIN
 
 logger = logging.getLogger(__name__)
@@ -554,5 +555,96 @@ def ej_raw_download(atm_id, run_id):
         download_name=path.name,
         max_age=0,
     )
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@bp.route('/ej-journal/<atm_id>/raw/<int:run_id>/view',
+          methods=['GET', 'POST'])
+@login_required
+@role_required(ROLE_ADMIN)
+def ej_raw_view(atm_id, run_id):
+    """Read-only, paginated view of one archived raw journal.
+
+    This route never reads from the ATM and never accepts a path. The only
+    inputs are the database id and the ATM id; the evidence helper resolves the
+    file inside the read-only archive.
+
+    Search is POSTed and never placed in the URL: a raw-journal search can
+    contain a PAN, and query strings are routinely written to proxy access
+    logs. Pagination posts the same fields again.
+    """
+    if request.method == 'POST':
+        q = '' if request.form.get('clear') else (request.form.get('q') or '')
+        q = q.strip()[:200]
+        page = _page(request.form.get('page'))
+    else:
+        q = ''
+        page = _page(request.args.get('page'))
+
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT p.file_path, p.journal_date, p.parsed_at, p.status,
+                       p.error, p.sessions, p.hostname, l.branch
+                  FROM ej_parse_runs p
+                  LEFT JOIN atm_locations l ON l.atm_id = p.atm_id
+                 WHERE p.id = %s AND p.atm_id = %s
+            """, (run_id, atm_id))
+            row = cur.fetchone()
+            cur.close()
+    except Exception as exc:  # noqa: BLE001 - do not expose database detail
+        logger.warning('raw EJ view lookup failed: %s', exc)
+        abort(404)
+
+    if not row:
+        abort(404)
+    file_path, journal_date, parsed_at, status, error, sessions, hostname, branch = row
+    path = raw_path(file_path)
+    if not path:
+        abort(404)
+
+    try:
+        info = raw_info(file_path)
+        text = read_text_lines(path)
+    except OSError as exc:
+        logger.warning('raw EJ view read failed: %s', exc)
+        abort(404)
+
+    view = {
+        'lines': [],
+        'total': 0,
+        'page': 1,
+        'pages': 1,
+    }
+    if not text['too_large'] and not text['binary']:
+        view = paginate_lines(text['lines'], query=q, page=page,
+                              per_page=VIEW_PAGE_SIZE)
+
+    log_action(
+        'EJ_RAW_VIEW',
+        f'ATM {atm_id} file {path.name} page {view["page"]} '
+        f'q_len {len(q)} total {view["total"]}',
+    )
+    response = make_response(render_template(
+        'ej_raw_view.html',
+        atm_id=atm_id,
+        branch=branch,
+        run_id=run_id,
+        file_label=path.name,
+        file_size=info.get('raw_size_label', '—'),
+        journal_date=journal_date.isoformat() if journal_date else '—',
+        parsed_at=_eat(parsed_at),
+        status=status,
+        error=error,
+        sessions=sessions,
+        hostname=hostname,
+        q=q,
+        too_large=text['too_large'],
+        binary=text['binary'],
+        view=view,
+        view_max_mb=VIEW_MAX_BYTES // (1024 * 1024),
+    ))
     response.headers['Cache-Control'] = 'no-store'
     return response

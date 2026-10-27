@@ -21,6 +21,8 @@ RAW_FILENAME_RE = re.compile(
     r'^\d{4}-\d{2}-\d{2}_[A-Za-z0-9][A-Za-z0-9._-]*_EJDATA\.log$'
 )
 DEFAULT_RAW_DIR = '/app/evidence/raw'
+VIEW_MAX_BYTES = 8 * 1024 * 1024
+VIEW_PAGE_SIZE = 200
 
 
 def raw_dir() -> Path:
@@ -91,3 +93,72 @@ def sha256_file(path: Path | str) -> str:
         for chunk in iter(lambda: fh.read(1024 * 1024), b''):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def read_text_lines(path: Path | str, max_bytes: int = VIEW_MAX_BYTES) -> dict:
+    """Read a raw journal for display, never a partial file.
+
+    The viewer is a convenience over the archived evidence, not a replacement
+    for downloading the bytes. Files above ``max_bytes`` are refused rather
+    than truncated, because searching a silently partial log is worse than
+    telling the operator to download it.
+    """
+    path = Path(path)
+    size = path.stat().st_size
+    if size > max_bytes:
+        return {
+            'lines': [],
+            'too_large': True,
+            'binary': False,
+            'size': size,
+        }
+    with open(path, 'rb') as fh:
+        data = fh.read()
+    if b'\x00' in data[:4096]:
+        return {
+            'lines': [],
+            'too_large': False,
+            'binary': True,
+            'size': size,
+        }
+    return {
+        'lines': data.decode('utf-8', errors='replace').splitlines(),
+        'too_large': False,
+        'binary': False,
+        'size': size,
+    }
+
+
+def paginate_lines(lines, query: str = '', page: int = 1,
+                   per_page: int = VIEW_PAGE_SIZE) -> dict:
+    """Return one page of raw lines, optionally filtered by substring.
+
+    Search is deliberately literal and case-insensitive: raw EJ text is not a
+    query language, and a user searching for a PAN or terminal ID must not have
+    their input interpreted as a regex.
+    """
+    needle = (query or '').strip().casefold()
+    matched = [
+        (number, line)
+        for number, line in enumerate(lines, start=1)
+        if not needle or needle in line.casefold()
+    ]
+    total = len(matched)
+    per_page = max(1, int(per_page or VIEW_PAGE_SIZE))
+    pages = max(1, (total + per_page - 1) // per_page)
+    try:
+        page = max(1, int(page or 1))
+    except (TypeError, ValueError):
+        page = 1
+    page = min(page, pages)
+    start = (page - 1) * per_page
+    return {
+        'lines': [
+            {'number': number, 'text': line}
+            for number, line in matched[start:start + per_page]
+        ],
+        'total': total,
+        'page': page,
+        'pages': pages,
+        'per_page': per_page,
+    }

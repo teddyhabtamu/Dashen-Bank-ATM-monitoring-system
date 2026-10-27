@@ -363,7 +363,8 @@ table.txn tbody tr:hover{background:#EEF2FF}
             <td><span class="pill pill-{{ r.status|lower }}">{{ r.status }}</span></td>
             <td>
               {% if r.raw_available %}
-              <a class="raw-download" href="{{ url_for('ej_journal.ej_raw_download', atm_id=atm.atm_id, run_id=r.id) }}">Download raw</a>
+              <a class="raw-download" href="{{ url_for('ej_journal.ej_raw_view', atm_id=atm.atm_id, run_id=r.id) }}">View</a>
+              · <a class="raw-download" href="{{ url_for('ej_journal.ej_raw_download', atm_id=atm.atm_id, run_id=r.id) }}">Download raw</a>
               {% elif r.error %}
               <span style="color:#DC2626" title="{{ r.error }}">Parse error</span>
               {% else %}
