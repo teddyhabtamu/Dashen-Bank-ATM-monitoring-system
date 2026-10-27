@@ -165,17 +165,9 @@ def evaluate(now=None):
                 except OSError:
                     fh.seek(0)
                 tail = fh.read().decode('utf-8', 'replace')
-            low = tail.lower()
-            for marker, label in ((b'no such file or directory', 'command not found'),
-                                  (b'not found', 'command not found'),
-                                  (b'traceback', 'python traceback'),
-                                  (b'command not found', 'command not found'),
-                                  (b'permission denied', 'permission denied'),
-                                  (b'connection refused', 'cannot connect'),
-                                  (b'relation .* does not exist', 'missing table')):
-                if re_search(low, marker):
-                    state, detail = 'FAILED', 'recent log contains: %s' % label
-                    break
+            reason = failure_reason(tail)
+            if reason:
+                state, detail = 'FAILED', 'recent log contains: %s' % reason
         except OSError:
             pass
         others = [n for n in shared.get(os.path.basename(path), []) if n != name]
@@ -194,6 +186,35 @@ def evaluate(now=None):
 def re_search(haystack, needle_bytes):
     import re
     return re.search(needle_bytes.decode(), haystack) is not None
+
+
+def failure_reason(text):
+    """Classify a recent log tail, or return None when it looks healthy.
+
+    "No such file or directory" from a Zabbix item is a missing evidence file,
+    not a missing shell command. The old mapping sent operators looking at
+    PATH when the puller had actually run and the ATM had not produced the
+    journal.
+    """
+    low = (text or '').lower()
+    if 'command not found' in low:
+        return 'command not found'
+    if 'no such file or directory' in low:
+        # A Zabbix item that cannot open a journal is missing evidence; a
+        # shell's "<program>: No such file or directory" is a missing command.
+        if 'zbx_notsupported' in low:
+            return 'missing file/path'
+        if ': no such file or directory' in low:
+            return 'command not found'
+        return 'missing file/path'
+    for marker, label in ((b'not found', 'missing file or command'),
+                          (b'traceback', 'python traceback'),
+                          (b'permission denied', 'permission denied'),
+                          (b'connection refused', 'cannot connect'),
+                          (b'relation .* does not exist', 'missing table')):
+        if re_search(low, marker):
+            return label
+    return None
 
 
 def main():
