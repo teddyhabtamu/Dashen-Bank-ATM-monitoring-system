@@ -125,6 +125,22 @@ inside one second remain ambiguous, which is exactly the fraud pattern where a
 wrong link would be worst. The viewer must show the timestamp evidence and a
 short caveat; it must not present the card field as proof.
 
+The matcher is implemented as a pure module, `scripts/atm_image_link.py`, with
+a read-only CLI, `scripts/find_atm_image.py`. It **ranks, never joins**:
+
+* `CardInserted` within 3 seconds of the session start is a **start anchor**;
+* `CardReturned` within 3 seconds of the session end is an **end anchor**;
+* other events inside the interval are supporting evidence;
+* `CabinetOpen` is service evidence and is excluded from the customer count;
+* the card field is displayed but the result always carries
+  `card_field_used_for_link: false`.
+
+`confidence: high` means exactly one start anchor and one end anchor.
+`ambiguous: true` means more than one anchor matched, so the viewer must not
+pick one. For NCR the matcher stops at the **day zip**, because the entry
+naming/timestamps are not confirmed; it returns `confidence: low` with that
+caveat rather than inventing an entry-level link.
+
 ## Transport: read-only chunks through the existing agent
 
 The reachability test settles the channel:
@@ -199,6 +215,8 @@ It is read-only: no writes, extraction, deletion, rename, or execution. It:
   user-supplied path;
 * discovers files with the paged, non-recursive directory listing, so a
   browser cannot ask the ATM to walk the disk;
+* ranks candidates with the shared `atm_image_link` rule, showing the
+  confidence and caveat rather than a transaction key;
 * checks the ATM's size + SHA-256 before publishing; zip entries are checked
   by size + CRC32;
 * checks magic bytes so an HTML error page saved as `.jpg` is refused;

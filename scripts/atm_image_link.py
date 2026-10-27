@@ -1,0 +1,290 @@
+"""Timestamp/event matching for ATM image evidence.
+
+The image filename is not a transaction key.  GRG proved that on 2026-10-22:
+the filename said ``CarNum-8888########8888`` while the EJ said ``NOCARD``.
+This module therefore ranks files by capture time and event sequence, and
+never by the card field.
+
+It is deliberately pure: the caller lists an allow-listed directory, then
+passes the rows here.  No bytes are read, no file is written, and nothing is
+stored.  The future bridge can use the same functions, so the ranking rule is
+tested once and used everywhere.
+"""
+from __future__ import annotations
+
+import datetime as dt
+import re
+from typing import Sequence
+
+from fetch_atm_image import mask_sensitive
+
+# CAM[1]_[DateTime-261022153444]_[CarNum-8888########8888]CardInserted.jpg
+# CAM[1]_[DateTime-261022153444]_[CarNum-8888########8888].mp4
+GRG_NAME_RE = re.compile(
+    r'^CAM\[(?P<camera>\d{1,3})\]_'
+    r'\[DateTime-(?P<stamp>\d{12})\]_'
+    r'\[CarNum-(?P<card>[^\]]*)\]'
+    r'(?P<event>[A-Za-z][A-Za-z0-9_]*)?'
+    r'\.(?P<ext>jpg|jpeg|png|mp4)$',
+    re.IGNORECASE,
+)
+
+# 172.23.248.4_102226_163377_16_1.zip
+NCR_ZIP_RE = re.compile(
+    r'^(?P<ip>\d{1,3}(?:\.\d{1,3}){3})_'
+    r'(?P<date>\d{6})_(?P<size>\d+)_(?P<count>\d+)_'
+    r'(?P<camera>\d+)\.zip$',
+    re.IGNORECASE,
+)
+
+START_EVENTS = frozenset({'CardInserted'})
+END_EVENTS = frozenset({'CardReturned'})
+SERVICE_EVENTS = frozenset({'CabinetOpen'})
+
+DEFAULT_ANCHOR_WINDOW = 3.0
+DEFAULT_PRE_WINDOW = 10.0
+DEFAULT_POST_WINDOW = 10.0
+
+LINK_BASIS = 'capture_time+event_sequence'
+CAVEAT = (
+    'Timestamp and event sequence only; this is not a transaction ID. '
+    'Two sessions in the same second remain ambiguous. Verify against the '
+    'EJ interval and adjacent sessions.'
+)
+NCR_CAVEAT = (
+    'The zip name carries only a day, and the entry naming/timestamps are '
+    'not yet confirmed. This identifies the day container, not a transaction '
+    'link.'
+)
+
+
+class LinkError(RuntimeError):
+    """A refused or impossible match request, with a stable reason."""
+
+
+def parse_grg_name(name: str) -> dict | None:
+    """Parse one GRG evidence filename, or return None if it is not one.
+
+    ``captured_at`` is naive local time, because the ATM filename carries no
+    timezone.  The caller must supply session times in the same local clock.
+    """
+    if not isinstance(name, str):
+        return None
+    match = GRG_NAME_RE.match(name)
+    if not match:
+        return None
+    try:
+        captured = dt.datetime.strptime(match.group('stamp'), '%y%m%d%H%M%S')
+    except ValueError:
+        return None
+
+    extension = match.group('ext').casefold()
+    card = match.group('card')
+    return {
+        'name': name,
+        'name_masked': mask_sensitive(name),
+        'camera': int(match.group('camera')),
+        'captured_at': captured,
+        'event': match.group('event') or '',
+        'kind': 'video' if extension == 'mp4' else 'image',
+        'card_field': mask_sensitive(card),
+        'card_field_present': bool(card),
+    }
+
+
+def parse_ncr_zip_name(name: str) -> dict | None:
+    """Parse one NCR daily image zip name, or return None."""
+    if not isinstance(name, str):
+        return None
+    match = NCR_ZIP_RE.match(name)
+    if not match:
+        return None
+    try:
+        day = dt.datetime.strptime(match.group('date'), '%m%d%y').date()
+    except ValueError:
+        return None
+    return {
+        'name': name,
+        'name_masked': mask_sensitive(name),
+        'atm_ip': match.group('ip'),
+        'day': day,
+        'size': int(match.group('size')),
+        'count': int(match.group('count')),
+        'camera': int(match.group('camera')),
+    }
+
+
+def _seconds(value: float) -> float:
+    return round(float(value), 3)
+
+
+def _row_size(row: dict) -> int:
+    value = row.get('length') or 0
+    if isinstance(value, bool):
+        raise LinkError('E_ROWS')
+    try:
+        size = int(value)
+    except (TypeError, ValueError):
+        raise LinkError('E_ROWS') from None
+    if size < 0:
+        raise LinkError('E_ROWS')
+    return size
+
+
+def rank_grg_candidates(rows: Sequence[dict],
+                        start: dt.datetime,
+                        end: dt.datetime,
+                        *,
+                        pre_window: float = DEFAULT_PRE_WINDOW,
+                        post_window: float = DEFAULT_POST_WINDOW,
+                        anchor_window: float = DEFAULT_ANCHOR_WINDOW) -> dict:
+    """Rank GRG files for one EJ interval.
+
+    A start anchor (``CardInserted``) and an end anchor (``CardReturned``)
+    within ``anchor_window`` seconds of the session edges make the match
+    strong.  Everything else inside the interval is supporting evidence.
+    The card field is shown but never used for the link.
+    """
+    if end < start:
+        raise LinkError('E_RANGE')
+    if pre_window < 0 or post_window < 0 or anchor_window < 0:
+        raise LinkError('E_ARGS')
+
+    candidates: list[dict] = []
+    unparsed = 0
+
+    for row in rows:
+        if not isinstance(row, dict):
+            raise LinkError('E_ROWS')
+        info = parse_grg_name(row.get('name'))
+        if info is None:
+            unparsed += 1
+            continue
+
+        captured = info['captured_at']
+        delta_start = (captured - start).total_seconds()
+        delta_end = (captured - end).total_seconds()
+        in_interval = start <= captured <= end
+        in_window = (-pre_window <= delta_start
+                     and delta_end <= post_window)
+        if not in_window:
+            continue
+
+        event = info['event']
+        service = event in SERVICE_EVENTS
+        if service:
+            role = 'service'
+            score = 0
+        elif event in START_EVENTS and abs(delta_start) <= anchor_window:
+            role = 'start'
+            score = 80
+        elif event in END_EVENTS and abs(delta_end) <= anchor_window:
+            role = 'end'
+            score = 80
+        elif in_interval:
+            role = 'in_window'
+            score = 30
+        else:
+            role = 'near_window'
+            score = 10
+
+        candidates.append({
+            'name': info['name'],
+            'name_masked': info['name_masked'],
+            'captured_at': captured.isoformat(sep=' '),
+            'camera': info['camera'],
+            'event': event,
+            'kind': info['kind'],
+            'card_field': info['card_field'],
+            'card_field_present': info['card_field_present'],
+            'delta_start_s': _seconds(delta_start),
+            'delta_end_s': _seconds(delta_end),
+            'in_interval': in_interval,
+            'service': service,
+            'role': role,
+            'score': score,
+            'size': _row_size(row),
+        })
+
+    candidates.sort(key=lambda item: (
+        -item['score'], item['captured_at'], item['name']))
+
+    start_anchors = [item for item in candidates if item['role'] == 'start']
+    end_anchors = [item for item in candidates if item['role'] == 'end']
+    evidence = [item for item in candidates if not item['service']]
+    ambiguous = len(start_anchors) > 1 or len(end_anchors) > 1
+
+    if start_anchors and end_anchors:
+        confidence = 'medium' if ambiguous else 'high'
+    elif start_anchors or end_anchors:
+        confidence = 'medium'
+    elif evidence:
+        confidence = 'low'
+    else:
+        confidence = 'none'
+
+    return {
+        'vendor': 'GRG',
+        'link_basis': LINK_BASIS,
+        'card_field_used_for_link': False,
+        'confidence': confidence,
+        'ambiguous': ambiguous,
+        'caveat': CAVEAT,
+        'candidate_count': len(evidence),
+        'service_count': len(candidates) - len(evidence),
+        'unparsed_count': unparsed,
+        'start_anchor_count': len(start_anchors),
+        'end_anchor_count': len(end_anchors),
+        'candidates': candidates,
+    }
+
+
+def select_ncr_zips(rows: Sequence[dict], day: dt.date) -> dict:
+    """Select the NCR daily zip(s) for one local day.
+
+    NCR entry naming and timestamp semantics are still being confirmed, so
+    this stops at the day container.  It does not pretend to link an entry.
+    """
+    if not isinstance(day, dt.date):
+        raise LinkError('E_ARGS')
+
+    found: list[dict] = []
+    unparsed = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            raise LinkError('E_ROWS')
+        info = parse_ncr_zip_name(row.get('name'))
+        if info is None:
+            unparsed += 1
+            continue
+        if info['day'] != day:
+            continue
+        found.append({
+            'name': info['name'],
+            'name_masked': info['name_masked'],
+            'atm_ip': info['atm_ip'],
+            'day': info['day'].isoformat(),
+            'zip_bytes': info['size'],
+            'image_count': info['count'],
+            'camera': info['camera'],
+            'length': _row_size(row),
+            'last_write_time': str(row.get('last_write_time') or ''),
+        })
+
+    found.sort(key=lambda item: (
+        item['last_write_time'], item['camera'], item['name']))
+
+    return {
+        'vendor': 'NCR',
+        'link_basis': 'zip_date_only',
+        'card_field_used_for_link': False,
+        'confidence': 'low' if found else 'none',
+        'ambiguous': False,
+        'caveat': NCR_CAVEAT,
+        'candidate_count': len(found),
+        'service_count': 0,
+        'unparsed_count': unparsed,
+        'start_anchor_count': 0,
+        'end_anchor_count': 0,
+        'candidates': found,
+    }

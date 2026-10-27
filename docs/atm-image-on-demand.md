@@ -227,6 +227,78 @@ The JSON entry names/timestamps decide whether NCR can be linked by event or
 only by the zip/time window. Entry names are masked in the default output;
 `--show-sensitive` prints them for local diagnosis only.
 
+## Step 4b — find candidates for one EJ session
+
+`find_atm_image.py` lists the allow-listed day folder and ranks files by
+capture time and event. It does **not** fetch bytes, write a file, or store
+metadata.
+
+GRG:
+
+```bash
+python3 scripts/find_atm_image.py --host 10.41.30.115 --vendor GRG \
+  --start '2026-10-22 15:34:44' --end '2026-10-22 15:35:21'
+```
+
+The real 22 October session produces this shape:
+
+```json
+{
+  "confidence": "high",
+  "ambiguous": false,
+  "card_field_used_for_link": false,
+  "start_anchor_count": 1,
+  "end_anchor_count": 1,
+  "candidates": [
+    {"event": "CardInserted", "role": "start", "score": 80},
+    {"event": "CardReturned", "role": "end", "score": 80},
+    {"event": "EnterInfo", "role": "in_window", "score": 30},
+    {"event": "", "kind": "video", "role": "in_window", "score": 30}
+  ]
+}
+```
+
+Reading the result:
+
+| Field | Meaning |
+|---|---|
+| `confidence: high` | Exactly one start anchor and one end anchor |
+| `confidence: medium` | One anchor, or more than one anchor (`ambiguous: true`) |
+| `confidence: low` | Only supporting files inside the interval |
+| `confidence: none` | No matching file in the ATM folder |
+| `card_field_used_for_link` | Always `false`; the card field is display-only |
+| `caveat` | Must be shown next to the candidates, not hidden |
+
+An **anchor** is `CardInserted` within 3 seconds of the session start or
+`CardReturned` within 3 seconds of the session end. `CabinetOpen` is service
+evidence and is excluded from the customer count. If `ambiguous` is true, do
+not pick a candidate; show all of them.
+
+NCR (day container only, until the zip entry format is confirmed):
+
+```bash
+python3 scripts/find_atm_image.py --host 10.41.30.114 --vendor NCR \
+  --start '2026-10-22 00:00:00' --end '2026-10-22 23:59:59'
+```
+
+This returns the daily zip with `confidence: low` and the NCR caveat. It does
+not pretend to link an entry.
+
+If the day folder has rotated off the ATM, the CLI returns exit code `0` and:
+
+```json
+{
+  "available": false,
+  "reason": "Not available on ATM",
+  "detail": "ERR:E_MISSING",
+  "candidates": []
+}
+```
+
+The viewer must render that as **Not available on ATM**, not as a broken
+image or an empty success. Raw names/directories are masked by default; add
+`--show-sensitive` only for local diagnosis.
+
 ## Step 5 — fetch one NCR entry
 
 By index (the form the portal will use, and the only safe form if the entry
