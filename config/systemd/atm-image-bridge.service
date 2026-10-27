@@ -13,6 +13,10 @@ EnvironmentFile=-/etc/atm-monitoring/image-bridge.env
 Environment=PYTHONDONTWRITEBYTECODE=1
 RuntimeDirectory=atm-image-bridge
 RuntimeDirectoryMode=0750
+# The portal bind-mounts this directory. Without Preserve=yes, a bridge
+# restart removes and recreates the host directory, leaving the running
+# portal container mounted to the old, empty inode.
+RuntimeDirectoryPreserve=yes
 UMask=0027
 ExecStart=/usr/bin/python3 /data/atm-monitoring/scripts/atm_image_bridge.py \
   --config /etc/atm-monitoring/atm-image-bridge.json \

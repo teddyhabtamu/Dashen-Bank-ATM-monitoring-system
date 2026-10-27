@@ -477,6 +477,12 @@ the bind mount. Fix the service/order first; do not disable SELinux. On an
 enforcing host, inspect `ausearch -m avc -ts recent` and label the shared
 directory under change control.
 
+The unit sets `RuntimeDirectoryPreserve=yes`. This is not optional: without it,
+every bridge restart removes and recreates `/run/atm-image-bridge`, and the
+running portal container stays mounted to the old, now-empty directory. The
+symptom is **Image bridge not configured** even though the bridge is active.
+After changing the unit, restart the bridge and recreate the portal once.
+
 ### 6.4 Use the viewer
 
 Open:
@@ -589,6 +595,7 @@ audit-retention policy.
 | `agent timeout` | Network, ACL, or agent load | Check TCP/10050 ACL and the agent log |
 | `zabbix_get not found` | Host tooling missing | Install the Zabbix agent package or set `ZBX_GET` |
 | Viewer says **Image bridge not configured** | Socket/token missing in the portal | Check `ATM_IMAGE_BRIDGE_*` in `.env`, the read-only `/run/atm-image-bridge` mount, and `systemctl status atm-image-bridge` |
+| Viewer says bridge not running right after a bridge restart | The running container is mounted to the old `/run/atm-image-bridge` inode; systemd removed and recreated it | Keep `RuntimeDirectoryPreserve=yes` in the unit. After adding it, restart the bridge and recreate the portal once. |
 | Viewer says **Image transport failed** | Bridge is down or the ATM did not answer | Check the bridge journal, `zabbix_get`, and TCP/10050; do not treat this as missing evidence |
 | Bridge returns `401` | Portal token differs from the host env file | Regenerate/paste the same token, recreate the portal |
 | Bridge returns `404 unknown_atm` | ATM id is not in `config/atm-image-bridge.json` | Add it under change control; never accept an IP from the browser |
