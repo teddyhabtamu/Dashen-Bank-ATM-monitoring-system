@@ -1,16 +1,16 @@
 # ATM image evidence — on-demand pilot runbook
 
-> **Scope:** read-only transport for one image at a time. This does **not**
-> add a central image store, an image database column, or a portal page yet.
-> The viewer remains gated by compliance and by the NCR zip entry format.
+> **Scope:** read-only transport and an admin-only portal viewer for one image
+> at a time. This does **not** add a central image store or copy image bytes
+> into Postgres, OpenSearch, the portal container, or object storage.
 >
 > **Decision record:** `docs/adr-atm-images.md`.
 
 ## What this builds
 
 ```text
-Admin viewer (later)
-  → host-side bridge (metadata ID, allow-list, audit)
+Admin viewer in the portal
+  → host-side bridge over a Unix socket (allow-list, HMAC locator, audit)
     → zabbix_get -s <ATM> -t 30 -k atm.image.dir[...]        page of names
     → zabbix_get -s <ATM> -t 30 -k atm.image.info[...]       size + SHA-256
     → zabbix_get -s <ATM> -t 30 -k atm.image.chunk[...,offset,length]
@@ -18,9 +18,11 @@ Admin viewer (later)
         → E:\pic\... or iCamImageZip\...zip
 ```
 
-Image bytes remain on the ATM. The host writes a file only when an operator
-runs the CLI with `--out`; the future bridge will stream from memory. The
-portal container never talks to an ATM.
+Image bytes remain on the ATM. The host bridge holds one verified image in
+memory, streams it over the Unix socket, and discards it. The portal streams
+those bytes to the admin's browser; the browser is the only place a copy can
+land, and the portal never writes one. The portal container has no route to
+ATM TCP/10050.
 
 ## Confirmed test coordinates
 
@@ -311,7 +313,8 @@ image or an empty success. Raw names/directories are masked by default; add
 
 The CLI is a **host-side diagnostic tool**, not the audited viewer. It does
 not write the portal audit log; shell access to the host is the control. The
-future bridge must write `IMAGE_VIEW` before it streams a byte.
+portal viewer (Step 6) writes `IMAGE_SEARCH` for discovery and `IMAGE_VIEW`
+before it streams a byte from the bridge.
 
 ## Step 5 — fetch one NCR entry
 
@@ -338,20 +341,220 @@ The host verifies the entry's declared size and CRC32 before publishing.
 Only image/video entries are listed and fetchable; a text/config entry in the
 same zip is not reachable through this transport.
 
+## Step 6 — install the host bridge and enable the portal viewer
+
+The bridge is a host process, not a container: the portal image has no
+`zabbix_get` and must not have a route to ATM TCP/10050. It listens on a Unix
+socket that is mounted read-only into the portal container.
+
+### 6.1 Host files and secrets
+
+On the monitoring host:
+
+```bash
+cd /data/atm-monitoring
+git pull --ff-only origin uat-prep
+
+sudo install -d -m 0750 -o tewodros -g tewodros /etc/atm-monitoring
+sudo install -m 0640 -o root -g tewodros \
+  config/atm-image-bridge.json /etc/atm-monitoring/atm-image-bridge.json
+sudo install -m 0640 -o root -g tewodros \
+  config/systemd/atm-image-bridge.env.example \
+  /etc/atm-monitoring/image-bridge.env
+```
+
+Generate **two different** secrets. The token is shared with the portal; the
+HMAC key never leaves the host:
+
+```bash
+TOKEN=$(openssl rand -hex 32)
+HMAC_KEY=$(openssl rand -hex 32)
+
+sudo sed -i "s|^ATM_IMAGE_BRIDGE_TOKEN=.*|ATM_IMAGE_BRIDGE_TOKEN=$TOKEN|" \
+  /etc/atm-monitoring/image-bridge.env
+printf '%s\n' "$HMAC_KEY" | sudo tee /etc/atm-monitoring/image-hmac.key >/dev/null
+sudo chown tewodros:tewodros /etc/atm-monitoring/image-hmac.key
+sudo chmod 0600 /etc/atm-monitoring/image-hmac.key
+```
+
+`config/atm-image-bridge.json` is the **allow-list**. It contains only the two
+UAT test ATMs and their confirmed roots. For production, generate one entry per
+ATM from inventory; never accept an ATM id, IP, path, or vendor from the
+browser. A broad root such as `E:\` or `C:\` must be rejected at startup.
+
+### 6.2 Start the service
+
+```bash
+sudo install -m 0644 config/systemd/atm-image-bridge.service \
+  /etc/systemd/system/atm-image-bridge.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now atm-image-bridge
+sudo systemctl status atm-image-bridge --no-pager
+sudo journalctl -u atm-image-bridge -n 30 --no-pager
+```
+
+Validate without starting a second copy:
+
+```bash
+sudo -u tewodros bash -c '
+  set -a; . /etc/atm-monitoring/image-bridge.env; set +a
+  cd /data/atm-monitoring
+  python3 scripts/atm_image_bridge.py --check
+'
+```
+
+Expected: `"ok": true`, two ATM ids, and no raw key/token in the output.
+
+Test the socket directly. The token stays out of shell history by reading it
+from the root-readable env file:
+
+```bash
+sudo bash -c '
+  set -a; . /etc/atm-monitoring/image-bridge.env; set +a
+  curl --silent --show-error --unix-socket /run/atm-image-bridge/bridge.sock \
+    -H "Authorization: Bearer $ATM_IMAGE_BRIDGE_TOKEN" \
+    http://localhost/healthz
+'
+```
+
+Expected:
+
+```json
+{"ok":true,"atms":2}
+```
+
+An unauthenticated request must return `401`; a request for an ATM not in the
+allow-list must return `404`.
+
+### 6.3 Give the portal the socket and token
+
+The token is the **same** value generated above. Update `.env` on the host:
+
+```bash
+cd /data/atm-monitoring
+TOKEN=$(sudo awk -F= '/^ATM_IMAGE_BRIDGE_TOKEN=/{print $2}' \
+  /etc/atm-monitoring/image-bridge.env)
+
+if grep -q '^ATM_IMAGE_BRIDGE_TOKEN=' .env; then
+  sed -i "s|^ATM_IMAGE_BRIDGE_TOKEN=.*|ATM_IMAGE_BRIDGE_TOKEN=$TOKEN|" .env
+else
+  printf '\nATM_IMAGE_BRIDGE_SOCKET=/run/atm-image-bridge/bridge.sock\nATM_IMAGE_BRIDGE_TOKEN=%s\n' \
+    "$TOKEN" >> .env
+fi
+```
+
+`docker-compose.yml` mounts `/run/atm-image-bridge` read-only into
+`report-portal` and passes `ATM_IMAGE_BRIDGE_TOKEN`. If the directory does not
+exist, create it with the service user before recreating the portal; otherwise
+Docker may create a root-owned directory that the service cannot use:
+
+```bash
+sudo install -d -o tewodros -g tewodros -m 0750 /run/atm-image-bridge
+docker compose up -d report-portal
+docker compose exec report-portal python -c \
+  "import os; print(os.path.exists('/run/atm-image-bridge/bridge.sock'))"
+```
+
+Expected: `True`. Also prove the container can connect, not just see the file:
+
+```bash
+docker compose exec report-portal python -c \
+  "import socket; s=socket.socket(socket.AF_UNIX); s.connect('/run/atm-image-bridge/bridge.sock'); print('connected')"
+```
+
+If it prints `False` or `Permission denied`, the bridge is not running, the
+mount was created before the socket directory existed, or SELinux is denying
+the bind mount. Fix the service/order first; do not disable SELinux. On an
+enforcing host, inspect `ausearch -m avc -ts recent` and label the shared
+directory under change control.
+
+### 6.4 Use the viewer
+
+Open:
+
+```text
+http://<portal>/ej-journal/ATM-TEST-GRG/images
+```
+
+Then choose the ATM day and the session window. The EJ Journal detail page has
+an **ATM images** button; each staged transaction and each journal file has an
+**Images** link. A transaction link fills a ±2 minute window. The evidence
+table shows the confidence, both anchors, the masked filename, the video clip
+interval, and a **View** link. The browser streams the image or video directly;
+there is no thumbnail cache and no second copy.
+
+For the confirmed GRG session:
+
+```text
+Day:    2026-10-22
+Start:  15:34:44
+End:    15:35:21
+```
+
+Expected candidates: `CardInserted.jpg` (start, 114,843 bytes),
+`CardReturned.jpg` (end, 108,133 bytes), the 37-second `.mp4` (clip
+`15:34:44` → `15:35:21`), and `EnterInfo.jpg` (supporting).
+
+For NCR, choose the day and open the daily zip; entries are addressed by
+**archive index**, never by name. The page says the zip is a day container,
+not a transaction link, until the entry timestamps are confirmed.
+
+### 6.5 What the audit records
+
+Two actions are written to `audit_log`:
+
+| Action | When | Contains |
+|---|---|---|
+| `IMAGE_SEARCH` | A day/window or zip listing is requested | ATM id, day, window, confidence, counts, unavailable/error flags |
+| `IMAGE_VIEW` | Before an image/video byte is streamed | ATM id, day, HMAC prefix, size, SHA-256 or CRC32 |
+
+Neither action contains a raw filename, ATM path, full PAN, HMAC key, or image
+bytes. The page and every response use `Cache-Control: no-store`.
+
+```sql
+SELECT performed_at, username, action, detail
+  FROM audit_log
+ WHERE action IN ('IMAGE_SEARCH', 'IMAGE_VIEW')
+ ORDER BY performed_at DESC
+ LIMIT 20;
+```
+
+### 6.6 Verify the two failure states
+
+1. **Missing on ATM:** request a day with no folder, or delete a test export
+   from the ATM. The page must say **Not available on ATM**. It must not show a
+   broken image or an empty success.
+2. **Bridge down:** `sudo systemctl stop atm-image-bridge`, reload the viewer.
+   The page must say **Image transport failed** / bridge not running. It must
+   **not** say "Not available on ATM", because the puller is broken, not the
+   evidence.
+3. **Wrong token:** change only the portal `.env` token and recreate the
+   portal. The bridge returns `401`; the viewer reports a transport/token
+   failure, not missing evidence.
+
+Start the service again after the test.
+
 ## Rollback
 
 No image or database state is created, so rollback is configuration only:
 
-1. Remove the four `atm.image.*` UserParameter lines from
+1. `sudo systemctl disable --now atm-image-bridge`
+2. Remove the `/run/atm-image-bridge` bind mount and
+   `ATM_IMAGE_BRIDGE_*` variables from `docker-compose.yml`/`.env`, then
+   `docker compose up -d report-portal`.
+3. Remove `/etc/systemd/system/atm-image-bridge.service` and
+   `/etc/atm-monitoring/atm-image-bridge.json` if the pilot is ending.
+4. Remove the four `atm.image.*` UserParameter lines from
    `zabbix_agentd.conf`.
-2. Restart the agent service.
-3. Delete `C:\monitor\atm-image-chunk.ps1` and
+5. Restart the agent service.
+6. Delete `C:\monitor\atm-image-chunk.ps1` and
    `C:\monitor\atm-image-roots.txt`.
-4. Restore the previous agent `Timeout` if it was changed only for this pilot.
-5. Delete any test export from the host.
+7. Restore the previous agent `Timeout` if it was changed only for this pilot.
+8. Delete any test export from the host.
 
 The agent keys are additive; removing them does not affect `atm.parts`,
-`atm.xfs.cdm`, or the EJ pull.
+`atm.xfs.cdm`, or the EJ pull. `audit_log` rows are retained under the bank's
+audit-retention policy.
 
 ## Troubleshooting
 
@@ -372,6 +575,12 @@ The agent keys are additive; removing them does not affect `atm.parts`,
 | `E_SHA256` / `E_CRC32` (host) | The file changed during the fetch | Retry once; if persistent, investigate the ATM |
 | `agent timeout` | Network, ACL, or agent load | Check TCP/10050 ACL and the agent log |
 | `zabbix_get not found` | Host tooling missing | Install the Zabbix agent package or set `ZBX_GET` |
+| Viewer says **Image bridge not configured** | Socket/token missing in the portal | Check `ATM_IMAGE_BRIDGE_*` in `.env`, the read-only `/run/atm-image-bridge` mount, and `systemctl status atm-image-bridge` |
+| Viewer says **Image transport failed** | Bridge is down or the ATM did not answer | Check the bridge journal, `zabbix_get`, and TCP/10050; do not treat this as missing evidence |
+| Bridge returns `401` | Portal token differs from the host env file | Regenerate/paste the same token, recreate the portal |
+| Bridge returns `404 unknown_atm` | ATM id is not in `config/atm-image-bridge.json` | Add it under change control; never accept an IP from the browser |
+| `E_CHANGED` / changed evidence | The file or zip was replaced during the fetch | Refresh candidates; investigate if it repeats |
+| `429 busy` | Two requests are already pulling from that ATM | Wait for the current view to finish; do not raise the limit blindly |
 
 ## Security checklist
 
@@ -381,15 +590,20 @@ The agent keys are additive; removing them does not affect `atm.parts`,
 - [ ] `C:\monitor\atm-image-roots.txt` is present and contains no drive root,
       UNC path, wildcard, or colon after the drive letter.
 - [ ] The deployed script hash is in the change record.
-- [ ] The portal container has no route to ATM TCP/10050.
-- [ ] Viewer access is admin-only; every view is audited (`IMAGE_VIEW`).
+- [ ] The portal container has no route to ATM TCP/10050; it reaches only the
+      host bridge socket.
+- [ ] The bridge allow-list contains only ATMs approved for image evidence;
+      unknown ATM ids and paths are refused before `zabbix_get`.
+- [ ] Viewer access is admin-only; every search and view is audited
+      (`IMAGE_SEARCH`, `IMAGE_VIEW`).
 - [ ] Responses use `Cache-Control: no-store` and `X-Content-Type-Options:
-      nosniff`.
+      nosniff`; evidence responses also use a sandbox CSP.
 - [ ] No image bytes in Postgres, OpenSearch, logs, or object storage.
 - [ ] Paths in tickets/logs are masked with `mask_sensitive`; full PANs never
       appear in a Zabbix key.
 - [ ] Directory listings are masked in the UI and audit; raw names stay in the
-      restricted bridge response and are never rendered.
+      host bridge process and are never rendered.
+- [ ] The HMAC key is outside the repository, database and portal container.
 - [ ] Test exports are deleted under the bank's media-sanitisation policy.
 - [ ] Compliance has signed off on lawful basis, retention, audit, and PCI
       masking before the viewer is exposed to operators.
@@ -407,50 +621,53 @@ The agent keys are additive; removing them does not affect `atm.parts`,
 | Latency | ~1–2 s per chunk/page because each call starts PowerShell |
 | Zip skip cost | Each chunk reopens the zip and skips from the start; the 8 MiB entry cap bounds this. Still images are the target; video is best-effort |
 | Concurrency | Limit at the bridge (e.g. 2 per ATM); no caching |
+| Bridge memory | One verified image per request; bounded by the 8 MiB video/zip-entry cap |
+| Bridge socket | Unix stream socket, mode 0660, mounted read-only into the portal |
+| Portal worker | Gunicorn timeout is 120 s; a still image is the target. A maximum-size video/zip entry may exceed it, so do not treat a timeout as missing evidence |
 
 The long-term answer for 1,300 ATMs and video is an ATM-side HTTPS file agent
 or tunnel, not a 24 KiB Zabbix key. The chunk transport is the smallest thing
 that works on both test ATMs without a network change.
 
-## Portal bridge contract (next phase)
+## Portal bridge contract (implemented)
 
-The viewer must not accept a path from the browser. It uses a metadata ID:
+The browser never supplies a path. The only inputs are an ATM id, a local day,
+and a keyed HMAC locator returned by the bridge:
 
 ```text
-GET /admin/evidence/image/<id>
-  → bridge looks up id in atm_image_evidence (no bytes in the row)
-  → re-lists the zip / checks the file
-  → streams bytes with Cache-Control: no-store
-  → Content-Type from the validated extension; nosniff
-  → Content-Disposition: inline; filename="atm-image.jpg" (never the raw name)
-  → writes IMAGE_VIEW audit before the first byte
+GET /ej-journal/<atm_id>/images
+  → portal asks the bridge for masked candidates for one day/window
+  → bridge re-lists the allow-listed ATM folder and ranks by
+    capture time + event sequence
+  → each candidate carries name_masked + name_hmac (no raw name/path)
+
+GET /ej-journal/<atm_id>/images/file?day=...&name_hmac=...
+  → bridge re-lists the same folder, recomputes HMAC for every entry,
+    matches exactly one, then fetches size + SHA-256 + bytes
+  → portal streams bytes with Cache-Control: no-store
+  → Content-Type from the validated extension; nosniff; sandbox CSP
+  → Content-Disposition: inline; filename="atm-evidence.jpg"
+  → IMAGE_VIEW audit before the first byte
   → 404 "Not available on ATM" if the source is gone
+
+GET /ej-journal/<atm_id>/images/zip?day=...&zip_hmac=...
+  → NCR daily zip listing; entries addressed by archive index
+  → /images/zip/file?day=...&zip_hmac=...&index=...
 ```
 
-Metadata index (no bytes, and no raw PAN-bearing filename):
+The HMAC locator is `HMAC-SHA256(server_key, raw_filename)`. The key lives only
+in the host service environment/file, never in Postgres, the portal container,
+the repository, or a log. At view time the bridge re-lists the directory and
+recomputes the HMAC for each name; it does not trust a path supplied by the
+caller. A stale locator returns **Not available on ATM**; a changed file returns
+a changed/retry state. For a zip entry, the archive index + size + CRC32 are
+enough to re-select it; the entry name is not needed.
 
-```text
-atm_image_evidence
-  id, atm_id, captured_at, event,
-  source_kind (file|zip),
-  directory (restricted; no filename),
-  name_masked, name_hmac,             -- HMAC-SHA256, server-keyed
-  zip_entry_index, zip_entry_name_masked, zip_entry_crc32,
-  size_bytes, sha256, crc32,          -- sha256 for files, crc32 for zip entries
-  first_seen, last_seen, last_viewed_at
-```
-
-The index deliberately does **not** store the raw filename. A GRG filename can
-carry a card number, and a plain hash of a low-entropy name is reversible by
-guessing. At view time the bridge re-lists the directory, computes the same
-HMAC for each name, and matches `name_hmac` + size + capture time. If nothing
-matches, it returns **Not available on ATM**. For a zip entry, the index and
-CRC32 are enough to re-select it; the entry name is not needed.
-
-The HMAC key lives outside the database (host configuration), is rotated under
-change control, and is never rendered or logged. The UI shows `name_masked`
-only. This keeps the metadata useful for investigation without turning
-Postgres into a second copy of card-bearing filenames.
+The pilot does **not** create an `atm_image_evidence` table. It computes the
+locator live, so there is no second copy of card-bearing filenames to protect
+or retain. A persistent metadata index is optional and would need its own
+retention/compliance decision; if added, it must store only `name_masked` and
+`name_hmac`, never the raw name or bytes.
 
 ## Open questions
 
@@ -461,5 +678,6 @@ Postgres into a second copy of card-bearing filenames.
    move file reads to a directory index as well.
 5. Does NetXMS cache images centrally, or only show what is still on the ATM?
 6. Compliance sign-off: lawful basis, retention, access audit, PCI masking.
-7. Metadata collector: `atm.image.dir` now provides the paged, non-recursive
-   listing. The collector itself is not built; do not scan-hash every file.
+7. Metadata collector: the pilot computes HMACs live and stores nothing. A
+   persistent index is deferred; do not scan-hash every file or import raw
+   filenames into Postgres.

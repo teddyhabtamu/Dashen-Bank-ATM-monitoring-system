@@ -203,6 +203,11 @@ services:
       GLPI_UI_URL: "${GLPI_UI_URL}"
       REPORT_PORTAL_PORT: "8888"
       EVIDENCE_RAW_DIR: "/app/evidence/raw"
+      # Host-side, read-only image bridge. The socket directory is mounted
+      # read-only below; the portal has no route to ATM TCP/10050. The token
+      # must match /etc/atm-monitoring/image-bridge.env on the host.
+      ATM_IMAGE_BRIDGE_SOCKET: "/run/atm-image-bridge/bridge.sock"
+      ATM_IMAGE_BRIDGE_TOKEN: "${ATM_IMAGE_BRIDGE_TOKEN:-}"
       BASE_URL: "${BASE_URL:-http://localhost:8888}"
       ES_HOST: "${DATA_VM_IP}:9200"
       ES_INDEX: "atm-ej-live-*,atm-electronic-journal"
@@ -239,6 +244,9 @@ services:
     volumes:
       - ./report-portal:/app:rw
       - ./ej-logs/raw:/app/evidence/raw:ro
+      # Unix socket created by the host atm-image-bridge service. Mount the
+      # directory, not one socket inode: a service restart must keep working.
+      - /run/atm-image-bridge:/run/atm-image-bridge:ro
       - ./zabbix_modules:/app/zabbix_modules:ro
       - ./config/status_map.json:/app/config/status_map.json:ro
       - ./config/cassette_capacity.json:/app/config/cassette_capacity.json:ro

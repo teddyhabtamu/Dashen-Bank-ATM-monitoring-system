@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}{{ atm.atm_id }} · ATM image archive{% endblock %}
+{% block extra_style %}
+{% include "_ej_journal_style.html" %}
+<style>
+.img-meta{display:flex;flex-wrap:wrap;gap:8px 22px;background:#fff;border:1px solid #EEF1F6;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:#64748B;box-shadow:0 1px 3px rgba(1,33,105,.04)}
+.img-meta b{color:#0F172A}
+.img-name{max-width:480px;word-break:break-word}
+.img-caveat{background:#F8FAFC;border:1px solid #E4E9F1;color:#475569;border-radius:10px;padding:11px 14px;font-size:12px;line-height:1.55;margin-bottom:14px}
+</style>
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="archive"></i></div>
+  <div>
+    <div class="detail-head">
+      <a class="back" href="{{ url_for('atm_images.atm_images', atm_id=atm.atm_id, day=day_value) }}">← ATM images</a>
+      <a class="back" href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id) }}">EJ Journal</a>
+    </div>
+    <h1 class="page-title">{{ atm.atm_id }} · Image archive</h1>
+    <p class="page-subtitle">{{ atm.branch or 'Unknown branch' }} · {{ atm.vendor or '—' }} · {{ day_value }} · admin only</p>
+  </div>
+</div>
+<div class="page-content">
+
+<div class="banner banner-note">
+  <strong>Archive entries are addressed by index, never by name.</strong>
+  The NCR zip entry name can contain card data and is masked here. The host
+  bridge re-lists the archive and verifies the entry's size and CRC32 before
+  streaming it. The portal does not keep a copy.
+</div>
+
+{% if bridge_error %}
+<div class="banner banner-error"><strong>Image transport failed.</strong> {{ bridge_error }}</div>
+{% endif %}
+{% if unavailable %}
+<div class="banner banner-warn">
+  <strong>{{ not_available_text }}.</strong>
+  The archive is no longer present on this ATM. It may have rotated off the
+  device; the portal never kept a copy.
+</div>
+{% endif %}
+
+{% if result %}
+<div class="img-meta">
+  <span>ATM <b>{{ atm.atm_id }}</b></span>
+  <span>Day <b>{{ day_value }}</b></span>
+  <span>Archive <b class="mono">{{ result.get('zip_masked') }}</b></span>
+  <span>Entries <b>{{ result.get('count', 0) }}</b></span>
+  <span>Locator <b class="mono">{{ zip_hmac[:16] }}…</b></span>
+</div>
+
+<div class="img-caveat">
+  NCR's zip name identifies the <strong>day container</strong>, not a
+  transaction. Pick the entry by its timestamp and compare it with the EJ
+  session; the entry name is not a transaction key. A zip can be replaced or
+  rotated, so a stale entry index returns a changed/not-available state rather
+  than a different image.
+</div>
+
+<div class="card">
+  <div class="card-header"><h2>Archive entries</h2></div>
+  <div class="op-table-wrap" style="overflow-x:auto">
+    <table class="ej-table">
+      <thead><tr><th>Index</th><th>Modified</th><th>Masked entry</th><th>Size</th><th>View</th></tr></thead>
+      <tbody>
+        {% for e in result.get('entries', []) %}
+        <tr>
+          <td class="mono">{{ e.index }}</td>
+          <td class="mono">{{ e.last_write_time or '—' }}</td>
+          <td class="img-name">{{ e.name_masked }}</td>
+          <td>{{ '{:,}'.format(e.length|int) }} B</td>
+          <td>
+            {% if e.fetchable %}
+            <a href="{{ url_for('atm_images.atm_zip_image_file', atm_id=atm.atm_id, day=day_value, zip_hmac=zip_hmac, index=e.index) }}" target="_blank" rel="noopener">View</a>
+            {% else %}
+            <span style="color:#94A3B8">Too large</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="ej-empty">No image entries in this archive.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% elif not unavailable and not bridge_error %}
+<div class="card" style="padding:22px;text-align:center;color:#94A3B8">
+  No archive was loaded.
+</div>
+{% endif %}
+
+</div>
+{% endblock %}

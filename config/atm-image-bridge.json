@@ -1,0 +1,24 @@
+{
+  "max_days_back": 90,
+  "timeout": 30,
+  "retries": 1,
+  "atms": {
+    "ATM-TEST-GRG": {
+      "host": "10.41.30.115",
+      "vendor": "GRG",
+      "roots": [
+        "E:\\pic"
+      ],
+      "image_root": "E:\\pic"
+    },
+    "ATM-TEST-NCR": {
+      "host": "10.41.30.114",
+      "vendor": "NCR",
+      "roots": [
+        "C:\\ISUITE\\ICAM\\Permit\\icamimages",
+        "C:\\ISUITE\\ICAM\\Permit\\iCamImageZip"
+      ],
+      "zip_root": "C:\\ISUITE\\ICAM\\Permit\\iCamImageZip"
+    }
+  }
+}

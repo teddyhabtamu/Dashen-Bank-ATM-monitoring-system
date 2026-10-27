@@ -50,10 +50,14 @@ GRG_ROOT = r'E:\pic'
 NCR_ZIP_ROOT = r'C:\ISUITE\ICAM\Permit\iCamImageZip'
 
 
-def grg_directory(day: dt.date) -> str:
-    """Return the GRG day folder for one local date."""
+def grg_directory(day: dt.date, image_root: str = GRG_ROOT) -> str:
+    """Return the GRG day folder for one local date.
+
+    ``image_root`` is supplied by the bridge allow-list; the CLI keeps the
+    confirmed ``E:\\pic`` default.
+    """
     return '{}\\{}\\{:02d}\\{:02d}'.format(
-        GRG_ROOT, day.year, day.month, day.day)
+        image_root.rstrip('\\/'), day.year, day.month, day.day)
 
 
 def _parse_when(value: str) -> dt.datetime:

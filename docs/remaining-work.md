@@ -125,7 +125,7 @@ Listed so they stop appearing as open tasks. None can be closed by writing code.
 | D2 | EJ parser viability against busy NCR/GRG journals | Real journal samples | `adr-ej-transport.md` |
 | D3 | Physical cassette balances — cash forecasting is book-based until these exist | Field access | — |
 | D4 | GRG telemetry over UDP/161 | Network + vendor MIB | `atm-data-requirements.md` |
-| D5 | Camera images | Live ATM deployment of the `atm.image.*` keys; NCR zip entry format; compliance/retention | `adr-atm-images.md`, `atm-image-on-demand.md` |
+| D5 | Camera images | `atm.image.*` deployed and proven on GRG; host bridge + admin viewer implemented. Still needed: NCR zip entry format, UAT bridge install, compliance/retention sign-off | `adr-atm-images.md`, `atm-image-on-demand.md` |
 | D6 | SMTP and Africa's Talking credentials | You | `BRD_Compliance_Matrix.md` |
 
 D2 deserves the emphasis: it is the one dependency where a negative answer

@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}{{ atm.atm_id }} · ATM image evidence{% endblock %}
+{% block extra_style %}
+{% include "_ej_journal_style.html" %}
+<style>
+.img-meta{display:flex;flex-wrap:wrap;gap:8px 22px;background:#fff;border:1px solid #EEF1F6;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:#64748B;box-shadow:0 1px 3px rgba(1,33,105,.04)}
+.img-meta b{color:#0F172A}
+.img-summary{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;margin-bottom:12px;font-size:12px;color:#64748B}
+.img-summary b{color:#0F172A}
+.img-caveat{background:#F8FAFC;border:1px solid #E4E9F1;color:#475569;border-radius:10px;padding:11px 14px;font-size:12px;line-height:1.55;margin-bottom:14px}
+.img-role{display:inline-block;padding:2px 9px;border-radius:100px;font-size:10px;font-weight:700;white-space:nowrap;background:#F1F5F9;color:#475569}
+.img-role-start{background:#DBEAFE;color:#1D4ED8}
+.img-role-end{background:#DCFCE7;color:#166534}
+.img-role-service{background:#FEF3C7;color:#92400E}
+.img-role-near{background:#FEF2F2;color:#991B1B}
+.img-name{max-width:460px;word-break:break-word}
+.img-name small{display:block;color:#94A3B8;font-size:10px;margin-top:2px}
+.img-clip{font-size:10px;color:#94A3B8;margin-top:2px}
+.img-preview-note{font-size:11px;color:#64748B;margin-top:4px}
+@media(max-width:720px){.img-name{max-width:220px}}
+</style>
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="camera"></i></div>
+  <div>
+    <div class="detail-head">
+      <a class="back" href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id) }}">← EJ Journal</a>
+      <a class="back" href="{{ url_for('admin.atm_detail', atm_id=atm.atm_id) }}">ATM detail</a>
+    </div>
+    <h1 class="page-title">{{ atm.atm_id }} · ATM image evidence</h1>
+    <p class="page-subtitle">
+      {{ atm.branch or 'Unknown branch' }} · {{ atm.vendor or '—' }} ·
+      admin only · on demand from the ATM
+    </p>
+  </div>
+</div>
+<div class="page-content">
+
+<div class="banner banner-note">
+  <strong>Read-only evidence, not a central image archive.</strong>
+  The portal asks the host bridge for one image at a time. The image is held in
+  memory, streamed to this browser, and discarded. Filenames are masked because
+  a GRG filename can contain card data. The card field is display-only and is
+  <strong>not</strong> used to link an image to a transaction.
+</div>
+
+{% if not bridge_configured %}
+<div class="banner banner-warn">
+  <strong>Image bridge not configured.</strong>
+  The host-side image bridge is not running or the portal has no bridge token.
+  This is a transport problem, not an empty ATM. Start
+  <code>atm-image-bridge</code> on the monitoring host, then reload this page.
+</div>
+{% endif %}
+
+{% if form_error %}
+<div class="banner banner-error"><strong>Invalid search.</strong> {{ form_error }}</div>
+{% endif %}
+{% if bridge_error %}
+<div class="banner banner-error"><strong>Image transport failed.</strong> {{ bridge_error }}</div>
+{% endif %}
+{% if unavailable %}
+<div class="banner banner-warn">
+  <strong>{{ not_available_text }}.</strong>
+  The day folder or the requested source is no longer present on this ATM.
+  This can happen after the ATM rotates its image folder. It does not mean the
+  portal lost a copy — the portal never keeps one.
+</div>
+{% endif %}
+
+<form method="get" action="{{ url_for('atm_images.atm_images', atm_id=atm.atm_id) }}" class="ej-filters">
+  <div class="fg">
+    <label for="img-day">ATM day</label>
+    <input id="img-day" name="day" type="date" value="{{ day_value }}" max="{{ today_value }}" required>
+  </div>
+  <div class="fg">
+    <label for="img-start">Window start (ATM local)</label>
+    <input id="img-start" name="start" type="time" step="1" value="{{ start_value }}">
+  </div>
+  <div class="fg">
+    <label for="img-end">Window end (ATM local)</label>
+    <input id="img-end" name="end" type="time" step="1" value="{{ end_value }}">
+  </div>
+  <div class="actions">
+    <button class="btn btn-primary" type="submit">Find evidence</button>
+    {% if searched %}<a class="btn btn-outline" href="{{ url_for('atm_images.atm_images', atm_id=atm.atm_id) }}">Clear</a>{% endif %}
+  </div>
+</form>
+<p class="img-preview-note">
+  Tip: open a transaction in EJ Journal and use its <strong>Images</strong>
+  link. That fills a ±2 minute window around the transaction. Adjust the window
+  to the session's card-inserted → card-returned interval when you have it.
+  Only the last {{ max_days_back }} days can be requested.
+</p>
+
+{% if result %}
+<div class="img-summary">
+  <span>Confidence
+    <span class="pill pill-{{ 'ok' if result.get('confidence') == 'high' else ('error' if result.get('confidence') == 'none' else 'unknown') }}">{{ result.get('confidence') }}</span>
+  </span>
+  <span>Candidates <b>{{ result.get('candidate_count', 0) }}</b></span>
+  <span>Start anchors <b>{{ result.get('start_anchor_count', 0) }}</b></span>
+  <span>End anchors <b>{{ result.get('end_anchor_count', 0) }}</b></span>
+  <span>Service files <b>{{ result.get('service_count', 0) }}</b></span>
+  <span>Window <b>{{ result.get('session_start') }} → {{ result.get('session_end') }}</b></span>
+  <span>Folder <b class="mono">{{ result.get('directory_masked') }}</b></span>
+</div>
+
+{% if result.get('ambiguous') %}
+<div class="banner banner-warn">
+  <strong>Ambiguous evidence.</strong>
+  More than one start or end anchor matched. Do not pick one image as the
+  transaction's evidence; compare the adjacent sessions and narrow the window.
+</div>
+{% endif %}
+
+{% if result.get('caveat') %}
+<div class="img-caveat">
+  <strong>Link basis:</strong> {{ result.get('caveat') }}
+  <span class="mono">card_field_used_for_link={{ result.get('card_field_used_for_link') }}</span>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header"><h2>Candidate evidence</h2></div>
+  <div class="op-table-wrap" style="overflow-x:auto">
+    <table class="ej-table">
+      <thead>
+        <tr>
+          <th>Role</th>
+          <th>Captured / clip</th>
+          <th>Event</th>
+          <th>Cam</th>
+          <th>Type</th>
+          <th>Size</th>
+          <th>Masked evidence</th>
+          <th>View</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in result.get('candidates', []) %}
+        <tr>
+          <td>
+            <span class="img-role {% if c.role == 'start' %}img-role-start{% elif c.role == 'end' %}img-role-end{% elif c.role == 'service' %}img-role-service{% elif c.role == 'near_window' %}img-role-near{% endif %}">{{ c.role }}</span>
+          </td>
+          <td class="mono">
+            {% if c.kind == 'zip' %}
+            {{ c.last_write_time or '—' }}
+            <div class="img-clip">day archive</div>
+            {% else %}
+            {{ c.captured_at }}
+            {% if c.clip_end %}
+            <div class="img-clip">ends {{ c.clip_end }} · {{ c.clip_duration_s }}s</div>
+            {% endif %}
+            {% endif %}
+          </td>
+          <td>{{ c.event or '—' }}</td>
+          <td>{{ c.camera if c.camera is not none else '—' }}</td>
+          <td>{{ c.kind }}</td>
+          <td>{{ '{:,}'.format(c.size|int) }} B</td>
+          <td class="img-name">
+            {{ c.name_masked }}
+            {% if c.card_field_present %}
+            <small>Card field {{ c.card_field }} · display only, not a link key</small>
+            {% endif %}
+          </td>
+          <td>
+            {% if c.kind == 'zip' %}
+            <a href="{{ url_for('atm_images.atm_image_zip', atm_id=atm.atm_id, day=day_value, zip_hmac=c.name_hmac) }}">Open archive</a>
+            <div class="img-clip">{{ c.image_count }} image(s)</div>
+            {% elif c.fetchable %}
+            <a href="{{ url_for('atm_images.atm_image_file', atm_id=atm.atm_id, day=day_value, name_hmac=c.name_hmac) }}" target="_blank" rel="noopener">View</a>
+            {% else %}
+            <span style="color:#94A3B8">Too large</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" class="ej-empty">
+            {% if result.get('candidate_count', 0) %}
+            No viewable candidate matched this window.
+            {% else %}
+            No image evidence in this interval. Adjust the window or check that
+            the ATM has not rotated the day folder.
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% elif searched and not unavailable and not bridge_error and not form_error %}
+<div class="card" style="padding:22px;text-align:center;color:#94A3B8">
+  The search returned no result. Check the day and window.
+</div>
+{% endif %}
+
+</div>
+{% endblock %}

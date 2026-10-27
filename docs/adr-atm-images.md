@@ -1,13 +1,14 @@
 # ADR: ATM camera images — on-demand evidence, no central image store
 
-> **Status:** Accepted for a read-only pilot (2026-10-27).
+> **Status:** Accepted; admin-only pilot implemented (2026-10-27).
 >
-> The target paths and the agent's ability to resolve the bracketed GRG
-> filename are proven against a real image. The chunk script is ready for its
-> first live test. The **viewer** remains gated by compliance, by the NCR zip
-> entry format, and by the retention answers below. This ADR records the
-> on-demand model as the chosen direction and keeps the central-receiver
-> design only as a fallback.
+> The target paths, the agent keys, the chunk transport and the full image
+> SHA-256/MD5 match are proven against the real 22 October GRG image. The
+> admin-only portal viewer and host bridge are implemented. The **viewer is
+> still gated** by compliance, by the NCR zip entry format, and by the
+> retention answers below before operator or production exposure. This ADR
+> records the on-demand model as the chosen direction and keeps the
+> central-receiver design only as a fallback.
 
 ## Decision
 
@@ -165,13 +166,19 @@ Zabbix database. See `docs/adr-ej-transport.md` for the text/binary limit.
 
 ```text
 Portal (admin viewer)
-  → host-side bridge (metadata ID, allow-list, audit)
+  → host-side bridge over a Unix socket, read-only mount
+      (allow-list, HMAC locator, audit)
     → zabbix_get -s <ATM> -k atm.image.dir[...]         page of names
     → zabbix_get -s <ATM> -k atm.image.info[...]        size + SHA-256
     → zabbix_get -s <ATM> -k atm.image.chunk[...,o,l]   base64 chunks
       → ATM: C:\monitor\atm-image-chunk.ps1
         → read-only directory / file / zip entry
 ```
+
+The portal container has **no** route to ATM TCP/10050 and no `zabbix_get`.
+The Unix socket is mounted read-only; the bridge holds the HMAC key and the
+ATM allow-list. A request carries an ATM id, a day and an HMAC locator, never
+a path.
 
 Keys:
 
@@ -215,33 +222,40 @@ It is read-only: no writes, extraction, deletion, rename, or execution. It:
   latter wraps long JSON/base64 at console width and inserts CRLF — the WMI
   collector hit that bug on 2026-10-09).
 
-### What the host bridge does
+### What the host bridge does (implemented)
 
-* resolves an opaque metadata ID to an allow-listed source, never a
+* accepts only ATM ids in the host-side allow-list; vendor, host, roots and
+  day-folder rules come from that config, never from the request;
+* listens on a Unix socket, not a TCP port, and requires a shared bearer token;
+* resolves an opaque HMAC locator to an allow-listed source, never a
   user-supplied path;
-* re-resolves the source at view time and matches a keyed HMAC of the name,
-  not a stored raw filename;
+* re-lists the source at view time and recomputes `HMAC-SHA256(key, name)` for
+  every entry, so a stale locator cannot become a path;
 * discovers files with the paged, non-recursive directory listing, so a
   browser cannot ask the ATM to walk the disk;
 * ranks candidates with the shared `atm_image_link` rule, showing the
   confidence and caveat rather than a transaction key;
-* checks the ATM's size + SHA-256 before publishing; zip entries are checked
-  by size + CRC32;
+* checks the ATM's size + SHA-256 before streaming; zip entries are checked by
+  size + CRC32;
 * checks magic bytes so an HTML error page saved as `.jpg` is refused;
-* writes to a private temp file and publishes atomically, or holds the bytes
-  in memory and streams them;
-* audits every view (`IMAGE_VIEW`) with the admin identity, ATM, timestamp,
-  source (restricted), size, hash, and result;
-* sends `Cache-Control: no-store` and never logs image bytes;
-* returns **404 "Not available on ATM"** when the file is gone, without
-  pretending a link exists.
+* holds the verified bytes in memory for one response and discards them; no
+  central file is written;
+* the portal writes `IMAGE_SEARCH` for discovery and `IMAGE_VIEW` before the
+  first byte, with the admin identity, ATM, day, HMAC prefix, size and hash;
+* sends `Cache-Control: no-store`, `X-Content-Type-Options: nosniff` and a
+  sandbox CSP, and never logs image bytes or raw names;
+* returns **404 "Not available on ATM"** when the file is gone, and a
+  separate transport error when the ATM or bridge did not answer.
 
-The portal container must not talk to ATMs directly. The bridge runs on the
-host with a dedicated service user and the narrowest possible network ACL.
+The pilot has no `atm_image_evidence` table. The locator is recomputed live,
+so there is no central copy of card-bearing filenames to retain. A persistent
+metadata index is deferred and, if added, must store only `name_masked` and
+`name_hmac`, never the raw name or bytes.
 
 ## Compliance gates
 
-These are bank decisions and still gate the viewer, not the transport:
+These are bank decisions and still gate operator/production exposure of the
+admin-only pilot, not the transport itself:
 
 | Gate | Why |
 |---|---|
@@ -270,21 +284,22 @@ The metadata still needs retention, access control, and audit.
    retention. If NetXMS still shows it, NetXMS is a central store and the
    on-demand model is weaker for old disputes.
 6. **Compliance sign-off** on lawful basis, retention, audit, and masking.
-7. **Metadata collector** — the transport now provides a paged, non-recursive
-   `atm.image.dir` for GRG day folders and the NCR zip folder. The collector
-   that writes the metadata index is not built yet, and it should not hash
-   every file on every scan; hash on first view or on an explicit evidence
-   request.
+7. **Metadata collector** — the pilot computes the HMAC locator live from the
+   paged, non-recursive `atm.image.dir`; it stores nothing. A persistent
+   metadata index is deferred; do not import raw filenames into Postgres.
 
 ## Phasing
 
-| Phase | Scope | Gate |
+| Phase | Scope | State |
 |---|---|---|
-| 1 | Read-only transport proof on GRG (this change) | Agent keys + allow-list deployed |
-| 2 | Metadata index (no bytes): ATM, capture time, event, masked card, source, size, hash, last seen | NCR entry format confirmed; collector built on `atm.image.dir` |
-| 3 | Host bridge + admin viewer, audit, no-store | Compliance sign-off |
-| 4 | Pilot on the two test ATMs; retention measured | Phase 2/3 |
-| 5 | Fleet rollout; long-term file agent/tunnel if 1,300 ATMs outgrow chunking | Architecture decision |
+| 1 | Read-only transport proof on GRG | Done: 114,843 bytes, SHA-256 and MD5 match |
+| 2 | Host bridge over Unix socket + admin viewer, HMAC locator, audit, no-store | Implemented; UAT install pending |
+| 3 | NCR zip entry listing and timestamp semantics | Pending `--list` after NCR deployment |
+| 4 | UAT pilot on both test ATMs; retention measured | Pending |
+| 5 | Compliance sign-off, then fleet rollout; long-term file agent/tunnel if 1,300 ATMs outgrow chunking | Gate |
+
+A persistent metadata index (no bytes) is optional and deferred; it is not a
+prerequisite for the viewer. It would store only masked names and HMACs.
 
 ## Fallback if retention beyond the ATM is required
 

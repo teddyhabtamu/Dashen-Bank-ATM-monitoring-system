@@ -60,6 +60,7 @@ def create_app():
     from blueprints.admin      import bp as admin_bp
     from blueprints.ej_search  import bp as ej_bp
     from blueprints.ej_journal import bp as ej_journal_bp
+    from blueprints.atm_images import bp as atm_images_bp
     from blueprints.anomalies  import bp as anomalies_bp
     from blueprints.monitoring import bp as monitoring_bp
     from blueprints.operations import bp as operations_bp
@@ -75,6 +76,7 @@ def create_app():
     app.register_blueprint(admin_bp)
     app.register_blueprint(ej_bp)
     app.register_blueprint(ej_journal_bp)
+    app.register_blueprint(atm_images_bp)
     app.register_blueprint(anomalies_bp)
     app.register_blueprint(monitoring_bp)
     app.register_blueprint(operations_bp)
