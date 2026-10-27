@@ -231,7 +231,8 @@ only by the zip/time window. Entry names are masked in the default output;
 
 `find_atm_image.py` lists the allow-listed day folder and ranks files by
 capture time and event. It does **not** fetch bytes, write a file, or store
-metadata.
+metadata. It needs the `atm.image.dir` key from Step 2; until that key is
+deployed, the ATM returns `ZBX_NOTSUPPORTED: Unsupported item key`.
 
 GRG:
 
