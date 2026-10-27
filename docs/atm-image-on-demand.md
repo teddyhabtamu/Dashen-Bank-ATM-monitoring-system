@@ -303,6 +303,10 @@ The viewer must render that as **Not available on ATM**, not as a broken
 image or an empty success. Raw names/directories are masked by default; add
 `--show-sensitive` only for local diagnosis.
 
+The CLI is a **host-side diagnostic tool**, not the audited viewer. It does
+not write the portal audit log; shell access to the host is the control. The
+future bridge must write `IMAGE_VIEW` before it streams a byte.
+
 ## Step 5 — fetch one NCR entry
 
 By index (the form the portal will use, and the only safe form if the entry
