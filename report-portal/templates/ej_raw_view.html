@@ -8,21 +8,15 @@
 .raw-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;color:#64748B}
 .raw-toolbar .raw-count b{color:#0F172A}
 .raw-toolbar .raw-actions{display:flex;gap:8px;flex-wrap:wrap}
-.raw-shell{background:#0F172A;border-radius:12px;overflow:auto;max-height:72vh;border:1px solid #1E293B}
+.raw-shell{background:#fff;border-radius:12px;overflow:auto;max-height:72vh;border:1px solid #E4E9F1;box-shadow:0 1px 3px rgba(1,33,105,.04)}
 .raw-lines{width:100%;border-collapse:collapse;table-layout:fixed}
-.raw-lines th{position:sticky;top:0;z-index:1;text-align:left;background:#1E293B;color:#94A3B8;font-size:10px;text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;border-bottom:1px solid #334155}
+.raw-lines th{position:sticky;top:0;z-index:1;text-align:left;background:#F8FAFC;color:#64748B;font-size:10px;text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;border-bottom:1px solid #E4E9F1}
 .raw-lines th.ln{width:72px}
-.raw-lines td{padding:4px 12px;border-bottom:1px solid #1E293B;vertical-align:top;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;line-height:1.6}
-.raw-lines td.ln{width:72px;color:#64748B;text-align:right;user-select:none;background:#111827;font-size:10.5px;padding-top:5px}
-.raw-lines td.code{color:#E2E8F0;white-space:pre-wrap;word-break:break-word}
-/* base.html stripes every even row and paints every hover; both make the
-   light text on this dark log surface unreadable. Keep the shell dark and
-   put the hover treatment on the cells. */
-.raw-lines tbody tr,
-.raw-lines tbody tr:nth-child(even),
-.raw-lines tbody tr:hover{background:transparent}
-.raw-lines tbody tr:hover td{background:#1E293B}
-.raw-lines tbody tr:hover td.ln{background:#172033}
+.raw-lines td{padding:4px 12px;border-bottom:1px solid #F1F5F9;vertical-align:top;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;line-height:1.6}
+.raw-lines td.ln{width:72px;color:#94A3B8;text-align:right;user-select:none;background:#F8FAFC;border-right:1px solid #EEF1F6;font-size:10.5px;padding-top:5px}
+.raw-lines td.code{color:#0F172A;white-space:pre-wrap;word-break:break-word}
+.raw-lines tbody tr:hover td{background:#EEF2FF}
+.raw-lines tbody tr:hover td.ln{background:#E8EDF8}
 .raw-empty{padding:32px 20px;text-align:center;color:#94A3B8;font-size:13px}
 .raw-notice{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.55;margin-bottom:14px}
 @media(max-width:640px){.raw-lines th.ln,.raw-lines td.ln{width:48px}.raw-lines td,.raw-lines th{padding-left:8px;padding-right:8px}}

@@ -391,3 +391,9 @@ def test_fleet_table_says_counts_are_latest_file_only():
     template = (ROOT / 'report-portal' / 'templates' / 'ej_journal.html').read_text()
     assert 'Latest journal file per ATM' in template
     assert 'period totals above' in template
+
+
+def test_raw_view_uses_the_light_portal_surface():
+    template = (ROOT / 'report-portal' / 'templates' / 'ej_raw_view.html').read_text()
+    assert '.raw-shell{background:#fff' in template
+    assert '.raw-lines td.code{color:#0F172A' in template
