@@ -121,12 +121,28 @@ def read_text_lines(path: Path | str, max_bytes: int = VIEW_MAX_BYTES) -> dict:
             'binary': True,
             'size': size,
         }
+    lines = data.decode('utf-8', errors='replace').splitlines()
     return {
-        'lines': data.decode('utf-8', errors='replace').splitlines(),
+        'lines': [_display_line(line) for line in lines],
         'too_large': False,
         'binary': False,
         'size': size,
     }
+
+
+def _display_line(line: str) -> str:
+    """Make control bytes visible instead of letting them draw glyph soup.
+
+    Raw EJ writers put STX/ETX and other control bytes between fields. They are
+    valid in the evidence, but a browser renders them as replacement boxes or
+    invisible layout noise. ``\\x02`` keeps the evidence readable and makes
+    it obvious that the byte was present.
+    """
+    return ''.join(
+        char if char == '\t' or char.isprintable()
+        else f'\\x{ord(char):02x}'
+        for char in line
+    )
 
 
 def paginate_lines(lines, query: str = '', page: int = 1,

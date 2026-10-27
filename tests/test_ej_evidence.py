@@ -99,6 +99,15 @@ def test_read_text_lines_decodes_utf8_and_crlf(tmp_path):
     assert result['binary'] is False
 
 
+def test_read_text_lines_makes_control_bytes_visible(tmp_path):
+    path = _write(
+        tmp_path / '2026-10-25_CONTROL_EJDATA.log',
+        b'STX\x02field\n',
+    )
+    result = evidence.read_text_lines(path)
+    assert result['lines'] == ['STX\\x02field']
+
+
 def test_read_text_lines_refuses_binary_and_oversize(tmp_path):
     binary = _write(
         tmp_path / '2026-10-25_BINARY_EJDATA.log', b'abc\x00def')
@@ -376,3 +385,9 @@ def test_ej_journal_detail_has_raw_view_and_download_links():
     assert '<th>Raw</th>' in template
     assert "url_for('ej_journal.ej_raw_view'" in template
     assert "url_for('ej_journal.ej_raw_download'" in template
+
+
+def test_fleet_table_says_counts_are_latest_file_only():
+    template = (ROOT / 'report-portal' / 'templates' / 'ej_journal.html').read_text()
+    assert 'Latest journal file per ATM' in template
+    assert 'period totals above' in template
