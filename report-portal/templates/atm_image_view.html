@@ -137,6 +137,7 @@
 
   var controller = new AbortController();
   var objectUrl = null;
+  var expectedSize = 0;
   var finished = false;
 
   function humanSize(bytes) {
@@ -211,7 +212,8 @@
     var size = response.headers.get('X-Evidence-Size');
     var sha = response.headers.get('X-Evidence-SHA256');
     if (size) {
-      sizeEl.textContent = humanSize(parseInt(size, 10));
+      expectedSize = parseInt(size, 10) || 0;
+      sizeEl.textContent = humanSize(expectedSize);
       sizeWrap.hidden = false;
     }
     if (sha) {
@@ -222,6 +224,11 @@
     return response.blob();
   }).then(function (blob) {
     if (!blob) return;
+    if (expectedSize && blob.size !== expectedSize) {
+      throw new HttpError(502,
+        'The ATM stream ended after ' + blob.size + ' of ' +
+        expectedSize + ' bytes. The bridge or ATM connection dropped.');
+    }
     if (!sizeWrap.hidden) {
       sizeEl.textContent = humanSize(blob.size);
     }
