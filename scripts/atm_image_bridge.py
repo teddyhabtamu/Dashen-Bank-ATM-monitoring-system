@@ -328,7 +328,8 @@ def _hmac(value: str) -> str:
     return value
 
 
-def _project_grg(item: dict, day: dt.date, key: bytes) -> dict:
+def _project_grg(item: dict, day: dt.date, key: bytes,
+                 fetchable: bool = True) -> dict:
     """Drop the raw name/path and add a keyed locator."""
     return {
         'name_masked': item['name_masked'],
@@ -352,11 +353,12 @@ def _project_grg(item: dict, day: dt.date, key: bytes) -> dict:
         'score': item['score'],
         'size': item['size'],
         'content_type': _content_type(item['name']),
-        'fetchable': True,
+        'fetchable': bool(fetchable),
     }
 
 
-def _project_ncr(item: dict, day: dt.date, key: bytes) -> dict:
+def _project_ncr(item: dict, day: dt.date, key: bytes,
+                 fetchable: bool = True) -> dict:
     """Drop the raw zip name and expose only the keyed locator."""
     return {
         'name_masked': item['name_masked'],
@@ -370,7 +372,7 @@ def _project_ncr(item: dict, day: dt.date, key: bytes) -> dict:
         'last_write_time': item['last_write_time'],
         'kind': 'zip',
         'content_type': 'application/zip',
-        'fetchable': True,
+        'fetchable': bool(fetchable),
     }
 
 
@@ -473,8 +475,12 @@ class BridgeApp:
                 ranked = rank_grg_candidates(rows, start, end)
             except LinkError as exc:
                 raise BridgeError('The ATM listing could not be ranked.') from exc
+            fetchable = {
+                row['name']: row.get('fetchable', True) for row in rows
+            }
             candidates = [
-                _project_grg(item, day, self.key)
+                _project_grg(item, day, self.key,
+                             fetchable.get(item['name'], True))
                 for item in ranked['candidates']
             ]
             result = {key: value for key, value in ranked.items()
@@ -486,8 +492,12 @@ class BridgeApp:
                 selected = select_ncr_zips(rows, day)
             except LinkError as exc:
                 raise BridgeError('The ATM listing could not be selected.') from exc
+            fetchable = {
+                row['name']: row.get('fetchable', True) for row in rows
+            }
             candidates = [
-                _project_ncr(item, day, self.key)
+                _project_ncr(item, day, self.key,
+                             fetchable.get(item['name'], True))
                 for item in selected['candidates']
             ]
             result = {key: value for key, value in selected.items()

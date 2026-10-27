@@ -167,8 +167,12 @@
           </td>
           <td>
             {% if c.kind == 'zip' %}
-            <a href="{{ url_for('atm_images.atm_image_zip', atm_id=atm.atm_id, day=day_value, zip_hmac=c.name_hmac) }}">Open archive</a>
-            <div class="img-clip">{{ c.image_count }} image(s)</div>
+              {% if c.fetchable %}
+              <a href="{{ url_for('atm_images.atm_image_zip', atm_id=atm.atm_id, day=day_value, zip_hmac=c.name_hmac) }}">Open archive</a>
+              <div class="img-clip">{{ c.image_count }} image(s)</div>
+              {% else %}
+              <span style="color:#94A3B8">Too large</span>
+              {% endif %}
             {% elif c.fetchable %}
             <a href="{{ url_for('atm_images.atm_image_file', atm_id=atm.atm_id, day=day_value, name_hmac=c.name_hmac) }}" target="_blank" rel="noopener">View</a>
             {% else %}
