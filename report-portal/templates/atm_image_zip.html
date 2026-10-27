@@ -7,6 +7,9 @@
 .img-meta b{color:#0F172A}
 .img-name{max-width:480px;word-break:break-word}
 .img-caveat{background:#F8FAFC;border:1px solid #E4E9F1;color:#475569;border-radius:10px;padding:11px 14px;font-size:12px;line-height:1.55;margin-bottom:14px}
+.img-view-link{display:inline-block;padding:5px 11px;border:1px solid #BFDBFE;border-radius:6px;background:#EFF6FF;color:#1D4ED8 !important;font-weight:700;text-decoration:none;white-space:nowrap}
+.img-view-link:hover{background:#DBEAFE;text-decoration:none !important}
+.img-view-link.off{background:#F8FAFC;border-color:#E4E9F1;color:#94A3B8 !important}
 </style>
 {% endblock %}
 {% block body %}
@@ -68,13 +71,13 @@
         <tr>
           <td class="mono">{{ e.index }}</td>
           <td class="mono">{{ e.last_write_time or '—' }}</td>
-          <td class="img-name">{{ e.name_masked }}</td>
-          <td>{{ '{:,}'.format(e.length|int) }} B</td>
+          <td class="img-name"><span class="mono">{{ e.name_masked }}</span></td>
+          <td title="{{ e.length|int }} bytes">{{ e.size_label or ('{:,}'.format(e.length|int) + ' B') }}</td>
           <td>
             {% if e.fetchable %}
-            <a href="{{ url_for('atm_images.atm_zip_image_file', atm_id=atm.atm_id, day=day_value, zip_hmac=zip_hmac, index=e.index) }}" target="_blank" rel="noopener">View</a>
+            <a class="img-view-link" href="{{ url_for('atm_images.atm_image_view', atm_id=atm.atm_id, day=day_value, source='zip', zip_hmac=zip_hmac, index=e.index, kind=('video' if e.content_type == 'video/mp4' else 'image')) }}">View</a>
             {% else %}
-            <span style="color:#94A3B8">Too large</span>
+            <span class="img-view-link off">Too large</span>
             {% endif %}
           </td>
         </tr>

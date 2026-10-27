@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+{% block title %}{{ atm.atm_id }} · ATM evidence{% endblock %}
+{% block extra_style %}
+{% include "_ej_journal_style.html" %}
+<style>
+.ev-meta{display:flex;flex-wrap:wrap;gap:8px 22px;background:#fff;border:1px solid #EEF1F6;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:#64748B;box-shadow:0 1px 3px rgba(1,33,105,.04)}
+.ev-meta b{color:#0F172A}
+.ev-stage{position:relative;background:#0B1220;border:1px solid #1E293B;border-radius:14px;min-height:460px;display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:0 8px 30px rgba(1,33,105,.12)}
+.ev-media{max-width:100%;max-height:72vh;display:block;opacity:0;transition:opacity .2s ease}
+.ev-media[hidden]{display:none}
+.ev-media.ready{opacity:1}
+.ev-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;text-align:center;color:#CBD5E1;padding:24px;background:radial-gradient(circle at center,#172033 0%,#0B1220 70%)}
+.ev-loading[hidden]{display:none}
+.ev-loading strong{color:#F8FAFC;font-size:14px}
+.ev-loading span{font-size:12px;max-width:460px;line-height:1.55;color:#94A3B8}
+.ev-spinner{width:34px;height:34px;border:3px solid rgba(148,163,184,.25);border-top-color:#60A5FA;border-radius:50%;animation:ev-spin .9s linear infinite;margin-bottom:3px}
+@keyframes ev-spin{to{transform:rotate(360deg)}}
+.ev-error{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:30px;background:radial-gradient(circle at center,#1F1720 0%,#0B1220 72%);color:#FCA5A5}
+.ev-error[hidden]{display:none}
+.ev-error-icon{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(248,113,113,.12);color:#F87171}
+.ev-error-icon svg{width:22px;height:22px}
+.ev-error strong{font-size:16px;color:#FEE2E2}
+.ev-error span{font-size:12px;color:#94A3B8;max-width:470px;line-height:1.55}
+.ev-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.ev-note{font-size:12px;color:#64748B;line-height:1.55;margin-top:12px}
+.ev-note code{font-size:11px}
+.ev-sha{word-break:break-all}
+@media(max-width:720px){.ev-stage{min-height:300px}.ev-media{max-height:62vh}.ev-error{padding:20px}}
+</style>
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="{{ 'video' if kind == 'video' else 'image' }}"></i></div>
+  <div>
+    <div class="detail-head">
+      <a class="back" href="{{ back_url }}">{{ back_label }}</a>
+      <a class="back" href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id) }}">EJ Journal</a>
+    </div>
+    <h1 class="page-title">{{ atm.atm_id }} · ATM evidence</h1>
+    <p class="page-subtitle">
+      {{ atm.branch or 'Unknown branch' }} · {{ atm.vendor or '—' }} ·
+      {{ day_value }} · admin only
+    </p>
+  </div>
+</div>
+<div class="page-content">
+
+<div class="banner banner-note">
+  <strong>Streamed from the ATM for this one view.</strong>
+  The host bridge re-lists the allow-listed folder, matches the keyed locator,
+  verifies the file, and relays it through the portal. The response is not
+  cached, written to disk, or stored in the database. The card field in a
+  filename is display-only and is never used to link an image to a transaction.
+</div>
+
+<div class="ev-meta">
+  <span>ATM <b>{{ atm.atm_id }}</b></span>
+  <span>Day <b>{{ day_value }}</b></span>
+  <span>Source <b>{{ source_label }}</b></span>
+  <span>Type <b>{{ 'Video clip' if kind == 'video' else 'Still image' }}</b></span>
+  <span>Locator <b class="mono">{{ locator[:16] }}…</b></span>
+  {% if source == 'file' %}
+  <span>Window <b>{{ start_value }} → {{ end_value }}</b></span>
+  {% endif %}
+  <span id="ev-size-wrap" hidden>Size <b id="ev-size">—</b></span>
+  <span id="ev-sha-wrap" hidden>SHA-256 <b class="mono ev-sha" id="ev-sha">—</b></span>
+</div>
+
+<div class="ev-stage" id="ev-stage"
+     data-src="{{ stream_url }}"
+     data-kind="{{ kind }}"
+     data-missing-text="{{ not_available_text }}">
+  <div class="ev-loading" id="ev-loading">
+    <div class="ev-spinner" aria-hidden="true"></div>
+    <strong>Fetching evidence from the ATM…</strong>
+    <span>
+      {% if kind == 'video' %}
+      A video reopens the ATM archive for every chunk and can take over a
+      minute. Keep this tab open; the browser shows the clip when the verified
+      download completes.
+      {% elif source == 'zip' %}
+      The bridge lists the day archive, extracts this entry by index, and
+      verifies its size and CRC32 before sending it. This can take a minute.
+      {% else %}
+      A still image usually takes a few seconds. The browser shows it when the
+      verified download completes.
+      {% endif %}
+    </span>
+  </div>
+
+  <div class="ev-error" id="ev-error" hidden>
+    <div class="ev-error-icon"><i data-lucide="alert-triangle"></i></div>
+    <strong id="ev-error-title">{{ not_available_text }}</strong>
+    <span id="ev-error-detail">
+      The file may have rotated off the ATM, or the bridge may be unavailable.
+      Go back to the candidate list; a transport failure is shown separately
+      from missing evidence.
+    </span>
+    <a class="btn btn-outline" href="{{ back_url }}">{{ back_label }}</a>
+  </div>
+
+  {% if kind == 'video' %}
+  <video id="ev-media" class="ev-media" controls playsinline preload="auto" hidden></video>
+  {% else %}
+  <img id="ev-media" class="ev-media" alt="ATM image evidence" hidden>
+  {% endif %}
+</div>
+
+<div class="ev-actions">
+  <a class="btn btn-outline" href="{{ back_url }}">{{ back_label }}</a>
+  <a class="btn btn-outline" target="_blank" rel="noopener" href="{{ stream_url }}">Open raw stream</a>
+</div>
+<p class="ev-note">
+  The raw stream skips the portal chrome and is only useful when you need the
+  browser's own viewer or a direct URL. Every load, including this page, is
+  audited as <code>IMAGE_VIEW</code>. A 404 with
+  <code>{{ not_available_text }}</code> means the evidence is gone from the
+  ATM; any other error is a bridge or ATM transport failure.
+</p>
+
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+(function () {
+  var stage = document.getElementById('ev-stage');
+  var media = document.getElementById('ev-media');
+  var loading = document.getElementById('ev-loading');
+  var error = document.getElementById('ev-error');
+  var errorTitle = document.getElementById('ev-error-title');
+  var errorDetail = document.getElementById('ev-error-detail');
+  var sizeWrap = document.getElementById('ev-size-wrap');
+  var sizeEl = document.getElementById('ev-size');
+  var shaWrap = document.getElementById('ev-sha-wrap');
+  var shaEl = document.getElementById('ev-sha');
+  if (!stage || !media) return;
+
+  var controller = new AbortController();
+  var objectUrl = null;
+  var finished = false;
+
+  function humanSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function showError(title, detail) {
+    if (finished) return;
+    finished = true;
+    loading.hidden = true;
+    media.hidden = true;
+    errorTitle.textContent = title;
+    if (detail) errorDetail.textContent = detail;
+    error.hidden = false;
+  }
+
+  function ready() {
+    if (finished) return;
+    finished = true;
+    loading.hidden = true;
+    media.hidden = false;
+    // Let the browser paint the display state before the fade-in.
+    requestAnimationFrame(function () { media.classList.add('ready'); });
+  }
+
+  media.addEventListener('load', ready);
+  media.addEventListener('loadeddata', ready);
+  media.addEventListener('canplay', ready);
+  media.addEventListener('error', function () {
+    showError('The ATM returned a file this browser cannot display.',
+              'The file was verified in transit, but the browser could not ' +
+              'decode it. Open the raw stream to inspect the original.');
+  });
+
+  window.addEventListener('pagehide', function () {
+    controller.abort();
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  });
+
+  function HttpError(status, message) {
+    this.status = status;
+    this.message = message || '';
+  }
+
+  fetch(stage.dataset.src, {
+    method: 'GET',
+    credentials: 'same-origin',
+    cache: 'no-store',
+    signal: controller.signal
+  }).then(function (response) {
+    if (response.redirected) {
+      return response.text().then(function () {
+        throw new HttpError(401,
+          'The portal session expired. Reload this page and sign in again.');
+      });
+    }
+    if (!response.ok) {
+      return response.text().then(function (text) {
+        throw new HttpError(response.status, (text || '').trim());
+      });
+    }
+    var type = (response.headers.get('Content-Type') || '')
+      .split(';')[0].trim().toLowerCase();
+    if (['image/jpeg', 'image/png', 'video/mp4'].indexOf(type) === -1) {
+      return response.text().then(function (text) {
+        throw new HttpError(502, (text || '').trim() ||
+          'The portal returned an unexpected content type.');
+      });
+    }
+    var size = response.headers.get('X-Evidence-Size');
+    var sha = response.headers.get('X-Evidence-SHA256');
+    if (size) {
+      sizeEl.textContent = humanSize(parseInt(size, 10));
+      sizeWrap.hidden = false;
+    }
+    if (sha) {
+      shaEl.textContent = sha.slice(0, 16) + '…';
+      shaEl.title = sha;
+      shaWrap.hidden = false;
+    }
+    return response.blob();
+  }).then(function (blob) {
+    if (!blob) return;
+    if (!sizeWrap.hidden) {
+      sizeEl.textContent = humanSize(blob.size);
+    }
+    objectUrl = URL.createObjectURL(blob);
+    media.src = objectUrl;
+    media.hidden = false;
+  }).catch(function (err) {
+    if (err.name === 'AbortError') return;
+    if (err instanceof HttpError) {
+      if (err.status === 404 &&
+          err.message === stage.dataset.missingText) {
+        showError(stage.dataset.missingText,
+                  'The file is no longer present on the ATM. It may have ' +
+                  'rotated off the device; the portal never kept a copy.');
+      } else if (err.status === 401) {
+        showError('The portal session expired',
+                  err.message || 'Reload this page and sign in again.');
+      } else if (err.status === 409) {
+        showError('Evidence changed on the ATM',
+                  err.message || 'The archive changed while it was being read.');
+      } else if (err.status === 429) {
+        showError('The ATM is busy',
+                  err.message || 'Another image request is still running.');
+      } else {
+        showError('Image transport failed',
+                  err.message || ('The bridge returned HTTP ' + err.status + '.'));
+      }
+      return;
+    }
+    showError('Image transport failed',
+              'The portal could not read the bridge response. The ATM may be ' +
+              'offline or the host bridge may have stopped.');
+  });
+})();
+</script>
+{% endblock %}

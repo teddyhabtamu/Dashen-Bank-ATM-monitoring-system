@@ -123,8 +123,33 @@ def _candidate():
         'role': 'start',
         'score': 80,
         'size': 114843,
+        'size_label': '112.2 KB',
         'content_type': 'image/jpeg',
         'fetchable': True,
+    }
+
+
+def _zip_result():
+    return {
+        'kind': 'atm-zip-entries',
+        'atm_id': 'ATM-TEST-NCR',
+        'host': '10.41.30.114',
+        'day': '2026-10-22',
+        'zip_masked': '172.23.248.4_102226_***_16_1.zip',
+        'zip_hmac': HMAC,
+        'count': 1,
+        'available': True,
+        'entries': [{
+            'index': 0,
+            'name_masked': 'PAN-************3456.jpg',
+            'length': 114843,
+            'size_label': '112.2 KB',
+            'compressed_length': 114000,
+            'crc32': 42,
+            'last_write_time': '2026-10-22T16:33:00+03:00',
+            'fetchable': True,
+            'content_type': 'image/jpeg',
+        }],
     }
 
 
@@ -221,6 +246,84 @@ def test_bridge_failure_is_not_missing_evidence(monkeypatch):
     assert 'bridge is down' in body
     assert 'Not available on ATM' not in body
     assert calls[0][1].endswith('unavailable 0 error 1')
+
+
+def test_candidate_page_links_to_the_wrapped_viewer(monkeypatch):
+    app, _calls = _app(monkeypatch)
+    monkeypatch.setattr(bpmod.bridge, 'candidates',
+                        lambda *a, **k: _result())
+    client = app.test_client()
+    _admin(client)
+
+    response = client.get(
+        '/ej-journal/ATM-TEST-GRG/images?'
+        'day=2026-10-22&start=15:34:44&end=15:35:21')
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert '/ej-journal/ATM-TEST-GRG/images/view?' in body
+    assert 'name_hmac=' + HMAC in body
+    assert '112.2 KB' in body
+    assert 'Start anchor' in body
+
+
+def test_viewer_page_wraps_the_stream_and_keeps_the_chrome(monkeypatch):
+    app, calls = _app(monkeypatch)
+    client = app.test_client()
+    _admin(client)
+
+    response = client.get(
+        f'/ej-journal/ATM-TEST-GRG/images/view?day=2026-10-22'
+        f'&name_hmac={HMAC}&kind=image&start=15:34:44&end=15:35:21')
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert response.headers['Cache-Control'] == 'no-store'
+    assert 'ATM evidence' in body
+    assert '/ej-journal/ATM-TEST-GRG/images/file?' in body
+    assert 'name_hmac=' + HMAC in body
+    assert 'Not available on ATM' in body
+    assert 'CardInserted' not in body
+    # Opening the page itself is not a view; the stream route audits the bytes.
+    assert calls == []
+
+
+def test_zip_page_links_entries_through_the_indexed_viewer(monkeypatch):
+    app, calls = _app(monkeypatch)
+    monkeypatch.setattr(bpmod.bridge, 'zip_entries',
+                        lambda *a, **k: _zip_result())
+    client = app.test_client()
+    _admin(client)
+
+    response = client.get(
+        f'/ej-journal/ATM-TEST-GRG/images/zip?'
+        f'day=2026-10-22&zip_hmac={HMAC}')
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert '/ej-journal/ATM-TEST-GRG/images/view?' in body
+    assert 'source=zip' in body
+    assert 'index=0' in body
+    assert 'zip_hmac=' + HMAC in body
+    assert calls and calls[0][0] == 'IMAGE_SEARCH'
+
+
+def test_zip_viewer_uses_the_entry_stream_not_a_file_locator(monkeypatch):
+    app, calls = _app(monkeypatch)
+    client = app.test_client()
+    _admin(client)
+
+    response = client.get(
+        f'/ej-journal/ATM-TEST-GRG/images/view?day=2026-10-22'
+        f'&source=zip&zip_hmac={HMAC}&index=0&kind=image')
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'Zip entry 0' in body
+    assert '/ej-journal/ATM-TEST-GRG/images/zip/file?' in body
+    assert 'zip_hmac=' + HMAC in body
+    assert 'index=0' in body
+    assert calls == []
 
 
 class _Stream:

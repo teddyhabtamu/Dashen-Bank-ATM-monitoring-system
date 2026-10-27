@@ -100,6 +100,7 @@ def test_candidates_never_return_a_raw_name_or_path(app, monkeypatch):
     assert candidate['name_hmac'] == name_hmac(name, KEY)
     assert candidate['name_masked'] != name
     assert len(candidate['name_hmac']) == 64
+    assert candidate['size_label'] == '112.2 KB'
 
 
 def test_candidates_drop_the_unparsed_and_unknown_rows(app, monkeypatch):
@@ -244,6 +245,7 @@ def test_zip_entry_projection_uses_an_index_not_a_name(app, monkeypatch):
     assert result['entries'][0]['index'] == 0
     assert 'name' not in result['entries'][0]
     assert result['entries'][0]['name_masked'] == 'PAN-************3456.jpg'
+    assert result['entries'][0]['size_label'] == '1000 B'
 
     with pytest.raises(bridge.NotAvailable):
         app.zip_entries('ATM-TEST-NCR', '2026-10-21',

@@ -17,6 +17,10 @@
 .img-name small{display:block;color:#94A3B8;font-size:10px;margin-top:2px}
 .img-clip{font-size:10px;color:#94A3B8;margin-top:2px}
 .img-preview-note{font-size:11px;color:#64748B;margin-top:4px}
+.img-view-link{display:inline-block;padding:5px 11px;border:1px solid #BFDBFE;border-radius:6px;background:#EFF6FF;color:#1D4ED8 !important;font-weight:700;text-decoration:none;white-space:nowrap}
+.img-view-link:hover{background:#DBEAFE;text-decoration:none !important}
+.img-view-link.off{background:#F8FAFC;border-color:#E4E9F1;color:#94A3B8 !important}
+.img-summary .pill{vertical-align:middle}
 @media(max-width:720px){.img-name{max-width:220px}}
 </style>
 {% endblock %}
@@ -97,7 +101,7 @@
 {% if result %}
 <div class="img-summary">
   <span>Confidence
-    <span class="pill pill-{{ 'ok' if result.get('confidence') == 'high' else ('error' if result.get('confidence') == 'none' else 'unknown') }}">{{ result.get('confidence') }}</span>
+    <span class="pill pill-{% if result.get('confidence') == 'high' %}ok{% elif result.get('confidence') == 'none' %}error{% else %}stale{% endif %}">{{ result.get('confidence') }}</span>
   </span>
   <span>Candidates <b>{{ result.get('candidate_count', 0) }}</b></span>
   <span>Start anchors <b>{{ result.get('start_anchor_count', 0) }}</b></span>
@@ -112,6 +116,17 @@
   <strong>Ambiguous evidence.</strong>
   More than one start or end anchor matched. Do not pick one image as the
   transaction's evidence; compare the adjacent sessions and narrow the window.
+</div>
+{% endif %}
+
+{% if not result.get('start_anchor_count') and not result.get('end_anchor_count') and result.get('candidate_count') %}
+<div class="banner banner-warn">
+  <strong>No start or end anchor is in this window.</strong>
+  The files below fall inside the interval, but none is close enough to a
+  <code>CardInserted</code> or <code>CardReturned</code> event to rank as an
+  anchor. Set the window to the actual session — for example
+  <span class="mono">15:34:44 → 15:35:21</span> — or open the transaction's
+  <strong>Images</strong> link and adjust from there.
 </div>
 {% endif %}
 
@@ -142,7 +157,8 @@
         {% for c in result.get('candidates', []) %}
         <tr>
           <td>
-            <span class="img-role {% if c.role == 'start' %}img-role-start{% elif c.role == 'end' %}img-role-end{% elif c.role == 'service' %}img-role-service{% elif c.role == 'near_window' %}img-role-near{% endif %}">{{ c.role }}</span>
+            {% set role_label = {'start': 'Start anchor', 'end': 'End anchor', 'in_window': 'Within window', 'near_window': 'Near window', 'service': 'Service'}.get(c.role, c.role) %}
+            <span class="img-role {% if c.role == 'start' %}img-role-start{% elif c.role == 'end' %}img-role-end{% elif c.role == 'service' %}img-role-service{% elif c.role == 'near_window' %}img-role-near{% endif %}">{{ role_label }}</span>
           </td>
           <td class="mono">
             {% if c.kind == 'zip' %}
@@ -158,9 +174,9 @@
           <td>{{ c.event or '—' }}</td>
           <td>{{ c.camera if c.camera is not none else '—' }}</td>
           <td>{{ c.kind }}</td>
-          <td>{{ '{:,}'.format(c.size|int) }} B</td>
+          <td title="{{ c.size|int }} bytes">{{ c.size_label or ('{:,}'.format(c.size|int) + ' B') }}</td>
           <td class="img-name">
-            {{ c.name_masked }}
+            <span class="mono">{{ c.name_masked }}</span>
             {% if c.card_field_present %}
             <small>Card field {{ c.card_field }} · display only, not a link key</small>
             {% endif %}
@@ -168,15 +184,15 @@
           <td>
             {% if c.kind == 'zip' %}
               {% if c.fetchable %}
-              <a href="{{ url_for('atm_images.atm_image_zip', atm_id=atm.atm_id, day=day_value, zip_hmac=c.name_hmac) }}">Open archive</a>
+              <a class="img-view-link" href="{{ url_for('atm_images.atm_image_zip', atm_id=atm.atm_id, day=day_value, zip_hmac=c.name_hmac) }}">Open archive</a>
               <div class="img-clip">{{ c.image_count }} image(s)</div>
               {% else %}
-              <span style="color:#94A3B8">Too large</span>
+              <span class="img-view-link off">Too large</span>
               {% endif %}
             {% elif c.fetchable %}
-            <a href="{{ url_for('atm_images.atm_image_file', atm_id=atm.atm_id, day=day_value, name_hmac=c.name_hmac) }}" target="_blank" rel="noopener">View</a>
+            <a class="img-view-link" href="{{ url_for('atm_images.atm_image_view', atm_id=atm.atm_id, day=day_value, name_hmac=c.name_hmac, kind=c.kind, start=start_value, end=end_value) }}">View</a>
             {% else %}
-            <span style="color:#94A3B8">Too large</span>
+            <span class="img-view-link off">Too large</span>
             {% endif %}
           </td>
         </tr>

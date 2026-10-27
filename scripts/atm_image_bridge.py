@@ -317,6 +317,18 @@ def _content_type(name: str) -> str:
         raise BridgeError('Unsupported evidence type.') from None
 
 
+def _size_label(size) -> str:
+    try:
+        value = int(size)
+    except (TypeError, ValueError):
+        return '—'
+    if value < 1024:
+        return f'{value} B'
+    if value < 1024 * 1024:
+        return f'{value / 1024:.1f} KB'
+    return f'{value / (1024 * 1024):.1f} MB'
+
+
 def _safe_ext(name: str) -> str:
     ext = ntpath.splitext(name)[1].casefold()
     return ext if ext in ALLOWED_MIME else '.bin'
@@ -352,6 +364,7 @@ def _project_grg(item: dict, day: dt.date, key: bytes,
         'role': item['role'],
         'score': item['score'],
         'size': item['size'],
+        'size_label': _size_label(item['size']),
         'content_type': _content_type(item['name']),
         'fetchable': bool(fetchable),
     }
@@ -369,6 +382,7 @@ def _project_ncr(item: dict, day: dt.date, key: bytes,
         'camera': item['camera'],
         'length': item['length'],
         'size': item['length'],
+        'size_label': _size_label(item['length']),
         'last_write_time': item['last_write_time'],
         'kind': 'zip',
         'content_type': 'application/zip',
@@ -483,6 +497,10 @@ class BridgeApp:
                              fetchable.get(item['name'], True))
                 for item in ranked['candidates']
             ]
+            # Keep anchors first, then still images before the slow video.
+            candidates.sort(key=lambda item: (
+                -item['score'], item['kind'] == 'video',
+                item['captured_at'], item['name_masked']))
             result = {key: value for key, value in ranked.items()
                       if key != 'candidates'}
         else:
@@ -559,6 +577,7 @@ class BridgeApp:
             'index': item['index'],
             'name_masked': item['name_masked'],
             'length': item['length'],
+            'size_label': _size_label(item['length']),
             'compressed_length': item['compressed_length'],
             'crc32': item['crc32'],
             'last_write_time': item['last_write_time'],

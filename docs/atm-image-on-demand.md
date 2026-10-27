@@ -488,8 +488,12 @@ Then choose the ATM day and the session window. The EJ Journal detail page has
 an **ATM images** button; each staged transaction and each journal file has an
 **Images** link. A transaction link fills a ±2 minute window. The evidence
 table shows the confidence, both anchors, the masked filename, the video clip
-interval, and a **View** link. The browser streams the image or video directly;
-there is no thumbnail cache and no second copy.
+interval, and a **View** link. **View** opens the portal's evidence page, not a
+bare image tab: it keeps the sidebar and the ATM context, shows the fetch state,
+and distinguishes **Not available on ATM** from a bridge/ATM transport failure.
+The page fetches the verified stream once and holds it in this browser tab only
+(an object URL); there is no thumbnail cache, disk cache, or second copy. The
+**Open raw stream** action is for a direct URL or the browser's own viewer.
 
 For the confirmed GRG session:
 
@@ -649,6 +653,9 @@ GET /ej-journal/<atm_id>/images
     capture time + event sequence
   → each candidate carries name_masked + name_hmac (no raw name/path)
 
+GET /ej-journal/<atm_id>/images/view?day=...&name_hmac=...&kind=...
+  → portal page around one piece of evidence (sidebar, ATM context, fetch state)
+  → the page fetches the stream once into this tab and shows missing vs failure
 GET /ej-journal/<atm_id>/images/file?day=...&name_hmac=...
   → bridge re-lists the same folder, recomputes HMAC for every entry,
     matches exactly one, then fetches size + SHA-256 + bytes
@@ -660,7 +667,8 @@ GET /ej-journal/<atm_id>/images/file?day=...&name_hmac=...
 
 GET /ej-journal/<atm_id>/images/zip?day=...&zip_hmac=...
   → NCR daily zip listing; entries addressed by archive index
-  → /images/zip/file?day=...&zip_hmac=...&index=...
+  → /images/view?day=...&source=zip&zip_hmac=...&index=...
+  → /images/zip/file?day=...&zip_hmac=...&index=... (raw stream)
 ```
 
 The HMAC locator is `HMAC-SHA256(server_key, raw_filename)`. The key lives only

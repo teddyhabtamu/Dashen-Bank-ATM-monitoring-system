@@ -23,6 +23,7 @@ from flask import (
     render_template,
     request,
     stream_with_context,
+    url_for,
 )
 
 import atm_images as bridge
@@ -330,6 +331,75 @@ def atm_image_file(atm_id):
         audit_tail=f'hmac {name_hmac[:16]}...',
         unavailable_tail=f'hmac {name_hmac[:16]}...',
     )
+
+
+@bp.route('/ej-journal/<atm_id>/images/view')
+@login_required
+@role_required(ROLE_ADMIN)
+def atm_image_view(atm_id):
+    """Portal chrome around the streamed evidence, not a bare image tab."""
+    atm = _atm_or_404(atm_id)
+    try:
+        day = _required_day(request.args.get('day'))
+        source = (request.args.get('source') or 'file').strip().lower()
+        if source not in ('file', 'zip'):
+            source = 'file'
+        name_hmac = None
+        zip_hmac = None
+        index = None
+        if source == 'zip':
+            zip_hmac = _hmac_arg(request.args.get('zip_hmac'))
+            index = _index_arg(request.args.get('index'))
+        else:
+            name_hmac = _hmac_arg(request.args.get('name_hmac'))
+        kind = (request.args.get('kind') or 'image').strip().lower()
+        if kind not in ('image', 'video'):
+            kind = 'image'
+        start_raw = (request.args.get('start') or '').strip()
+        end_raw = (request.args.get('end') or '').strip()
+        start = _parse_time(start_raw, time.min) if start_raw else time.min
+        end = _parse_time(end_raw, time.max) if end_raw else time.max
+    except ValueError as exc:
+        return _no_store(Response(str(exc), status=400, mimetype='text/plain'))
+
+    if source == 'zip':
+        stream_url = url_for(
+            'atm_images.atm_zip_image_file', atm_id=atm_id,
+            day=day.isoformat(), zip_hmac=zip_hmac, index=index)
+        back_url = url_for(
+            'atm_images.atm_image_zip', atm_id=atm_id,
+            day=day.isoformat(), zip_hmac=zip_hmac)
+        back_label = '← Archive entries'
+        source_label = f'Zip entry {index}'
+        locator = zip_hmac
+    else:
+        stream_url = url_for(
+            'atm_images.atm_image_file', atm_id=atm_id,
+            day=day.isoformat(), name_hmac=name_hmac)
+        back_url = url_for(
+            'atm_images.atm_images', atm_id=atm_id, day=day.isoformat(),
+            start=start.strftime('%H:%M:%S'), end=end.strftime('%H:%M:%S'))
+        back_label = '← Candidate list'
+        source_label = 'Direct file'
+        locator = name_hmac
+
+    response = make_response(render_template(
+        'atm_image_view.html',
+        atm=atm,
+        day=day,
+        day_value=day.isoformat(),
+        source=source,
+        source_label=source_label,
+        locator=locator,
+        kind=kind,
+        stream_url=stream_url,
+        back_url=back_url,
+        back_label=back_label,
+        start_value=start.strftime('%H:%M:%S'),
+        end_value=end.strftime('%H:%M:%S'),
+        not_available_text=bridge.NOT_AVAILABLE,
+    ))
+    return _no_store(response)
 
 
 @bp.route('/ej-journal/<atm_id>/images/zip')
