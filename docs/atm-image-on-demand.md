@@ -458,7 +458,7 @@ Docker may create a root-owned directory that the service cannot use:
 
 ```bash
 sudo install -d -o tewodros -g tewodros -m 0750 /run/atm-image-bridge
-docker compose up -d report-portal
+docker compose up -d --force-recreate report-portal
 docker compose exec report-portal python -c \
   "import os; print(os.path.exists('/run/atm-image-bridge/bridge.sock'))"
 ```
