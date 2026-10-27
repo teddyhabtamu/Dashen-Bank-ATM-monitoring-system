@@ -45,8 +45,8 @@ answer can delete work rather than add it.
 | # | Question | Who answers | What it decides |
 |---|---|---|---|
 | 0.1 | **Can the monitoring host reach every branch on TCP/10050?** | Network | `adr-ej-transport.md` calls this "before rollout — nobody has asked this". If some branches are unreachable, EJ pull dies there *and* WMI polling dies there. The fallback is per-site: Zabbix proxy or active agent for metrics, a file-POST receiver into the `filebeat` directory for EJ. Answer this before sizing anything. |
-| 0.2 | **Does the ATM filename encode the transaction or sequence number?** (question 4 of 5) | ATM vendor | Whether a camera image can be defensibly linked to a transaction. If not, time-based nearest-match is the only option — and it is unreliable exactly in the fraud pattern that matters (several transactions in one second). See `adr-atm-images.md`. |
-| 0.3 | Questions 1, 2, 3, 5: camera attached, capture enabled, write path, retention | ATM vendor | Gates Phase 1 of the image work. Nothing should be designed before these are answered. |
+| 0.2 | **Does the ATM filename encode the transaction or sequence number?** (question 4 of 5) | ATM vendor | **GRG: no** — the 22 Oct filename said `CarNum-8888########8888` while the EJ said `NOCARD`. Time+event is the rule. **NCR entry format still pending.** See `adr-atm-images.md`. |
+| 0.3 | Questions 1, 2, 3, 5: camera attached, capture enabled, write path, retention | ATM vendor | Attached, capturing and writing confirmed on the two test ATMs on 2026-10-22. Production paths and retention are still open. |
 | 0.4 | **What are the retention periods for EJ evidence and for images?** | Risk / Compliance | Decides the Zabbix-vs-OpenSearch split (days vs years) and whether a purge must exist from day one. Current ISM policy is 90 days; the period is still TBD with Risk. |
 | 0.5 | Lawful basis, consent signage, access audit for face images | Compliance | `adr-atm-images.md` states plainly that compliance gates engineering here, not the reverse. |
 
@@ -125,7 +125,7 @@ Listed so they stop appearing as open tasks. None can be closed by writing code.
 | D2 | EJ parser viability against busy NCR/GRG journals | Real journal samples | `adr-ej-transport.md` |
 | D3 | Physical cassette balances — cash forecasting is book-based until these exist | Field access | — |
 | D4 | GRG telemetry over UDP/161 | Network + vendor MIB | `atm-data-requirements.md` |
-| D5 | Camera images | Sections 0.2–0.5; NCR zip entry format | `adr-atm-images.md`, `atm-image-on-demand.md` |
+| D5 | Camera images | Live ATM deployment of the `atm.image.*` keys; NCR zip entry format; compliance/retention | `adr-atm-images.md`, `atm-image-on-demand.md` |
 | D6 | SMTP and Africa's Talking credentials | You | `BRD_Compliance_Matrix.md` |
 
 D2 deserves the emphasis: it is the one dependency where a negative answer

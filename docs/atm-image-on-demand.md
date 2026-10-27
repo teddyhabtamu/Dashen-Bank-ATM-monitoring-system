@@ -252,11 +252,14 @@ The real 22 October session produces this shape:
   "candidates": [
     {"event": "CardInserted", "role": "start", "score": 80},
     {"event": "CardReturned", "role": "end", "score": 80},
-    {"event": "EnterInfo", "role": "in_window", "score": 30},
-    {"event": "", "kind": "video", "role": "in_window", "score": 30}
+    {"event": "", "kind": "video", "role": "in_window", "score": 30},
+    {"event": "EnterInfo", "role": "in_window", "score": 30}
   ]
 }
 ```
+
+Candidates are ordered by score and then capture time, so the two anchors
+come first; the video and `EnterInfo` share the supporting score.
 
 Reading the result:
 
@@ -413,20 +416,30 @@ GET /admin/evidence/image/<id>
   → 404 "Not available on ATM" if the source is gone
 ```
 
-Metadata index (no bytes):
+Metadata index (no bytes, and no raw PAN-bearing filename):
 
 ```text
 atm_image_evidence
   id, atm_id, captured_at, event,
-  source_kind (file|zip), source_path (restricted),
-  source_path_masked, zip_entry_name, zip_entry_index,
+  source_kind (file|zip),
+  directory (restricted; no filename),
+  name_masked, name_hmac,             -- HMAC-SHA256, server-keyed
+  zip_entry_index, zip_entry_name_masked, zip_entry_crc32,
   size_bytes, sha256, crc32,          -- sha256 for files, crc32 for zip entries
   first_seen, last_seen, last_viewed_at
 ```
 
-`source_path` can contain sensitive filename fragments; store it in a
-restricted column/table with column-level privileges, and never render it in
-the UI. The UI shows `source_path_masked`.
+The index deliberately does **not** store the raw filename. A GRG filename can
+carry a card number, and a plain hash of a low-entropy name is reversible by
+guessing. At view time the bridge re-lists the directory, computes the same
+HMAC for each name, and matches `name_hmac` + size + capture time. If nothing
+matches, it returns **Not available on ATM**. For a zip entry, the index and
+CRC32 are enough to re-select it; the entry name is not needed.
+
+The HMAC key lives outside the database (host configuration), is rotated under
+change control, and is never rendered or logged. The UI shows `name_masked`
+only. This keeps the metadata useful for investigation without turning
+Postgres into a second copy of card-bearing filenames.
 
 ## Open questions
 

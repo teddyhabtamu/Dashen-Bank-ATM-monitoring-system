@@ -213,6 +213,8 @@ It is read-only: no writes, extraction, deletion, rename, or execution. It:
 
 * resolves an opaque metadata ID to an allow-listed source, never a
   user-supplied path;
+* re-resolves the source at view time and matches a keyed HMAC of the name,
+  not a stored raw filename;
 * discovers files with the paged, non-recursive directory listing, so a
   browser cannot ask the ATM to walk the disk;
 * ranks candidates with the shared `atm_image_link` rule, showing the

@@ -13,6 +13,8 @@ tested once and used everywhere.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import hmac
 import re
 from typing import Sequence
 
@@ -60,6 +62,21 @@ NCR_CAVEAT = (
 
 class LinkError(RuntimeError):
     """A refused or impossible match request, with a stable reason."""
+
+
+def name_hmac(name: str, key: bytes) -> str:
+    """Return a keyed, non-reversible locator for a card-bearing filename.
+
+    The metadata index stores this instead of the raw name.  A plain hash is
+    not enough: filenames have low entropy and can be guessed.  The key lives
+    outside the database and must be at least 256 bits.
+    """
+    if not isinstance(name, str) or not name:
+        raise LinkError('E_ARGS')
+    if not isinstance(key, (bytes, bytearray)) or len(key) < 32:
+        raise LinkError('E_KEY')
+    return hmac.new(bytes(key), name.encode('utf-8'),
+                    hashlib.sha256).hexdigest()
 
 
 def parse_grg_name(name: str) -> dict | None:

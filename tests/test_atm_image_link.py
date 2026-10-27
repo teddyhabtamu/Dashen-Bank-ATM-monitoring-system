@@ -104,6 +104,22 @@ def test_non_ncr_zip_names_are_rejected(name):
     assert link.parse_ncr_zip_name(name) is None
 
 
+def test_name_hmac_is_keyed_and_stable():
+    key = b'k' * 32
+    first = link.name_hmac(CARD_INSERTED, key)
+
+    assert first == link.name_hmac(CARD_INSERTED, key)
+    assert len(first) == 64
+    assert link.name_hmac(CARD_INSERTED, b'x' * 32) != first
+    assert CARD_INSERTED not in first
+
+
+def test_name_hmac_requires_a_256_bit_key():
+    with pytest.raises(link.LinkError) as exc:
+        link.name_hmac(CARD_INSERTED, b'short')
+    assert str(exc.value) == 'E_KEY'
+
+
 # ---------------------------------------------------------------------------
 # GRG ranking
 # ---------------------------------------------------------------------------
