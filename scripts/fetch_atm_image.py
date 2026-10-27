@@ -6,6 +6,7 @@ This is the host-side half of the read-only image chunk transport:
     atm-image-chunk.ps1   (on the ATM)
       atm.image.info[<b64url path>]                  -> {"size": n, "sha256": "..."}
       atm.image.chunk[<b64url path>,o,l]             -> base64 chunk
+      atm.image.dir[<b64url dir>,o,n]                -> {"total":n,"next":...}
       atm.image.ziplist[<b64url zip>,o,n]            -> {"total":n,"next":...}
       atm.image.zipentry[<b64url zip>,i,o,l]         -> base64 chunk
 
@@ -37,7 +38,13 @@ Usage on the UAT host:
       --path 'E:\\pic\\2026\\10\\22\\CAM[1]...jpg' \
       --out /tmp/grg-22oct.jpg
 
-    # list a daily NCR zip (the durable image unit)
+    # list the GRG day folder (non-recursive, paged)
+    python3 scripts/fetch_atm_image.py --host 10.41.30.115 \
+      --dir 'E:\\pic\\2026\\10\\22'
+
+    # list the NCR zip folder, then one daily zip
+    python3 scripts/fetch_atm_image.py --host 10.41.30.114 \
+      --dir 'C:\\ISUITE\\ICAM\\Permit\\iCamImageZip'
     python3 scripts/fetch_atm_image.py --host 10.41.30.114 \
       --zip 'C:\\ISUITE\\ICAM\\Permit\\iCamImageZip\\...zip' --list
 
@@ -82,11 +89,14 @@ VIDEO_EXTENSIONS = frozenset({'.mp4'})
 FILE_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 ZIP_EXTENSIONS = frozenset({'.zip'})
 ENTRY_EXTENSIONS = FILE_EXTENSIONS
+DIR_EXTENSIONS = FILE_EXTENSIONS | ZIP_EXTENSIONS
 
 MAX_FILE_BYTES = 32 * 1024 * 1024
 MAX_VIDEO_BYTES = 8 * 1024 * 1024
 MAX_ZIP_ENTRY_BYTES = 8 * 1024 * 1024
+MAX_ZIP_BYTES = 256 * 1024 * 1024
 MAX_ZIP_ENTRIES = 5000
+MAX_DIR_ENTRIES = 5000
 MAX_CHUNK = 32768
 MIN_CHUNK = 16
 DEFAULT_CHUNK = 24576
@@ -218,6 +228,35 @@ def validate_path(value: str, roots: Sequence[str] = DEFAULT_ROOTS,
         root_cf = root_normal.casefold().rstrip('\\')
         if normal_cf == root_cf:
             raise ImageFetchError('E_PATH')
+        if normal_cf.startswith(root_cf + '\\'):
+            return normal
+    raise ImageFetchError('E_ROOT')
+
+
+def validate_dir(value: str, roots: Sequence[str] = DEFAULT_ROOTS) -> str:
+    """Return the normalised directory if it is inside an allow-listed root.
+
+    Unlike a file path, a directory may be the allow-list root itself.  The
+    listing is non-recursive; callers derive the day/zip folder explicitly.
+    """
+    normal = _normalise_windows_path(value).rstrip('\\')
+    if not normal or normal.endswith(':'):
+        raise ImageFetchError('E_PATH')
+
+    leaf = ntpath.basename(normal)
+    if not leaf or leaf in ('.', '..'):
+        raise ImageFetchError('E_PATH')
+    if _RESERVED_RE.match(leaf.split('.')[0].rstrip(' .')):
+        raise ImageFetchError('E_PATH')
+
+    normal_cf = normal.casefold()
+    for root in roots:
+        if not _is_narrow_root(str(root)):
+            continue
+        root_normal = ntpath.normpath(str(root).replace('/', '\\'))
+        root_cf = root_normal.casefold().rstrip('\\')
+        if normal_cf == root_cf:
+            return normal
         if normal_cf.startswith(root_cf + '\\'):
             return normal
     raise ImageFetchError('E_ROOT')
@@ -617,6 +656,120 @@ def fetch_bytes(host: str, path: str, *,
     }
 
 
+def _parse_dir_entry(item: dict, directory: str) -> dict:
+    """Validate one directory-listing row and add its fetchable path."""
+    if not isinstance(item, dict):
+        raise ImageFetchError('E_JSON')
+    name = item.get('name')
+    if not isinstance(name, str) or not name:
+        raise ImageFetchError('E_JSON')
+    if len(name) > MAX_ZIP_NAME_LENGTH:
+        raise ImageFetchError('E_ENTRY')
+    if '/' in name or '\\' in name:
+        raise ImageFetchError('E_ENTRY')
+    validate_entry(name)
+
+    extension = ntpath.splitext(name)[1].casefold()
+    if extension not in DIR_EXTENSIONS:
+        raise ImageFetchError('E_EXT')
+    if _RESERVED_RE.match(ntpath.splitext(name)[0].split('.')[0].rstrip(' .')):
+        raise ImageFetchError('E_ENTRY')
+
+    index = _as_int(item.get('index'))
+    length = _as_int(item.get('length'))
+    if index < 0 or length < 0:
+        raise ImageFetchError('E_JSON')
+
+    if extension in ZIP_EXTENSIONS:
+        kind = 'zip'
+        max_bytes = MAX_ZIP_BYTES
+    elif extension in VIDEO_EXTENSIONS:
+        kind = 'video'
+        max_bytes = MAX_VIDEO_BYTES
+    else:
+        kind = 'image'
+        max_bytes = MAX_FILE_BYTES
+
+    path = ntpath.join(directory, name)
+    return {
+        'index': index,
+        'name': name,
+        'name_masked': mask_sensitive(name),
+        'path': path,
+        'path_masked': mask_sensitive(path),
+        'length': length,
+        'last_write_time': str(item.get('last_write_time') or ''),
+        'kind': kind,
+        'fetchable': 0 < length <= max_bytes,
+    }
+
+
+def list_dir(host: str, dir_path: str, *,
+             timeout: int = DEFAULT_TIMEOUT,
+             roots: Sequence[str] = DEFAULT_ROOTS,
+             command: str | None = None,
+             retries: int = DEFAULT_RETRIES) -> list[dict]:
+    """List one allow-listed ATM directory, page by page, non-recursively.
+
+    This replaces the recursive ``vfs.dir.get`` for evidence discovery.  It
+    returns names/sizes/timestamps only; a caller fetches hashes with
+    :func:`fetch_info` or bytes with :func:`fetch_bytes` when needed.
+    """
+    source = validate_dir(dir_path, roots)
+    offset = 0
+    total: int | None = None
+    entries: list[dict] = []
+
+    while True:
+        key = (f'atm.image.dir["{b64url(source)}",'
+               f'{offset},{LIST_PAGE}]')
+        raw = zbx_get(host, key, timeout=timeout, command=command,
+                      retries=retries)
+        try:
+            payload = json.loads(raw.decode('utf-8'))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ImageFetchError('E_JSON') from exc
+        if not isinstance(payload, dict):
+            raise ImageFetchError('E_JSON')
+
+        page_total = _as_int(payload.get('total'))
+        page_offset = _as_int(payload.get('offset'))
+        if page_total < 0 or page_total > MAX_DIR_ENTRIES:
+            raise ImageFetchError('E_COUNT')
+        if page_offset != offset:
+            raise ImageFetchError('E_JSON')
+        if total is None:
+            total = page_total
+        elif total != page_total:
+            raise ImageFetchError('E_CHANGED')
+
+        page = payload.get('entries')
+        if not isinstance(page, list):
+            raise ImageFetchError('E_JSON')
+        if not page and payload.get('next') is not None:
+            raise ImageFetchError('E_JSON')
+        for item in page:
+            entries.append(_parse_dir_entry(item, source))
+
+        next_offset = payload.get('next')
+        if next_offset is None:
+            break
+        next_offset = _as_int(next_offset)
+        if next_offset <= offset or next_offset > total:
+            raise ImageFetchError('E_JSON')
+        offset = next_offset
+        if len(entries) > MAX_DIR_ENTRIES:
+            raise ImageFetchError('E_COUNT')
+
+    if total is None:
+        raise ImageFetchError('E_JSON')
+    if len(entries) != total:
+        raise ImageFetchError('E_CHANGED')
+    if [item['index'] for item in entries] != list(range(total)):
+        raise ImageFetchError('E_CHANGED')
+    return entries
+
+
 def _parse_zip_entry(item: dict) -> dict:
     if not isinstance(item, dict):
         raise ImageFetchError('E_JSON')
@@ -838,11 +991,12 @@ def _redact_result(result: dict) -> dict:
     not become a copy of a card-bearing filename.
     """
     redacted = dict(result)
-    for key in ('source', 'zip', 'entry'):
+    for key in ('source', 'zip', 'entry', 'dir'):
         redacted.pop(key, None)
     if isinstance(redacted.get('entries'), list):
         redacted['entries'] = [
-            {key: value for key, value in item.items() if key != 'name'}
+            {key: value for key, value in item.items()
+             if key not in ('name', 'path')}
             for item in redacted['entries']
         ]
     return redacted
@@ -856,6 +1010,8 @@ def _build_parser() -> argparse.ArgumentParser:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument('--path', help='absolute file path on the ATM')
     source.add_argument('--zip', help='absolute NCR image zip path on the ATM')
+    source.add_argument('--dir',
+                        help='absolute directory to list (non-recursive)')
     parser.add_argument('--out', help='output file for --path or --zip entry')
     parser.add_argument('--list', action='store_true',
                         help='with --zip: list entries instead of extracting')
@@ -893,7 +1049,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.retries < 0 or args.retries > 5:
         parser.error('--retries must be between 0 and 5')
 
-    if args.path:
+    if args.dir:
+        if (args.info or args.list or args.entry is not None
+                or args.index is not None):
+            parser.error(
+                '--info/--list/--entry/--index are not valid with --dir')
+        if args.out:
+            parser.error('--out is not used with --dir')
+    elif args.path:
         if args.list or args.entry is not None or args.index is not None:
             parser.error('--list/--entry/--index are only valid with --zip')
         if args.info and args.out:
@@ -922,7 +1085,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     roots = tuple(DEFAULT_ROOTS) + tuple(args.root or ())
     command = args.zbx_get
     try:
-        if args.path and args.info:
+        if args.dir:
+            entries = list_dir(
+                args.host, args.dir, timeout=args.timeout, roots=roots,
+                command=command, retries=args.retries,
+            )
+            source = validate_dir(args.dir, roots)
+            result = {
+                'kind': 'dir-list',
+                'host': args.host,
+                'dir': source,
+                'dir_masked': mask_sensitive(source),
+                'count': len(entries),
+                'entries': entries,
+            }
+        elif args.path and args.info:
             result = fetch_info(
                 args.host, args.path, timeout=args.timeout, roots=roots,
                 command=command, retries=args.retries,

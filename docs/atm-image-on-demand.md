@@ -11,7 +11,8 @@
 ```text
 Admin viewer (later)
   → host-side bridge (metadata ID, allow-list, audit)
-    → zabbix_get -s <ATM> -t 30 -k atm.image.info[...]
+    → zabbix_get -s <ATM> -t 30 -k atm.image.dir[...]        page of names
+    → zabbix_get -s <ATM> -t 30 -k atm.image.info[...]       size + SHA-256
     → zabbix_get -s <ATM> -t 30 -k atm.image.chunk[...,offset,length]
       → C:\monitor\atm-image-chunk.ps1   (read-only, allow-listed)
         → E:\pic\... or iCamImageZip\...zip
@@ -146,6 +147,14 @@ Expected `-Info` output is one JSON line with `size: 114843` and a 64-character
 `sha256`. If it prints `ERR:E_CONFIG`, the roots file is missing or invalid.
 If it prints `ERR:E_ROOT`, the path is outside the allow-list.
 
+For a directory, list one page (non-recursive):
+
+```powershell
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+  -File C:\monitor\atm-image-chunk.ps1 `
+  -DirPath 'E:\pic\2026\10\22' -DirList -DirOffset 0 -DirLimit 25
+```
+
 For a zip, list a page:
 
 ```powershell
@@ -167,6 +176,10 @@ do not paste that output into a ticket.
 ```bash
 cd /data/atm-monitoring          # the repo on UAT-01
 command -v zabbix_get
+
+# discover the day folder first (names only, non-recursive)
+python3 scripts/fetch_atm_image.py --host 10.41.30.115 \
+  --dir 'E:\pic\2026\10\22'
 
 python3 scripts/fetch_atm_image.py --host 10.41.30.115 \
   --path 'E:\pic\2026\10\22\CAM[1]_[DateTime-261022153444]_[CarNum-8888########8888]CardInserted.jpg' \
@@ -198,9 +211,13 @@ Delete the export after the test using the bank's approved sanitisation:
 shred -u /tmp/grg-22oct.jpg 2>/dev/null || rm -f /tmp/grg-22oct.jpg
 ```
 
-For the NCR zip, this is also the discovery command we still need:
+For NCR, list the zip folder first, then the daily zip. The folder listing is
+how the collector discovers zips whose names are not derivable from a date:
 
 ```bash
+python3 scripts/fetch_atm_image.py --host 10.41.30.114 \
+  --dir 'C:\ISUITE\ICAM\Permit\iCamImageZip'
+
 python3 scripts/fetch_atm_image.py --host 10.41.30.114 \
   --zip 'C:\ISUITE\ICAM\Permit\iCamImageZip\172.23.248.4_102226_163377_16_1.zip' \
   --list
@@ -285,6 +302,8 @@ The agent keys are additive; removing them does not affect `atm.parts`,
 - [ ] No image bytes in Postgres, OpenSearch, logs, or object storage.
 - [ ] Paths in tickets/logs are masked with `mask_sensitive`; full PANs never
       appear in a Zabbix key.
+- [ ] Directory listings are masked in the UI and audit; raw names stay in the
+      restricted bridge response and are never rendered.
 - [ ] Test exports are deleted under the bank's media-sanitisation policy.
 - [ ] Compliance has signed off on lawful basis, retention, audit, and PCI
       masking before the viewer is exposed to operators.
@@ -297,7 +316,9 @@ The agent keys are additive; removing them does not affect `atm.parts`,
 | Still image | 32 MiB cap; a 115 KiB JPEG is ~5 chunks |
 | Video | 8 MiB cap; chunking is best-effort, not a video streaming design |
 | Zip entry | 8 MiB cap; 5,000 entries; listing page 25 (max 100) |
-| Latency | ~1–2 s per chunk because each call starts PowerShell |
+| Zip file | 256 MiB cap; the daily NCR zip is ~160 KB |
+| Directory | Non-recursive; 5,000 evidence entries; page 25 (max 100) |
+| Latency | ~1–2 s per chunk/page because each call starts PowerShell |
 | Zip skip cost | Each chunk reopens the zip and skips from the start; the 8 MiB entry cap bounds this. Still images are the target; video is best-effort |
 | Concurrency | Limit at the bridge (e.g. 2 per ATM); no caching |
 
@@ -344,6 +365,5 @@ the UI. The UI shows `source_path_masked`.
    move file reads to a directory index as well.
 5. Does NetXMS cache images centrally, or only show what is still on the ATM?
 6. Compliance sign-off: lawful basis, retention, access audit, PCI masking.
-7. Paged directory listing (`atm.image.dir`) for the metadata collector; do
-   not use recursive `vfs.dir.get` on a 500-entry folder without checking the
-   Zabbix text-value limit.
+7. Metadata collector: `atm.image.dir` now provides the paged, non-recursive
+   listing. The collector itself is not built; do not scan-hash every file.

@@ -144,15 +144,17 @@ Zabbix database. See `docs/adr-ej-transport.md` for the text/binary limit.
 ```text
 Portal (admin viewer)
   → host-side bridge (metadata ID, allow-list, audit)
+    → zabbix_get -s <ATM> -k atm.image.dir[...]         page of names
     → zabbix_get -s <ATM> -k atm.image.info[...]        size + SHA-256
     → zabbix_get -s <ATM> -k atm.image.chunk[...,o,l]   base64 chunks
       → ATM: C:\monitor\atm-image-chunk.ps1
-        → read-only file / zip entry
+        → read-only directory / file / zip entry
 ```
 
 Keys:
 
 ```text
+atm.image.dir[<base64url dir>,<offset>,<limit>]
 atm.image.info[<base64url path>]
 atm.image.chunk[<base64url path>,<offset>,<length>]
 atm.image.ziplist[<base64url zip>,<offset>,<limit>]
@@ -160,10 +162,12 @@ atm.image.zipentry[<base64url zip>,<index>,<offset>,<length>]
 ```
 
 Zip entries are addressed by **archive index**, so an entry name, which may
-contain a card number, never appears in a Zabbix key. For GRG files the path
-is in the key; confirm that production filenames are masked (the test
-filename is). If they are not, the next hardening step is a directory index
-with the same index-based read, not a wider key.
+contain a card number, never appears in a Zabbix key. A directory listing
+carries only the directory path in the key; filenames appear in the JSON
+value and are masked in CLI/UI output by default. For GRG files the path is
+in the key; confirm that production filenames are masked (the test filename
+is). If they are not, the next hardening step is an index-based directory
+read, not a wider key.
 
 The agent's `Timeout` must be raised (30 recommended, 10 minimum) because
 every call starts PowerShell. The default 3 seconds is too short on a loaded
@@ -179,8 +183,11 @@ It is read-only: no writes, extraction, deletion, rename, or execution. It:
   roots; zip entries are further filtered to image/video extensions;
 * rejects `..`, UNC paths, alternate data streams, reserved device names,
   reparse points, and paths outside the roots;
-* caps still images at 32 MiB, video and zip entries at 8 MiB, chunks at
-  32 KiB, zip entries at 5,000, and zip names at 256 characters;
+* caps still images at 32 MiB, video and zip entries at 8 MiB, image zips at
+  256 MiB, chunks at 32 KiB, directory/zip entries at 5,000, and names at
+  256 characters;
+* lists directories **non-recursively** and filters to evidence extensions;
+  this is the discovery primitive that replaces recursive `vfs.dir.get`;
 * returns generic `ERR:E_*` codes and never a path;
 * emits one line with `[System.Console]::WriteLine`, not `Write-Output` (the
   latter wraps long JSON/base64 at console width and inserts CRLF — the WMI
@@ -190,6 +197,8 @@ It is read-only: no writes, extraction, deletion, rename, or execution. It:
 
 * resolves an opaque metadata ID to an allow-listed source, never a
   user-supplied path;
+* discovers files with the paged, non-recursive directory listing, so a
+  browser cannot ask the ATM to walk the disk;
 * checks the ATM's size + SHA-256 before publishing; zip entries are checked
   by size + CRC32;
 * checks magic bytes so an HTML error page saved as `.jpg` is refused;
@@ -235,19 +244,18 @@ The metadata still needs retention, access control, and audit.
    retention. If NetXMS still shows it, NetXMS is a central store and the
    on-demand model is weaker for old disputes.
 6. **Compliance sign-off** on lawful basis, retention, audit, and masking.
-7. **Metadata discovery at fleet scale** — the transport fetches a known path or
-   zip. The metadata index still needs a paged directory listing
-   (`atm.image.dir`) for GRG day folders and the NCR zip folder;
-   `vfs.dir.get` is recursive and a 500-entry folder can exceed the Zabbix
-   text-value limit. Build the paged listing before the metadata collector,
-   not after.
+7. **Metadata collector** — the transport now provides a paged, non-recursive
+   `atm.image.dir` for GRG day folders and the NCR zip folder. The collector
+   that writes the metadata index is not built yet, and it should not hash
+   every file on every scan; hash on first view or on an explicit evidence
+   request.
 
 ## Phasing
 
 | Phase | Scope | Gate |
 |---|---|---|
-| 1 | Read-only transport proof on GRG (this change) | Agent key + allow-list deployed |
-| 2 | Metadata index (no bytes): ATM, capture time, event, masked card, source, size, hash, last seen | NCR entry format confirmed; paged directory listing |
+| 1 | Read-only transport proof on GRG (this change) | Agent keys + allow-list deployed |
+| 2 | Metadata index (no bytes): ATM, capture time, event, masked card, source, size, hash, last seen | NCR entry format confirmed; collector built on `atm.image.dir` |
 | 3 | Host bridge + admin viewer, audit, no-store | Compliance sign-off |
 | 4 | Pilot on the two test ATMs; retention measured | Phase 2/3 |
 | 5 | Fleet rollout; long-term file agent/tunnel if 1,300 ATMs outgrow chunking | Architecture decision |

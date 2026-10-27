@@ -82,6 +82,39 @@ def test_a_drive_root_is_not_a_valid_allow_list_root():
         f.validate_path(r'E:\pic\a.jpg', roots=(r'\pic',))
 
 
+DIR = r'E:\pic\2026\10\22'
+ZIPDIR = r'C:\ISUITE\ICAM\Permit\iCamImageZip'
+
+
+def test_confirmed_directories_are_allowed():
+    assert f.validate_dir(DIR) == DIR
+    assert f.validate_dir(ZIPDIR) == ZIPDIR
+    assert f.validate_dir(r'E:\pic') == r'E:\pic'
+    assert f.validate_dir(r'E:\pic\\') == r'E:\pic'
+
+
+@pytest.mark.parametrize('path', [
+    r'E:\pic\..\Windows',
+    r'E:\pic\2026\..\..\Windows',
+    r'E:\pic2',
+    r'\\server\share\pic',
+    r'\pic',
+    r'E:pic',
+    'C:\\',
+    r'C:',
+])
+def test_unsafe_directories_are_refused(path):
+    with pytest.raises(f.ImageFetchError):
+        f.validate_dir(path)
+
+
+def test_directory_validation_requires_an_absolute_path():
+    with pytest.raises(f.ImageFetchError):
+        f.validate_dir('pic')
+    with pytest.raises(f.ImageFetchError):
+        f.validate_dir('')
+
+
 @pytest.mark.parametrize('name', [
     '',
     '../x.jpg',
@@ -449,6 +482,129 @@ def test_zip_entry_traversal_is_refused_before_listing(monkeypatch, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Directory mode
+# ---------------------------------------------------------------------------
+
+def _dir_rows(entries):
+    return [
+        {
+            'index': index,
+            'name': name,
+            'length': length,
+            'last_write_time': '2026-10-22T15:34:44.0000000+03:00',
+        }
+        for index, (name, length) in enumerate(entries)
+    ]
+
+
+def _dir_agent(monkeypatch, rows):
+    calls = []
+
+    def fake(host, key, **kwargs):
+        calls.append(key)
+        if key.startswith('atm.image.dir'):
+            match = re.search(r',(\d+),(\d+)\]$', key)
+            offset, limit = int(match.group(1)), int(match.group(2))
+            page = rows[offset:offset + limit]
+            next_offset = (offset + len(page)
+                           if offset + len(page) < len(rows) else None)
+            return json.dumps({
+                'total': len(rows),
+                'offset': offset,
+                'next': next_offset,
+                'entries': page,
+            }).encode()
+        raise AssertionError(key)
+
+    monkeypatch.setattr(f, 'zbx_get', fake)
+    return calls
+
+
+def test_directory_listing_is_paged_and_masked(monkeypatch):
+    rows = _dir_rows([
+        ('CAM[1]_[DateTime-261022153444]_[CarNum-1234567890123456]'
+         'CardInserted.jpg', 114843),
+        ('CAM[1]_[DateTime-261022153519]_[CarNum-1234567890123456]'
+         'EnterInfo.jpg', 100000),
+        ('CAM[1]_[DateTime-261022153444]_[CarNum-1234567890123456].mp4',
+         1000),
+    ])
+    calls = _dir_agent(monkeypatch, rows)
+    monkeypatch.setattr(f, 'LIST_PAGE', 1)
+
+    entries = f.list_dir('10.0.0.1', DIR, retries=0)
+
+    assert [item['index'] for item in entries] == [0, 1, 2]
+    assert entries[0]['path'].endswith('CardInserted.jpg')
+    assert '1234********3456' in entries[0]['name_masked']
+    assert '1234567890123456' not in entries[0]['path_masked']
+    assert entries[0]['kind'] == 'image'
+    assert entries[2]['kind'] == 'video'
+    assert all(item['fetchable'] for item in entries)
+    assert sum(key.startswith('atm.image.dir') for key in calls) == 3
+
+
+def test_empty_directory_is_a_valid_listing(monkeypatch):
+    _dir_agent(monkeypatch, [])
+
+    assert f.list_dir('10.0.0.1', DIR, retries=0) == []
+
+
+def test_directory_listing_rejects_a_traversal_name(monkeypatch):
+    _dir_agent(monkeypatch, _dir_rows([('../x.jpg', 100)]))
+
+    with pytest.raises(f.ImageFetchError) as exc:
+        f.list_dir('10.0.0.1', DIR, retries=0)
+
+    assert str(exc.value) == 'E_ENTRY'
+
+
+def test_directory_listing_rejects_a_non_evidence_entry(monkeypatch):
+    _dir_agent(monkeypatch, _dir_rows([('notes.txt', 100)]))
+
+    with pytest.raises(f.ImageFetchError) as exc:
+        f.list_dir('10.0.0.1', DIR, retries=0)
+
+    assert str(exc.value) == 'E_EXT'
+
+
+def test_directory_listing_rejects_a_gap_in_the_index(monkeypatch):
+    rows = _dir_rows([('a.jpg', 100), ('b.jpg', 100)])
+    rows[1]['index'] = 7
+    _dir_agent(monkeypatch, rows)
+
+    with pytest.raises(f.ImageFetchError) as exc:
+        f.list_dir('10.0.0.1', DIR, retries=0)
+
+    assert str(exc.value) == 'E_CHANGED'
+
+
+def test_directory_listing_marks_oversized_entries_unfetchable(monkeypatch):
+    rows = _dir_rows([
+        ('huge.jpg', f.MAX_FILE_BYTES + 1),
+        ('huge.mp4', f.MAX_VIDEO_BYTES + 1),
+        ('huge.zip', f.MAX_ZIP_BYTES + 1),
+    ])
+    _dir_agent(monkeypatch, rows)
+
+    entries = f.list_dir('10.0.0.1', DIR, retries=0)
+
+    assert [item['fetchable'] for item in entries] == [False, False, False]
+    assert [item['kind'] for item in entries] == ['image', 'video', 'zip']
+
+
+def test_directory_mode_refuses_a_file_path_outside_the_roots(monkeypatch):
+    called = []
+    monkeypatch.setattr(f, 'zbx_get', lambda *a, **k: called.append(a))
+
+    with pytest.raises(f.ImageFetchError) as exc:
+        f.list_dir('10.0.0.1', r'C:\Windows', retries=0)
+
+    assert str(exc.value) == 'E_ROOT'
+    assert called == []
+
+
+# ---------------------------------------------------------------------------
 # Static guardrails on the ATM script and its configuration
 # ---------------------------------------------------------------------------
 
@@ -493,16 +649,27 @@ def test_zip_list_helper_does_not_unroll_a_single_entry():
 def test_userparams_expose_read_only_keys_and_zip_index():
     assert 'atm.image.info[*]' in USERPARAMS
     assert 'atm.image.chunk[*]' in USERPARAMS
+    assert 'atm.image.dir[*]' in USERPARAMS
     assert 'atm.image.ziplist[*]' in USERPARAMS
     assert 'atm.image.zipentry[*]' in USERPARAMS
+    assert '-DirPathB64 "$1" -DirList' in USERPARAMS
     assert '-EntryIndex "$2"' in USERPARAMS
     assert '-EntryB64' not in USERPARAMS
     assert 'Timeout=30' in USERPARAMS
 
 
+def test_directory_listing_is_non_recursive_and_paged():
+    assert 'Get-DirectoryEntries' in PS1
+    assert 'Get-ChildItem -LiteralPath $FullPath -Force' in PS1
+    assert '-Recurse' not in PS1
+    assert 'MaxDirEntries' in PS1
+    assert 'DirOffset' in PS1
+    assert 'DirLimit' in PS1
+
+
 def test_read_only_codes_are_documented():
     for code in ('E_MISSING', 'E_REPARSE', 'E_ROOT', 'E_EXT',
-                 'E_CONFIG', 'E_ZIP_BUSY'):
+                 'E_CONFIG', 'E_ZIP_BUSY', 'E_COUNT'):
         assert code in PS1
 
 
@@ -526,6 +693,40 @@ def test_result_redaction_hides_raw_paths_and_entry_names():
     assert 'zip' not in redacted
     assert 'name' not in redacted['entries'][0]
     assert redacted['entries'][0]['name_masked'] == '1234********3456.jpg'
+
+
+def test_result_redaction_hides_raw_directory_and_entry_paths():
+    result = {
+        'kind': 'dir-list',
+        'dir': DIR,
+        'dir_masked': DIR,
+        'entries': [
+            {'index': 0, 'name': '1234567890123456.jpg',
+             'name_masked': '1234********3456.jpg',
+             'path': DIR + r'\1234567890123456.jpg',
+             'path_masked': DIR + r'\1234********3456.jpg'},
+        ],
+    }
+
+    redacted = f._redact_result(result)
+
+    assert 'dir' not in redacted
+    assert 'name' not in redacted['entries'][0]
+    assert 'path' not in redacted['entries'][0]
+    assert redacted['entries'][0]['path_masked'].endswith(
+        r'\1234********3456.jpg')
+
+
+def test_cli_rejects_dir_with_an_output_path():
+    with pytest.raises(SystemExit):
+        f.main(['--host', '10.0.0.1', '--dir', DIR, '--out', '/tmp/x'])
+
+
+def test_cli_rejects_dir_with_zip_actions():
+    with pytest.raises(SystemExit):
+        f.main(['--host', '10.0.0.1', '--dir', DIR, '--list'])
+    with pytest.raises(SystemExit):
+        f.main(['--host', '10.0.0.1', '--dir', DIR, '--info'])
 
 
 def test_cli_rejects_a_chunk_too_small_for_magic_checks():

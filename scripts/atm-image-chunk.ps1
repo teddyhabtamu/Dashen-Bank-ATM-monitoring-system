@@ -17,15 +17,18 @@
     atm-image-chunk.ps1 -PathB64 '<base64url>' -Info
     atm-image-chunk.ps1 -PathB64 '<base64url>' -Offset 0 -Length 24576
 
+  Directory mode (non-recursive; used to discover evidence on the ATM):
+    atm-image-chunk.ps1 -DirPathB64 '<base64url>' -DirList -DirOffset 0 -DirLimit 25
+
   Zip modes (entries are selected by their archive index, never by name):
     atm-image-chunk.ps1 -ZipPathB64 '<base64url>' -List -ListOffset 0 -ListLimit 25
     atm-image-chunk.ps1 -ZipPathB64 '<base64url>' -EntryIndex 0 -Offset 0 -Length 24576
 
-  Output is one line: base64 data, or single-line JSON for -Info / -List.
-  On refusal the script prints ERR:<code> and exits 1.  Codes are deliberately
-  generic and never contain a path:
+  Output is one line: base64 data, or single-line JSON for -Info / -List /
+  -DirList.  On refusal the script prints ERR:<code> and exits 1.  Codes are
+  deliberately generic and never contain a path:
     E_ARGS, E_PATH, E_MISSING, E_ROOT, E_EXT, E_REPARSE, E_RANGE, E_SIZE,
-    E_IO, E_ZIP, E_ZIP_BUSY, E_ZIP_COUNT, E_ENTRY, E_CONFIG
+    E_IO, E_ZIP, E_ZIP_BUSY, E_ZIP_COUNT, E_ENTRY, E_COUNT, E_CONFIG
 
   Allow-list:
     C:\monitor\atm-image-roots.txt, one absolute root per line, # comments.
@@ -46,12 +49,18 @@ param(
     [string]$ZipPathB64,
     [long]$EntryIndex = -1,
 
+    [string]$DirPath,
+    [string]$DirPathB64,
+    [long]$DirOffset = 0,
+    [int]$DirLimit = 25,
+
     [long]$Offset = 0,
     [int]$Length = 24576,
 
     [long]$ListOffset = 0,
     [int]$ListLimit = 25,
 
+    [switch]$DirList,
     [switch]$List,
     [switch]$Info,
     [switch]$Trace
@@ -63,7 +72,9 @@ $Script:MaxChunk = 32768
 $Script:MaxFileBytes = 33554432          # 32 MiB for a still image
 $Script:MaxVideoBytes = 8388608          # 8 MiB for a short MP4
 $Script:MaxZipEntryBytes = 8388608       # 8 MiB per zip entry
+$Script:MaxZipBytes = 268435456          # 256 MiB per image zip
 $Script:MaxZipEntries = 5000
+$Script:MaxDirEntries = 5000
 $Script:MaxZipNameLength = 256
 $Script:MaxListLimit = 100
 $Script:AllowedExtensions = @('.jpg', '.jpeg', '.png', '.mp4', '.zip')
@@ -102,6 +113,7 @@ function Get-AllowedRoots {
         if ($value -match '[\x00-\x1F\x7F]') { Fail 'E_CONFIG' }
 
         if (-not [IO.Path]::IsPathRooted($value)) { Fail 'E_CONFIG' }
+        if ($value -match '^[A-Za-z]:([^\\/]|$)') { Fail 'E_CONFIG' }
         if ($value.StartsWith('\') -and -not $value.StartsWith('\\')) {
             Fail 'E_CONFIG'
         }
@@ -144,9 +156,18 @@ function Test-NoReparsePoint([string]$Root, [string]$FullPath) {
         Fail 'E_REPARSE'
     }
 
-    $relative = $FullPath.Substring($Root.Length)
+    $fullPath = $FullPath -replace '[\\/]+$', ''
+    if ($fullPath.Equals($rootPath, [StringComparison]::OrdinalIgnoreCase)) {
+        return
+    }
+    if (-not $fullPath.StartsWith(
+            $rootPath, [StringComparison]::OrdinalIgnoreCase)) {
+        Fail 'E_ROOT'
+    }
+
+    $relative = $fullPath.Substring($rootPath.Length)
     $current = $rootPath
-    foreach ($part in ($relative -split '\\')) {
+    foreach ($part in ($relative -split '[\\/]')) {
         if (-not $part) { continue }
         $current = Join-Path $current $part
         $item = Get-ItemOrFail $current 'E_PATH'
@@ -164,6 +185,7 @@ function Resolve-AllowedPath([string]$Value) {
     }
     if ($Value.StartsWith('\\')) { Fail 'E_ROOT' }
     if (-not [IO.Path]::IsPathRooted($Value)) { Fail 'E_PATH' }
+    if ($Value -match '^[A-Za-z]:([^\\/]|$)') { Fail 'E_PATH' }
 
     try {
         $full = [IO.Path]::GetFullPath($Value)
@@ -198,6 +220,108 @@ function Resolve-AllowedPath([string]$Value) {
 
     Test-NoReparsePoint $matched $full
     return $full
+}
+
+function Resolve-AllowedDirectory([string]$Value) {
+    if ([string]::IsNullOrWhiteSpace($Value)) { Fail 'E_PATH' }
+    if ($Value -match '[\x00-\x1F\x7F]') { Fail 'E_PATH' }
+    if ($Value.StartsWith('\') -and -not $Value.StartsWith('\\')) {
+        Fail 'E_ROOT'
+    }
+    if ($Value.StartsWith('\\')) { Fail 'E_ROOT' }
+    if (-not [IO.Path]::IsPathRooted($Value)) { Fail 'E_PATH' }
+    if ($Value -match '^[A-Za-z]:([^\\/]|$)') { Fail 'E_PATH' }
+
+    try {
+        $full = [IO.Path]::GetFullPath($Value)
+    } catch {
+        Fail 'E_PATH'
+    }
+    if ($full.StartsWith('\\')) { Fail 'E_ROOT' }
+    if ($full.IndexOf([char]':', 2) -ge 0) { Fail 'E_PATH' }
+
+    $full = $full -replace '[\\/]+$', ''
+    if ($full -match '^[A-Za-z]:$') { Fail 'E_ROOT' }
+
+    $matched = $null
+    foreach ($root in (Get-AllowedRoots)) {
+        $rootPath = $root -replace '[\\/]+$', ''
+        if ($full.Equals($rootPath, [StringComparison]::OrdinalIgnoreCase)) {
+            $matched = $rootPath
+            break
+        }
+        $candidate = $rootPath + '\'
+        if ($full.StartsWith($candidate, [StringComparison]::OrdinalIgnoreCase)) {
+            $matched = $rootPath
+            break
+        }
+    }
+    if (-not $matched) { Fail 'E_ROOT' }
+
+    Test-NoReparsePoint $matched $full
+
+    $item = Get-ItemOrFail $full 'E_PATH'
+    if (-not $item.PSIsContainer) { Fail 'E_PATH' }
+    return $full
+}
+
+function Get-DirectoryEntries([string]$FullPath, [long]$PageOffset,
+                              [int]$PageLimit) {
+    if ($PageOffset -lt 0 -or $PageLimit -le 0 -or
+        $PageLimit -gt $Script:MaxListLimit) {
+        Fail 'E_RANGE'
+    }
+
+    $dirItem = Get-ItemOrFail $FullPath 'E_PATH'
+    if (-not $dirItem.PSIsContainer) { Fail 'E_PATH' }
+
+    try {
+        $children = @(Get-ChildItem -LiteralPath $FullPath -Force -ErrorAction Stop)
+    } catch {
+        Fail 'E_IO'
+    }
+
+    $files = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($child in $children) {
+        if ($child.PSIsContainer) { continue }
+        if ($child.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            continue
+        }
+        if ($child.Name.Length -gt $Script:MaxZipNameLength) { continue }
+        $extension = [IO.Path]::GetExtension($child.Name).ToLowerInvariant()
+        if ($Script:AllowedExtensions -notcontains $extension) { continue }
+        $files.Add($child)
+    }
+
+    if ($files.Count -gt $Script:MaxDirEntries) { Fail 'E_COUNT' }
+
+    $sorted = @($files.ToArray() | Sort-Object -Property Name)
+    $total = $sorted.Count
+    $start = [int][Math]::Min($PageOffset, [long]$total)
+    $end = [int][Math]::Min(
+        ([long]$start + [long]$PageLimit), [long]$total)
+
+    $entries = New-Object 'System.Collections.Generic.List[object]'
+    for ($i = $start; $i -lt $end; $i++) {
+        $file = $sorted[$i]
+        $entries.Add([pscustomobject]@{
+            index           = $i
+            name            = $file.Name
+            length          = [long]$file.Length
+            last_write_time = $file.LastWriteTime.ToString('o')
+        })
+    }
+
+    $next = $null
+    if ($end -lt $total) { $next = $end }
+
+    $payload = [pscustomobject]@{
+        total   = $total
+        offset  = $start
+        next    = $next
+        entries = @($entries.ToArray())
+    }
+    return (ConvertTo-Json -InputObject $payload -Compress -Depth 5)
 }
 
 function Get-MaxBytes([string]$FullPath) {
@@ -284,6 +408,12 @@ function Read-FileChunk([string]$FullPath, [long]$ChunkOffset, [int]$ChunkLength
 }
 
 function Open-Zip([string]$FullPath) {
+    $zipItem = Get-ItemOrFail $FullPath 'E_ZIP'
+    if ($zipItem.PSIsContainer) { Fail 'E_ZIP' }
+    if ($zipItem.Length -le 0 -or $zipItem.Length -gt $Script:MaxZipBytes) {
+        Fail 'E_SIZE'
+    }
+
     if (-not ('System.IO.Compression.ZipFile' -as [type])) {
         try {
             Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
@@ -424,8 +554,21 @@ function Get-EffectivePath([string]$Plain, [string]$Encoded, [string]$Code) {
 }
 
 try {
+    if ($DirList) {
+        if ($Info -or $List -or $Path -or $PathB64 -or
+            $ZipPath -or $ZipPathB64 -or $EntryIndex -ge 0) {
+            Fail 'E_ARGS'
+        }
+        $dirValue = Get-EffectivePath $DirPath $DirPathB64 'E_ARGS'
+        $fullDir = Resolve-AllowedDirectory $dirValue
+        [System.Console]::WriteLine(
+            (Get-DirectoryEntries $fullDir $DirOffset $DirLimit))
+        exit 0
+    }
+
     if ($Info) {
-        if ($List -or $ZipPath -or $ZipPathB64 -or $EntryIndex -ge 0) {
+        if ($List -or $DirPath -or $DirPathB64 -or
+            $ZipPath -or $ZipPathB64 -or $EntryIndex -ge 0) {
             Fail 'E_ARGS'
         }
         $fileValue = Get-EffectivePath $Path $PathB64 'E_ARGS'
@@ -438,7 +581,10 @@ try {
     }
 
     if ($List) {
-        if ($Path -or $PathB64 -or $EntryIndex -ge 0) { Fail 'E_ARGS' }
+        if ($Path -or $PathB64 -or $DirPath -or $DirPathB64 -or
+            $EntryIndex -ge 0) {
+            Fail 'E_ARGS'
+        }
         $zipValue = Get-EffectivePath $ZipPath $ZipPathB64 'E_ARGS'
         $fullZip = Resolve-AllowedPath $zipValue
         if ([IO.Path]::GetExtension($fullZip).ToLowerInvariant() -ne '.zip') {
@@ -450,7 +596,9 @@ try {
     }
 
     if ($ZipPath -or $ZipPathB64 -or $EntryIndex -ge 0) {
-        if ($Path -or $PathB64) { Fail 'E_ARGS' }
+        if ($Path -or $PathB64 -or $DirPath -or $DirPathB64) {
+            Fail 'E_ARGS'
+        }
         if ($EntryIndex -lt 0) { Fail 'E_ARGS' }
 
         $zipValue = Get-EffectivePath $ZipPath $ZipPathB64 'E_ARGS'
@@ -462,6 +610,8 @@ try {
             (Read-ZipEntryChunk $fullZip $EntryIndex $Offset $Length))
         exit 0
     }
+
+    if ($DirPath -or $DirPathB64) { Fail 'E_ARGS' }
 
     $fileValue = Get-EffectivePath $Path $PathB64 'E_ARGS'
     $fullFile = Resolve-AllowedPath $fileValue
