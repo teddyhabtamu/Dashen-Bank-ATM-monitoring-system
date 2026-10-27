@@ -382,9 +382,14 @@ def test_atm_detail_has_admin_only_evidence_card():
 
 def test_ej_journal_detail_has_raw_view_and_download_links():
     template = (ROOT / 'report-portal' / 'templates' / 'ej_journal_detail.html').read_text()
-    assert '<th>Raw</th>' in template
+    assert '<th style="width:64px">Actions</th>' in template
     assert "url_for('ej_journal.ej_raw_view'" in template
     assert "url_for('ej_journal.ej_raw_download'" in template
+    assert 'toggleKebab' in template
+    assert 'View raw' in template
+    assert 'Download raw' in template
+    assert 'ATM images' in template
+    assert 'View</a> · ' not in template
 
 
 def test_fleet_table_says_counts_are_latest_file_only():
