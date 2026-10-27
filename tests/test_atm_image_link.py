@@ -141,6 +141,51 @@ def test_real_grg_session_has_a_strong_start_and_end_anchor():
         'start', 'end', 'in_window', 'in_window']
     assert [item['event'] for item in result['candidates']] == [
         'CardInserted', 'CardReturned', '', 'EnterInfo']
+    assert [item['capture_basis'] for item in result['candidates']] == [
+        'filename_time', 'filename_time',
+        'filename_start+file_mtime_end', 'filename_time']
+
+
+def test_video_clip_end_uses_the_file_write_time():
+    video = {
+        'name': VIDEO,
+        'length': 1383102,
+        'last_write_time': '2026-10-22T15:35:21.1063883+03:00',
+    }
+    result = link.rank_grg_candidates(
+        [video, rows(CARD_INSERTED)[0]], SESSION_START, SESSION_END)
+
+    clip = [item for item in result['candidates']
+            if item['kind'] == 'video'][0]
+    assert clip['captured_at'] == '2026-10-22 15:34:44'
+    assert clip['file_mtime'] == '2026-10-22T15:35:21.1063883+03:00'
+    assert clip['clip_end'] == '2026-10-22 15:35:21'
+    assert clip['clip_duration_s'] == 37.0
+    assert clip['capture_basis'] == 'filename_start+file_mtime_end'
+
+
+def test_video_covering_the_session_is_included_even_if_it_starts_early():
+    video = {
+        'name': 'CAM[1]_[DateTime-261022153400]_[CarNum-1].mp4',
+        'length': 100,
+        'last_write_time': '2026-10-22T15:35:00.0000000+03:00',
+    }
+    result = link.rank_grg_candidates([video], SESSION_START, SESSION_END)
+
+    assert result['candidate_count'] == 1
+    assert result['candidates'][0]['in_interval'] is True
+
+
+def test_video_ending_before_the_window_is_dropped():
+    video = {
+        'name': 'CAM[1]_[DateTime-261022153300]_[CarNum-1].mp4',
+        'length': 100,
+        'last_write_time': '2026-10-22T15:33:30.0000000+03:00',
+    }
+    result = link.rank_grg_candidates([video], SESSION_START, SESSION_END)
+
+    assert result['candidates'] == []
+    assert result['confidence'] == 'none'
 
 
 def test_candidates_outside_the_window_are_dropped():

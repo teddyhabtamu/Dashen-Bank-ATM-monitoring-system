@@ -148,6 +148,23 @@ def _row_size(row: dict) -> int:
     return size
 
 
+def _parse_mtime(value) -> dt.datetime | None:
+    """Parse the ATM's ISO write time as naive local wall-clock time.
+
+    PowerShell emits ``2026-10-22T15:35:21.1063883+03:00``.  The offset is the
+    ATM's local offset; the filename and EJ sessions are also ATM-local, so
+    the wall-clock part is what we compare.  Fractional seconds are dropped
+    for the interval calculation and kept in the raw display string.
+    """
+    if not isinstance(value, str) or len(value) < 19:
+        return None
+    text = value[:19].replace('T', ' ')
+    try:
+        return dt.datetime.strptime(text, '%Y-%m-%d %H:%M:%S')
+    except ValueError:
+        return None
+
+
 def rank_grg_candidates(rows: Sequence[dict],
                         start: dt.datetime,
                         end: dt.datetime,
@@ -181,11 +198,24 @@ def rank_grg_candidates(rows: Sequence[dict],
             continue
 
         captured = info['captured_at']
+        mtime_raw = str(row.get('last_write_time') or '')
+        mtime = _parse_mtime(mtime_raw)
+        clip_end = captured
+        if info['kind'] == 'video' and mtime is not None and mtime > captured:
+            clip_end = mtime
+
         delta_start = (captured - start).total_seconds()
         delta_end = (captured - end).total_seconds()
-        in_interval = start <= captured <= end
-        in_window = (-pre_window <= delta_start
-                     and delta_end <= post_window)
+        if info['kind'] == 'video':
+            # The filename time is the clip start; the file mtime is the end.
+            in_interval = captured <= end and clip_end >= start
+            in_window = (captured <= end + dt.timedelta(seconds=post_window)
+                         and clip_end >= start - dt.timedelta(
+                             seconds=pre_window))
+        else:
+            in_interval = start <= captured <= end
+            in_window = (-pre_window <= delta_start
+                         and delta_end <= post_window)
         if not in_window:
             continue
 
@@ -207,10 +237,18 @@ def rank_grg_candidates(rows: Sequence[dict],
             role = 'near_window'
             score = 10
 
+        is_video = info['kind'] == 'video'
         candidates.append({
             'name': info['name'],
             'name_masked': info['name_masked'],
             'captured_at': captured.isoformat(sep=' '),
+            'file_mtime': mtime_raw,
+            'capture_basis': ('filename_start+file_mtime_end'
+                              if is_video else 'filename_time'),
+            'clip_end': (clip_end.isoformat(sep=' ')
+                         if is_video else None),
+            'clip_duration_s': (_seconds((clip_end - captured).total_seconds())
+                                if is_video else None),
             'camera': info['camera'],
             'event': event,
             'kind': info['kind'],

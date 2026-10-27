@@ -141,6 +141,12 @@ pick one. For NCR the matcher stops at the **day zip**, because the entry
 naming/timestamps are not confirmed; it returns `confidence: low` with that
 caveat rather than inventing an entry-level link.
 
+For a GRG **video**, the filename time is the clip start and the file mtime is
+the clip end. The matcher reports both (`captured_at`, `clip_end`,
+`clip_duration_s`, `capture_basis`) and includes a clip that overlaps the
+session even if it starts before the pre-window. The viewer must show the
+whole clip interval, not just the filename time.
+
 ## Transport: read-only chunks through the existing agent
 
 The reachability test settles the channel:

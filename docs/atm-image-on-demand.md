@@ -278,6 +278,12 @@ An **anchor** is `CardInserted` within 3 seconds of the session start or
 evidence and is excluded from the customer count. If `ambiguous` is true, do
 not pick a candidate; show all of them.
 
+A **video** is different: the filename time is the clip start, and the file
+mtime is the clip end. The JSON carries `clip_end`, `clip_duration_s`, and
+`capture_basis: "filename_start+file_mtime_end"`. A clip that overlaps the
+session is included even if it starts before the 10-second pre-window. Show
+the whole interval, not just the filename time.
+
 NCR (day container only, until the zip entry format is confirmed):
 
 ```bash
