@@ -205,6 +205,10 @@ def test_page_renders_masked_candidates_and_audits(monkeypatch):
     assert '1234567890123456' not in body
     assert '1234********3456' in body
     assert 'card_field_used_for_link=False' in body
+    assert 'flatpickr-date' in body
+    assert 'flatpickr-time' in body
+    assert 'type="date"' not in body
+    assert 'type="time"' not in body
     assert calls and calls[0][0] == 'IMAGE_SEARCH'
     assert '1234567890123456' not in calls[0][1]
 

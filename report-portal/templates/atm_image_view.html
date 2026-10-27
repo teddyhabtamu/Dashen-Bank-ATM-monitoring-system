@@ -3,8 +3,11 @@
 {% block extra_style %}
 {% include "_ej_journal_style.html" %}
 <style>
-.ev-meta{display:flex;flex-wrap:wrap;gap:8px 22px;background:#fff;border:1px solid #EEF1F6;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:#64748B;box-shadow:0 1px 3px rgba(1,33,105,.04)}
-.ev-meta b{color:#0F172A}
+.ev-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px 24px;background:#fff;border:1px solid #EEF1F6;border-radius:12px;padding:14px 16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(1,33,105,.04)}
+.ev-meta span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ev-meta span[hidden]{display:none}
+.ev-meta small{font-size:9.5px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px}
+.ev-meta b{color:#0F172A;font-size:12px;font-weight:650;overflow-wrap:anywhere}
 .ev-stage{position:relative;background:#0B1220;border:1px solid #1E293B;border-radius:14px;min-height:460px;display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:0 8px 30px rgba(1,33,105,.12)}
 .ev-media{max-width:100%;max-height:72vh;display:block;opacity:0;transition:opacity .2s ease}
 .ev-media[hidden]{display:none}
@@ -54,16 +57,16 @@
 </div>
 
 <div class="ev-meta">
-  <span>ATM <b>{{ atm.atm_id }}</b></span>
-  <span>Day <b>{{ day_value }}</b></span>
-  <span>Source <b>{{ source_label }}</b></span>
-  <span>Type <b>{{ 'Video clip' if kind == 'video' else 'Still image' }}</b></span>
-  <span>Locator <b class="mono">{{ locator[:16] }}…</b></span>
+  <span><small>ATM</small><b>{{ atm.atm_id }}</b></span>
+  <span><small>Day</small><b>{{ day_value }}</b></span>
+  <span><small>Source</small><b>{{ source_label }}</b></span>
+  <span><small>Type</small><b>{{ 'Video clip' if kind == 'video' else 'Still image' }}</b></span>
+  <span><small>Locator</small><b class="mono">{{ locator[:16] }}…</b></span>
   {% if source == 'file' %}
-  <span>Window <b>{{ start_value }} → {{ end_value }}</b></span>
+  <span><small>Window</small><b>{{ start_value }} → {{ end_value }}</b></span>
   {% endif %}
-  <span id="ev-size-wrap" hidden>Size <b id="ev-size">—</b></span>
-  <span id="ev-sha-wrap" hidden>SHA-256 <b class="mono ev-sha" id="ev-sha">—</b></span>
+  <span id="ev-size-wrap" hidden><small>Size</small><b id="ev-size">—</b></span>
+  <span id="ev-sha-wrap" hidden><small>SHA-256</small><b class="mono ev-sha" id="ev-sha">—</b></span>
 </div>
 
 <div class="ev-stage" id="ev-stage"

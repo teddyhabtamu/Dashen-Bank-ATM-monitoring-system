@@ -21,6 +21,14 @@
 .img-view-link:hover{background:#DBEAFE;text-decoration:none !important}
 .img-view-link.off{background:#F8FAFC;border-color:#E4E9F1;color:#94A3B8 !important}
 .img-summary .pill{vertical-align:middle}
+.fp-field{position:relative;display:flex;align-items:center;width:260px;min-width:220px}
+.fp-field input{width:100% !important;min-width:0 !important;padding-right:32px}
+.fp-field svg{position:absolute;right:10px;width:14px;height:14px;color:#94A3B8;pointer-events:none}
+.flatpickr-calendar.noCalendar.hasTime{width:190px;padding:4px 6px}
+.flatpickr-time{max-height:none;line-height:38px}
+.flatpickr-time input{font-family:'Inter',sans-serif;font-weight:600;color:#0F172A}
+.flatpickr-time input:hover,.flatpickr-time input:focus{background:#EEF2FF;color:#012169}
+@media(max-width:980px){.fp-field{width:100%;min-width:100%}}
 @media(max-width:720px){.img-name{max-width:220px}}
 </style>
 {% endblock %}
@@ -76,15 +84,28 @@
 <form method="get" action="{{ url_for('atm_images.atm_images', atm_id=atm.atm_id) }}" class="ej-filters">
   <div class="fg">
     <label for="img-day">ATM day</label>
-    <input id="img-day" name="day" type="date" value="{{ day_value }}" max="{{ today_value }}" required>
+    <div class="fp-field">
+      <input id="img-day" name="day" type="text" class="flatpickr-date"
+             value="{{ day_value }}" data-max="{{ today_value }}"
+             placeholder="YYYY-MM-DD" autocomplete="off" required>
+      <i data-lucide="calendar"></i>
+    </div>
   </div>
   <div class="fg">
     <label for="img-start">Window start (ATM local)</label>
-    <input id="img-start" name="start" type="time" step="1" value="{{ start_value }}">
+    <div class="fp-field">
+      <input id="img-start" name="start" type="text" class="flatpickr-time"
+             value="{{ start_value }}" placeholder="HH:MM:SS" autocomplete="off">
+      <i data-lucide="clock"></i>
+    </div>
   </div>
   <div class="fg">
     <label for="img-end">Window end (ATM local)</label>
-    <input id="img-end" name="end" type="time" step="1" value="{{ end_value }}">
+    <div class="fp-field">
+      <input id="img-end" name="end" type="text" class="flatpickr-time"
+             value="{{ end_value }}" placeholder="HH:MM:SS" autocomplete="off">
+      <i data-lucide="clock"></i>
+    </div>
   </div>
   <div class="actions">
     <button class="btn btn-primary" type="submit">Find evidence</button>
@@ -219,4 +240,35 @@
 {% endif %}
 
 </div>
+{% endblock %}
+{% block extra_scripts %}
+<script src="/static/flatpickr.min.js"></script>
+<script>
+(function () {
+  if (typeof flatpickr === 'undefined') return;
+
+  document.querySelectorAll('.flatpickr-date').forEach(function (el) {
+    flatpickr(el, {
+      dateFormat: 'Y-m-d',
+      maxDate: el.dataset.max || null,
+      allowInput: true,
+      disableMobile: true,
+      monthSelectorType: 'static'
+    });
+  });
+
+  document.querySelectorAll('.flatpickr-time').forEach(function (el) {
+    flatpickr(el, {
+      enableTime: true,
+      noCalendar: true,
+      time_24hr: true,
+      enableSeconds: true,
+      minuteIncrement: 1,
+      dateFormat: 'H:i:S',
+      allowInput: true,
+      disableMobile: true
+    });
+  });
+})();
+</script>
 {% endblock %}
