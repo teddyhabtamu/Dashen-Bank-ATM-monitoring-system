@@ -223,7 +223,7 @@ def test_missing_evidence_renders_the_exact_state(monkeypatch):
 
     body = response.get_data(as_text=True)
     assert response.status_code == 200
-    assert 'Not available on ATM' in body
+    assert '<strong>Not available on ATM</strong>' in body
     assert calls and calls[0][0] == 'IMAGE_SEARCH'
     assert calls[0][1].endswith('unavailable 1 error 0')
 
