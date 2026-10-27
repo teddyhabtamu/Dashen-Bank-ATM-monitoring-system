@@ -178,7 +178,10 @@ Portal (admin viewer)
 The portal container has **no** route to ATM TCP/10050 and no `zabbix_get`.
 The Unix socket is mounted read-only; the bridge holds the HMAC key and the
 ATM allow-list. A request carries an ATM id, a day and an HMAC locator, never
-a path.
+a path. The portal proxies the verified stream through per-request worker
+memory; it is never written or cached. A literal no-transit requirement would
+need a separate host HTTP endpoint with signed URLs, which adds firewall
+exposure and is not part of this pilot.
 
 Keys:
 

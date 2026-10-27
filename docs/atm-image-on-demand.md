@@ -24,6 +24,14 @@ those bytes to the admin's browser; the browser is the only place a copy can
 land, and the portal never writes one. The portal container has no route to
 ATM TCP/10050.
 
+**Transient boundary:** the portal worker necessarily carries each response
+through per-request memory while it proxies the Unix-socket stream to the
+browser. It is never written to disk, Postgres, OpenSearch, logs, or object
+storage, and it is not cached. If policy requires image bytes never to transit
+the portal process at all, the alternative is a separate host HTTP endpoint
+with short-lived signed URLs; that adds a firewall exposure and is not part of
+this pilot.
+
 ## Confirmed test coordinates
 
 | Item | Value |
