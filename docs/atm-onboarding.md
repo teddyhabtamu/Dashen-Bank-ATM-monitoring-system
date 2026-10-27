@@ -180,7 +180,8 @@ After a cron job failed silently for ~19 days (its crontab invoked
 added so that class of failure cannot hide again.
 
 ```bash
-# 1. Are the cron jobs still running? Exit 0 = all healthy, 1 = something is wrong
+# 1. Are the cron jobs still running? Exit 0 = jobs ran (warnings allowed),
+#    1 = something is overdue or failed
 python3 scripts/check_jobs.py
 
 # 2. What is this environment actually running? Captures image DIGESTS (a tag
@@ -197,6 +198,9 @@ failing dependency. `/health` is unchanged and stays unconditional — it answer
 "is the process alive", which must not fail during a dependency restart.
 
 Wire `check_jobs.py` to whatever alerts you use. Its exit code is the contract.
+A `WARN` means the job ran but the ATM had no journal at the configured path.
+That is expected for an idle or out-of-service ATM and exits 0; a missing log,
+an overdue job, or a broken command still exits 1.
 
 **Log paths.** Jobs are located by the log they write, so the paths in
 `check_jobs.py` must match your crontab. `backup_db.sh` and

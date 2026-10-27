@@ -112,6 +112,33 @@ def test_the_reconcile_failure_we_actually_had_is_detected(tmp_path):
     assert 'ej_pull' not in problems, 'a healthy job must not be reported'
 
 
+def test_missing_zbx_evidence_warns_but_does_not_fail_the_check(tmp_path):
+    """An idle or out-of-service ATM produces no journal. The puller still
+    ran, so the gap must be visible without paging as a job failure."""
+    _make_repo(tmp_path, {
+        'logs/ej-pull.log': 30,
+        'logs/grg-ej-pull.log': 30,
+        'logs/reconcile.log': 600,
+        '$HOME/atm-backup_db.log': 600,
+        '$HOME/atm-backup_configs.log': 600,
+    })
+    p = tmp_path / 'logs' / 'grg-ej-pull.log'
+    p.write_text(
+        '  ATM-GRG-1 2026-10-27 absent: ZBX_NOTSUPPORTED: Cannot open file: '
+        '[2] No such file or directory\n')
+    now = time.time()
+    os.utime(p, (now, now))
+
+    env = _env(tmp_path)
+    out = subprocess.run([sys.executable, str(CHECK_JOBS), '--json'],
+                         capture_output=True, text=True, env=env, timeout=60)
+    assert out.returncode == 0, out.stdout
+    data = json.loads(out.stdout)
+    assert data['problems'] == []
+    assert [w['job'] for w in data['warnings']] == ['grg_ej_pull']
+    assert data['warnings'][0]['state'] == 'WARN'
+
+
 def test_healthy_repo_reports_nothing_and_exits_zero(tmp_path):
     _make_repo(tmp_path, {
         'logs/ej-pull.log': 30,

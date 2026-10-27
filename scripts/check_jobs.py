@@ -14,19 +14,23 @@ turn a small mistake into a large surprise.
 
 Usage:
 
-    python3 scripts/check_jobs.py                 # human summary, exit 1 if stale
+    python3 scripts/check_jobs.py                 # human summary, exit 1 if a job failed
     python3 scripts/check_jobs.py --json          # machine readable
     python3 scripts/check_jobs.py --quiet         # exit code only, for cron
 
 Wire it to whatever alerts you use (a cron entry that mails, an Alertmanager
 webhook, a Slack/Teams hook). The exit code is the contract:
 
-    0 = every tracked job ran inside its window
-    1 = at least one job is overdue
+    0 = every tracked job ran inside its window (warnings allowed)
+    1 = at least one job is overdue or failed
 
 Note on what counts as "ran": a job that exits non-zero still updates its log,
 so a FAILED job is reported separately from a job that never started. Those are
 different faults and get different remedies.
+
+A WARN is not a job failure. It means the job ran and the ATM had no journal
+file at the requested path. That is normal for an idle or out-of-service ATM
+and must not page anyone; the evidence gap is still visible in the report.
 """
 import argparse
 import datetime as dt
@@ -165,9 +169,14 @@ def evaluate(now=None):
                 except OSError:
                     fh.seek(0)
                 tail = fh.read().decode('utf-8', 'replace')
-            reason = failure_reason(tail)
+            state, reason = classify_tail(tail)
             if reason:
-                state, detail = 'FAILED', 'recent log contains: %s' % reason
+                if state == 'WARN':
+                    detail = ('ran, but the ATM had no journal file at the '
+                              'requested path (normal for an idle or '
+                              'out-of-service ATM)')
+                else:
+                    detail = 'recent log contains: %s' % reason
         except OSError:
             pass
         others = [n for n in shared.get(os.path.basename(path), []) if n != name]
@@ -191,10 +200,10 @@ def re_search(haystack, needle_bytes):
 def failure_reason(text):
     """Classify a recent log tail, or return None when it looks healthy.
 
-    "No such file or directory" from a Zabbix item is a missing evidence file,
-    not a missing shell command. The old mapping sent operators looking at
-    PATH when the puller had actually run and the ATM had not produced the
-    journal.
+    A Zabbix item that cannot open a journal is missing evidence, not a broken
+    puller. The old mapping sent operators looking at PATH when the puller had
+    actually run and the ATM had not produced the journal. Keep it distinct
+    from a real missing path so the caller can warn instead of fail.
     """
     low = (text or '').lower()
     if 'command not found' in low:
@@ -203,7 +212,7 @@ def failure_reason(text):
         # A Zabbix item that cannot open a journal is missing evidence; a
         # shell's "<program>: No such file or directory" is a missing command.
         if 'zbx_notsupported' in low:
-            return 'missing file/path'
+            return 'missing evidence file'
         if ': no such file or directory' in low:
             return 'command not found'
         return 'missing file/path'
@@ -217,6 +226,22 @@ def failure_reason(text):
     return None
 
 
+def classify_tail(text):
+    """Return (state, reason) for a log tail.
+
+    WARN is deliberately separate from FAILED: the puller did its job, but the
+    ATM produced no evidence file. Treating that as a failure means every idle
+    ATM pages the on-call operator forever, which trains them to ignore the
+    check. A real missing path, traceback or connection error stays FAILED.
+    """
+    reason = failure_reason(text)
+    if reason is None:
+        return 'ok', None
+    if reason == 'missing evidence file':
+        return 'WARN', reason
+    return 'FAILED', reason
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -225,31 +250,42 @@ def main():
     args = ap.parse_args()
 
     results = evaluate()
-    bad = [r for r in results if r['state'] != 'ok']
+    failures = [r for r in results if r['state'] not in ('ok', 'WARN')]
+    warnings = [r for r in results if r['state'] == 'WARN']
 
     if args.json:
-        print(json.dumps({'checked': len(results), 'problems': bad,
-                          'results': results}, indent=2))
+        print(json.dumps({'checked': len(results), 'problems': failures,
+                          'warnings': warnings, 'results': results}, indent=2))
     elif not args.quiet:
-        if not bad:
+        if not failures and not warnings:
             print('all %d tracked jobs ran within their window' % len(results))
             for r in results:
                 print('  ok      %-16s %s' % (r['job'], r['detail']))
         else:
-            print('%d of %d tracked jobs need attention\n' % (len(bad), len(results)))
+            if failures:
+                print('%d of %d tracked jobs need attention\n'
+                      % (len(failures), len(results)))
+            else:
+                print('all %d tracked jobs ran; %d evidence warning(s)\n'
+                      % (len(results), len(warnings)))
             for r in results:
                 mark = '  ' if r['state'] == 'ok' else '!!'
                 print('%s %-8s %-16s %s' % (mark, r['state'], r['job'], r['detail']))
-            print('\nLikely causes, cheapest first:')
-            print('  * the log path here does not match the crontab - cron runs as')
-            print('    its own user, so $HOME may not be yours; override with')
-            print('    CHECK_JOBS_LOG_<job>=/actual/path')
-            print('  * the command in the crontab does not exist (check with `which`)')
-            print('  * the script moved, or the path in crontab is relative to the wrong dir')
-            print('  * no venv: crontab uses venv/bin/python but the host has none -')
-            print('    use `python3` on the host, or pipe the script into the container')
-            print('  * permissions on logs/')
-    return 1 if bad else 0
+            if warnings:
+                print('\nWARN is not a job failure: the puller ran, but the ATM')
+                print('had no journal at the configured path. An idle or')
+                print('out-of-service ATM can legitimately produce no new journal.')
+            if failures:
+                print('\nLikely causes, cheapest first:')
+                print('  * the log path here does not match the crontab - cron runs as')
+                print('    its own user, so $HOME may not be yours; override with')
+                print('    CHECK_JOBS_LOG_<job>=/actual/path')
+                print('  * the command in the crontab does not exist (check with `which`)')
+                print('  * the script moved, or the path in crontab is relative to the wrong dir')
+                print('  * no venv: crontab uses venv/bin/python but the host has none -')
+                print('    use `python3` on the host, or pipe the script into the container')
+                print('  * permissions on logs/')
+    return 1 if failures else 0
 
 
 if __name__ == '__main__':
