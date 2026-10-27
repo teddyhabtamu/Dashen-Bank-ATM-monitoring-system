@@ -96,7 +96,7 @@
           <td>{{ r.unknown }}</td>
           <td>{{ r.no_receipt }}</td>
           <td>{% if r.parse_errors %}<span class="pill pill-error">{{ r.parse_errors }}</span>{% else %}<span style="color:#94A3B8">—</span>{% endif %}</td>
-          <td><span class="pill pill-{{ r.status|lower|replace(' ', '') }}">{{ r.status }}</span></td>
+          <td><span class="pill pill-{{ r.status|lower|replace(' ', '') }}"{% if r.status == 'stale' %} title="No journal for two or more days. An idle or out-of-service ATM can legitimately produce no new journal."{% endif %}>{{ r.status }}</span></td>
         </tr>
         {% else %}
         <tr><td colspan="12" class="ej-empty">No active ATMs match this filter.</td></tr>
@@ -104,6 +104,10 @@
       </tbody>
     </table>
   </div>
+  <p style="margin:0;padding:10px 14px 2px;font-size:11px;color:#64748B">
+    <strong>Stale</strong> means no journal for two or more days. It is not necessarily a puller fault:
+    an ATM that is out of service, or has had no transactions, can legitimately have no new journal.
+  </p>
   {% if total_pages > 1 %}
   <div class="pager">
     {% if page > 1 %}<a href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, page=page-1) }}">Previous</a>{% else %}<span class="off">Previous</span>{% endif %}
