@@ -87,6 +87,25 @@ def test_dependent_items_do_not_guess_their_master_cadence(monkeypatch):
     assert 'no collected agent reading' in status['reason']
 
 
+def test_fresh_snmp_or_http_items_do_not_prove_the_agent_is_alive(monkeypatch):
+    now = int(time.time())
+    _zabbix(monkeypatch, [
+        _item(now - 10, delay='10s', kind='20'),   # SNMP agent, fresh
+        _item(now - 10, delay='10s', kind='19'),   # HTTP agent, fresh
+        _item(now - 6 * 60 * 60, delay='1m', kind='0'),  # real agent, dead
+    ])
+    status = admin._fetch_agent_status('ATM-TEST-GRG')
+    assert status['state'] == 'unreachable', (
+        'SNMP/HTTP polling must not be mistaken for TCP/10050 health')
+
+
+def test_only_non_agent_items_is_unknown(monkeypatch):
+    now = int(time.time())
+    _zabbix(monkeypatch, [_item(now - 10, delay='10s', kind='20')])
+    status = admin._fetch_agent_status('ATM-TEST-GRG')
+    assert status['state'] == 'unknown'
+
+
 def test_a_missing_host_is_unknown_not_unreachable(monkeypatch):
     _zabbix(monkeypatch, [], hosts=[])
     status = admin._fetch_agent_status('ATM-TEST-GRG')

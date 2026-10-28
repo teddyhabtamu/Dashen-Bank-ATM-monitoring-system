@@ -392,12 +392,16 @@ def _fetch_agent_status(atm_id):
     if items is None:
         return None
 
+    # Only Zabbix-agent item types prove the agent answered.  SNMP and HTTP
+    # agent items can stay fresh while TCP/10050 is dead, which is exactly the
+    # "Network OK / agent unreachable" disagreement this strip must expose.
     # Dependent items inherit their master's clock and have delay 0; using
-    # them would guess the wrong cadence.  Independent items tell us when the
-    # agent last delivered a value and how often it should.
+    # them would guess the wrong cadence.
     readings = []
     for item in items:
-        if str(item.get('type')) == '18' or str(item.get('delay', '0')) == '0':
+        if str(item.get('type')) not in ('0', '7'):
+            continue
+        if str(item.get('delay', '0')) == '0':
             continue
         try:
             clock = int(item.get('lastclock') or 0)
