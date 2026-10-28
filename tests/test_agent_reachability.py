@@ -26,6 +26,7 @@ def test_item_delay_and_age_labels():
     assert admin._item_delay_seconds('1m') == 60
     assert admin._item_delay_seconds('5m') == 300
     assert admin._item_delay_seconds('1h') == 3600
+    assert admin._item_delay_seconds('1m/1m') == 60
     assert admin._item_delay_seconds('0') == 1
     assert admin._item_delay_seconds('nonsense') == 60
     assert admin._age_label(12) == '12 s ago'

@@ -352,8 +352,8 @@ def fetch_agent_status(atm_id):
 
 
 def _item_delay_seconds(value):
-    """Zabbix item delay ('30s', '1m', '5m') -> seconds."""
-    match = re.fullmatch(r'\s*(\d+)\s*([smhd]?)\s*', str(value or ''))
+    """Zabbix item delay ('30s', '1m', '5m', '1m/1m') -> seconds."""
+    match = re.match(r'\s*(\d+)\s*([smhd]?)', str(value or ''))
     if not match:
         return 60
     number = int(match.group(1))
