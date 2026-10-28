@@ -334,6 +334,105 @@ def _fetch_zabbix_metrics(atm_id):
         return None
 
 
+def fetch_agent_status(atm_id):
+    """Return whether Zabbix is still receiving data from the ATM's agent.
+
+    This is deliberately separate from the device's own ``Network`` chip:
+    that chip is XFS/WMI link state reported by the ATM, while this answers a
+    different question -- did the monitoring server hear from the agent
+    recently?  The two can disagree during an outage, and the page must never
+    make one look like the other.
+    """
+    from zbx_cache import get as _cached
+    return _cached(
+        f'agent-status:{atm_id}',
+        lambda key: _fetch_agent_status(key.split(':', 1)[1]),
+        cacheable=lambda value: value is not None,
+    )
+
+
+def _item_delay_seconds(value):
+    """Zabbix item delay ('30s', '1m', '5m') -> seconds."""
+    match = re.fullmatch(r'\s*(\d+)\s*([smhd]?)\s*', str(value or ''))
+    if not match:
+        return 60
+    number = int(match.group(1))
+    unit = match.group(2) or 's'
+    return max(1, number * {'s': 1, 'm': 60, 'h': 3600, 'd': 86400}[unit])
+
+
+def _age_label(seconds):
+    seconds = max(0, int(seconds))
+    if seconds < 90:
+        return f'{seconds} s ago'
+    if seconds < 5400:
+        return f'{seconds // 60} min ago'
+    if seconds < 172800:
+        return f'{seconds // 3600} h ago'
+    return f'{seconds // 86400} day{"s" if seconds >= 345600 else ""} ago'
+
+
+def _fetch_agent_status(atm_id):
+    auth = _zbx_login()
+    if not auth:
+        return None
+    hosts = _zbx_call('host.get', {'output': ['hostid'],
+                                   'filter': {'host': [atm_id]}}, auth)
+    if not hosts:
+        return {
+            'state': 'unknown',
+            'reason': 'This ATM is not enrolled in Zabbix, so agent '
+                      'reachability cannot be checked.',
+        }
+    items = _zbx_call('item.get', {
+        'hostids': [hosts[0]['hostid']],
+        'output': ['key_', 'lastclock', 'delay', 'type'],
+        'filter': {'status': 0},
+    }, auth)
+    if items is None:
+        return None
+
+    # Dependent items inherit their master's clock and have delay 0; using
+    # them would guess the wrong cadence.  Independent items tell us when the
+    # agent last delivered a value and how often it should.
+    readings = []
+    for item in items:
+        if str(item.get('type')) == '18' or str(item.get('delay', '0')) == '0':
+            continue
+        try:
+            clock = int(item.get('lastclock') or 0)
+        except (TypeError, ValueError):
+            continue
+        if clock > 0:
+            readings.append((clock, _item_delay_seconds(item.get('delay'))))
+
+    if not readings:
+        return {
+            'state': 'unknown',
+            'reason': 'Zabbix has no collected agent reading for this ATM yet.',
+        }
+
+    clock, delay = max(readings, key=lambda row: row[0])
+    age = max(0, int(time.time()) - clock)
+    # One missed poll is normal; two plus slack is not.  The cap keeps a
+    # once-an-hour item from hiding an agent that stopped answering.
+    allowed = min(900, max(120, int(delay * 2.5) + 60))
+    reachable = age <= allowed
+    return {
+        'state': 'reachable' if reachable else 'unreachable',
+        'last_clock': clock,
+        'last_seen': to_eat(datetime.fromtimestamp(clock, tz=timezone.utc),
+                            '%d %b %H:%M'),
+        'age_seconds': age,
+        'age_label': _age_label(age),
+        'allowed_seconds': allowed,
+        'reason': ('Zabbix received agent data within the expected interval.'
+                   if reachable else
+                   'Zabbix has not received agent data within the expected '
+                   'interval.'),
+    }
+
+
 def determine_live_state(vendor, metrics):
     """Derive ATM state from live Zabbix item values (mirrors state_manager.determine_state)."""
     try:
@@ -688,6 +787,18 @@ def atm_detail(atm_id):
 
         metrics = fetch_metrics(atm_id, port=atm.get('sim_port')) if ENABLE_SIMULATORS \
             else fetch_zabbix_metrics(atm_id)
+        if ENABLE_SIMULATORS:
+            agent_status = {
+                'state': 'unknown',
+                'reason': 'Simulator mode: Zabbix agent reachability is not '
+                          'checked for this host.',
+            }
+        else:
+            try:
+                agent_status = fetch_agent_status(atm_id)
+            except Exception as exc:  # noqa: BLE001 - telemetry card is optional
+                logger.warning('agent status read failed for %s: %s', atm_id, exc)
+                agent_status = None
         cap_map = load_cassette_capacity()
         cassette_cap = cap_map.get(atm_id, CASSETTE_MAX)
         cassettes = build_cassettes(vendor, metrics, cassette_cap) if metrics else []
@@ -792,6 +903,7 @@ def atm_detail(atm_id):
                                part_rows=part_rows, device_rows=device_rows,
                                metrics_online=metrics is not None,
                                telemetry_note=_telemetry_note(metrics),
+                               agent_status=agent_status,
                                total_txns=total_txns, success_rate=success_rate,
                                cash_today=cash_today, active_faults=active_faults,
                                txns=txns, cash_outlook=cash_outlook,

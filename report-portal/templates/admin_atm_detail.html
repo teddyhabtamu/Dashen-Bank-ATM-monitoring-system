@@ -35,6 +35,15 @@
 .hw-status.unknown{background:#F1F5F9;color:#64748B}
 .hw-status.warn{background:rgba(217,119,6,.14);color:#B45309}
 .hw-status.error{background:rgba(220,38,38,.12);color:#DC2626}
+.hw-qual{font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#94A3B8;margin-left:2px}
+.agent-strip{display:flex;gap:11px;align-items:flex-start;border:1px solid #E4E9F1;border-radius:10px;padding:11px 13px;margin-bottom:14px;background:#F8FAFC}
+.agent-strip .agent-dot{width:10px;height:10px;border-radius:50%;margin-top:4px;flex:0 0 auto;background:#94A3B8}
+.agent-strip.reachable{background:#F0FDF4;border-color:#BBF7D0}
+.agent-strip.reachable .agent-dot{background:#059669}
+.agent-strip.unreachable{background:#FEF2F2;border-color:#FECACA}
+.agent-strip.unreachable .agent-dot{background:#DC2626}
+.agent-title{font-size:12px;font-weight:700;color:#0F172A}
+.agent-note{font-size:11px;color:#64748B;margin-top:2px;line-height:1.45}
 table.txn{width:100%;border-collapse:collapse;font-size:12px}
 table.txn th{background:#012169;color:#fff;font-weight:600;padding:10px 12px;text-align:left;white-space:nowrap}
 table.txn td{padding:9px 12px;border-bottom:1px solid #EEF1F6}
@@ -293,12 +302,35 @@ table.txn tbody tr:hover{background:#EEF2FF}
       <div class="card">
         <div class="card-header"><h2>Hardware Status</h2></div>
         <div class="card-body">
+          {% set a_state = agent_status.state if agent_status else 'unknown' %}
+          <div class="agent-strip {{ a_state }}"
+               title="Agent reachability is a Zabbix check. It is separate from the Network chip, which is the ATM device's own reported link state.">
+            <span class="agent-dot"></span>
+            <div>
+              <div class="agent-title">
+                {% if a_state == 'reachable' %}Zabbix agent reachable
+                {% elif a_state == 'unreachable' %}Zabbix agent unreachable
+                {% else %}Agent reachability unknown{% endif %}
+              </div>
+              <div class="agent-note">
+                {% if a_state in ('reachable', 'unreachable') and agent_status.last_seen %}
+                  Last agent data {{ agent_status.last_seen }} EAT ({{ agent_status.age_label }}).
+                  {% if a_state == 'unreachable' %}The ATM may be off or off the network.{% else %}This is separate from the device-reported Network chip.{% endif %}
+                {% elif agent_status and agent_status.reason %}
+                  {{ agent_status.reason }}
+                {% else %}
+                  The portal could not read Zabbix. This is a portal-side read failure, not evidence that the ATM is down.
+                {% endif %}
+              </div>
+            </div>
+          </div>
           {% if metrics_online and hardware %}
           <div class="hw-pills">
             {% for h in hardware %}
-            <span class="pill">
+            <span class="pill"{% if h.name == 'Network' %} title="Link status reported by the ATM's own XFS/WMI layer. This is not a live check from the monitoring host; use Agent reachability for that."{% endif %}>
               <span class="dot dot-{{ h.status }}"></span>{{ h.name }}
               <span class="hw-status hw-{{ h.status }}">{{ {'ok':'OK','warn':'Warning','error':'Fault','unknown':'Unknown'}[h.status] }}</span>
+              {% if h.name == 'Network' %}<span class="hw-qual">device</span>{% endif %}
             </span>
             {% endfor %}
           </div>
