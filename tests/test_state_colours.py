@@ -21,7 +21,7 @@ EXPECTED = [
     ('UNKNOWN', 'Unknown', '#F9A8D4'),
     ('IN_SUPERVISOR', 'In Supervisor', '#CA8A04'),
     ('HARDWARE_FAULT', 'Hardware Faults', '#1D4ED8'),
-    ('OUT_OF_CASH', 'Out Of Cash', '#0D9488'),
+    ('OUT_OF_CASH', 'Out Of Cash', '#0F4C5C'),
     ('OFFLINE', 'Offline', '#38BDF8'),
     ('OUT_OF_SERVICE', 'Out of Service', '#DC2626'),
 ]

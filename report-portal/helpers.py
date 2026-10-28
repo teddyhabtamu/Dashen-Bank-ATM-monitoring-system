@@ -397,7 +397,7 @@ STATE_COLOURS = {
     'UNKNOWN': '#F9A8D4',          # light pink
     'IN_SUPERVISOR': '#CA8A04',    # yellow
     'HARDWARE_FAULT': '#1D4ED8',   # dark blue
-    'OUT_OF_CASH': '#0D9488',      # green-blue / teal
+    'OUT_OF_CASH': '#0F4C5C',      # deep petrol blue-green
     'OFFLINE': '#38BDF8',          # light blue
     'OUT_OF_SERVICE': '#DC2626',   # red
     'NOT_PROVISIONED': '#A5B4CB',

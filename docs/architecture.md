@@ -153,7 +153,7 @@ receives the same map from `/api/charts`.
 | Unknown | `UNKNOWN` | light pink `#F9A8D4` |
 | In Supervisor | `IN_SUPERVISOR` | yellow `#CA8A04` |
 | Hardware Faults | `HARDWARE_FAULT` | dark blue `#1D4ED8` |
-| Out Of Cash | `OUT_OF_CASH` | green-blue `#0D9488` |
+| Out Of Cash | `OUT_OF_CASH` | deep petrol blue-green `#0F4C5C` |
 | Offline | `OFFLINE` | light blue `#38BDF8` |
 | Out of Service | `OUT_OF_SERVICE` | red `#DC2626` |
 
