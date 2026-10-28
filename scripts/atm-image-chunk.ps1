@@ -93,6 +93,12 @@ function Fail([string]$Code) {
     throw $Code
 }
 
+# .NET 2.0 has no String.IsNullOrWhiteSpace (added in .NET 4.0).  This is the
+# same check, and the [string] parameter turns $null into an empty string.
+function Test-IsNullOrWhiteSpace([string]$Value) {
+    return ($Value.Trim().Length -eq 0)
+}
+
 # PowerShell 2.0 has no ConvertTo-Json.  The payloads here are small and
 # fixed-shape, so a tiny serializer is enough and keeps one output format on
 # every ATM regardless of PowerShell version.
@@ -156,7 +162,7 @@ function ConvertTo-JsonText {
 }
 
 function ConvertFrom-Base64Url([string]$Value) {
-    if ([string]::IsNullOrWhiteSpace($Value)) { Fail 'E_ARGS' }
+    if ((Test-IsNullOrWhiteSpace $Value)) { Fail 'E_ARGS' }
     $text = $Value.Replace('-', '+').Replace('_', '/')
     switch ($text.Length % 4) {
         2 { $text += '==' }
@@ -249,7 +255,7 @@ function Test-NoReparsePoint([string]$Root, [string]$FullPath) {
 }
 
 function Resolve-AllowedPath([string]$Value) {
-    if ([string]::IsNullOrWhiteSpace($Value)) { Fail 'E_PATH' }
+    if ((Test-IsNullOrWhiteSpace $Value)) { Fail 'E_PATH' }
     if ($Value -match '[\x00-\x1F\x7F]') { Fail 'E_PATH' }
     if ($Value.StartsWith('\') -and -not $Value.StartsWith('\\')) {
         Fail 'E_ROOT'
@@ -294,7 +300,7 @@ function Resolve-AllowedPath([string]$Value) {
 }
 
 function Resolve-AllowedDirectory([string]$Value) {
-    if ([string]::IsNullOrWhiteSpace($Value)) { Fail 'E_PATH' }
+    if ((Test-IsNullOrWhiteSpace $Value)) { Fail 'E_PATH' }
     if ($Value -match '[\x00-\x1F\x7F]') { Fail 'E_PATH' }
     if ($Value.StartsWith('\') -and -not $Value.StartsWith('\\')) {
         Fail 'E_ROOT'
@@ -435,8 +441,11 @@ function Get-FileInfo([string]$FullPath) {
         $after = [long]$stream.Length
         if ($after -ne $before) { Fail 'E_IO' }
     } finally {
-        if ($stream) { $stream.Dispose() }
-        $sha.Dispose()
+        if ($stream) { $stream.Close() }
+        # HashAlgorithm.Dispose is an explicit interface implementation on
+        # .NET 2.0, so PowerShell 2.0 cannot call it.  Clear() is the public
+        # method that releases the same resources.
+        $sha.Clear()
     }
 
     $hex = ([BitConverter]::ToString($hash) -replace '-', '').ToLowerInvariant()
@@ -481,7 +490,7 @@ function Read-FileChunk([string]$FullPath, [long]$ChunkOffset, [int]$ChunkLength
         if ($read -ne $toRead -or $after -ne $before) { Fail 'E_IO' }
         return [Convert]::ToBase64String($buffer, 0, $read)
     } finally {
-        if ($stream) { $stream.Dispose() }
+        if ($stream) { $stream.Close() }
     }
 }
 
@@ -499,9 +508,10 @@ function Get-ZipEntryTime([int]$Date, [int]$Time) {
         return [datetime]::MinValue
     }
     try {
-        $value = Get-Date -Year $year -Month $month -Day $day `
-            -Hour $hour -Minute $minute -Second $second
-        return $value.AddTicks(-($value.Ticks % [TimeSpan]::TicksPerSecond))
+        return (New-Object System.DateTime -ArgumentList @(
+            [int]$year, [int]$month, [int]$day,
+            [int]$hour, [int]$minute, [int]$second
+        ))
     } catch {
         return [datetime]::MinValue
     }
@@ -559,7 +569,7 @@ function Open-FallbackZipEntry($Entry) {
                 if ($got -le 0) { Fail 'E_ZIP' }
                 $read += $got
             }
-            $fs.Dispose()
+            $fs.Close()
             $fs = $null
 
             $memory = New-Object System.IO.MemoryStream
@@ -574,7 +584,7 @@ function Open-FallbackZipEntry($Entry) {
 
         Fail 'E_ZIP'
     } catch {
-        if ($fs) { $fs.Dispose() }
+        if ($fs) { $fs.Close() }
         throw
     }
 }
@@ -687,7 +697,7 @@ function Open-ZipFallback([string]$FullPath) {
     } catch {
         throw
     } finally {
-        if ($fs) { $fs.Dispose() }
+        if ($fs) { $fs.Close() }
     }
 }
 
@@ -827,7 +837,7 @@ function Read-ZipEntryChunk([string]$FullPath, [long]$Index,
             if ($read -ne $toRead) { Fail 'E_IO' }
             return [Convert]::ToBase64String($buffer, 0, $read)
         } finally {
-            $stream.Dispose()
+            $stream.Close()
         }
     } finally {
         $zip.Dispose()

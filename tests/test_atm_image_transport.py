@@ -630,6 +630,15 @@ def test_chunk_script_runs_on_powershell_2():
     assert 'DeflateStream' in PS1
 
 
+def test_chunk_script_avoids_dotnet4_only_apis():
+    # The NCR's PowerShell 2.0 runs on CLR 2.0.  These APIs exist in .NET 4
+    # but not there; both were hit on the live ATM on 2026-10-28.
+    assert '[string]::IsNullOrWhiteSpace' not in PS1
+    assert '$sha.Dispose()' not in PS1
+    assert '$sha.Clear()' in PS1
+    assert 'CopyTo(' not in PS1
+
+
 def test_chunk_script_has_no_write_or_execute_cmdlets():
     for cmdlet in ('Remove-Item', 'Set-Content', 'Out-File', 'New-Item',
                    'Move-Item', 'Copy-Item', 'Start-Process',
