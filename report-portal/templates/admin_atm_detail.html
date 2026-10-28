@@ -10,8 +10,7 @@
 .kv{display:flex;flex-direction:column;gap:3px}
 .kv .k{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#94A3B8;font-weight:600}
 .kv .v{font-size:13px;color:#0F172A;font-weight:500}
-.state-badge{padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;color:#fff;display:inline-block}
-.state-green{background:#059669}.state-amber{background:#B45309}.state-red{background:#DC2626}.state-grey{background:#64748B}
+.state-badge{padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;display:inline-block}
 .retired-banner{display:flex;align-items:flex-start;gap:10px;background:#F1F5F9;border:1px solid #CBD5E1;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#475569;line-height:1.5}
 .retired-banner svg{width:18px;height:18px;color:#64748B;flex-shrink:0;margin-top:1px}
 .retired-banner b{color:#0F172A}
@@ -94,10 +93,10 @@ table.txn tbody tr:hover{background:#EEF2FF}
       {% set st = atm.current_state or 'UNKNOWN' %}
       {% set is_retired = (atm.status or 'active') != 'active' %}
       {% if is_retired %}
-      <span class="state-badge state-grey">RETIRED</span>
-      <span class="vendor-badge" style="background:#EEF2FF;color:#64748B">Last state: {{ st }}</span>
+      <span class="state-badge" style="background:#64748B;color:#fff">RETIRED</span>
+      <span class="vendor-badge" style="background:#EEF2FF;color:#64748B">Last state: {{ st | state_label }}</span>
       {% else %}
-      <span class="state-badge {% if st | state_tone == 'good' %}state-green{% elif st | state_tone == 'warn' %}state-amber{% elif st | state_tone == 'bad' %}state-red{% else %}state-grey{% endif %}">{{ st }}</span>
+      <span class="state-badge" style="background:{{ st | state_colour }};color:{{ st | state_ink }}">{{ st | state_label }}</span>
       {% if atm.get('live') %}<span class="vendor-badge" style="background:#DCFCE7;color:#166534;font-size:10px" title="State verified just now via live check (it can still be UNREACHABLE — this badge means fresh, not healthy)">LIVE</span>{% endif %}
       {% endif %}
       <span class="vendor-badge vendor-{{ atm.vendor }}">{{ atm.vendor or '—' }}</span>
@@ -152,11 +151,11 @@ table.txn tbody tr:hover{background:#EEF2FF}
             <text x="186" y="44" fill="#FFFFFF" font-size="15" font-weight="800" text-anchor="middle" font-family="Inter,sans-serif">DASHEN BANK</text>
             <!-- screen -->
             <rect x="44" y="74" width="232" height="92" rx="12" fill="url(#screenGrad)" stroke="#334155" stroke-width="1"/>
-            <circle cx="252" cy="88" r="4" fill="#22C55E"/>
+            <circle cx="252" cy="88" r="4" fill="{{ st | state_colour }}"/>
             <text x="160" y="106" fill="#FFFFFF" font-size="16" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">{{ atm.atm_id }}</text>
             {% set st = atm.current_state or 'UNKNOWN' %}
-            {% set stcol = '#22C55E' if st == 'IN_SERVICE' else ('#F59E0B' if st == 'IN_SUPERVISOR' else '#EF4444') %}
-            <text x="160" y="130" fill="{{ stcol }}" font-size="12" font-weight="600" text-anchor="middle" font-family="Inter,sans-serif">{{ st }}</text>
+            {% set stink = st | state_ink %}
+            <text x="160" y="130" fill="{{ stink }}" font-size="12" font-weight="600" text-anchor="middle" font-family="Inter,sans-serif">{{ st | state_label }}</text>
             <!-- card reader -->
             <rect x="238" y="184" width="40" height="9" rx="3" fill="#1F2937"/>
             <text x="258" y="208" fill="#64748B" font-size="8" font-weight="600" text-anchor="middle" font-family="Inter,sans-serif">CARD</text>

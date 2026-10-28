@@ -96,9 +96,13 @@ def create_app():
     def start_timer():
         g.start = time.time()
 
-    from helpers import state_tone, state_colour
+    from helpers import (state_tone, state_colour, state_ink, state_label,
+                         state_legend)
     app.jinja_env.filters['state_tone'] = state_tone
     app.jinja_env.filters['state_colour'] = state_colour
+    app.jinja_env.filters['state_ink'] = state_ink
+    app.jinja_env.filters['state_label'] = state_label
+    app.jinja_env.globals['state_legend'] = state_legend
 
     @app.context_processor
     def external_links():

@@ -9,7 +9,8 @@ from db import get_db
 from helpers import (xl_header, xl_style_row, xl_style_data_rows, xl_autosize,
                      xl_send, xl_finalize,
                      xl_build_sheet, xl_append_section, csv_send, pdf_send, mktable,
-                     _pdf_header_block, _period_slug, LOGO_PATH)
+                     _pdf_header_block, _period_slug, LOGO_PATH,
+                     state_label, state_colour, state_ink)
 import livecache
 from datetime import datetime, timedelta, timezone
 from reportlab.lib.pagesizes import A4, landscape
@@ -279,7 +280,13 @@ def api_charts():
                 state = hit[0] if hit else (stored or 'UNKNOWN')
                 counts[state] = counts.get(state, 0) + 1
             rows = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
-            return {'labels': [f'{s} ({n})' for s, n in rows],
+            states = [s for s, _n in rows]
+            # Labels and colours are resolved here so the donut, the list
+            # badges and the legend all read from the same eight-state map.
+            return {'labels': [f'{state_label(s)} ({n})' for s, n in rows],
+                    'states': states,
+                    'colours': [state_colour(s) for s in states],
+                    'inks': [state_ink(s) for s in states],
                     'data': [n for _s, n in rows]}
 
         # Shared across viewers (25s TTL under the 30s chart poll).

@@ -16,6 +16,7 @@ from flask import Blueprint, render_template, request, jsonify
 import livecache
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from db import get_db
+from helpers import state_label
 
 logger = logging.getLogger(__name__)
 
@@ -269,6 +270,7 @@ def _collect():
                 'atm_id': r['atm_id'], 'branch': r.get('branch') or r['atm_id'],
                 'city': r.get('city') or '', 'health': r.get('health'),
                 'state': r.get('state'), 'txns': r.get('txns', 0),
+                'state_label': state_label(r.get('state')),
                 'lat': lat, 'lng': lng,
                 'x': round(x, 1), 'y': round(y, 1),
             })

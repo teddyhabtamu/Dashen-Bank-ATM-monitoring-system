@@ -137,6 +137,33 @@ dashboards, alerts, and reports stay the same. See
 
 ---
 
+## ATM state colours (NetXMS parity)
+
+Operations staff move between NetXMS and this portal, so the eight
+operator-facing states and their colours deliberately match. The single
+source of truth is `report-portal/helpers.py` (`STATE_LABELS`,
+`STATE_COLOURS`, `STATE_INKS`, `STATE_ORDER`); templates use the
+`state_label`, `state_colour` and `state_ink` Jinja filters, and the donut
+receives the same map from `/api/charts`.
+
+| State | Internal key | Colour |
+|---|---|---|
+| In Service | `IN_SERVICE` | green `#059669` |
+| Agent Disconnected (power/network) | `UNREACHABLE` | dark pink `#BE185D` |
+| Unknown | `UNKNOWN` | light pink `#F9A8D4` |
+| In Supervisor | `IN_SUPERVISOR` | yellow `#CA8A04` |
+| Hardware Faults | `HARDWARE_FAULT` | dark blue `#1D4ED8` |
+| Out Of Cash | `OUT_OF_CASH` | green-blue `#0D9488` |
+| Offline | `OFFLINE` | light blue `#38BDF8` |
+| Out of Service | `OUT_OF_SERVICE` | red `#DC2626` |
+
+`Agent Disconnected` is the display name for `UNREACHABLE`; the internal key
+is unchanged so `atm_state_history`, Zabbix triggers and existing rows keep
+their meaning. `NOT_PROVISIONED` and `INACTIVE` are portal-only setup states,
+not part of the NetXMS eight.
+
+---
+
 ## Key Design Principle
 
 **Every simulator is a placeholder for a real data source.** The

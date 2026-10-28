@@ -368,11 +368,93 @@ TONE_COLOURS = {
     'muted': '#64748B',
 }
 
+# The eight operator-facing ATM states, matching the NetXMS colour language
+# the bank's operations team already knows. STATE_TONES above stays the
+# coarse good/warn/bad/muted tier used for layout (CSS classes, alert cards);
+# these maps are the single source of truth for state text and colour.
+#
+# UNREACHABLE is displayed as "Agent Disconnected" because that is what it
+# means operationally: Zabbix has positive evidence the agent is unavailable
+# (power or network). The internal key is unchanged so atm_state_history,
+# triggers and existing rows keep their meaning.
+STATE_LABELS = {
+    'IN_SERVICE': 'In Service',
+    'UNREACHABLE': 'Agent Disconnected',
+    'UNKNOWN': 'Unknown',
+    'IN_SUPERVISOR': 'In Supervisor',
+    'HARDWARE_FAULT': 'Hardware Faults',
+    'OUT_OF_CASH': 'Out Of Cash',
+    'OFFLINE': 'Offline',
+    'OUT_OF_SERVICE': 'Out of Service',
+    # Portal-only states, not part of the NetXMS eight.
+    'NOT_PROVISIONED': 'Not Provisioned',
+    'INACTIVE': 'Inactive',
+}
+
+STATE_COLOURS = {
+    'IN_SERVICE': '#059669',       # green
+    'UNREACHABLE': '#BE185D',      # dark pink
+    'UNKNOWN': '#F9A8D4',          # light pink
+    'IN_SUPERVISOR': '#CA8A04',    # yellow
+    'HARDWARE_FAULT': '#1D4ED8',   # dark blue
+    'OUT_OF_CASH': '#0D9488',      # green-blue / teal
+    'OFFLINE': '#38BDF8',          # light blue
+    'OUT_OF_SERVICE': '#DC2626',   # red
+    'NOT_PROVISIONED': '#A5B4CB',
+    'INACTIVE': '#94A3B8',
+}
+
+# White text disappears on light pink / light blue / yellow. Dark ink keeps
+# the badge legible without changing the state colour itself.
+STATE_INKS = {
+    'UNKNOWN': '#831843',
+    'IN_SUPERVISOR': '#1C1917',
+    'OFFLINE': '#0C4A6E',
+    'NOT_PROVISIONED': '#1E293B',
+    'INACTIVE': '#1E293B',
+}
+STATE_INK_DEFAULT = '#FFFFFF'
+
+# Order used by the on-screen legend — exactly the eight NetXMS states.
+STATE_ORDER = (
+    'IN_SERVICE',
+    'UNREACHABLE',
+    'UNKNOWN',
+    'IN_SUPERVISOR',
+    'HARDWARE_FAULT',
+    'OUT_OF_CASH',
+    'OFFLINE',
+    'OUT_OF_SERVICE',
+)
+
+
+def _state_key(state):
+    return str(state or '').strip().upper()
+
 
 def state_tone(state):
     """good / warn / bad / muted for an ATM state string."""
-    return STATE_TONES.get(str(state or '').upper(), 'muted')
+    return STATE_TONES.get(_state_key(state), 'muted')
+
+
+def state_label(state):
+    """Operator-facing text for a state key."""
+    key = _state_key(state)
+    return STATE_LABELS.get(key, key.replace('_', ' ').title() or 'Unknown')
 
 
 def state_colour(state):
-    return TONE_COLOURS[state_tone(state)]
+    """NetXMS-parity colour for a state key."""
+    return STATE_COLOURS.get(_state_key(state), '#64748B')
+
+
+def state_ink(state):
+    """Readable text colour on top of state_colour()."""
+    return STATE_INKS.get(_state_key(state), STATE_INK_DEFAULT)
+
+
+def state_legend():
+    """The eight state legend entries, in NetXMS display order."""
+    return [{'state': key, 'label': state_label(key),
+             'colour': state_colour(key), 'ink': state_ink(key)}
+            for key in STATE_ORDER]

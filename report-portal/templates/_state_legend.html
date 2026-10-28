@@ -1,0 +1,9 @@
+{# The eight operator-facing ATM states, matching the NetXMS colour language.
+   Rendered from helpers.state_legend() so labels and colours have one owner. #}
+<div class="state-legend" role="list" aria-label="ATM state legend">
+  {% for item in state_legend() %}
+  <span class="state-legend-item" role="listitem" title="{{ item.label }}">
+    <span class="state-legend-dot" style="background:{{ item.colour }}" aria-hidden="true"></span>{{ item.label }}
+  </span>
+  {% endfor %}
+</div>

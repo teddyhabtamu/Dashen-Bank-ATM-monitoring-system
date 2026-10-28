@@ -76,7 +76,7 @@
           <circle cx="{{ d.x }}" cy="{{ d.y }}" r="9" data-health="{{ d.health }}"
                   fill="{% if d.health == 'Healthy' %}#10B981{% elif d.health == 'Degraded' %}#F59E0B{% elif d.health == 'Critical' %}#DC2626{% else %}#94A3B8{% endif %}"
                   stroke="#fff" stroke-width="2.5" style="cursor:pointer">
-            <title>{{ d.atm_id }} · {{ d.branch }}{% if d.city %} ({{ d.city }}){% endif %} — {{ d.state }} · {{ d.health }} ({{ d.txns }} txns/1h). Click for details.</title>
+            <title>{{ d.atm_id }} · {{ d.branch }}{% if d.city %} ({{ d.city }}){% endif %} — {{ d.state_label or d.state }} · {{ d.health }} ({{ d.txns }} txns/1h). Click for details.</title>
           </circle>
         </a>
         {% endfor %}
@@ -364,7 +364,7 @@
           c.setAttribute('fill', HEALTH_COLORS[x.health] || '#94A3B8');
           c.setAttribute('data-health', x.health || 'No Data');
           var t = c.querySelector('title');
-          if(t) t.textContent = x.atm_id + ' · ' + (x.branch || '') + ' — ' + (x.state || '') + ' · ' + (x.health || '') + ' (' + (x.txns || 0) + ' txns/1h)';
+          if(t) t.textContent = x.atm_id + ' · ' + (x.branch || '') + ' — ' + (x.state_label || x.state || '') + ' · ' + (x.health || '') + ' (' + (x.txns || 0) + ' txns/1h)';
         }
       });
       if(window._fleetMarkers){
@@ -372,7 +372,7 @@
           var x = byId[id], m = window._fleetMarkers[id];
           if(!x || !m) return;
           m.setStyle({fillColor: HEALTH_COLORS[x.health] || '#94A3B8'});
-          m.setTooltipContent(id + ' · ' + (x.branch || '') + ' — ' + (x.state || '') + ' · ' + (x.health || '') + ' (' + (x.txns || 0) + ' txns/1h)');
+          m.setTooltipContent(id + ' · ' + (x.branch || '') + ' — ' + (x.state_label || x.state || '') + ' · ' + (x.health || '') + ' (' + (x.txns || 0) + ' txns/1h)');
         });
       }
       fails = 0; stamp(true);
@@ -442,7 +442,7 @@
       {radius: 9, color: '#fff', weight: 2.5,
        fillColor: COLORS[d.health] || '#94A3B8', fillOpacity: 1, health: d.health});
     m.bindTooltip(d.atm_id + ' · ' + d.branch + (d.city ? ' (' + d.city + ')' : '') +
-      ' — ' + d.state + ' · ' + d.health + ' (' + d.txns + ' txns/1h)', {sticky: true});
+      ' — ' + (d.state_label || d.state) + ' · ' + d.health + ' (' + d.txns + ' txns/1h)', {sticky: true});
     m.on('click', function(){ window.location = '/atms/' + encodeURIComponent(d.atm_id); });
     m.options.atmId = d.atm_id;
     (window._fleetMarkers = window._fleetMarkers || {})[d.atm_id] = m;

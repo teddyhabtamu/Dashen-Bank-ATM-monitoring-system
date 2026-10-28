@@ -201,6 +201,9 @@ body { background: var(--surface); color: var(--text-primary); min-height: 100vh
       <div class="chart-canvas-wrap">
         <canvas id="chart-atm-status"></canvas>
       </div>
+      <div style="padding:0 18px 14px">
+        {% include '_state_legend.html' %}
+      </div>
     </div>
 
     <div class="chart-card">
@@ -340,20 +343,27 @@ async function loadCharts() {
     // ATM Status — Doughnut Chart
     const statusCtx = document.getElementById('chart-atm-status').getContext('2d');
     if (atmStatusChart) atmStatusChart.destroy();
+    // Server-computed colours are authoritative; this fallback mirrors the
+    // eight-state map in helpers.py so a cached/partial payload still renders.
     const statusColors = {
-      'IN_SERVICE': chartColors.success,
-      'OUT_OF_SERVICE': chartColors.danger,
-      'OUT_OF_CASH': chartColors.warning,
-      'HARDWARE_FAULT': chartColors.danger,
-      'OFFLINE': chartColors.muted,
-      'UNREACHABLE': chartColors.muted,
+      'IN_SERVICE': '#059669',
+      'UNREACHABLE': '#BE185D',
+      'UNKNOWN': '#F9A8D4',
+      'IN_SUPERVISOR': '#CA8A04',
+      'HARDWARE_FAULT': '#1D4ED8',
+      'OUT_OF_CASH': '#0D9488',
+      'OFFLINE': '#38BDF8',
+      'OUT_OF_SERVICE': '#DC2626',
       'INACTIVE': '#94A3B8',
-      'UNKNOWN': '#CBD5E1',
       'NOT_PROVISIONED': '#A5B4CB',
     };
     const statusLabels = d.atm_status.labels;
     const statusData = d.atm_status.data;
-    const statusBg = d.atm_status.labels.map(l => statusColors[String(l).replace(/ \([0-9,]+\)$/, '')] || chartColors.muted);
+    const statusStates = d.atm_status.states || statusLabels.map(
+      l => String(l).replace(/ \([0-9,]+\)$/, ''));
+    const statusBg = statusStates.map((s, i) =>
+      (d.atm_status.colours && d.atm_status.colours[i]) ||
+      statusColors[s] || chartColors.muted);
     atmStatusChart = new Chart(statusCtx, {
       type: 'doughnut',
       data: {
@@ -441,7 +451,11 @@ function refreshChart(chart, payload){
   chart.data.labels = payload.labels || [];
   (chart.data.datasets || []).forEach(function(ds){
     ds.data = payload.data || [];
-    if(ds.backgroundColor) ds.backgroundColor = cycleColors(ds.backgroundColor, (payload.labels || []).length);
+    if(payload.colours && payload.colours.length){
+      ds.backgroundColor = payload.colours;
+    } else if(ds.backgroundColor){
+      ds.backgroundColor = cycleColors(ds.backgroundColor, (payload.labels || []).length);
+    }
     if(ds.borderColor && Array.isArray(ds.borderColor)) ds.borderColor = cycleColors(ds.borderColor, (payload.labels || []).length);
   });
   chart.update();

@@ -223,6 +223,19 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
 .badge.inactive,.badge.DECLINED{background:rgba(220,38,38,.08);color:#DC2626}
 .badge.TIMEOUT,.badge.ERROR{background:rgba(217,119,6,.1);color:#D97706}
 
+/* ── ATM STATE BADGE + LEGEND ──
+   Colours come from helpers.py (the NetXMS eight-state palette). The pill
+   carries the state colour; the legend is the same list rendered in order. */
+.state-pill{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;
+  font-weight:700;line-height:1.45;white-space:nowrap}
+.state-legend{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;
+  font-size:11px;color:#475569;line-height:1.6}
+.state-legend-item{display:inline-flex;align-items:center;white-space:nowrap}
+.state-legend-dot{width:10px;height:10px;border-radius:50%;display:inline-block;
+  margin-right:5px;flex:0 0 auto}
+.state-legend-bar{padding:10px 16px;background:#F8FAFC;border:1px solid #EEF1F6;
+  border-radius:8px;margin-bottom:16px}
+
 /* ── ALERT CARDS ── */
 .alert-card {
   border-radius:10px; padding:18px 22px;
