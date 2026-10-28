@@ -255,6 +255,11 @@
       } else if (err.status === 429) {
         showError('The ATM is busy',
                   err.message || 'Another image request is still running.');
+      } else if (err.status === 503) {
+        showError('ATM agent unreachable',
+                  err.message || ('The monitoring host could not reach ' +
+                                  'the ATM agent. The ATM may be off or off ' +
+                                  'the network.'));
       } else {
         showError('Image transport failed',
                   err.message || ('The bridge returned HTTP ' + err.status + '.'));

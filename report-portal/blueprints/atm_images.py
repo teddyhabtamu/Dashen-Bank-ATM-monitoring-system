@@ -181,6 +181,7 @@ def atm_images(atm_id):
     result = None
     unavailable = False
     bridge_error = None
+    bridge_error_code = None
     day = _today()
     start = datetime.combine(day, time.min)
     end = datetime.combine(day, time.max)
@@ -209,6 +210,7 @@ def atm_images(atm_id):
             bridge_error = str(exc)
         except bridge.BridgeError as exc:
             bridge_error = str(exc)
+            bridge_error_code = exc.code
 
         confidence = (result or {}).get('confidence', 'none')
         count = len((result or {}).get('candidates') or [])
@@ -233,6 +235,7 @@ def atm_images(atm_id):
         result=result,
         unavailable=unavailable,
         bridge_error=bridge_error,
+        bridge_error_code=bridge_error_code,
         bridge_configured=bridge.configured(),
         not_available_text=bridge.NOT_AVAILABLE,
         max_days_back=MAX_DAYS_BACK,
@@ -255,7 +258,7 @@ def _stream_evidence(atm_id: str, day: date, opener, *,
     except bridge.BridgeError as exc:
         log_action('IMAGE_VIEW', f'ATM {atm_id} day {day.isoformat()} '
                                   f'{unavailable_tail} error {exc.code}')
-        status = exc.status if exc.status in (400, 409, 429) else 502
+        status = exc.status if exc.status in (400, 409, 429, 503) else 502
         return _no_store(Response(
             str(exc),
             status=status,
@@ -416,12 +419,14 @@ def atm_image_zip(atm_id):
     result = None
     unavailable = False
     bridge_error = None
+    bridge_error_code = None
     try:
         result = bridge.zip_entries(atm_id, day.isoformat(), zip_hmac)
     except bridge.NotAvailable:
         unavailable = True
     except bridge.BridgeError as exc:
         bridge_error = str(exc)
+        bridge_error_code = exc.code
     count = len((result or {}).get('entries') or [])
     log_action(
         'IMAGE_SEARCH',
@@ -438,6 +443,7 @@ def atm_image_zip(atm_id):
         result=result,
         unavailable=unavailable,
         bridge_error=bridge_error,
+        bridge_error_code=bridge_error_code,
         not_available_text=bridge.NOT_AVAILABLE,
     ))
     return _no_store(response)

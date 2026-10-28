@@ -44,6 +44,7 @@ import ntpath
 import os
 import re
 import signal
+import socket
 import socketserver
 import stat
 import threading
@@ -83,6 +84,8 @@ MAX_DAYS_BACK = 90
 MAX_WINDOW = dt.timedelta(hours=24)
 MAX_BODY = 8192
 MAX_TOKEN = 512
+DEFAULT_PREFLIGHT_TIMEOUT = 3
+AGENT_PORT = 10050
 HMAC_RE = re.compile(r'^[0-9a-f]{64}$')
 ATM_ID_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$')
 HOST_RE = re.compile(r'^[A-Za-z0-9._:-]{1,255}$')
@@ -130,6 +133,13 @@ class UpstreamError(BridgeError):
     public = 'The ATM image service did not respond.'
 
 
+class AgentUnreachable(BridgeError):
+    status = 503
+    code = 'agent_unreachable'
+    public = ('The monitoring host cannot reach the ATM agent on TCP/10050. '
+              'The ATM may be off or off the network.')
+
+
 class Busy(BridgeError):
     status = 429
     code = 'busy'
@@ -152,6 +162,7 @@ class BridgeConfig:
     max_days_back: int
     timeout: int
     retries: int
+    preflight_timeout: int = DEFAULT_PREFLIGHT_TIMEOUT
 
 
 def _today() -> dt.date:
@@ -295,6 +306,8 @@ def load_config(path: str | os.PathLike[str]) -> BridgeConfig:
         max_days_back = int(payload.get('max_days_back', MAX_DAYS_BACK))
         timeout = int(payload.get('timeout', DEFAULT_TIMEOUT))
         retries = int(payload.get('retries', DEFAULT_RETRIES))
+        preflight_timeout = int(payload.get(
+            'preflight_timeout', DEFAULT_PREFLIGHT_TIMEOUT))
     except (TypeError, ValueError):
         raise RuntimeError('max_days_back, timeout and retries must be integers') \
             from None
@@ -304,9 +317,12 @@ def load_config(path: str | os.PathLike[str]) -> BridgeConfig:
         raise RuntimeError('timeout must be between 1 and 30')
     if not 0 <= retries <= 5:
         raise RuntimeError('retries must be between 0 and 5')
+    if not 0 <= preflight_timeout <= 10:
+        raise RuntimeError('preflight_timeout must be between 0 and 10')
 
     return BridgeConfig(atms=atms, max_days_back=max_days_back,
-                        timeout=timeout, retries=retries)
+                        timeout=timeout, retries=retries,
+                        preflight_timeout=preflight_timeout)
 
 
 def _content_type(name: str) -> str:
@@ -407,15 +423,37 @@ class BridgeApp:
     """The transport-independent core, kept testable without a socket."""
 
     def __init__(self, config: BridgeConfig, key: bytes,
-                 *, timeout: int | None = None, per_atm: int = 2):
+                 *, timeout: int | None = None, per_atm: int = 2,
+                 preflight_timeout: int | None = None):
         self.config = config
         self.key = key
         self.timeout = timeout or config.timeout
         self.retries = config.retries
+        self.preflight_timeout = (
+            config.preflight_timeout if preflight_timeout is None
+            else max(0, preflight_timeout)
+        )
         self._slots = {
             atm_id: threading.BoundedSemaphore(max(1, per_atm))
             for atm_id in config.atms
         }
+
+    def _preflight(self, atm: AtmConfig) -> None:
+        """Fail fast when TCP/10050 is closed instead of retrying for 60s.
+
+        The bridge already has no route to an ATM except this port; if the
+        connect fails, every ``zabbix_get`` will fail the same way.  Keeping
+        this small and boring means an offline ATM produces the same answer
+        in about three seconds, while a reachable ATM pays milliseconds.
+        """
+        if not self.preflight_timeout:
+            return
+        try:
+            with socket.create_connection(
+                    (atm.host, AGENT_PORT), timeout=self.preflight_timeout):
+                return
+        except OSError:
+            raise AgentUnreachable() from None
 
     @contextmanager
     def _guard(self, atm_id: str):
@@ -481,6 +519,7 @@ class BridgeApp:
         atm = self.atm(atm_id)
         day = _parse_day(day_raw, self.config.max_days_back)
         start, end = _window(day, start_raw, end_raw)
+        self._preflight(atm)
 
         if atm.vendor == 'GRG':
             directory = grg_directory(day, atm.image_root)
@@ -539,6 +578,7 @@ class BridgeApp:
         if atm.vendor != 'GRG' or not atm.image_root:
             raise BridgeError('This ATM does not expose direct image files.')
         day = _parse_day(day_raw, self.config.max_days_back)
+        self._preflight(atm)
         directory = grg_directory(day, atm.image_root)
         match = self._locate(atm, directory, requested_hmac)
         _content_type(match['name'])
@@ -571,6 +611,7 @@ class BridgeApp:
                     zip_hmac: str) -> dict:
         atm = self.atm(atm_id)
         day = _parse_day(day_raw, self.config.max_days_back)
+        self._preflight(atm)
         zip_path, match = self._locate_zip(atm, day, zip_hmac)
         entries = self._list_zip(atm, zip_path)
         projected = [{
@@ -603,6 +644,7 @@ class BridgeApp:
         if isinstance(index, bool) or not isinstance(index, int) \
                 or index < 0 or index >= MAX_ZIP_ENTRIES:
             raise BridgeError('The archive index is invalid.')
+        self._preflight(atm)
         zip_path, _match = self._locate_zip(atm, day, zip_hmac)
         entries = self._list_zip(atm, zip_path)
         if index >= len(entries):

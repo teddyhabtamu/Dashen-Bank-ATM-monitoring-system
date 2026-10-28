@@ -252,6 +252,28 @@ def test_bridge_failure_is_not_missing_evidence(monkeypatch):
     assert calls[0][1].endswith('unavailable 0 error 1')
 
 
+def test_agent_unreachable_has_its_own_banner(monkeypatch):
+    app, calls = _app(monkeypatch)
+
+    def offline(*_a, **_k):
+        raise bpmod.bridge.BridgeError(
+            'The monitoring host cannot reach the ATM agent on TCP/10050.',
+            code='agent_unreachable', status=503)
+    monkeypatch.setattr(bpmod.bridge, 'candidates', offline)
+    client = app.test_client()
+    _admin(client)
+
+    response = client.get(
+        '/ej-journal/ATM-TEST-GRG/images?day=2026-10-22')
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'ATM agent unreachable' in body
+    assert 'TCP/10050' in body
+    assert 'Image transport failed' not in body
+    assert 'Not available on ATM' not in body
+
+
 def test_candidate_page_links_to_the_wrapped_viewer(monkeypatch):
     app, _calls = _app(monkeypatch)
     monkeypatch.setattr(bpmod.bridge, 'candidates',

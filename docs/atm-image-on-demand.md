@@ -390,6 +390,13 @@ UAT test ATMs and their confirmed roots. For production, generate one entry per
 ATM from inventory; never accept an ATM id, IP, path, or vendor from the
 browser. A broad root such as `E:\` or `C:\` must be rejected at startup.
 
+The same file sets `preflight_timeout` (default 3 seconds). Before it calls
+`zabbix_get`, the bridge opens TCP/10050 to the requested ATM. If the connect
+fails, the request stops there with `agent_unreachable` instead of spending
+`timeout × (retries + 1)` — 60 seconds with the current settings — on an ATM
+that is off or off the network. Set it to `0` only for a deliberate transport
+diagnosis.
+
 ### 6.2 Start the service
 
 ```bash
@@ -547,7 +554,11 @@ SELECT performed_at, username, action, detail
    The page must say **Image transport failed** / bridge not running. It must
    **not** say "Not available on ATM", because the puller is broken, not the
    evidence.
-3. **Wrong token:** change only the portal `.env` token and recreate the
+3. **ATM agent unreachable:** stop or unplug the test ATM, or block TCP/10050
+   from the monitoring host. The page must say **ATM agent unreachable** and
+   return in about three seconds, not after the 60-second retry budget. This is
+   still not missing evidence.
+4. **Wrong token:** change only the portal `.env` token and recreate the
    portal. The bridge returns `401`; the viewer reports a transport/token
    failure, not missing evidence.
 
@@ -593,10 +604,12 @@ audit-retention policy.
 | `E_CONTENT` (host) | The bytes are not a real JPEG/PNG/MP4 | Treat as an incident; the viewer must not show it |
 | `E_SHA256` / `E_CRC32` (host) | The file changed during the fetch | Retry once; if persistent, investigate the ATM |
 | `agent timeout` | Network, ACL, or agent load | Check TCP/10050 ACL and the agent log |
+| `agent_unreachable` | TCP/10050 refused or timed out during the 3-second preflight | Treat as ATM offline/off-network; do not treat it as missing evidence |
 | `zabbix_get not found` | Host tooling missing | Install the Zabbix agent package or set `ZBX_GET` |
 | Viewer says **Image bridge not configured** | Socket/token missing in the portal | Check `ATM_IMAGE_BRIDGE_*` in `.env`, the read-only `/run/atm-image-bridge` mount, and `systemctl status atm-image-bridge` |
 | Viewer says bridge not running right after a bridge restart | The running container is mounted to the old `/run/atm-image-bridge` inode; systemd removed and recreated it | Keep `RuntimeDirectoryPreserve=yes` in the unit. After adding it, restart the bridge and recreate the portal once. |
 | Viewer says **Image transport failed** | Bridge is down or the ATM did not answer | Check the bridge journal, `zabbix_get`, and TCP/10050; do not treat this as missing evidence |
+| Viewer says **ATM agent unreachable** | The 3-second TCP/10050 preflight failed | Check ATM power/link and the IP mapping; this is an outage, not missing evidence |
 | Bridge returns `401` | Portal token differs from the host env file | Regenerate/paste the same token, recreate the portal |
 | Bridge returns `404 unknown_atm` | ATM id is not in `config/atm-image-bridge.json` | Add it under change control; never accept an IP from the browser |
 | `E_CHANGED` / changed evidence | The file or zip was replaced during the fetch | Refresh candidates; investigate if it repeats |
@@ -641,6 +654,7 @@ audit-retention policy.
 | Latency | ~1–2 s per chunk/page because each call starts PowerShell |
 | Zip skip cost | Each chunk reopens the zip and skips from the start; the 8 MiB entry cap bounds this. Still images are the target; video is best-effort |
 | Concurrency | Limit at the bridge (e.g. 2 per ATM); no caching |
+| Offline ATM | 3-second TCP/10050 preflight, then `agent_unreachable`; no 60-second retry loop |
 | Bridge memory | One verified image per request; bounded by the 8 MiB video/zip-entry cap |
 | Bridge socket | Unix stream socket, mode 0660, mounted read-only into the portal |
 | Portal worker | Gunicorn timeout is 120 s; a still image is the target. A maximum-size video/zip entry may exceed it, so do not treat a timeout as missing evidence |

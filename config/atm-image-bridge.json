@@ -2,6 +2,7 @@
   "max_days_back": 90,
   "timeout": 30,
   "retries": 1,
+  "preflight_timeout": 3,
   "atms": {
     "ATM-TEST-GRG": {
       "host": "10.41.30.115",

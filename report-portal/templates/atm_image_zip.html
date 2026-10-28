@@ -34,7 +34,10 @@
 </div>
 
 {% if bridge_error %}
-<div class="banner banner-error"><strong>Image transport failed.</strong> {{ bridge_error }}</div>
+<div class="banner banner-error">
+  <strong>{% if bridge_error_code == 'agent_unreachable' %}ATM agent unreachable.{% else %}Image transport failed.{% endif %}</strong>
+  {{ bridge_error }}
+</div>
 {% endif %}
 {% if unavailable %}
 <div class="banner banner-warn">

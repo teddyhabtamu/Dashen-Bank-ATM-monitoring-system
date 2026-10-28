@@ -161,6 +161,8 @@ def _error(response, conn) -> BridgeError:
         return BridgeError(message, code='changed', status=409)
     if response.status == 429:
         return BridgeError(message, code='busy', status=429)
+    if response.status == 503 and code == 'agent_unreachable':
+        return BridgeError(message, code='agent_unreachable', status=503)
     if response.status >= 500:
         return BridgeUnavailable(message)
     return BridgeError(message, code=code, status=response.status)

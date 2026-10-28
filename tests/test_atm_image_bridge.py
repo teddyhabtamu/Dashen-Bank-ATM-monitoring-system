@@ -76,7 +76,7 @@ def _row(name, length=114843, mtime='2026-10-22T15:34:44.8883446+03:00'):
 @pytest.fixture
 def app(tmp_path, monkeypatch):
     monkeypatch.setattr(bridge, '_today', lambda: dt.date(2026, 10, 27))
-    return bridge.BridgeApp(_config(tmp_path), KEY)
+    return bridge.BridgeApp(_config(tmp_path), KEY, preflight_timeout=0)
 
 
 def test_candidates_never_return_a_raw_name_or_path(app, monkeypatch):
@@ -250,6 +250,45 @@ def test_zip_entry_projection_uses_an_index_not_a_name(app, monkeypatch):
     with pytest.raises(bridge.NotAvailable):
         app.zip_entries('ATM-TEST-NCR', '2026-10-21',
                         name_hmac(zip_name, KEY))
+
+
+def test_preflight_fails_fast_when_tcp_10050_is_closed(tmp_path, monkeypatch):
+    monkeypatch.setattr(bridge, '_today', lambda: dt.date(2026, 10, 27))
+    listed = []
+    monkeypatch.setattr(bridge, 'list_dir', lambda *a, **k: listed.append(1))
+    monkeypatch.setattr(bridge.socket, 'create_connection',
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            ConnectionRefusedError()))
+
+    app = bridge.BridgeApp(_config(tmp_path), KEY, preflight_timeout=3)
+    with pytest.raises(bridge.AgentUnreachable) as caught:
+        app.candidates(GRG, DAY, '2026-10-22 15:34:44',
+                       '2026-10-22 15:35:21')
+
+    assert caught.value.status == 503
+    assert caught.value.code == 'agent_unreachable'
+    assert 'TCP/10050' in caught.value.public
+    assert listed == [], 'the slow zabbix_get path must not run'
+
+
+def test_preflight_continues_when_tcp_10050_answers(tmp_path, monkeypatch):
+    monkeypatch.setattr(bridge, '_today', lambda: dt.date(2026, 10, 27))
+    monkeypatch.setattr(bridge, 'list_dir', lambda *a, **k: [])
+
+    class _Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+    monkeypatch.setattr(bridge.socket, 'create_connection',
+                        lambda *a, **k: _Connection())
+
+    app = bridge.BridgeApp(_config(tmp_path), KEY, preflight_timeout=3)
+    result = app.candidates(GRG, DAY, '2026-10-22 15:34:44',
+                            '2026-10-22 15:35:21')
+    assert result['candidates'] == []
 
 
 class _UnixClient(http.client.HTTPConnection):
