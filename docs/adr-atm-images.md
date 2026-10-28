@@ -205,6 +205,10 @@ The agent's `Timeout` must be raised (30 recommended, 10 minimum) because
 every call starts PowerShell. The default 3 seconds is too short on a loaded
 ATM. Restrict TCP/10050 to the bridge host; the key is a file-read primitive.
 
+The script is PowerShell 2.0-compatible. It reads zip central directories and
+inflates method-8 entries with `System.IO.Compression.DeflateStream`, so it does
+not depend on `System.IO.Compression.ZipFile` or .NET 4.5 on the ATM.
+
 ### What the ATM script does and does not do
 
 It is read-only: no writes, extraction, deletion, rename, or execution. It:

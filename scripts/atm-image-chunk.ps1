@@ -1,4 +1,4 @@
-#Requires -Version 3.0
+#Requires -Version 2.0
 <#
 .SYNOPSIS
   Read-only image chunk reader for the Zabbix agent.
@@ -68,6 +68,15 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# PowerShell 2.0 has no $PSScriptRoot. Resolve the script folder once so the
+# roots file is always read from beside the script, whether the agent invokes
+# it by absolute path or the operator runs it from another directory.
+$Script:ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+if (-not $Script:ScriptRoot) {
+    $Script:ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+}
+if (-not $Script:ScriptRoot) { throw 'E_CONFIG' }
+
 $Script:MaxChunk = 32768
 $Script:MaxFileBytes = 33554432          # 32 MiB for a still image
 $Script:MaxVideoBytes = 8388608          # 8 MiB for a short MP4
@@ -82,6 +91,68 @@ $Script:EntryExtensions = @('.jpg', '.jpeg', '.png', '.mp4')
 
 function Fail([string]$Code) {
     throw $Code
+}
+
+# PowerShell 2.0 has no ConvertTo-Json.  The payloads here are small and
+# fixed-shape, so a tiny serializer is enough and keeps one output format on
+# every ATM regardless of PowerShell version.
+function ConvertTo-JsonString([string]$Value) {
+    $sb = New-Object System.Text.StringBuilder
+    [void]$sb.Append('"')
+    foreach ($ch in $Value.ToCharArray()) {
+        $code = [int]$ch
+        if ($code -eq 34) { [void]$sb.Append('\"') }
+        elseif ($code -eq 92) { [void]$sb.Append('\\') }
+        elseif ($code -eq 8) { [void]$sb.Append('\b') }
+        elseif ($code -eq 9) { [void]$sb.Append('\t') }
+        elseif ($code -eq 10) { [void]$sb.Append('\n') }
+        elseif ($code -eq 12) { [void]$sb.Append('\f') }
+        elseif ($code -eq 13) { [void]$sb.Append('\r') }
+        elseif ($code -lt 32) { [void]$sb.Append(('\u{0:x4}' -f $code)) }
+        else { [void]$sb.Append($ch) }
+    }
+    [void]$sb.Append('"')
+    return $sb.ToString()
+}
+
+function ConvertTo-JsonText {
+    param($Value)
+
+    if ($null -eq $Value) { return 'null' }
+    if ($Value -is [string]) { return (ConvertTo-JsonString $Value) }
+    if ($Value -is [bool]) {
+        if ($Value) { return 'true' }
+        return 'false'
+    }
+    if ($Value -is [int] -or $Value -is [long] -or
+        $Value -is [uint32] -or $Value -is [byte]) {
+        return [string]$Value
+    }
+    if ($Value -is [System.Collections.IDictionary]) {
+        $parts = @()
+        foreach ($key in $Value.Keys) {
+            $parts += ((ConvertTo-JsonString ([string]$key)) + ':' +
+                       (ConvertTo-JsonText $Value[$key]))
+        }
+        return '{' + ($parts -join ',') + '}'
+    }
+    if ($Value -is [System.Collections.IEnumerable]) {
+        $parts = @()
+        foreach ($item in $Value) {
+            $parts += (ConvertTo-JsonText $item)
+        }
+        return '[' + ($parts -join ',') + ']'
+    }
+
+    $parts = @()
+    foreach ($prop in $Value.PSObject.Properties) {
+        $memberType = [string]$prop.MemberType
+        if ($memberType -eq 'NoteProperty' -or $memberType -eq 'Property') {
+            $parts += ((ConvertTo-JsonString ([string]$prop.Name)) + ':' +
+                       (ConvertTo-JsonText $prop.Value))
+        }
+    }
+    return '{' + ($parts -join ',') + '}'
 }
 
 function ConvertFrom-Base64Url([string]$Value) {
@@ -100,7 +171,7 @@ function ConvertFrom-Base64Url([string]$Value) {
 }
 
 function Get-AllowedRoots {
-    $config = Join-Path $PSScriptRoot 'atm-image-roots.txt'
+    $config = Join-Path $Script:ScriptRoot 'atm-image-roots.txt'
     if (-not (Test-Path -LiteralPath $config -PathType Leaf)) {
         Fail 'E_CONFIG'
     }
@@ -311,24 +382,24 @@ function Get-DirectoryEntries([string]$FullPath, [long]$PageOffset,
     $entries = New-Object 'System.Collections.Generic.List[object]'
     for ($i = $start; $i -lt $end; $i++) {
         $file = $sorted[$i]
-        $entries.Add([pscustomobject]@{
+        $entries.Add((New-Object PSObject -Property @{
             index           = $i
             name            = $file.Name
             length          = [long]$file.Length
             last_write_time = $file.LastWriteTime.ToString('o')
-        })
+        }))
     }
 
     $next = $null
     if ($end -lt $total) { $next = $end }
 
-    $payload = [pscustomobject]@{
+    $payload = New-Object PSObject -Property @{
         total   = $total
         offset  = $start
         next    = $next
         entries = @($entries.ToArray())
     }
-    return (ConvertTo-Json -InputObject $payload -Compress -Depth 5)
+    return (ConvertTo-JsonText $payload)
 }
 
 function Get-MaxBytes([string]$FullPath) {
@@ -369,10 +440,10 @@ function Get-FileInfo([string]$FullPath) {
     }
 
     $hex = ([BitConverter]::ToString($hash) -replace '-', '').ToLowerInvariant()
-    return (ConvertTo-Json -InputObject ([pscustomobject]@{
+    return (ConvertTo-JsonText (New-Object PSObject -Property @{
         size   = [long]$size
         sha256 = $hex
-    }) -Compress)
+    }))
 }
 
 function Read-FileChunk([string]$FullPath, [long]$ChunkOffset, [int]$ChunkLength) {
@@ -414,6 +485,212 @@ function Read-FileChunk([string]$FullPath, [long]$ChunkOffset, [int]$ChunkLength
     }
 }
 
+function Get-ZipEntryTime([int]$Date, [int]$Time) {
+    $year = 1980 + [int](($Date -band 0xFE00) / 512)
+    $month = [int](($Date -band 0x01E0) / 32)
+    $day = $Date -band 0x001F
+    $hour = [int](($Time -band 0xF800) / 2048)
+    $minute = [int](($Time -band 0x07E0) / 32)
+    $second = ($Time -band 0x001F) * 2
+
+    if ($month -lt 1 -or $month -gt 12 -or
+        $day -lt 1 -or $day -gt 31 -or
+        $hour -gt 23 -or $minute -gt 59 -or $second -gt 59) {
+        return [datetime]::MinValue
+    }
+    try {
+        $value = Get-Date -Year $year -Month $month -Day $day `
+            -Hour $hour -Minute $minute -Second $second
+        return $value.AddTicks(-($value.Ticks % [TimeSpan]::TicksPerSecond))
+    } catch {
+        return [datetime]::MinValue
+    }
+}
+
+function Open-FallbackZipEntry($Entry) {
+    $fs = $null
+    try {
+        $fs = [IO.File]::Open(
+            $Entry.ZipPath,
+            [IO.FileMode]::Open,
+            [IO.FileAccess]::Read,
+            [IO.FileShare]::ReadWrite
+        )
+        [void]$fs.Seek([long]$Entry.LocalOffset, [IO.SeekOrigin]::Begin)
+        $br = New-Object System.IO.BinaryReader -ArgumentList $fs
+
+        if ($br.ReadUInt32() -ne [uint32]0x04034b50) { Fail 'E_ZIP' }
+        [void]$br.ReadUInt16()              # version needed
+        $flags = $br.ReadUInt16()
+        $method = $br.ReadUInt16()
+        [void]$br.ReadUInt16()              # time
+        [void]$br.ReadUInt16()              # date
+        [void]$br.ReadUInt32()              # crc
+        [void]$br.ReadUInt32()              # compressed size
+        [void]$br.ReadUInt32()              # uncompressed size
+        $nameLen = $br.ReadUInt16()
+        $extraLen = $br.ReadUInt16()
+
+        if (($flags -band 1) -ne 0) { Fail 'E_ZIP' }
+        if ([int]$method -ne [int]$Entry.Method) { Fail 'E_ZIP' }
+
+        $dataOffset = [long]$Entry.LocalOffset + 30 +
+                      [long]$nameLen + [long]$extraLen
+        if ($dataOffset -gt $fs.Length) { Fail 'E_ZIP' }
+
+        if ([int]$Entry.Method -eq 0) {
+            [void]$fs.Seek($dataOffset, [IO.SeekOrigin]::Begin)
+            return $fs
+        }
+
+        if ([int]$Entry.Method -eq 8) {
+            $compressed = [long]$Entry.CompressedLength
+            if ($compressed -le 0 -or
+                $compressed -gt ([long]$Script:MaxZipEntryBytes + 1048576)) {
+                Fail 'E_SIZE'
+            }
+            if ($dataOffset + $compressed -gt $fs.Length) { Fail 'E_ZIP' }
+
+            [void]$fs.Seek($dataOffset, [IO.SeekOrigin]::Begin)
+            $buffer = New-Object byte[] ([int]$compressed)
+            $read = 0
+            while ($read -lt $buffer.Length) {
+                $got = $fs.Read($buffer, $read, $buffer.Length - $read)
+                if ($got -le 0) { Fail 'E_ZIP' }
+                $read += $got
+            }
+            $fs.Dispose()
+            $fs = $null
+
+            $memory = New-Object System.IO.MemoryStream
+            $memory.Write($buffer, 0, $buffer.Length)
+            $memory.Position = 0
+            return (New-Object System.IO.Compression.DeflateStream `
+                -ArgumentList @(
+                    $memory,
+                    [System.IO.Compression.CompressionMode]::Decompress
+                ))
+        }
+
+        Fail 'E_ZIP'
+    } catch {
+        if ($fs) { $fs.Dispose() }
+        throw
+    }
+}
+
+function Open-ZipFallback([string]$FullPath) {
+    $fs = $null
+    try {
+        $fs = [IO.File]::Open(
+            $FullPath,
+            [IO.FileMode]::Open,
+            [IO.FileAccess]::Read,
+            [IO.FileShare]::ReadWrite
+        )
+        $length = [long]$fs.Length
+        if ($length -lt 22) { Fail 'E_ZIP' }
+
+        $tailLength = [int][Math]::Min($length, [long]65557)
+        $tail = New-Object byte[] $tailLength
+        [void]$fs.Seek($length - $tailLength, [IO.SeekOrigin]::Begin)
+        $tailRead = 0
+        while ($tailRead -lt $tailLength) {
+            $got = $fs.Read($tail, $tailRead, $tailLength - $tailRead)
+            if ($got -le 0) { Fail 'E_ZIP' }
+            $tailRead += $got
+        }
+
+        $eocd = -1
+        for ($i = $tailLength - 22; $i -ge 0; $i--) {
+            if ($tail[$i] -eq 0x50 -and $tail[$i + 1] -eq 0x4B -and
+                $tail[$i + 2] -eq 0x05 -and $tail[$i + 3] -eq 0x06) {
+                $eocd = $i
+                break
+            }
+        }
+        if ($eocd -lt 0) { Fail 'E_ZIP' }
+
+        $count = [int][BitConverter]::ToUInt16($tail, $eocd + 10)
+        $cdSize = [long][BitConverter]::ToUInt32($tail, $eocd + 12)
+        $cdOffset = [long][BitConverter]::ToUInt32($tail, $eocd + 16)
+
+        if ($count -eq 0xFFFF -or $cdSize -eq [long][uint32]::MaxValue -or
+            $cdOffset -eq [long][uint32]::MaxValue) {
+            Fail 'E_ZIP'   # ZIP64 is outside this reader
+        }
+        if ($cdOffset + $cdSize -gt $length) { Fail 'E_ZIP' }
+        if ($count -gt $Script:MaxZipEntries) { Fail 'E_ZIP_COUNT' }
+
+        [void]$fs.Seek($cdOffset, [IO.SeekOrigin]::Begin)
+        $br = New-Object System.IO.BinaryReader -ArgumentList $fs
+        $entries = New-Object 'System.Collections.Generic.List[object]'
+
+        for ($n = 0; $n -lt $count; $n++) {
+            if ($br.ReadUInt32() -ne [uint32]0x02014b50) { Fail 'E_ZIP' }
+            [void]$br.ReadUInt16()          # version made by
+            [void]$br.ReadUInt16()          # version needed
+            $flags = $br.ReadUInt16()
+            $method = $br.ReadUInt16()
+            $time = $br.ReadUInt16()
+            $date = $br.ReadUInt16()
+            $crc = $br.ReadUInt32()
+            $compressed = $br.ReadUInt32()
+            $uncompressed = $br.ReadUInt32()
+            $nameLen = $br.ReadUInt16()
+            $extraLen = $br.ReadUInt16()
+            $commentLen = $br.ReadUInt16()
+            [void]$br.ReadUInt16()          # disk start
+            [void]$br.ReadUInt16()          # internal attributes
+            [void]$br.ReadUInt32()          # external attributes
+            $localOffset = $br.ReadUInt32()
+
+            $nameBytes = $br.ReadBytes([int]$nameLen)
+            if ($extraLen -gt 0) { [void]$br.ReadBytes([int]$extraLen) }
+            if ($commentLen -gt 0) { [void]$br.ReadBytes([int]$commentLen) }
+
+            if (($flags -band 1) -ne 0) { Fail 'E_ZIP' }
+            if ($compressed -eq [uint32]::MaxValue -or
+                $uncompressed -eq [uint32]::MaxValue -or
+                $localOffset -eq [uint32]::MaxValue) {
+                Fail 'E_ZIP'   # ZIP64 is outside this reader
+            }
+
+            if (($flags -band 0x800) -ne 0) {
+                $name = [Text.Encoding]::UTF8.GetString($nameBytes)
+            } else {
+                $name = [Text.Encoding]::Default.GetString($nameBytes)
+            }
+            $entryTime = Get-ZipEntryTime -Date ([int]$date) -Time ([int]$time)
+
+            $entry = New-Object PSObject -Property @{
+                ZipPath          = $FullPath
+                FullName         = $name
+                Length           = [long]$uncompressed
+                CompressedLength = [long]$compressed
+                Crc32            = [long]$crc
+                Method           = [int]$method
+                LocalOffset      = [long]$localOffset
+                LastWriteTime    = $entryTime
+            }
+            $entry | Add-Member -MemberType ScriptMethod -Name Open -Value {
+                return (Open-FallbackZipEntry $this)
+            }
+            $entries.Add($entry)
+        }
+
+        $zip = New-Object PSObject -Property @{
+            Entries = @($entries.ToArray())
+        }
+        $zip | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+        return $zip
+    } catch {
+        throw
+    } finally {
+        if ($fs) { $fs.Dispose() }
+    }
+}
+
 function Open-Zip([string]$FullPath) {
     $zipItem = Get-ItemOrFail $FullPath 'E_ZIP'
     if ($zipItem.PSIsContainer) { Fail 'E_ZIP' }
@@ -421,18 +698,13 @@ function Open-Zip([string]$FullPath) {
         Fail 'E_SIZE'
     }
 
-    if (-not ('System.IO.Compression.ZipFile' -as [type])) {
-        try {
-            Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
-        } catch {
-            Fail 'E_ZIP'
-        }
-    }
     try {
-        $zip = [IO.Compression.ZipFile]::OpenRead($FullPath)
+        $zip = Open-ZipFallback $FullPath
     } catch [IO.IOException] {
         Fail 'E_ZIP_BUSY'
     } catch {
+        $code = [string]$_.Exception.Message
+        if ($code -match '^E_[A-Z_]+$') { Fail $code }
         Fail 'E_ZIP'
     }
 
@@ -447,8 +719,17 @@ function Get-ZipImageList($Zip) {
     $files = New-Object 'System.Collections.Generic.List[object]'
     foreach ($entry in $Zip.Entries) {
         if ($entry.FullName.EndsWith('/') -or $entry.FullName.EndsWith('\')) { continue }
-        $extension = [IO.Path]::GetExtension(
-            $entry.FullName.Replace('/', '\')).ToLowerInvariant()
+
+        # Do not hand an archive entry name to [IO.Path]: a name can contain
+        # characters Windows rejects in a filesystem path, and those names are
+        # still valid inside a zip.  The extension check only needs the leaf.
+        $leaf = $entry.FullName.Replace('\', '/')
+        $slash = $leaf.LastIndexOf('/')
+        if ($slash -ge 0) { $leaf = $leaf.Substring($slash + 1) }
+        $dot = $leaf.LastIndexOf('.')
+        if ($dot -lt 0) { continue }
+        $extension = $leaf.Substring($dot).ToLowerInvariant()
+
         if ($Script:EntryExtensions -notcontains $extension) { continue }
         $files.Add($entry)
     }
@@ -476,26 +757,26 @@ function Get-ZipEntries([string]$FullPath, [long]$PageOffset, [int]$PageLimit) {
             if ($entry.FullName.Length -gt $Script:MaxZipNameLength) {
                 Fail 'E_ENTRY'
             }
-            $entries.Add([pscustomobject]@{
+            $entries.Add((New-Object PSObject -Property @{
                 index             = $i
                 name              = $entry.FullName
                 length            = [long]$entry.Length
                 compressed_length = [long]$entry.CompressedLength
                 crc32             = [long]$entry.Crc32
                 last_write_time   = $entry.LastWriteTime.ToString('o')
-            })
+            }))
         }
 
         $next = $null
         if ($end -lt $total) { $next = $end }
 
-        $payload = [pscustomobject]@{
+        $payload = New-Object PSObject -Property @{
             total   = $total
             offset  = $start
             next    = $next
             entries = @($entries.ToArray())
         }
-        return (ConvertTo-Json -InputObject $payload -Compress -Depth 5)
+        return (ConvertTo-JsonText $payload)
     } finally {
         $zip.Dispose()
     }

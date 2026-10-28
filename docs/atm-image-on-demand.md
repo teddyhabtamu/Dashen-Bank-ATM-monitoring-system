@@ -52,7 +52,8 @@ On the ATM:
   already pulls EJ with `zabbix_get`; if that works, the agent's `Server=`
   ACL and the network path are already correct. If not, add the bridge host
   to `Server=` and restart the agent.
-- PowerShell 3.0+ and .NET 4.5+ (Windows 10 is fine).
+- PowerShell 2.0+ (the NCR test ATM runs 2.0; the chunk reader is
+  PS2-compatible and does not require .NET 4.5 or `System.IO.Compression.ZipFile`).
 - `C:\monitor\` exists or can be created by the deployment account.
 - McAfee/Solidifier or the bank's application control allows
   `C:\monitor\atm-image-chunk.ps1` to run. If the agent log shows a denial,
@@ -85,6 +86,11 @@ one-size-fits-all list:
   exists on the box.
 
 A missing root is harmless until a request uses it, but a broad root is not.
+
+The script runs on Windows PowerShell 2.0. It ships its own small ZIP reader
+using `System.IO.Compression.DeflateStream` (present since .NET 2.0), so it
+does **not** need `System.IO.Compression.ZipFile`, .NET 4.5, or a PowerShell
+upgrade on the ATM.
 
 GRG has no RDP or SMB exposure. Use the bank's endpoint/software distribution
 tool or the vendor's deployment channel. Do **not** open RDP, SMB, or WinRM

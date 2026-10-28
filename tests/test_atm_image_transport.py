@@ -620,6 +620,16 @@ def test_chunk_script_writes_one_clean_line():
     assert 'Write-Output' not in PS1
 
 
+def test_chunk_script_runs_on_powershell_2():
+    assert '#Requires -Version 2.0' in PS1
+    assert 'ConvertTo-Json -InputObject' not in PS1
+    assert 'Join-Path $PSScriptRoot' not in PS1
+    assert 'System.IO.Compression.ZipFile' not in PS1
+    assert ' -shr ' not in PS1
+    assert 'ConvertTo-JsonText' in PS1
+    assert 'DeflateStream' in PS1
+
+
 def test_chunk_script_has_no_write_or_execute_cmdlets():
     for cmdlet in ('Remove-Item', 'Set-Content', 'Out-File', 'New-Item',
                    'Move-Item', 'Copy-Item', 'Start-Process',
