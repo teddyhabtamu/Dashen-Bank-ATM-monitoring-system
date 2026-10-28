@@ -105,7 +105,7 @@ Get-FileHash C:\monitor\atm-image-chunk.ps1 -Algorithm SHA256
 # PowerShell 2.0 (Get-FileHash does not exist there)
 $sha = [Security.Cryptography.SHA256]::Create()
 $fs = [IO.File]::OpenRead('C:\monitor\atm-image-chunk.ps1')
-try { $hash = $sha.ComputeHash($fs) } finally { $fs.Dispose(); $sha.Dispose() }
+try { $hash = $sha.ComputeHash($fs) } finally { $fs.Close(); $sha.Clear() }
 ([BitConverter]::ToString($hash) -replace '-', '').ToLowerInvariant()
 ```
 
