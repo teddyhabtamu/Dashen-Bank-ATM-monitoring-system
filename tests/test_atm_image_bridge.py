@@ -79,6 +79,10 @@ def app(tmp_path, monkeypatch):
     return bridge.BridgeApp(_config(tmp_path), KEY, preflight_timeout=0)
 
 
+def test_config_defaults_to_a_three_second_preflight(tmp_path):
+    assert _config(tmp_path).preflight_timeout == 3
+
+
 def test_candidates_never_return_a_raw_name_or_path(app, monkeypatch):
     name = _grg_name()
     end_name = _grg_name('261022153521', 'CardReturned')

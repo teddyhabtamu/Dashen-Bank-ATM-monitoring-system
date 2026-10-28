@@ -889,6 +889,7 @@ def _check(config_path: str, key_path: str | None) -> int:
         'max_days_back': config.max_days_back,
         'timeout': config.timeout,
         'retries': config.retries,
+        'preflight_timeout': config.preflight_timeout,
         'atms': {
             atm_id: {
                 'host': atm.host,
