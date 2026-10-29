@@ -12,6 +12,7 @@ from db import get_db
 from audit import log_action
 from evidence import raw_info
 from state_summary import merge_live_in_service
+from helpers import STATE_ORDER
 from scheduler import REPORT_TYPE_LABELS
 from zabbix_modules.xfs_metrics import DISPENSE_UNITS, is_xfs, normalize
 
@@ -599,6 +600,9 @@ def atm_list():
     search = request.args.get('search', '').strip()
     vendor = request.args.get('vendor', '').strip()
     status = request.args.get('status', '').strip()
+    state_filter = request.args.get('state', '').strip().upper()
+    if state_filter and state_filter not in STATE_ORDER:
+        state_filter = ''
     region = request.args.get('region', '').strip()
     city = request.args.get('city', '').strip()
     per_page = 50
@@ -624,6 +628,13 @@ def atm_list():
         if status:
             clauses.append("l.status = %s")
             params.append(status)
+        if state_filter:
+            # The list is paginated, so filter on the persisted state (the
+            # system of record, refreshed by state_manager every 30s) rather
+            # than fetching live state for the whole fleet on every request.
+            # The visible rows still get the fresh live overlay below.
+            clauses.append("COALESCE(s.state, 'UNKNOWN') = %s")
+            params.append(state_filter)
         if region:
             clauses.append("l.region = %s")
             params.append(region)
@@ -632,16 +643,17 @@ def atm_list():
             params.append(city)
 
         where = "WHERE " + " AND ".join(clauses) if clauses else ""
+        from_sql = ("FROM atm_locations l "
+                    "LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id")
 
-        cur.execute(f"SELECT COUNT(*) FROM atm_locations l {where}", params)
+        cur.execute(f"SELECT COUNT(*) {from_sql} {where}", params)
         total = cur.fetchone()[0]
         total_pages = max(1, (total + per_page - 1) // per_page)
         page = min(page, total_pages)
 
         cur.execute(f"""SELECT l.*, s.state, s.last_seen AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa' as last_seen,
                                s.state_changed_at
-                        FROM atm_locations l
-                        LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id
+                        {from_sql}
                         {where}
                         ORDER BY l.atm_id LIMIT %s OFFSET %s""",
                     params + [per_page, (page - 1) * per_page])
@@ -699,6 +711,7 @@ def atm_list():
                            page=page, total_pages=total_pages,
                            search=search, fields=FIELDS, summary=summary,
                            f_vendor=vendor, f_status=status, f_region=region, f_city=city,
+                           f_state=state_filter,
                            filter_options={'regions': region_options, 'cities': city_options},
                            vendor_options=vendor_options)
 

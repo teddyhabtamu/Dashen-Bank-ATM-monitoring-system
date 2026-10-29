@@ -59,3 +59,19 @@ def test_unknown_values_fall_back_without_crashing():
     assert helpers.state_colour('SOME_NEW_STATE') == '#64748B'
     assert helpers.state_label(None) == 'Unknown'
     assert helpers.state_colour(None) == '#64748B'
+
+
+def test_atm_registration_offers_the_eight_state_filter():
+    html = (ROOT / 'report-portal' / 'templates' / 'admin_atm.html').read_text()
+    assert 'name="state"' in html
+    assert 'state_legend()' in html, (
+        'the filter options must come from the same eight-state map as the legend')
+    assert "'state'" in html, 'applyFilter must carry the state parameter'
+
+
+def test_atm_list_filters_on_the_persisted_state():
+    src = (ROOT / 'report-portal' / 'blueprints' / 'admin.py').read_text()
+    assert "COALESCE(s.state, 'UNKNOWN') = %s" in src, (
+        'the list is paginated; filtering must happen in SQL, not after the page slice')
+    assert 'f_state=state_filter' in src, (
+        'the selected state must survive pagination and the template')

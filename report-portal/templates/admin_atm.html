@@ -180,7 +180,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
                style="padding:7px 12px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;width:220px;transition:border-color .2s"
                onfocus="this.style.borderColor='#012169'" onblur="this.style.borderColor='#E4E9F1'">
         <button type="submit" class="btn btn-outline" style="padding:7px 12px" onclick="event.preventDefault(); applyFilter();"><i data-lucide="search" style="width:14px;height:14px"></i></button>
-        {% if search or f_vendor or f_status or f_region or f_city %}<a href="/atms" class="btn btn-outline clear-btn" style="padding:7px 12px">Clear</a>{% endif %}
+        {% if search or f_vendor or f_status or f_state or f_region or f_city %}<a href="/atms" class="btn btn-outline clear-btn" style="padding:7px 12px">Clear</a>{% endif %}
       </form>
       <a id="atmExportBtn" href="/atms/csv" class="btn btn-outline"><i data-lucide="download" style="width:14px;height:14px"></i> Export CSV</a>
       {% if session.get('role') in ('admin', 'operator') %}
@@ -202,6 +202,12 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
       <option value="active" {{ 'selected' if f_status=='active' }}>Active</option>
       <option value="inactive" {{ 'selected' if f_status=='inactive' }}>Inactive</option>
     </select>
+    <select name="state" onchange="applyFilter()" title="Filter by the persisted ATM state (updated every 30s). The LIVE badge on a row is a fresh check.">
+      <option value="">All States</option>
+      {% for item in state_legend() %}
+      <option value="{{ item.state }}" {{ 'selected' if f_state==item.state }}>{{ item.label }}</option>
+      {% endfor %}
+    </select>
     <select name="region" onchange="applyFilter()">
       <option value="">All Regions</option>
       {% for r in filter_options.regions %}<option value="{{ r }}" {{ 'selected' if f_region==r }}>{{ r }}</option>{% endfor %}
@@ -210,7 +216,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
       <option value="">All Cities</option>
       {% for c in filter_options.cities %}<option value="{{ c }}" {{ 'selected' if f_city==c }}>{{ c }}</option>{% endfor %}
     </select>
-    {% if search or f_vendor or f_status or f_region or f_city %}
+    {% if search or f_vendor or f_status or f_state or f_region or f_city %}
     <a href="/atms" class="btn btn-outline filter-reset" style="padding:7px 12px;font-size:12px"><i data-lucide="x" style="width:14px;height:14px"></i> Clear Filters</a>
     {% endif %}
   </div>
@@ -372,7 +378,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
     {% endif %}
   </div>
 
-  {% macro qs(page) %}/atms?page={{ page }}{% if search %}&search={{ search }}{% endif %}{% if f_vendor %}&vendor={{ f_vendor }}{% endif %}{% if f_status %}&status={{ f_status }}{% endif %}{% if f_region %}&region={{ f_region }}{% endif %}{% if f_city %}&city={{ f_city }}{% endif %}{% endmacro %}
+  {% macro qs(page) %}/atms?page={{ page }}{% if search %}&search={{ search }}{% endif %}{% if f_vendor %}&vendor={{ f_vendor }}{% endif %}{% if f_status %}&status={{ f_status }}{% endif %}{% if f_state %}&state={{ f_state }}{% endif %}{% if f_region %}&region={{ f_region }}{% endif %}{% if f_city %}&city={{ f_city }}{% endif %}{% endmacro %}
   {% if total_pages > 1 %}
   <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-top:1px solid #EEF1F6">
     <div style="font-size:12px;color:#64748B">Page {{ page }} of {{ total_pages }}</div>
@@ -548,7 +554,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
 
 function applyFilter(){
   var params = new URLSearchParams();
-  ['search','vendor','status','region','city'].forEach(function(k){
+  ['search','vendor','status','state','region','city'].forEach(function(k){
     var el = document.querySelector('[name="'+k+'"]');
     if(el && el.value) params.set(k, el.value);
   });
