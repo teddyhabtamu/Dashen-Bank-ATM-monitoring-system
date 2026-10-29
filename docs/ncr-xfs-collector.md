@@ -86,8 +86,13 @@ C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe `
   -File C:\monitor\ncr-xfs-probe.ps1
 ```
 
-It must print exactly one JSON line. PowerShell 2.0 has no
-`ConvertFrom-Json`, so check the expected fields with `-match`:
+It must print exactly one JSON line. The JSON carries `probe_version` and
+`probe_path`; if `probe_path` is not `C:\monitor\ncr-xfs-probe.ps1`, the
+UserParameter is pointing at a different file. Fix that before debugging
+anything else.
+
+PowerShell 2.0 has no `ConvertFrom-Json`, so check the expected fields with
+`-match`:
 
 ```powershell
 $out = & C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe `
@@ -128,6 +133,10 @@ zabbix_get -s <ATM_IP> -t 30 -k atm.xfs.cdm
 
 The value is the same single-line JSON. Until the template is linked, the
 master item is enough to prove collection.
+
+Check `probe_version` and `probe_path` first. If they are missing or show an
+old path, the ATM is running a stale copy and no amount of probe debugging
+will explain the result.
 
 ## Template
 

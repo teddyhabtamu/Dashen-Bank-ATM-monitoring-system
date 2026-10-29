@@ -82,3 +82,9 @@ def test_probe_reports_the_peripheral_candidates_it_tried():
     assert '$attempts' in PROBE
     assert 'candidates = $candidateNames' in PROBE
     assert 'attempts = $attempts' in PROBE
+
+
+def test_probe_identifies_its_version_and_path():
+    """A stale copy on the ATM is otherwise indistinguishable from a code bug."""
+    assert "probe_version = '2026-10-29.3'" in PROBE
+    assert 'probe_path = [string]$MyInvocation.MyCommand.Path' in PROBE
