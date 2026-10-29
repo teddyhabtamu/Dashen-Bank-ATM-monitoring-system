@@ -309,7 +309,7 @@ function Open-XfsService([string]$name, [IntPtr]$hApp, [uint32]$version, [uint32
   [uint16]$hService = 0
   $hr = -1
   try {
-    $hr = [NcrXfsCollector]::WFSOpen($name, $hApp, 'ZabbixATM', 0, $timeout,
+    $hr = [NcrXfsCollector]::WFSOpen($name, $hApp, 'ZabbixATMRecon', 0, $timeout,
       $version, [ref]$svcVer, [ref]$spiVer, [ref]$hService)
   } catch {
     return @{ hr = -2; hService = 0; svcVer = $svcVer; spiVer = $spiVer;
@@ -342,10 +342,10 @@ function Close-XfsService([uint16]$hService) {
 }
 
 # ── Cassette mapping ───────────────────────────────────────────────────────
-# Reuse the template's established cassette IDs where the NCR denomination
-# matches the GRG bay. Unknown denominations get CU<n> so the JSON remains
-# truthful instead of inventing a bay. Kept separate from the XFS calls so the
-# mapping is testable without msxfs.dll.
+# Map by physical unit number, not by ulValues. NCR reports the second
+# 100 ETB cassette as 101, which a denomination lookup would turn into a CU<n>
+# key the template and portal cannot chart. The denomination field keeps the
+# vendor's value (101) so the cash total is not silently rewritten.
 function New-CassetteSummary([object[]]$units) {
   $totalNotes = 0
   $totalAmount = 0
@@ -354,7 +354,6 @@ function New-CassetteSummary([object[]]$units) {
   $hasLow = 0
   $hasEmpty = 0
   $currency = 'ETB'
-  $hundreds = 0
   $cassettes = @{}
 
   foreach ($u in @($units | Sort-Object number)) {
@@ -381,15 +380,14 @@ function New-CassetteSummary([object[]]$units) {
       $id = 'Rej01'
     } elseif ($isRetract) {
       $id = 'Rct01'
-    } elseif ($u.values -eq 50) {
-      $id = '0050A'
-    } elseif ($u.values -eq 100) {
-      $hundreds++
-      if ($hundreds -eq 1) { $id = '0100A' } else { $id = '0100B' }
-    } elseif ($u.values -eq 200) {
-      $id = '0200A'
     } else {
-      $id = "CU$($u.number)"
+      switch ([int]$u.number) {
+        1 { $id = '0050A' }
+        2 { $id = '0100A' }
+        3 { $id = '0100B' }
+        4 { $id = '0200A' }
+        default { $id = "CU$($u.number)" }
+      }
     }
     if ($cassettes.ContainsKey($id)) { $id = "CU$($u.number)" }
 
@@ -494,12 +492,12 @@ if ($null -ne $startupVersion -and $hApp -ne [IntPtr]::Zero) {
 
   $best = $null
   foreach ($svc in $cdmCandidates) {
-    $open = Open-XfsService $svc.Name $hApp ([uint32]$startupVersion) 2000
+    $open = Open-XfsService $svc.Name $hApp ([uint32]$startupVersion) 3000
     if ($open.hr -ne 0) { continue }
 
     $status = $null
     $statusHr = -1
-    $statusInfo = Get-XfsInfo $open.hService 301 2000
+    $statusInfo = Get-XfsInfo $open.hService 301 3000
     if ($statusInfo.result -ne $null -and $statusInfo.result.hResult -eq 0 -and
         $statusInfo.result.lpBuffer -ne [IntPtr]::Zero) {
       $st = [Runtime.InteropServices.Marshal]::PtrToStructure(
@@ -619,7 +617,7 @@ if ($null -ne $startupVersion -and $hApp -ne [IntPtr]::Zero) {
 
     $fallback = $null
     foreach ($svc in $candidates) {
-      $open = Open-XfsService $svc.Name $hApp $version 1500
+      $open = Open-XfsService $svc.Name $hApp $version 3000
       if ($open.hr -ne 0) {
         if ($fallback -eq $null) {
           $fallback = @{ class = $class; service = $svc.Name;
@@ -630,7 +628,7 @@ if ($null -ne $startupVersion -and $hApp -ne [IntPtr]::Zero) {
       }
 
       $category = @{ IDC = 201; PTR = 101; PIN = 401; SIU = 801 }[$class]
-      $info = Get-XfsInfo $open.hService ([uint32]$category) 1500
+      $info = Get-XfsInfo $open.hService ([uint32]$category) 3000
       $payloadItem = @{ class = $class; service = $svc.Name;
                         open_hresult = $open.hr; status_hresult = $info.hr;
                         error = '' }

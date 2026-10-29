@@ -44,6 +44,12 @@ def test_probe_prefers_the_real_currency_dispenser():
 def test_probe_reuses_the_template_cassette_ids():
     for unit_id in ('0050A', '0100A', '0100B', '0200A', 'Rej01'):
         assert unit_id in PROBE
+    assert 'switch ([int]$u.number)' in PROBE, (
+        'NCR reports unit 3 as 101, so map by physical bay, not denomination')
+
+
+def test_probe_uses_the_application_id_that_was_proven_on_the_core():
+    assert "'ZabbixATMRecon'" in PROBE
 
 
 def test_probe_relaunches_32_bit_once():

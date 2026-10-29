@@ -162,12 +162,34 @@ def _xfs_rows(m):
         word, css = words.get(code, ('Unknown', 'unknown'))
         add(name, word, css)
 
+    def add_code_or_wmi(name, key, words, *wmi_parts):
+        """Use the XFS reading when it exists; otherwise WMI parts.
+
+        The ATM application can hold IDC/PIN open, so XFS returns -48 and the
+        dependent item is 255. The WMI parts are still valid evidence.
+        """
+        if key in m:
+            code = _xfs_num(m, key)
+            if code is not None:
+                word, css = words.get(code, ('Unknown', 'unknown'))
+                add(name, word, css)
+                return
+        for part in wmi_parts:
+            code = _wmi_code(m, f'atm.part.part_status[{part}]')
+            if code is not None:
+                word, css = PART_WORDS.get(code, ('Unknown', 'unknown'))
+                add(name, word, css)
+                return
+        add(name, 'Not queried', 'unknown')
+
     add_code('Cash dispenser', 'atm.xfs.cdm.device_status', XFS_DEVICE_WORDS)
     add_code('Safe door', 'atm.xfs.cdm.safe_door', XFS_DOOR_WORDS)
-    add_code('Card reader', 'atm.xfs.idc.device_status', XFS_DEVICE_WORDS)
+    add_code_or_wmi('Card reader', 'atm.xfs.idc.device_status', XFS_DEVICE_WORDS,
+                    'Card Reader', 'Smart Card Reader')
     add_code('Printer', 'atm.xfs.ptr.device_status', XFS_DEVICE_WORDS)
     add_code('Printer paper', 'atm.xfs.ptr.paper_status', XFS_PAPER_WORDS)
-    add_code('PIN pad', 'atm.xfs.pin.device_status', XFS_DEVICE_WORDS)
+    add_code_or_wmi('PIN pad', 'atm.xfs.pin.device_status', XFS_DEVICE_WORDS,
+                    'PinPad')
     add_code('Cabinet door', 'atm.xfs.siu.cabinet_door', XFS_DOOR_WORDS)
     add_code('Supervisor mode', 'atm.xfs.siu.supervisor_mode',
              {0: ('Normal run', 'ok'), 1: ('Supervisor', 'warn')})
@@ -247,6 +269,11 @@ def _xfs_hardware(m):
         cash = _worst(cash, 'error')
 
     card = _xfs_device_chip(m, 'atm.xfs.idc.device_status')
+    if card == 'unknown':
+        # The ATM application can hold the IDC/PIN services open; XFS then
+        # returns -48 and no status. WMI is still valid evidence for those
+        # two devices, so do not throw it away.
+        card = _wmi_chip(m, 'Card Reader', 'Smart Card Reader')
     if _xfs_num(m, 'atm.xfs.idc.media_status') == 3:
         card = _worst(card, 'error')
     if _xfs_num(m, 'atm.xfs.idc.retain_bin') == 2:
@@ -254,7 +281,12 @@ def _xfs_hardware(m):
 
     printer = _worst(_xfs_device_chip(m, 'atm.xfs.ptr.device_status'),
                      _xfs_paper_chip(m))
+    if printer == 'unknown':
+        printer = _worst(_wmi_chip(m, 'Print Head', 'Paper'),
+                         _wmi_dev(m, 'RPNT-01-UsbThermal'))
     pin = _xfs_device_chip(m, 'atm.xfs.pin.device_status')
+    if pin == 'unknown':
+        pin = _wmi_chip(m, 'PinPad')
 
     rejects = _xfs_num(m, 'atm.xfs.cdm.reject_count')
     reject = 'unknown' if rejects is None else ('warn' if rejects >= 250 else 'ok')

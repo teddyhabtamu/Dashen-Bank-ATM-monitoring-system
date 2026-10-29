@@ -109,6 +109,42 @@ def test_wmi_branch_is_used_when_parts_data_exists():
     assert got['Card reader'] == 'ok' and got['Network'] == 'unknown'
 
 
+def test_xfs_device_rows_fall_back_to_wmi_for_card_and_pin():
+    m = {'atm.xfs.cdm': '{}',
+         'atm.xfs.idc.device_status': '255',
+         'atm.xfs.pin.device_status': '255',
+         'atm.part.part_status[Card Reader]': 0,
+         'atm.part.part_status[PinPad]': 0}
+    rows = {r['name']: r['word'] for r in build_device_rows(m)}
+    assert rows['Card reader'] == 'OK'
+    assert rows['PIN pad'] == 'OK'
+
+
+def test_xfs_missing_card_and_pin_fall_back_to_wmi():
+    """NCR can hold IDC/PIN open, so XFS returns -48 and no status. The WMI
+    parts are still valid evidence for those two devices."""
+    m = {'atm.xfs.cdm': '{}',
+         'atm.xfs.idc.device_status': '255',
+         'atm.xfs.pin.device_status': '255',
+         'atm.part.part_status[Card Reader]': 0,
+         'atm.part.part_status[PinPad]': 0}
+    got, source = chips(m)
+    assert source == 'XFS'
+    assert got['Card reader'] == 'ok'
+    assert got['PIN pad'] == 'ok'
+
+
+def test_xfs_fault_still_wins_over_wmi():
+    m = {'atm.xfs.cdm': '{}',
+         'atm.xfs.idc.device_status': '4',
+         'atm.xfs.pin.device_status': '4',
+         'atm.part.part_status[Card Reader]': 0,
+         'atm.part.part_status[PinPad]': 0}
+    got, _ = chips(m)
+    assert got['Card reader'] == 'error'
+    assert got['PIN pad'] == 'error'
+
+
 def test_wmi_missing_part_is_grey_never_red():
     m = {'atm.parts': '{}', 'atm.part.part_status[Card Reader]': 2}
     got, source = chips(m)

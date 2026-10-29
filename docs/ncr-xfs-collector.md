@@ -80,7 +80,7 @@ $out = & C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe `
 $out
 $out -match '"service":"CurrencyDispenser1"'
 $out -match '"total_notes":31'
-$out -match '"total_amount":2500'
+$out -match '"total_amount":2509'
 $out -match '"0050A"'
 $out -match '"Rej01"'
 ```
@@ -91,14 +91,16 @@ On the test core the expected cash mapping is:
 |---|---|---|---|
 | 1 | ETB 50 | 12 | `0050A` |
 | 2 | ETB 100 | 10 | `0100A` |
-| 3 | ETB 100 | 9 | `0100B` |
+| 3 | ETB 100 (vendor reports 101) | 9 | `0100B` |
 | 4 | ETB 200 | 0 | `0200A` |
 | 5 | reject | 3 | `Rej01` |
 
 The counts change as the ATM dispenses; the structure and service name are
-the stable checks.
+the stable checks. NCR reports unit 3 as `ulValues=101`; the probe maps it to
+`0100B` by physical unit number, not by denomination, and keeps the vendor's
+101 in the cash value.
 
-The test core had 2,500 ETB across 31 notes, so the template's
+The test core had 2,509 ETB across 31 notes, so the template's
 `< 50,000 ETB` low-cash trigger and the `0200A` cassette-empty trigger will
 fire during the pilot. Both are correct readings, not collector faults.
 
@@ -146,10 +148,19 @@ XFS readings have been compared with the WMI readings for a full shift.
   array before they are enabled. Until then they are `255` (not queried).
 - **Offline:** XFS has no network-link signal. The existing reachability
   layer still decides Offline vs Agent Disconnected.
-- **PTR status:** both receipt printers report `device=4` (hardware error) on
-  the test core. The probe includes the first eight PTR status words as
-  `ptr.raw`. Compare with WMI before treating this as a real printer fault;
-  if WMI says OK, the NCR PTR status prefix needs investigation.
+- **Cassette status codes:** NCR's `usStatus` values do not follow the GRG
+  value map (unit 2 reports 10 notes with status 6, which the template labels
+  "Missing"). Use the counts; the portal and cash forecast use counts.
+- **PTR status:** both receipt printers report `device=4` (hardware error) and
+  `paper=2` (paper out) on the test core. The probe includes the first eight
+  PTR status words as `ptr.raw`. Compare with WMI before treating this as a
+  real printer fault; if WMI says OK, the NCR PTR status prefix needs
+  investigation.
+- **IDC/PIN `-48`:** `WFS_ERR_INVALID_SERVPROV` means the service provider is
+  unavailable, often because the ATM application holds the card reader or PIN
+  pad open. The probe reports `open_hresult=-48` and no `device`; the portal
+  falls back to the WMI card-reader/PIN rows for those two chips. The CDM and
+  SIU data are unaffected.
 - **Cassette IDs:** the probe reuses the template's GRG-style IDs where the
   denomination matches. A site with different denominations gets `CU<n>`
   keys, which the existing template does not chart. A neutral NCR template
