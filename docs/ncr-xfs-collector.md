@@ -98,6 +98,10 @@ On the test core the expected cash mapping is:
 The counts change as the ATM dispenses; the structure and service name are
 the stable checks.
 
+The test core had 2,500 ETB across 31 notes, so the template's
+`< 50,000 ETB` low-cash trigger and the `0200A` cassette-empty trigger will
+fire during the pilot. Both are correct readings, not collector faults.
+
 ## Verify from the Zabbix server
 
 ```bash
