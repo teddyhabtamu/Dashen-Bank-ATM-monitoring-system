@@ -129,24 +129,35 @@ def normalize(metrics):
     ptr_paper = _int(out.get('atm.xfs.ptr.paper_status'), STATUS_SENTINELS)
     if ptr_device is not None:
         out['atm.printer.receipt'] = 1 if _device_online(ptr_device) else 2
-    if ptr_paper is not None:
-        out['atm.printer.paper'] = 1 if ptr_paper in (0, 1) else 2
+    if ptr_paper == 2:
+        out['atm.printer.paper'] = 2
+    elif ptr_paper in (0, 1):
+        out['atm.printer.paper'] = 1
 
     pin_device = _int(out.get('atm.xfs.pin.device_status'), STATUS_SENTINELS)
     if pin_device is not None:
         out['atm.hw.pinpad'] = 1 if _device_online(pin_device) else 2
 
+    # Door codes 1 (not supported) and 5 (unknown) must stay unmapped. The
+    # old "anything not closed is open" rule turned NCR's unsupported door
+    # into a security alarm.
     safe_door = _int(out.get('atm.xfs.cdm.safe_door'), STATUS_SENTINELS)
-    if safe_door is not None:
-        out['atm.security.safedoor'] = 0 if safe_door in (3, 4) else 1
+    if safe_door == 2:
+        out['atm.security.safedoor'] = 1
+    elif safe_door in (3, 4):
+        out['atm.security.safedoor'] = 0
 
     cabinet_door = _int(out.get('atm.xfs.siu.cabinet_door'), STATUS_SENTINELS)
-    if cabinet_door is not None:
-        out['atm.security.cabdoor'] = 0 if cabinet_door in (3, 4) else 1
+    if cabinet_door == 2:
+        out['atm.security.cabdoor'] = 1
+    elif cabinet_door in (3, 4):
+        out['atm.security.cabdoor'] = 0
 
     siu_safe_door = _int(out.get('atm.xfs.siu.safe_door'), STATUS_SENTINELS)
-    if siu_safe_door is not None:
-        out['atm.security.safedoor'] = 0 if siu_safe_door in (3, 4) else 1
+    if siu_safe_door == 2:
+        out['atm.security.safedoor'] = 1
+    elif siu_safe_door in (3, 4):
+        out['atm.security.safedoor'] = 0
 
     supervisor = _int(out.get('atm.xfs.siu.supervisor_mode'), STATUS_SENTINELS)
     if supervisor == 1:

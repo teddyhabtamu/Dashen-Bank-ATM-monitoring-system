@@ -126,6 +126,30 @@ def test_card_jam_and_paper_out_are_visible_when_present():
     assert got['Printer'] == 'error'
 
 
+def test_unsupported_door_and_paper_codes_are_not_alarms():
+    """NCR returns 1 for a door it does not support and 4 for paper status it
+    cannot report. Treating either as a fault would make a healthy ATM red."""
+    m = live_xfs(**{
+        'atm.xfs.cdm.safe_door': '1',
+        'atm.xfs.siu.cabinet_door': '1',
+        'atm.xfs.siu.safe_door': '1',
+        'atm.xfs.ptr.device_status': '0',
+        'atm.xfs.ptr.paper_status': '4',
+    })
+    out = normalize(m)
+    assert 'atm.security.safedoor' not in out
+    assert 'atm.security.cabdoor' not in out
+    assert 'atm.printer.paper' not in out
+    assert interpret_state('GRG', m) == 'IN_SERVICE'
+
+
+def test_open_safe_door_is_reported_as_open():
+    out = normalize(live_xfs(**{'atm.xfs.cdm.safe_door': '2'}))
+    assert out['atm.security.safedoor'] == 1
+    out = normalize(live_xfs(**{'atm.xfs.cdm.safe_door': '4'}))
+    assert out['atm.security.safedoor'] == 0
+
+
 def test_device_rows_show_counts_and_not_queried_peripherals():
     rows = build_device_rows(normalize(live_xfs()))
     by_name = {r['name']: r for r in rows}

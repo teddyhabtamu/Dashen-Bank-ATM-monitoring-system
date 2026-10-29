@@ -26,8 +26,10 @@ The test core is **32-bit Windows** (`OS arch: x86`, PowerShell 2.0). The
 - 5 cash units: ETB 50 × 12, ETB 100 × 10, ETB 100 × 9, ETB 200 × 0,
   and a reject cassette with 3 notes
 - IDC, PTR, PIN and SIU also opened and returned status
-- `msxfs.dll` is **not** in `System32` or `SysWOW64`; the loader resolves it
-  from the NCR install directory (the updated run prints the loaded path)
+- `msxfs.dll` is **not** in `System32` or `SysWOW64`; it is loaded from
+  `C:\Program Files\Common Files\NCR\msxfs.dll` through the system `PATH`
+- the same run under `LocalSystem` (the Zabbix agent account) also reached
+  `WFSStartUp -> 0`, opened `CurrencyDispenser1` and returned five cash units
 - `BillDispenser1/2`, `CoinDispenser1`, `CurrencyDispenser2` and
   `MediaDispenser2` return `303 -> -13`; they are subordinate or alias
   logical services, not the primary dispenser. `CRDCardUnit1`,
@@ -164,9 +166,10 @@ The full report file from each run. In particular:
 - the `cash-unit list` and `unit[n]` lines
 - the `PATH`/loaded-module line for `msxfs.dll`
 
-The 2026-10-29 run met the CDM bar under `ssdbsup`: `WFSOpen -> 0`,
-`WFSGetInfo 303 -> 0`, five cash units. The remaining gate is the same result
-under `LocalSystem`, the account the Zabbix agent uses.
+The 2026-10-29 run met the CDM bar under both `ssdbsup` and
+`nt authority\system`: `WFSOpen -> 0`, `WFSGetInfo 303 -> 0`, five cash units.
+The collector may now run inside the Zabbix agent service; see
+`docs/ncr-xfs-collector.md`.
 
 ## Version warning
 
