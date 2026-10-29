@@ -212,6 +212,15 @@ foreach ($dll in @(
     Write-Output "MISSING $dll"
   }
 }
+# WFSStartUp can load msxfs.dll from the NCR install directory through
+# PATH even when it is absent from System32/SysWOW64. The collector must
+# load the same file, so record where the loader actually found it.
+$onPath = @(& where.exe msxfs.dll 2>$null)
+if ($onPath.Count -gt 0) {
+  foreach ($p in $onPath) { Write-Output "PATH $p" }
+} else {
+  Write-Output "msxfs.dll is not on PATH; the loaded-module line after WFSStartUp is authoritative."
+}
 Write-Output ""
 
 # ── XFS service providers ──────────────────────────────────────────────────
@@ -257,7 +266,9 @@ function Get-XfsLogicalServices {
       $class = [string]$p.Class
       $type = [string]$p.Type
       $provider = [string]$p.Provider
-      $key = "$name|$class|$provider|$root"
+      # The same logical service is mirrored in .DEFAULT and S-1-5-18.
+      # One probe per name/class/provider is enough; the first hive wins.
+      $key = "$name|$class|$provider"
       if (-not $seen.ContainsKey($key)) {
         $seen[$key] = $true
         New-Object PSObject -Property @{
@@ -395,6 +406,20 @@ if ($null -eq $startupVersion) {
   Stop-ReconWatchdog
   try { Stop-Transcript | Out-Null } catch {}
   exit 1
+}
+Write-Output ""
+
+# Which msxfs.dll did the loader actually use? System32/SysWOW64 may both
+# be empty while PATH resolves to the NCR install directory.
+Write-Step "Loaded msxfs module(s):"
+try {
+  foreach ($m in ([System.Diagnostics.Process]::GetCurrentProcess()).Modules) {
+    if ($m.ModuleName -match '(?i)^msxfs\.dll$') {
+      Write-Output ("  {0}  size={1}" -f $m.FileName, $m.ModuleMemorySize)
+    }
+  }
+} catch {
+  Write-Output ("  module list unavailable: {0}" -f $_.Exception.Message)
 }
 Write-Output ""
 
