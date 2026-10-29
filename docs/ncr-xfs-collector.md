@@ -70,19 +70,19 @@ C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe `
   -File C:\monitor\ncr-xfs-probe.ps1
 ```
 
-It must print exactly one JSON line. Parse it:
+It must print exactly one JSON line. PowerShell 2.0 has no
+`ConvertFrom-Json`, so check the expected fields with `-match`:
 
 ```powershell
-$p = & C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe `
-  -NoProfile -ExecutionPolicy Bypass -File C:\monitor\ncr-xfs-probe.ps1 |
-  ConvertFrom-Json
+$out = & C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe `
+  -NoProfile -ExecutionPolicy Bypass -File C:\monitor\ncr-xfs-probe.ps1
 
-$p.cdm.service                 # CurrencyDispenser1
-$p.cdm.status.device           # 0 = online
-$p.cdm.summary.total_notes     # 31 on the test core
-$p.cdm.summary.total_amount    # 2500 ETB on the test core
-$p.cdm.cassettes.Keys          # 0050A 0100A 0100B 0200A Rej01
-$p.siu.supervisor_switch       # 0 = normal run
+$out
+$out -match '"service":"CurrencyDispenser1"'
+$out -match '"total_notes":31'
+$out -match '"total_amount":2500'
+$out -match '"0050A"'
+$out -match '"Rej01"'
 ```
 
 On the test core the expected cash mapping is:
@@ -94,6 +94,9 @@ On the test core the expected cash mapping is:
 | 3 | ETB 100 | 9 | `0100B` |
 | 4 | ETB 200 | 0 | `0200A` |
 | 5 | reject | 3 | `Rej01` |
+
+The counts change as the ATM dispenses; the structure and service name are
+the stable checks.
 
 ## Verify from the Zabbix server
 
