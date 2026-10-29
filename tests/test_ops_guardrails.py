@@ -279,6 +279,15 @@ def test_dockerfile_installs_the_lock_when_present():
         'the Dockerfile must apply requirements.lock when it exists')
 
 
+def test_dockerfile_copies_requirements_before_installing_them():
+    """A clean build has an empty /app. Running pip before COPY used to fail
+    with 'No such file or directory: requirements.txt' and leave the old
+    container running."""
+    dockerfile = (REPO / 'report-portal' / 'Dockerfile').read_text()
+    assert dockerfile.index('COPY requirements.txt') < dockerfile.index(
+        'pip install --no-cache-dir -r requirements.txt')
+
+
 def test_lock_capture_script_resolves_digests_not_tags():
     """A tag can be repointed; a digest cannot. Capturing tags would reproduce
     the original problem."""

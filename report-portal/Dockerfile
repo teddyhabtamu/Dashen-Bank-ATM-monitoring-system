@@ -2,11 +2,17 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Dependencies first. The previous order ran pip before COPY, so a clean
+# build failed with "No such file or directory: requirements.txt". Copying
+# only the requirements keeps the pip layer cached across code-only builds.
+COPY requirements.txt ./
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir -r requirements.txt \
-    && if [ -f requirements.lock ]; then pip install --no-cache-dir -r requirements.lock; fi
+    && pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+# A committed lock is optional; apply it after the source copy so the
+# image is reproducible whenever requirements.lock is present.
+RUN if [ -f requirements.lock ]; then pip install --no-cache-dir -r requirements.lock; fi
 
 EXPOSE 8888
 
