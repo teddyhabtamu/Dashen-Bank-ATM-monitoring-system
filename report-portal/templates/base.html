@@ -56,6 +56,12 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .nav-item.active svg{color:#fff}
 .nav-item span{opacity:1;transition:opacity .2s ease .15s}
 .nav-item .ext{width:12px;height:12px;margin-left:auto;color:rgba(255,255,255,.28)}
+.nav-badge{display:inline-block;margin-left:auto;flex-shrink:0;min-width:18px;height:18px;padding:0 5px;
+  border-radius:999px;background:#DC2626;color:#fff;font-size:10px;font-weight:800;
+  line-height:18px;text-align:center;font-style:normal}
+.sidebar.collapsed .nav-badge{position:absolute;top:3px;right:3px;margin:0;
+  min-width:9px;width:9px;height:9px;padding:0;font-size:0;line-height:0;
+  border:2px solid #012169;box-sizing:content-box}
 .sidebar.collapsed .nav-item .ext{display:none}
 .nav-external{margin-top:4px;padding-top:5px;border-top:1px solid rgba(255,255,255,.07)}
 .sidebar.collapsed .nav-item span{opacity:0;width:0;margin:0;padding:0;pointer-events:none}
@@ -496,6 +502,7 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
            title="Incident Management — GLPI tickets">
           <i data-lucide="ticket"></i>
           <span>Incident Management</span>
+          <b class="nav-badge" id="incidentNavBadge" hidden title=""></b>
         </a>
         <a href="/cash" class="nav-item {% if request.path.startswith('/cash') %}active{% endif %}"
            title="Cash Loads — cassette levels and replenishment evidence">
@@ -937,5 +944,39 @@ initCustomSelects();
 </div>
 
 {% block extra_scripts %}{% endblock %}
+{% if session.get('username') %}
+<script>
+/* Sidebar notification badge: same unseen-change definition as the New
+   tags on the ticket list. Polling (not page-render) keeps every other
+   page fast even when GLPI is slow or unreachable. */
+(function(){
+  var badge = document.getElementById('incidentNavBadge');
+  if(!badge) return;
+  var baseTitle = document.title.replace(/^\(\d+\+?\)\s*/, '');
+  function paint(n){
+    if(typeof n !== 'number' || !isFinite(n)) return;
+    n = Math.max(0, Math.round(n));
+    badge.textContent = n > 99 ? '99+' : String(n);
+    badge.hidden = (n === 0);
+    badge.title = n
+      ? n + ' ticket' + (n === 1 ? '' : 's') + ' changed since you last opened them'
+      : '';
+    document.title = n ? '(' + (n > 99 ? '99+' : n) + ') ' + baseTitle : baseTitle;
+  }
+  function refresh(){
+    fetch('/incidents/unread-count', {
+      credentials: 'same-origin',
+      headers: {'Accept': 'application/json'}
+    }).then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if(d && typeof d.count === 'number') paint(d.count); })
+      .catch(function(){});
+  }
+  refresh();
+  setInterval(function(){ if(!document.hidden) refresh(); }, 60000);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) refresh(); });
+  window.addEventListener('focus', refresh);
+})();
+</script>
+{% endif %}
 </body>
 </html>

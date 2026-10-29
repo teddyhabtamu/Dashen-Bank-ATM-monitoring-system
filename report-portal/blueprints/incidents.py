@@ -14,7 +14,8 @@ import os
 import re
 import time
 from datetime import datetime, timezone, timedelta
-from flask import Blueprint, render_template, request, jsonify, session, Response
+from flask import (Blueprint, render_template, request, jsonify, session,
+                   Response, send_file)
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from audit import log_action
 from db import get_db
@@ -28,6 +29,13 @@ GLPI_URL = os.environ.get('GLPI_UI_URL', 'http://localhost:8082').rstrip('/')
 GLPI_APP_TOKEN = os.environ.get('GLPI_APP_TOKEN', '')
 GLPI_USER = os.environ.get('GLPI_USER', 'glpi')
 GLPI_API_PASSWORD = os.environ.get('GLPI_API_PASSWORD', '')
+# GLPI stores user photos as files under files/_pictures (the `picture`
+# field on User is a relative filename). The web endpoint that serves
+# them requires a browser GLPI session, so the portal reads the same
+# volume read-only and proxies the image instead. Empty/unmounted means
+# avatars gracefully fall back to initials.
+GLPI_PICTURE_DIR = os.environ.get(
+    'GLPI_PICTURE_DIR', '/var/www/html/glpi/files/_pictures')
 
 STATUS_NAMES = {
     1: 'New', 2: 'Processing (assigned)', 3: 'Processing (planned)',
@@ -48,6 +56,16 @@ CACHE_TTL = 60.0
 # per-message documents). Shared across users — entries hold no per-user
 # state (unread/seen is computed separately per request).
 _detail_cache = {}
+# uid -> (picture filename, fetched_at). User pictures change rarely; one
+# User call per avatar per five minutes is enough, and every contact-card
+# fetch refreshes this for free.
+_avatar_cache = {}
+_AVATAR_TTL = 300.0
+# username -> (computed_at, unread_count). The sidebar polls this endpoint;
+# a 20s cache stops three gunicorn workers and several tabs from repeating
+# the same per-user seen-map query on every poll.
+_unread_cache = {}
+_UNREAD_TTL = 20.0
 
 
 def _ensure_seen_table():
@@ -94,8 +112,39 @@ def _mark_seen(username, ticket_id):
                         (int(ticket_id), username))
             conn.commit()
             cur.close()
+        _unread_cache.pop(username, None)
     except Exception as e:
         logger.warning('ticket_seen write failed (non-fatal): %s', e)
+
+
+def _unread_ids(username, raw_tickets):
+    """Ticket ids that changed after this user last opened them.
+
+    One definition for both the list's New tags and the sidebar count, so
+    the number on the menu always matches the rows that carry the badge.
+    Never raises.
+    """
+    rows = []
+    for t in raw_tickets or []:
+        try:
+            tid = int(t.get('id'))
+        except (TypeError, ValueError, AttributeError):
+            continue
+        rows.append((tid, _parse_utc(t.get('date_mod'))))
+    if not rows:
+        return set()
+    seen = _seen_map(username, [tid for tid, _ in rows])
+    out = set()
+    for tid, mod in rows:
+        if mod is None:
+            continue
+        if tid not in seen:
+            out.add(tid)
+            continue
+        last = _as_utc(seen[tid])
+        if last is not None and mod > last:
+            out.add(tid)
+    return out
 
 
 def _parse_utc(ts):
@@ -189,6 +238,7 @@ def _tickets(token):
 
 def _invalidate_cache():
     _cache.update(ts=0.0, tickets=None)
+    _unread_cache.clear()
 
 
 def _invalidate_detail(ticket_id):
@@ -500,8 +550,64 @@ def _ticket_item_ids(token, ticket_id):
     return ids
 
 
+_PICTURE_EXTS = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')
+
+
+def _remember_picture(uid, picture):
+    """Cache a picture filename seen on a User payload (cheap freshness)."""
+    try:
+        _avatar_cache[int(uid)] = (str(picture or '').strip(), time.time())
+    except (TypeError, ValueError):
+        pass
+
+
+def _user_picture(uid):
+    """Current GLPI picture filename for a user ('' when none)."""
+    try:
+        uid = int(uid)
+    except (TypeError, ValueError):
+        return ''
+    hit = _avatar_cache.get(uid)
+    now = time.time()
+    if hit and now - hit[1] < _AVATAR_TTL:
+        return hit[0]
+    token = _session()
+    if not token:
+        return hit[0] if hit else ''
+    try:
+        ok, data = _api(token, 'GET', f'User/{uid}', None)
+        if ok and isinstance(data, dict):
+            picture = (data.get('picture') or '').strip()
+            _avatar_cache[uid] = (picture, now)
+            return picture
+    except Exception as e:
+        logger.warning('GLPI user picture lookup failed for %s: %s', uid, e)
+    finally:
+        _close(token)
+    return hit[0] if hit else ''
+
+
+def _avatar_path(picture):
+    """Resolve a GLPI picture filename inside the mounted picture dir.
+
+    Returns None for traversal attempts, non-image extensions and files
+    that are not present (e.g. the volume is not mounted in a dev setup).
+    """
+    name = str(picture or '').strip().replace('\\', '/')
+    if (not name or name.startswith('/')
+            or any(part in ('', '.', '..') for part in name.split('/'))):
+        return None
+    base = os.path.realpath(GLPI_PICTURE_DIR)
+    path = os.path.realpath(os.path.join(base, name))
+    if not path.startswith(base + os.sep):
+        return None
+    if os.path.splitext(path)[1].lower() not in _PICTURE_EXTS:
+        return None
+    return path if os.path.isfile(path) else None
+
+
 def _user_contact(token, users_id, cache):
-    """Contact card for the ticket thread popover: name + email + phones.
+    """Contact card for the ticket thread popover: name + email + phones + picture.
 
     Cached per request in `cache` (keyed by user id). Anything missing
     stays '' — the template hides empty rows instead of showing blanks.
@@ -510,10 +616,11 @@ def _user_contact(token, users_id, cache):
     try:
         uid = int(users_id or 0)
     except (TypeError, ValueError):
-        return {'name': '—', 'email': '', 'phone': '', 'mobile': ''}
+        return {'name': '—', 'email': '', 'phone': '', 'mobile': '', 'picture': ''}
     if uid in cache:
         return cache[uid]
-    card = {'name': f'#{uid}', 'email': '', 'phone': '', 'mobile': ''}
+    card = {'name': f'#{uid}', 'email': '', 'phone': '',
+            'mobile': '', 'picture': ''}
     try:
         ok, data = _api(token, 'GET', f'User/{uid}', None)
         if ok and isinstance(data, dict):
@@ -526,7 +633,9 @@ def _user_contact(token, users_id, cache):
                 'email': _user_default_email(token, uid),
                 'phone': (data.get('phone') or '').strip(),
                 'mobile': (data.get('mobile') or '').strip(),
+                'picture': (data.get('picture') or '').strip(),
             }
+            _remember_picture(uid, card['picture'])
     except Exception:
         pass
     cache[uid] = card
@@ -561,9 +670,35 @@ def _user_label(token, users_id, cache):
         name = ' '.join(p for p in ((data.get('realname') or '').strip(),
                                     (data.get('firstname') or '').strip()) if p)
         cache[users_id] = name or (data.get('name') or f'#{users_id}')
+        _remember_picture(users_id, data.get('picture'))
     else:
         cache[users_id] = f'#{users_id}'
     return cache[users_id]
+
+
+def _user_brief(token, users_id, cache):
+    """{name, picture} for an assignee chip — one User call, cached.
+
+    Separate from _user_label because the list needs the picture too,
+    and from _user_contact because email/phone sub-item calls would be
+    wasted on every ticket row.
+    """
+    try:
+        uid = int(users_id or 0)
+    except (TypeError, ValueError):
+        return {'name': '—', 'picture': ''}
+    if uid in cache:
+        return cache[uid]
+    info = {'name': f'#{uid}', 'picture': ''}
+    ok, data = _api(token, 'GET', f'User/{uid}', None)
+    if ok and isinstance(data, dict):
+        name = ' '.join(p for p in ((data.get('realname') or '').strip(),
+                                    (data.get('firstname') or '').strip()) if p)
+        info = {'name': name or (data.get('name') or f'#{uid}'),
+                'picture': (data.get('picture') or '').strip()}
+        _remember_picture(uid, info['picture'])
+    cache[uid] = info
+    return info
 
 
 @bp.route('')
@@ -615,22 +750,24 @@ def board():
                 'updated': _fmt_ts(t.get('date_mod')),
                 'unread': False,
                 'last_by': '',
-                '_mod': t.get('date_mod'),
                 '_updater': t.get('users_id_lastupdater'),
             })
 
     # Unread = GLPI moved since this user last saw the ticket (detail open
     # or own action marks it seen, so only *others'* activity lights up).
+    # Shared with /incidents/unread-count so the sidebar number always
+    # equals the rows carrying the New badge.
     try:
         me = session.get('username', '')
         _ensure_seen_table()
-        seen = _seen_map(me, [x['id'] for x in tickets])
+        unread_ids = _unread_ids(me, raw)
         need_names = set()
         for x in tickets:
-            mod = _parse_utc(x.pop('_mod'))
-            if mod and (x['id'] not in seen or
-                        (_as_utc(seen[x['id']]) is not None and mod > _as_utc(seen[x['id']]))):
-                x['unread'] = True
+            try:
+                x['unread'] = int(x['id']) in unread_ids
+            except (TypeError, ValueError):
+                x['unread'] = False
+            if x['unread']:
                 try:
                     uid = int(x.pop('_updater') or 0)
                 except (TypeError, ValueError):
@@ -663,31 +800,84 @@ def board():
         token = _session()
         if token:
             try:
-                names = {}
+                briefs = {}
                 for x in tickets:
-                    tech = '—'
+                    tech, tech_id, tech_pic = '—', None, ''
                     ok, actors = _api(token, 'GET', f"Ticket/{x['id']}/Ticket_User/", None)
                     if ok and isinstance(actors, list):
                         for a in actors:
                             try:
                                 if int(a.get('type', 0)) == 2 and a.get('users_id'):
-                                    tech = _user_label(token, a.get('users_id'), names)
+                                    tech_id = int(a.get('users_id'))
+                                    info = _user_brief(token, tech_id, briefs)
+                                    tech, tech_pic = info['name'], info['picture']
                                     break
                             except (TypeError, ValueError):
                                 continue
                     x['assignee'] = tech
+                    x['assignee_id'] = tech_id
+                    x['assignee_pic'] = tech_pic
             finally:
                 _close(token)
         else:
             for x in tickets:
                 x['assignee'] = '—'
+                x['assignee_id'] = None
+                x['assignee_pic'] = ''
     except Exception as e:
         logger.warning('assignee computation failed (non-fatal): %s', e)
         for x in tickets:
             x.setdefault('assignee', '—')
+            x.setdefault('assignee_id', None)
+            x.setdefault('assignee_pic', '')
 
     return render_template('incidents.html', tickets=tickets, counts=counts,
                            f_status=status, error=error, at_cap=len(raw) >= 100)
+
+
+@bp.route('/unread-count')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def unread_count():
+    """Sidebar notification count — same definition as the list's New tags."""
+    me = session.get('username', '')
+    now = time.time()
+    hit = _unread_cache.get(me)
+    if hit and now - hit[0] < _UNREAD_TTL:
+        return jsonify({'count': hit[1]})
+    raw = _cached_tickets()
+    if raw is None:
+        # Leave the existing badge alone instead of falsely clearing it.
+        return jsonify({'count': None, 'error': 'glpi_unreachable'})
+    try:
+        _ensure_seen_table()
+        count = len(_unread_ids(me, raw))
+    except Exception as e:
+        logger.warning('unread count failed (non-fatal): %s', e)
+        return jsonify({'count': None, 'error': 'unread_unavailable'})
+    _unread_cache[me] = (now, count)
+    return jsonify({'count': count})
+
+
+@bp.route('/avatar/<int:uid>')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def avatar(uid):
+    """Proxy a GLPI user picture from the read-only picture volume.
+
+    GLPI's own document.send.php needs a browser GLPI session; the portal
+    has an API session only, so serving the file directly is both simpler
+    and faster. A missing picture is a 404 and the template's initials
+    remain visible underneath.
+    """
+    path = _avatar_path(_user_picture(uid))
+    if not path:
+        return '', 404
+    resp = send_file(path, conditional=True, max_age=86400)
+    # Authenticated content: browser cache may keep it private, never shared.
+    resp.headers['Cache-Control'] = 'private, max-age=86400'
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    return resp
 
 
 @bp.route('/<int:ticket_id>')
@@ -833,10 +1023,12 @@ def detail(ticket_id):
     contacts = (hit.get('contacts', {}) if hit
                 else (ticket_contacts if 'ticket_contacts' in dir() else {}))
     # PII restraint: phone numbers to operator/admin only. Viewers get
-    # names + email. Stripped server-side — never rendered into the page.
+    # names + email + picture. Stripped server-side — never rendered into
+    # the page.
     if session.get('role', '') not in ('admin', 'operator'):
         contacts = {str(uid): {'name': c.get('name', '—'), 'email': c.get('email', ''),
-                               'phone': '', 'mobile': ''}
+                               'phone': '', 'mobile': '',
+                               'picture': c.get('picture', '')}
                     for uid, c in contacts.items()}
     else:
         contacts = {str(uid): c for uid, c in contacts.items()}
