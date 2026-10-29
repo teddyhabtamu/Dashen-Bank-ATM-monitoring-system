@@ -21,6 +21,17 @@ The probe emits the same JSON shape as `grg-xfs-probe.ps1 -Json`, so the
 existing CEN/XFS template and the portal's `xfs_metrics.normalize()` consume
 it without a second contract.
 
+## Service selection
+
+- **CDM:** `CurrencyDispenser1` is selected by a successful `303` with cash
+  units, not by the first service with a readable `301`.
+- **IDC:** `IDCardUnit1` is tried first, then `IDCardUnit2`. On the test core
+  unit 1 can return `-48` while the ATM application is running, and unit 2 is
+  a working alternate.
+- **PIN:** `Pinpad1` is the only configured PIN service on the test core; if
+  it returns `-48`, there is no XFS alternate and the portal uses WMI.
+- **PTR / SIU:** `ReceiptPrinter1` and `SIU` are the verified services.
+
 ## Preconditions
 
 On the ATM:
@@ -162,6 +173,9 @@ XFS readings have been compared with the WMI readings for a full shift.
   queried) so Zabbix does not keep a stale status; the portal falls back to
   the WMI card-reader/PIN rows for those two chips. The CDM and SIU data are
   unaffected.
+  On the 2026-10-29 15:25 recon, `IDCardUnit1` returned `-48` but
+  `IDCardUnit2` opened and is the unit the probe now selects; there is no
+  working alternate for `Pinpad1`, so the PIN chip stays on WMI.
 - **Cassette IDs:** the probe reuses the template's GRG-style IDs where the
   denomination matches. A site with different denominations gets `CU<n>`
   keys, which the existing template does not chart. A neutral NCR template
