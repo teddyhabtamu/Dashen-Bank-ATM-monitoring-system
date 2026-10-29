@@ -63,3 +63,13 @@ def test_siu_doors_stay_unknown_until_mapped():
     assert 'cabinet_door = 255' in PROBE
     assert 'safe_door = 255' in PROBE
     assert 'tamper_sensor = 255' in PROBE
+
+
+def test_unavailable_peripheral_is_marked_not_queried():
+    """A failed WFSOpen must emit device=255, not omit the field.
+
+    If the field is omitted, a dependent item can keep its last value and the
+    portal shows a stale "online" chip instead of falling back to WMI.
+    """
+    assert 'device = 255' in PROBE
+    assert "error = 'WFSOpen failed'" in PROBE

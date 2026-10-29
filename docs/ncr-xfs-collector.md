@@ -158,9 +158,10 @@ XFS readings have been compared with the WMI readings for a full shift.
   investigation.
 - **IDC/PIN `-48`:** `WFS_ERR_INVALID_SERVPROV` means the service provider is
   unavailable, often because the ATM application holds the card reader or PIN
-  pad open. The probe reports `open_hresult=-48` and no `device`; the portal
-  falls back to the WMI card-reader/PIN rows for those two chips. The CDM and
-  SIU data are unaffected.
+  pad open. The probe reports `open_hresult=-48` and `device=255` (not
+  queried) so Zabbix does not keep a stale status; the portal falls back to
+  the WMI card-reader/PIN rows for those two chips. The CDM and SIU data are
+  unaffected.
 - **Cassette IDs:** the probe reuses the template's GRG-style IDs where the
   denomination matches. A site with different denominations gets `CU<n>`
   keys, which the existing template does not chart. A neutral NCR template

@@ -461,13 +461,13 @@ $payload = @{
                  retract_count = 0; currency = 'ETB'; has_low = 0; has_empty = 0 }
     cassettes = @{}
   }
-  idc = @{ class = 'IDC'; service = ''; open_hresult = -1; status_hresult = -1;
+  idc = @{ class = 'IDC'; service = ''; device = 255; open_hresult = -1; status_hresult = -1;
            error = 'not queried' }
-  ptr = @{ class = 'PTR'; service = ''; open_hresult = -1; status_hresult = -1;
+  ptr = @{ class = 'PTR'; service = ''; device = 255; open_hresult = -1; status_hresult = -1;
            error = 'not queried' }
-  pin = @{ class = 'PIN'; service = ''; open_hresult = -1; status_hresult = -1;
+  pin = @{ class = 'PIN'; service = ''; device = 255; open_hresult = -1; status_hresult = -1;
            error = 'not queried' }
-  siu = @{ class = 'SIU'; service = ''; open_hresult = -1; status_hresult = -1;
+  siu = @{ class = 'SIU'; service = ''; device = 255; open_hresult = -1; status_hresult = -1;
            error = 'not queried' }
 }
 
@@ -620,7 +620,10 @@ if ($null -ne $startupVersion -and $hApp -ne [IntPtr]::Zero) {
       $open = Open-XfsService $svc.Name $hApp $version 3000
       if ($open.hr -ne 0) {
         if ($fallback -eq $null) {
-          $fallback = @{ class = $class; service = $svc.Name;
+          # 255 is the template's "not queried" sentinel. Emitting it keeps
+          # Zabbix from retaining an old device status and lets the portal
+          # fall back to WMI for this peripheral.
+          $fallback = @{ class = $class; service = $svc.Name; device = 255;
                          open_hresult = $open.hr; status_hresult = -1;
                          error = 'WFSOpen failed' }
         }
@@ -629,7 +632,7 @@ if ($null -ne $startupVersion -and $hApp -ne [IntPtr]::Zero) {
 
       $category = @{ IDC = 201; PTR = 101; PIN = 401; SIU = 801 }[$class]
       $info = Get-XfsInfo $open.hService ([uint32]$category) 3000
-      $payloadItem = @{ class = $class; service = $svc.Name;
+      $payloadItem = @{ class = $class; service = $svc.Name; device = 255;
                         open_hresult = $open.hr; status_hresult = $info.hr;
                         error = '' }
 
@@ -698,12 +701,12 @@ if ($null -ne $startupVersion -and $hApp -ne [IntPtr]::Zero) {
       Close-XfsService $open.hService
 
       if ($fallback -eq $null) { $fallback = $payloadItem }
-      if ($payloadItem.ContainsKey('device') -and $payloadItem.device -ne 3) {
+      if ($payloadItem.status_hresult -eq 0 -and $payloadItem.device -ne 3) {
         return $payloadItem
       }
     }
     if ($fallback -ne $null) { return $fallback }
-    return @{ class = $class; service = ''; open_hresult = -1;
+    return @{ class = $class; service = ''; device = 255; open_hresult = -1;
              status_hresult = -1; error = 'service not found' }
   }
 
