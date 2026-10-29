@@ -59,6 +59,7 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .nav-badge{display:inline-block;margin-left:auto;flex-shrink:0;min-width:18px;height:18px;padding:0 5px;
   border-radius:999px;background:#DC2626;color:#fff;font-size:10px;font-weight:800;
   line-height:18px;text-align:center;font-style:normal}
+.nav-badge[hidden]{display:none}
 .sidebar.collapsed .nav-badge{position:absolute;top:3px;right:3px;margin:0;
   min-width:9px;width:9px;height:9px;padding:0;font-size:0;line-height:0;
   border:2px solid #012169;box-sizing:content-box}
@@ -502,7 +503,7 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
            title="Incident Management — GLPI tickets">
           <i data-lucide="ticket"></i>
           <span>Incident Management</span>
-          <b class="nav-badge" id="incidentNavBadge" hidden title=""></b>
+          <b class="nav-badge" id="incidentNavBadge" {% if not unread_count %}hidden{% endif %}>{{ unread_count if unread_count else '' }}</b>
         </a>
         <a href="/cash" class="nav-item {% if request.path.startswith('/cash') %}active{% endif %}"
            title="Cash Loads — cassette levels and replenishment evidence">

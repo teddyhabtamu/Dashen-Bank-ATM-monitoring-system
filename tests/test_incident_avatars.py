@@ -2,8 +2,8 @@
 
 Two user-facing gaps pinned here:
 - GLPI profile pictures were never rendered; the portal showed initials.
-  Pictures are served through a path-checked proxy from the read-only
-  GLPI picture volume, not by linking to GLPI's session-protected URL.
+  Pictures now come from GLPI's API (`user/<id>/picture`) through the
+  portal proxy, so local and remote GLPI both work without a shared volume.
 - The "New" tag existed only inside the ticket list. The sidebar badge
   must use the same definition and must not block page rendering.
 """
@@ -16,23 +16,45 @@ sys.path.insert(0, str(ROOT / 'report-portal'))
 import blueprints.incidents as inc  # noqa: E402
 
 
-def test_avatar_path_accepts_nested_glpi_picture(tmp_path, monkeypatch):
-    (tmp_path / 'ab').mkdir()
-    pic = tmp_path / 'ab' / 'picture_abc.jpg'
-    pic.write_bytes(b'jpeg')
-    monkeypatch.setattr(inc, 'GLPI_PICTURE_DIR', str(tmp_path))
-    assert inc._avatar_path('ab/picture_abc.jpg') == str(pic)
-    assert inc._avatar_path('ab\\picture_abc.jpg') == str(pic)
+def test_avatar_fetch_uses_the_glpi_picture_endpoint(monkeypatch):
+    calls = []
+
+    class Resp:
+        status_code = 200
+        content = b'\x89PNG\r\n\x1a\n'
+        headers = {'Content-Type': 'image/png'}
+
+    def fake_get(url, **kwargs):
+        calls.append((url, kwargs))
+        return Resp()
+
+    monkeypatch.setattr(inc.requests, 'get', fake_get)
+    inc._avatar_cache.clear()
+    assert inc._fetch_avatar('session-token', 5) == (Resp.content, 'image/png')
+    assert calls[0][0] == f'{inc.GLPI_URL}/apirest.php/user/5/picture'
+    assert calls[0][1]['headers']['Session-Token'] == 'session-token'
+    # Second read is served from the process cache, not a second API call.
+    assert inc._fetch_avatar('session-token', 5) == (Resp.content, 'image/png')
+    assert len(calls) == 1
 
 
-def test_avatar_path_rejects_traversal_and_non_images(tmp_path, monkeypatch):
-    (tmp_path / 'ab').mkdir()
-    (tmp_path / 'ab' / 'picture.png').write_bytes(b'png')
-    (tmp_path / 'secret.txt').write_text('nope')
-    monkeypatch.setattr(inc, 'GLPI_PICTURE_DIR', str(tmp_path))
-    for bad in ('../secret.txt', '/etc/passwd', 'ab/../../secret.txt',
-                'secret.txt', 'ab/picture.png/..'):
-        assert inc._avatar_path(bad) is None, bad
+def test_avatar_fetch_caches_the_no_picture_answer(monkeypatch):
+    calls = []
+
+    class Resp:
+        status_code = 204
+        content = b''
+        headers = {}
+
+    def fake_get(url, **kwargs):
+        calls.append(url)
+        return Resp()
+
+    monkeypatch.setattr(inc.requests, 'get', fake_get)
+    inc._avatar_cache.clear()
+    assert inc._fetch_avatar('session-token', 6) == (b'', '')
+    assert inc._fetch_avatar('session-token', 6) == (b'', '')
+    assert len(calls) == 1
 
 
 def test_unread_ids_is_the_single_definition(monkeypatch):
@@ -84,10 +106,12 @@ def test_list_assignee_can_show_a_picture():
     assert '/incidents/avatar/{{ t.assignee_id }}' in tpl
 
 
-def test_glpi_picture_volume_is_mounted_read_only():
+def test_avatar_uses_the_glpi_api_not_a_shared_volume():
+    src = (ROOT / 'report-portal' / 'blueprints' / 'incidents.py').read_text()
     compose = (ROOT / 'docker-compose.yml').read_text()
-    assert 'glpi-root:/var/www/html/glpi:ro' in compose
-    assert 'GLPI_PICTURE_DIR' in compose
+    assert '/apirest.php/user/{uid}/picture' in src
+    assert 'glpi-root:/var/www/html/glpi:ro' not in compose, (
+        'avatars must work when GLPI runs on another host')
 
 
 def _client():
@@ -106,11 +130,9 @@ def _client():
         yield client
 
 
-def test_avatar_route_serves_images_only_to_logged_in_users(tmp_path, monkeypatch):
-    (tmp_path / 'ab').mkdir()
-    (tmp_path / 'ab' / 'p.png').write_bytes(b'\x89PNG\r\n\x1a\n')
-    monkeypatch.setattr(inc, 'GLPI_PICTURE_DIR', str(tmp_path))
-    monkeypatch.setattr(inc, '_user_picture', lambda uid: 'ab/p.png')
+def test_avatar_route_serves_images_only_to_logged_in_users(monkeypatch):
+    monkeypatch.setattr(inc, '_avatar_for',
+                        lambda uid: (b'\x89PNG\r\n\x1a\n', 'image/png'))
     for client in _client():
         r = client.get('/incidents/avatar/5')
         assert r.status_code == 200
@@ -120,7 +142,7 @@ def test_avatar_route_serves_images_only_to_logged_in_users(tmp_path, monkeypatc
             sess.clear()
         assert client.get('/incidents/avatar/5').status_code == 302
 
-    monkeypatch.setattr(inc, '_user_picture', lambda uid: '../../etc/passwd')
+    monkeypatch.setattr(inc, '_avatar_for', lambda uid: None)
     for client in _client():
         assert client.get('/incidents/avatar/5').status_code == 404
 

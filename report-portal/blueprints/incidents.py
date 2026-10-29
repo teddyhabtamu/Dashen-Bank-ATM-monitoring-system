@@ -15,7 +15,7 @@ import re
 import time
 from datetime import datetime, timezone, timedelta
 from flask import (Blueprint, render_template, request, jsonify, session,
-                   Response, send_file)
+                   Response)
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from audit import log_action
 from db import get_db
@@ -29,13 +29,6 @@ GLPI_URL = os.environ.get('GLPI_UI_URL', 'http://localhost:8082').rstrip('/')
 GLPI_APP_TOKEN = os.environ.get('GLPI_APP_TOKEN', '')
 GLPI_USER = os.environ.get('GLPI_USER', 'glpi')
 GLPI_API_PASSWORD = os.environ.get('GLPI_API_PASSWORD', '')
-# GLPI stores user photos as files under files/_pictures (the `picture`
-# field on User is a relative filename). The web endpoint that serves
-# them requires a browser GLPI session, so the portal reads the same
-# volume read-only and proxies the image instead. Empty/unmounted means
-# avatars gracefully fall back to initials.
-GLPI_PICTURE_DIR = os.environ.get(
-    'GLPI_PICTURE_DIR', '/var/www/html/glpi/files/_pictures')
 
 STATUS_NAMES = {
     1: 'New', 2: 'Processing (assigned)', 3: 'Processing (planned)',
@@ -56,9 +49,10 @@ CACHE_TTL = 60.0
 # per-message documents). Shared across users — entries hold no per-user
 # state (unread/seen is computed separately per request).
 _detail_cache = {}
-# uid -> (picture filename, fetched_at). User pictures change rarely; one
-# User call per avatar per five minutes is enough, and every contact-card
-# fetch refreshes this for free.
+# uid -> (fetched_at, image bytes, mime). GLPI's API serves the picture
+# binary directly (`user/<id>/picture`), so no shared filesystem is needed.
+# Empty bytes mean "this user has no picture" and are cached too, avoiding
+# a repeated API call for every page view.
 _avatar_cache = {}
 _AVATAR_TTL = 300.0
 # username -> (computed_at, unread_count). The sidebar polls this endpoint;
@@ -550,60 +544,75 @@ def _ticket_item_ids(token, ticket_id):
     return ids
 
 
-_PICTURE_EXTS = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')
+def _fetch_avatar(token, uid, force=False):
+    """Download one user picture through the GLPI API and cache the bytes.
 
-
-def _remember_picture(uid, picture):
-    """Cache a picture filename seen on a User payload (cheap freshness)."""
-    try:
-        _avatar_cache[int(uid)] = (str(picture or '').strip(), time.time())
-    except (TypeError, ValueError):
-        pass
-
-
-def _user_picture(uid):
-    """Current GLPI picture filename for a user ('' when none)."""
+    GLPI exposes `GET /apirest.php/user/<id>/picture` (binary; 204 when the
+    user has no picture). This works against local and remote GLPI alike
+    and needs no shared volume. Never raises; returns (bytes, mime) or None.
+    """
     try:
         uid = int(uid)
     except (TypeError, ValueError):
-        return ''
-    hit = _avatar_cache.get(uid)
+        return None
     now = time.time()
-    if hit and now - hit[1] < _AVATAR_TTL:
-        return hit[0]
+    hit = _avatar_cache.get(uid)
+    if hit and not force and now - hit[0] < _AVATAR_TTL:
+        return hit[1], hit[2]
+    try:
+        r = requests.get(
+            f'{GLPI_URL}/apirest.php/user/{uid}/picture',
+            headers={'App-Token': GLPI_APP_TOKEN, 'Session-Token': token},
+            timeout=10,
+        )
+        if r.status_code == 204:
+            _avatar_cache[uid] = (now, b'', '')
+            return b'', ''
+        if r.status_code != 200 or not r.content:
+            logger.info('GLPI avatar uid=%s status=%s', uid, r.status_code)
+            return None
+        if len(r.content) > 5 * 1024 * 1024:
+            logger.warning('GLPI avatar uid=%s too large (%s bytes)', uid, len(r.content))
+            return None
+        mime = (r.headers.get('Content-Type') or '').split(';')[0].strip()
+        if not mime.startswith('image/'):
+            logger.info('GLPI avatar uid=%s returned non-image %r', uid, mime)
+            return None
+        _avatar_cache[uid] = (now, r.content, mime)
+        return r.content, mime
+    except Exception as e:
+        logger.warning('GLPI avatar fetch failed for %s: %s', uid, e)
+        return None
+
+
+def _avatar_for(uid):
+    """Cached avatar bytes; one API session only on a cache miss."""
+    try:
+        uid = int(uid)
+    except (TypeError, ValueError):
+        return None
+    hit = _avatar_cache.get(uid)
+    if hit and time.time() - hit[0] < _AVATAR_TTL:
+        return hit[1], hit[2]
     token = _session()
     if not token:
-        return hit[0] if hit else ''
+        return None
     try:
-        ok, data = _api(token, 'GET', f'User/{uid}', None)
-        if ok and isinstance(data, dict):
-            picture = (data.get('picture') or '').strip()
-            _avatar_cache[uid] = (picture, now)
-            return picture
-    except Exception as e:
-        logger.warning('GLPI user picture lookup failed for %s: %s', uid, e)
+        return _fetch_avatar(token, uid)
     finally:
         _close(token)
-    return hit[0] if hit else ''
 
 
-def _avatar_path(picture):
-    """Resolve a GLPI picture filename inside the mounted picture dir.
-
-    Returns None for traversal attempts, non-image extensions and files
-    that are not present (e.g. the volume is not mounted in a dev setup).
-    """
-    name = str(picture or '').strip().replace('\\', '/')
-    if (not name or name.startswith('/')
-            or any(part in ('', '.', '..') for part in name.split('/'))):
-        return None
-    base = os.path.realpath(GLPI_PICTURE_DIR)
-    path = os.path.realpath(os.path.join(base, name))
-    if not path.startswith(base + os.sep):
-        return None
-    if os.path.splitext(path)[1].lower() not in _PICTURE_EXTS:
-        return None
-    return path if os.path.isfile(path) else None
+def _prefetch_avatar(token, uid):
+    """Populate the avatar cache while a detail/list session is already open."""
+    try:
+        uid = int(uid)
+    except (TypeError, ValueError):
+        return
+    hit = _avatar_cache.get(uid)
+    if hit and time.time() - hit[0] < _AVATAR_TTL:
+        return
+    _fetch_avatar(token, uid)
 
 
 def _user_contact(token, users_id, cache):
@@ -635,7 +644,8 @@ def _user_contact(token, users_id, cache):
                 'mobile': (data.get('mobile') or '').strip(),
                 'picture': (data.get('picture') or '').strip(),
             }
-            _remember_picture(uid, card['picture'])
+            if card['picture']:
+                _prefetch_avatar(token, uid)
     except Exception:
         pass
     cache[uid] = card
@@ -670,7 +680,6 @@ def _user_label(token, users_id, cache):
         name = ' '.join(p for p in ((data.get('realname') or '').strip(),
                                     (data.get('firstname') or '').strip()) if p)
         cache[users_id] = name or (data.get('name') or f'#{users_id}')
-        _remember_picture(users_id, data.get('picture'))
     else:
         cache[users_id] = f'#{users_id}'
     return cache[users_id]
@@ -696,7 +705,8 @@ def _user_brief(token, users_id, cache):
                                     (data.get('firstname') or '').strip()) if p)
         info = {'name': name or (data.get('name') or f'#{uid}'),
                 'picture': (data.get('picture') or '').strip()}
-        _remember_picture(uid, info['picture'])
+        if info['picture']:
+            _prefetch_avatar(token, uid)
     cache[uid] = info
     return info
 
@@ -757,10 +767,12 @@ def board():
     # or own action marks it seen, so only *others'* activity lights up).
     # Shared with /incidents/unread-count so the sidebar number always
     # equals the rows carrying the New badge.
+    unread_count = 0
     try:
         me = session.get('username', '')
         _ensure_seen_table()
         unread_ids = _unread_ids(me, raw)
+        unread_count = len(unread_ids)
         need_names = set()
         for x in tickets:
             try:
@@ -832,7 +844,8 @@ def board():
             x.setdefault('assignee_pic', '')
 
     return render_template('incidents.html', tickets=tickets, counts=counts,
-                           f_status=status, error=error, at_cap=len(raw) >= 100)
+                           f_status=status, error=error, at_cap=len(raw) >= 100,
+                           unread_count=unread_count)
 
 
 @bp.route('/unread-count')
@@ -863,17 +876,17 @@ def unread_count():
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def avatar(uid):
-    """Proxy a GLPI user picture from the read-only picture volume.
+    """Proxy a GLPI user picture through the API session.
 
-    GLPI's own document.send.php needs a browser GLPI session; the portal
-    has an API session only, so serving the file directly is both simpler
-    and faster. A missing picture is a 404 and the template's initials
-    remain visible underneath.
+    GLPI exposes the binary at /apirest.php/user/<id>/picture, so no
+    shared volume or browser GLPI session is needed. A missing picture is
+    a 404 and the template's initials remain visible underneath.
     """
-    path = _avatar_path(_user_picture(uid))
-    if not path:
+    blob = _avatar_for(uid)
+    if not blob or not blob[0]:
         return '', 404
-    resp = send_file(path, conditional=True, max_age=86400)
+    content, mime = blob
+    resp = Response(content, mimetype=mime or 'image/jpeg')
     # Authenticated content: browser cache may keep it private, never shared.
     resp.headers['Cache-Control'] = 'private, max-age=86400'
     resp.headers['X-Content-Type-Options'] = 'nosniff'

@@ -241,14 +241,8 @@ services:
       GLPI_APP_TOKEN: "${GLPI_APP_TOKEN:-}"
       GLPI_USER: "${GLPI_USER:-glpi}"
       GLPI_API_PASSWORD: "${GLPI_API_PASSWORD:-}"
-      GLPI_PICTURE_DIR: "${GLPI_PICTURE_DIR:-/var/www/html/glpi/files/_pictures}"
     volumes:
       - ./report-portal:/app:rw
-      # Read-only bridge to GLPI's user-photo directory. GLPI's own
-      # document.send.php requires a browser GLPI session; the portal only
-      # has an API session, so it serves the same files through
-      # /incidents/avatar/<uid> instead. Missing volume = initials.
-      - glpi-root:/var/www/html/glpi:ro
       - ./ej-logs/raw:/app/evidence/raw:ro
       # Unix socket created by the host atm-image-bridge service. Mount the
       # directory, not one socket inode: a service restart must keep working.
