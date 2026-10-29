@@ -32,6 +32,11 @@ it without a second contract.
   it returns `-48`, there is no XFS alternate and the portal uses WMI.
 - **PTR / SIU:** `ReceiptPrinter1` and `SIU` are the verified services.
 
+Each peripheral object also carries `candidates` (the services considered)
+and `attempts` (the `WFSOpen`/`WFSGetInfo` result for each). These are
+diagnostic fields; the template ignores them. They answer whether the probe
+tried an alternate such as `IDCardUnit2` and what it returned.
+
 ## Preconditions
 
 On the ATM:

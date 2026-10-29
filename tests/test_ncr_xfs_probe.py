@@ -73,3 +73,12 @@ def test_unavailable_peripheral_is_marked_not_queried():
     """
     assert 'device = 255' in PROBE
     assert "error = 'WFSOpen failed'" in PROBE
+
+
+def test_probe_reports_the_peripheral_candidates_it_tried():
+    """NCR can hold one IDC unit while the other is free; the attempts list
+    proves whether the probe tried the alternate."""
+    assert 'IDCardUnit2' in PROBE
+    assert '$attempts' in PROBE
+    assert 'candidates = $candidateNames' in PROBE
+    assert 'attempts = $attempts' in PROBE

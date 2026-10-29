@@ -616,8 +616,13 @@ if ($null -ne $startupVersion -and $hApp -ne [IntPtr]::Zero) {
     }
 
     $fallback = $null
+    $attempts = @()
+    $candidateNames = @($candidates | ForEach-Object { $_.Name })
     foreach ($svc in $candidates) {
+      $attempt = @{ service = $svc.Name; open_hresult = -1; status_hresult = -1 }
+      $attempts += $attempt
       $open = Open-XfsService $svc.Name $hApp $version 3000
+      $attempt.open_hresult = [int]$open.hr
       if ($open.hr -ne 0) {
         if ($fallback -eq $null) {
           # 255 is the template's "not queried" sentinel. Emitting it keeps
@@ -632,6 +637,7 @@ if ($null -ne $startupVersion -and $hApp -ne [IntPtr]::Zero) {
 
       $category = @{ IDC = 201; PTR = 101; PIN = 401; SIU = 801 }[$class]
       $info = Get-XfsInfo $open.hService ([uint32]$category) 3000
+      $attempt.status_hresult = [int]$info.hr
       $payloadItem = @{ class = $class; service = $svc.Name; device = 255;
                         open_hresult = $open.hr; status_hresult = $info.hr;
                         error = '' }
@@ -702,12 +708,19 @@ if ($null -ne $startupVersion -and $hApp -ne [IntPtr]::Zero) {
 
       if ($fallback -eq $null) { $fallback = $payloadItem }
       if ($payloadItem.status_hresult -eq 0 -and $payloadItem.device -ne 3) {
+        $payloadItem.candidates = $candidateNames
+        $payloadItem.attempts = $attempts
         return $payloadItem
       }
     }
-    if ($fallback -ne $null) { return $fallback }
+    if ($fallback -ne $null) {
+      $fallback.candidates = $candidateNames
+      $fallback.attempts = $attempts
+      return $fallback
+    }
     return @{ class = $class; service = ''; device = 255; open_hresult = -1;
-             status_hresult = -1; error = 'service not found' }
+             status_hresult = -1; error = 'service not found';
+             candidates = $candidateNames; attempts = $attempts }
   }
 
   $payload.idc = Get-PeripheralStatus 'IDC' $hApp ([uint32]$startupVersion)
