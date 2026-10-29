@@ -60,12 +60,35 @@ Write-Host "NCR XFS recon starting... (read-only; Ctrl+C is safe)"
 # [IntPtr]::Size works on PS 2.0/.NET 2.0; [Environment]::Is64BitProcess
 # requires .NET 4 and is not available on the NCR test core.
 $is64 = ([IntPtr]::Size -eq 8)
+$os64 = (($env:PROCESSOR_ARCHITECTURE -match '^(AMD64|ARM64|IA64)$') -or
+         ($env:PROCESSOR_ARCHITEW6432 -match '^(AMD64|ARM64|IA64)$'))
 
 if ($Bit -ne 'auto') {
   $want64 = ($Bit -eq '64')
-  if ($want64 -ne $is64) {
+
+  # On a 32-bit Windows install there is no 64-bit PowerShell at all.
+  # Say so and continue in 32-bit instead of relaunching forever.
+  if ($want64 -and -not $os64) {
+    Write-Output "This is a 32-bit Windows installation; 64-bit PowerShell is unavailable."
+    Write-Output "Continuing in 32-bit. Use -Bit 32 to make that explicit."
+    $want64 = $false
+  }
+
+  if ($env:NCR_XFS_RECON_CHILD -eq '1') {
+    # A relaunch already happened. Never relaunch again, even if the child
+    # still reports the wrong bitness; that is how the old script looped.
+    if ($want64 -ne $is64) {
+      Write-Output "WARNING: requested $Bit-bit but this process is $([IntPtr]::Size * 8)-bit; continuing anyway."
+    }
+  } elseif ($want64 -ne $is64) {
     if ($want64) {
-      $exe = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+      if ($env:PROCESSOR_ARCHITEW6432) {
+        # 32-bit process on 64-bit Windows: System32 is redirected to
+        # SysWOW64. Sysnative is the only way to reach the real 64-bit exe.
+        $exe = Join-Path $env:WINDIR 'Sysnative\WindowsPowerShell\v1.0\powershell.exe'
+      } else {
+        $exe = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+      }
     } else {
       $exe = Join-Path $env:WINDIR 'SysWOW64\WindowsPowerShell\v1.0\powershell.exe'
     }
@@ -74,6 +97,7 @@ if ($Bit -ne 'auto') {
         '-File', $MyInvocation.MyCommand.Path, '-Bit', $Bit,
         '-TimeoutSec', $TimeoutSec)
       if ($SkipXfs) { $childArgs += '-SkipXfs' }
+      $env:NCR_XFS_RECON_CHILD = '1'
       & $exe @childArgs
       exit $LASTEXITCODE
     }

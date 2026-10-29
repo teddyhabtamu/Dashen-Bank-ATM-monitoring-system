@@ -66,6 +66,13 @@ C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe `
   -File C:\monitor\ncr-xfs-recon.ps1 -Bit 64 -TimeoutSec 120
 ```
 
+If the console prints `NCR XFS recon starting...` several times and then
+returns, the old script was relaunching itself: a 32-bit process asking for
+64-bit PowerShell through `System32` gets redirected back to 32-bit
+PowerShell. The current script uses `Sysnative` for that transition, refuses
+to relaunch a child a second time, and falls back to 32-bit on a 32-bit
+Windows install. If this ATM is 32-bit, run `-Bit 32` explicitly.
+
 If it times out, two files matter:
 
 - `ncr-xfs-recon-<host>-<timestamp>.txt` — the transcript; its **last line**

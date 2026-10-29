@@ -298,6 +298,10 @@ def test_ncr_recon_has_progress_and_a_watchdog():
     assert 'Start-Job' in src and 'TimeoutSec' in src, (
         'a native XFS call with no timeout must have a hard watchdog')
     assert 'SkipXfs' in src, 'inventory must be runnable without XFS'
+    assert 'NCR_XFS_RECON_CHILD' in src, (
+        'a relaunch must never relaunch again, or 32-bit Windows loops forever')
+    assert 'Sysnative' in src, (
+        'a 32-bit process needs Sysnative to reach real 64-bit PowerShell')
 
 
 def test_lock_capture_script_resolves_digests_not_tags():
