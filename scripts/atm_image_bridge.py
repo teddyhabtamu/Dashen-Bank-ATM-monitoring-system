@@ -57,9 +57,12 @@ from urllib.parse import parse_qs, urlparse
 
 from atm_image_link import (
     LinkError,
+    NCR_ENTRY_CAVEAT,
     name_hmac,
+    parse_ncr_entry_name,
     parse_ncr_zip_name,
     rank_grg_candidates,
+    rank_ncr_entries,
     select_ncr_zips,
 )
 from fetch_atm_image import (
@@ -608,24 +611,68 @@ class BridgeApp:
         return match['path'], match
 
     def zip_entries(self, atm_id: str, day_raw: str,
-                    zip_hmac: str) -> dict:
+                    zip_hmac: str, start_raw: str | None = None,
+                    end_raw: str | None = None) -> dict:
         atm = self.atm(atm_id)
         day = _parse_day(day_raw, self.config.max_days_back)
         self._preflight(atm)
         zip_path, match = self._locate_zip(atm, day, zip_hmac)
         entries = self._list_zip(atm, zip_path)
-        projected = [{
-            'index': item['index'],
-            'name_masked': item['name_masked'],
-            'length': item['length'],
-            'size_label': _size_label(item['length']),
-            'compressed_length': item['compressed_length'],
-            'crc32': item['crc32'],
-            'last_write_time': item['last_write_time'],
-            'fetchable': item['fetchable'],
-            'content_type': _content_type(item['name']),
-        } for item in entries]
-        return {
+
+        ranked = None
+        by_index: dict[int, dict] = {}
+        start = end = None
+        if start_raw or end_raw:
+            start, end = _window(day, start_raw or '', end_raw or '')
+            try:
+                ranked = rank_ncr_entries(entries, start, end)
+            except LinkError as exc:
+                raise BridgeError('The archive entries could not be ranked.') \
+                    from exc
+            by_index = {
+                item['index']: item for item in ranked['candidates']
+                if isinstance(item.get('index'), int)
+            }
+
+        projected = []
+        for item in entries:
+            parsed = parse_ncr_entry_name(item['name'])
+            scored = by_index.get(item['index']) if ranked else None
+            projected.append({
+                'index': item['index'],
+                'name_masked': item['name_masked'],
+                'length': item['length'],
+                'size_label': _size_label(item['length']),
+                'compressed_length': item['compressed_length'],
+                'crc32': item['crc32'],
+                'last_write_time': item['last_write_time'],
+                'zip_mtime_utc': item['last_write_time'],
+                'captured_at': (parsed['captured_at'].strftime(
+                    '%Y-%m-%d %H:%M:%S') if parsed else ''),
+                'session_at': (parsed['session_at'].strftime(
+                    '%Y-%m-%d %H:%M:%S') if parsed else ''),
+                'camera': parsed['camera'] if parsed else None,
+                'image_type': parsed['image_type'] if parsed else '',
+                'kind': parsed['kind'] if parsed else 'image',
+                'card_field_present': (
+                    parsed['card_field_present'] if parsed else False),
+                'fetchable': item['fetchable'],
+                'content_type': _content_type(item['name']),
+                'role': scored['role'] if scored else '',
+                'score': scored['score'] if scored else 0,
+                'in_interval': scored['in_interval'] if scored else False,
+                'delta_start_s': scored['delta_start_s'] if scored else None,
+                'delta_end_s': scored['delta_end_s'] if scored else None,
+            })
+
+        if ranked:
+            projected.sort(key=lambda entry: (
+                -(entry['score'] or 0),
+                entry['captured_at'] or '',
+                entry['index'],
+            ))
+
+        result = {
             'kind': 'atm-zip-entries',
             'atm_id': atm.atm_id,
             'host': atm.host,
@@ -634,8 +681,22 @@ class BridgeApp:
             'zip_hmac': _hmac(zip_hmac),
             'count': len(projected),
             'entries': projected,
+            'caveat': NCR_ENTRY_CAVEAT,
             'available': True,
         }
+        if ranked:
+            result.update({
+                'session_start': start.strftime('%Y-%m-%d %H:%M:%S'),
+                'session_end': end.strftime('%Y-%m-%d %H:%M:%S'),
+                'confidence': ranked['confidence'],
+                'candidate_count': ranked['candidate_count'],
+                'entry_count': ranked['entry_count'],
+                'unparsed_count': ranked['unparsed_count'],
+                'start_anchor_count': ranked['start_anchor_count'],
+                'in_window_count': ranked['in_window_count'],
+                'card_field_used_for_link': False,
+            })
+        return result
 
     def zip_image(self, atm_id: str, day_raw: str, zip_hmac: str,
                   index: int) -> tuple[bytes, dict, str, str]:
@@ -816,6 +877,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
                         atm_id,
                         str(body.get('day') or ''),
                         str(body.get('zip_hmac') or ''),
+                        str(body.get('start') or '') or None,
+                        str(body.get('end') or '') or None,
                     )
                 self._send_json(200, result)
                 return

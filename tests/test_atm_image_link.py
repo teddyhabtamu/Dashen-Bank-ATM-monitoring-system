@@ -381,3 +381,93 @@ def test_cli_refuses_a_session_that_crosses_midnight():
 def test_grg_day_folder_uses_two_digit_month_and_day():
     assert finder.grg_directory(dt.date(2026, 1, 2)) == \
         r'E:\pic\2026\01\02'
+
+
+# ---------------------------------------------------------------------------
+# NCR zip entries
+# ---------------------------------------------------------------------------
+
+NCR_ENTRY = ('1.102226.103353.Default-PicOnly.1.102226.103353.1.'
+             '123456789012345.jpg')
+NCR_ENTRY_CAM10 = ('10.102226.103526.Default-PicOnly.1.102226.103353.1.'
+                   '123456789012345.jpg')
+NCR_ENTRY_LATER = ('2.102226.104430.Default-PicOnly.1.102226.104155.1.'
+                   '123456789012345.jpg')
+
+
+def test_ncr_entry_name_parses_capture_and_session_times():
+    parsed = link.parse_ncr_entry_name(NCR_ENTRY)
+
+    assert parsed['camera'] == 1
+    assert parsed['captured_at'] == dt.datetime(2026, 10, 22, 10, 33, 53)
+    assert parsed['session_at'] == dt.datetime(2026, 10, 22, 10, 33, 53)
+    assert parsed['image_type'] == 'Default-PicOnly'
+    assert parsed['kind'] == 'image'
+    assert parsed['card_field_present'] is True
+    assert '123456789012345' not in parsed['name_masked']
+
+
+@pytest.mark.parametrize('name', [
+    'notes.jpg',
+    '1.102226.103353.Default-PicOnly.1.102226.103353.1.jpg',
+    '1.132226.103353.Default-PicOnly.1.132226.103353.1.123456789012345.jpg',
+    '1.102226.103353.Default-PicOnly.1.102226.103353.1.123456789012345.gif',
+    '',
+])
+def test_non_ncr_entry_names_are_rejected(name):
+    assert link.parse_ncr_entry_name(name) is None
+
+
+def test_ncr_entry_ranking_uses_the_session_anchor_not_the_card_field():
+    rows = [
+        {'index': 0, 'name': NCR_ENTRY},
+        {'index': 1, 'name': NCR_ENTRY_CAM10},
+        {'index': 2, 'name': NCR_ENTRY_LATER},
+        {'index': 3, 'name': 'notes.jpg'},
+    ]
+    result = link.rank_ncr_entries(
+        rows,
+        dt.datetime(2026, 10, 22, 10, 33, 53),
+        dt.datetime(2026, 10, 22, 10, 35, 30),
+    )
+
+    assert result['confidence'] == 'high'
+    assert result['card_field_used_for_link'] is False
+    assert result['candidate_count'] == 2
+    assert result['unparsed_count'] == 1
+    assert result['start_anchor_count'] == 2
+    assert result['in_window_count'] == 2
+    assert [item['index'] for item in result['candidates'][:2]] == [0, 1]
+    assert [item['role'] for item in result['candidates'][:2]] == [
+        'start', 'start']
+    assert result['candidates'][2]['role'] == 'other'
+    assert 'card field' in result['caveat']
+
+
+def test_ncr_entry_ranking_matches_a_later_session_window():
+    result = link.rank_ncr_entries(
+        [{'index': 2, 'name': NCR_ENTRY_LATER}],
+        dt.datetime(2026, 10, 22, 10, 41, 55),
+        dt.datetime(2026, 10, 22, 10, 45, 0),
+    )
+
+    assert result['confidence'] == 'high'
+    assert result['candidates'][0]['role'] == 'start'
+    assert result['candidates'][0]['in_interval'] is True
+
+
+def test_ncr_entry_ranking_refuses_aware_times():
+    aware = dt.datetime(2026, 10, 22, 10, 33, 53, tzinfo=dt.timezone.utc)
+    with pytest.raises(link.LinkError) as exc:
+        link.rank_ncr_entries([], aware, aware)
+    assert str(exc.value) == 'E_TZ'
+
+
+def test_ncr_entry_ranking_refuses_a_reversed_window():
+    with pytest.raises(link.LinkError) as exc:
+        link.rank_ncr_entries(
+            [],
+            dt.datetime(2026, 10, 22, 10, 35, 0),
+            dt.datetime(2026, 10, 22, 10, 34, 0),
+        )
+    assert str(exc.value) == 'E_ARGS'

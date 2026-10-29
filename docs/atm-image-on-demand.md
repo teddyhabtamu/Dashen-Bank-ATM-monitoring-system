@@ -246,9 +246,19 @@ python3 scripts/fetch_atm_image.py --host 10.41.30.114 \
   --list
 ```
 
-The JSON entry names/timestamps decide whether NCR can be linked by event or
-only by the zip/time window. Entry names are masked in the default output;
-`--show-sensitive` prints them for local diagnosis only.
+The NCR entry name carries two ATM-local timestamps:
+
+```text
+1.102226.103353.Default-PicOnly.1.102226.103353.1.<masked-card>.jpg
+^camera ^capture date/time      ^type         ^session date/time
+```
+
+The first is the image capture time; the second groups entries by session.
+Both are ATM-local. The session timestamp is the link anchor and must be
+cross-checked against the NCR EJ start. The ZIP entry mtime is UTC and is not
+used for linking. Entry names are masked in the default output;
+`--show-sensitive` prints them for local diagnosis only. The card field is
+display-only and never a link key.
 
 ## Step 4b — find candidates for one EJ session
 
@@ -307,15 +317,16 @@ mtime is the clip end. The JSON carries `clip_end`, `clip_duration_s`, and
 session is included even if it starts before the 10-second pre-window. Show
 the whole interval, not just the filename time.
 
-NCR (day container only, until the zip entry format is confirmed):
+NCR (the CLI selects the day container; the portal ranks entries inside it):
 
 ```bash
 python3 scripts/find_atm_image.py --host 10.41.30.114 --vendor NCR \
   --start '2026-10-22 00:00:00' --end '2026-10-22 23:59:59'
 ```
 
-This returns the daily zip with `confidence: low` and the NCR caveat. It does
-not pretend to link an entry.
+This returns the daily zip with `confidence: low`. The CLI does not open the
+zip. In the portal, the archive view parses each entry's capture/session time
+and ranks it against the EJ window.
 
 If the day folder has rotated off the ATM, the CLI returns exit code `0` and:
 
@@ -534,9 +545,12 @@ Expected candidates: `CardInserted.jpg` (start, 114,843 bytes),
 `CardReturned.jpg` (end, 108,133 bytes), the 37-second `.mp4` (clip
 `15:34:44` → `15:35:21`), and `EnterInfo.jpg` (supporting).
 
-For NCR, choose the day and open the daily zip; entries are addressed by
-**archive index**, never by name. The page says the zip is a day container,
-not a transaction link, until the entry timestamps are confirmed.
+For NCR, choose the day and the session window, then open the daily zip.
+Entries are addressed by **archive index**, never by name. The archive page
+shows each entry's ATM-local capture time and session time, ranks the session
+start within 5 seconds of the EJ start, and marks captures inside the window.
+The ZIP entry mtime is UTC and is shown only as a secondary line. The card
+field is masked and is never the link.
 
 ### 6.5 What the audit records
 
@@ -670,7 +684,7 @@ audit-retention policy.
 | Offline ATM | 3-second TCP/10050 preflight, then `agent_unreachable`; no 60-second retry loop |
 | Bridge memory | One verified image per request; bounded by the 8 MiB video/zip-entry cap |
 | Bridge socket | Unix stream socket, mode 0660, mounted read-only into the portal |
-| Portal worker | Gunicorn timeout is 120 s; a still image is the target. A maximum-size video/zip entry may exceed it, so do not treat a timeout as missing evidence |
+| Portal worker | Gunicorn timeout is 300 s in the current Dockerfile; an older running container may still be 120 s. A maximum-size video/zip entry may exceed it, so do not treat a timeout as missing evidence |
 
 The long-term answer for 1,300 ATMs and video is an ATM-side HTTPS file agent
 or tunnel, not a 24 KiB Zabbix key. The chunk transport is the smallest thing
@@ -722,7 +736,9 @@ retention/compliance decision; if added, it must store only `name_masked` and
 
 ## Open questions
 
-1. NCR zip entry names and timestamps (run `--list`).
+1. NCR zip entry timestamps — resolved on 2026-10-22: the first timestamp is
+   the image capture time, the second is the session time, both ATM-local;
+   the ZIP entry mtime is UTC. Confirm the same format on a second day/ATM.
 2. GRG/NCR retention for day folders and zips.
 3. Production path: `C:\ISUITE\ICAM\Permit\icamimages` or `D:\Image\icamimages`?
 4. Are production GRG `CarNum` and NCR entry names always masked? If not,

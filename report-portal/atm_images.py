@@ -273,12 +273,17 @@ def open_image(atm_id: str, day: str, name_hmac: str) -> BridgeStream:
     return _open(f'/v1/image?{query}')
 
 
-def zip_entries(atm_id: str, day: str, zip_hmac: str) -> dict:
-    return _request_json('POST', '/v1/zip/list', {
+def zip_entries(atm_id: str, day: str, zip_hmac: str,
+                start: str | None = None, end: str | None = None) -> dict:
+    body = {
         'atm_id': atm_id,
         'day': day,
         'zip_hmac': zip_hmac,
-    })
+    }
+    if start and end:
+        body['start'] = start
+        body['end'] = end
+    return _request_json('POST', '/v1/zip/list', body)
 
 
 def open_zip_image(atm_id: str, day: str, zip_hmac: str,

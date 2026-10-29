@@ -176,6 +176,7 @@ def atm_images(atm_id):
     start_raw = (request.args.get('start') or '').strip()
     end_raw = (request.args.get('end') or '').strip()
     searched = bool(day_raw or at_raw or start_raw or end_raw)
+    has_window = bool(at_raw or start_raw or end_raw)
 
     form_error = None
     result = None
@@ -231,6 +232,7 @@ def atm_images(atm_id):
         start_value=start.strftime('%H:%M:%S'),
         end_value=end.strftime('%H:%M:%S'),
         searched=searched,
+        has_window=has_window,
         form_error=form_error,
         result=result,
         unavailable=unavailable,
@@ -416,22 +418,57 @@ def atm_image_zip(atm_id):
     except ValueError as exc:
         return _no_store(Response(str(exc), status=400, mimetype='text/plain'))
 
+    start_raw = (request.args.get('start') or '').strip()
+    end_raw = (request.args.get('end') or '').strip()
+    window_start = window_end = None
+    if start_raw or end_raw:
+        if not (start_raw and end_raw):
+            return _no_store(Response(
+                'Both start and end are required.',
+                status=400, mimetype='text/plain'))
+        try:
+            start_time = _parse_time(start_raw, time.min)
+            end_time = _parse_time(end_raw, time.max)
+            window_start = datetime.combine(day, start_time)
+            window_end = datetime.combine(day, end_time)
+            if window_end < window_start:
+                raise ValueError(
+                    'The window end must not be before its start.')
+            if window_end - window_start > timedelta(hours=24):
+                raise ValueError('The window must be 24 hours or less.')
+        except ValueError as exc:
+            return _no_store(Response(str(exc), status=400,
+                                      mimetype='text/plain'))
+
     result = None
     unavailable = False
     bridge_error = None
     bridge_error_code = None
     try:
-        result = bridge.zip_entries(atm_id, day.isoformat(), zip_hmac)
+        if window_start is not None:
+            result = bridge.zip_entries(
+                atm_id, day.isoformat(), zip_hmac,
+                window_start.strftime('%Y-%m-%d %H:%M:%S'),
+                window_end.strftime('%Y-%m-%d %H:%M:%S'),
+            )
+        else:
+            result = bridge.zip_entries(atm_id, day.isoformat(), zip_hmac)
     except bridge.NotAvailable:
         unavailable = True
     except bridge.BridgeError as exc:
         bridge_error = str(exc)
         bridge_error_code = exc.code
     count = len((result or {}).get('entries') or [])
+    confidence = (result or {}).get('confidence') or 'none'
+    window_tail = ''
+    if window_start is not None:
+        window_tail = (f' window {window_start.strftime("%H:%M:%S")}-'
+                       f'{window_end.strftime("%H:%M:%S")}'
+                       f' confidence {confidence}')
     log_action(
         'IMAGE_SEARCH',
         f'ATM {atm_id} day {day.isoformat()} zip hmac {zip_hmac[:16]}... '
-        f'entries {count} unavailable {int(unavailable)} '
+        f'entries {count}{window_tail} unavailable {int(unavailable)} '
         f'error {int(bool(bridge_error))}',
     )
     response = make_response(render_template(
@@ -444,6 +481,10 @@ def atm_image_zip(atm_id):
         unavailable=unavailable,
         bridge_error=bridge_error,
         bridge_error_code=bridge_error_code,
+        start_value=(window_start.strftime('%H:%M:%S')
+                     if window_start is not None else ''),
+        end_value=(window_end.strftime('%H:%M:%S')
+                   if window_end is not None else ''),
         not_available_text=bridge.NOT_AVAILABLE,
     ))
     return _no_store(response)

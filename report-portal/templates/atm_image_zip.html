@@ -6,6 +6,12 @@
 .img-meta{display:flex;flex-wrap:wrap;gap:8px 22px;background:#fff;border:1px solid #EEF1F6;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:#64748B;box-shadow:0 1px 3px rgba(1,33,105,.04)}
 .img-meta b{color:#0F172A}
 .img-name{max-width:480px;word-break:break-word}
+.img-name small{display:block;color:#94A3B8;font-size:10px;margin-top:2px}
+.img-clip{font-size:10px;color:#94A3B8;margin-top:2px}
+.img-role{display:inline-block;padding:2px 9px;border-radius:100px;font-size:10px;font-weight:700;white-space:nowrap;background:#F1F5F9;color:#475569}
+.img-role-start{background:#DBEAFE;color:#1D4ED8}
+.img-role-end{background:#DCFCE7;color:#166534}
+.img-role-near{background:#FEF2F2;color:#991B1B}
 .img-caveat{background:#F8FAFC;border:1px solid #E4E9F1;color:#475569;border-radius:10px;padding:11px 14px;font-size:12px;line-height:1.55;margin-bottom:14px}
 .img-view-link{display:inline-block;padding:5px 11px;border:1px solid #BFDBFE;border-radius:6px;background:#EFF6FF;color:#1D4ED8 !important;font-weight:700;text-decoration:none;white-space:nowrap}
 .img-view-link:hover{background:#DBEAFE;text-decoration:none !important}
@@ -53,28 +59,51 @@
   <span>Day <b>{{ day_value }}</b></span>
   <span>Archive <b class="mono">{{ result.get('zip_masked') }}</b></span>
   <span>Entries <b>{{ result.get('count', 0) }}</b></span>
+  {% if result.get('session_start') %}
+  <span>Session <b class="mono">{{ result.get('session_start') }} → {{ result.get('session_end') }}</b></span>
+  <span>Match <b>{{ result.get('confidence') }}</b></span>
+  <span>Matched <b>{{ result.get('candidate_count', 0) }} of {{ result.get('count', 0) }}</b></span>
+  {% endif %}
   <span>Locator <b class="mono">{{ zip_hmac[:16] }}…</b></span>
 </div>
 
 <div class="img-caveat">
-  NCR's zip name identifies the <strong>day container</strong>, not a
-  transaction. Pick the entry by its timestamp and compare it with the EJ
-  session; the entry name is not a transaction key. A zip can be replaced or
-  rotated, so a stale entry index returns a changed/not-available state rather
-  than a different image.
+  {{ result.get('caveat') or "The zip name identifies the day container, not a transaction link. Compare the entry capture/session time with the EJ interval; the card field is never the link." }}
 </div>
 
 <div class="card">
   <div class="card-header"><h2>Archive entries</h2></div>
   <div class="op-table-wrap" style="overflow-x:auto">
     <table class="ej-table">
-      <thead><tr><th>Index</th><th>Modified</th><th>Masked entry</th><th>Size</th><th>View</th></tr></thead>
+      <thead><tr><th>Index</th><th>Captured (ATM local)</th><th>Session (ATM local)</th><th>Match</th><th>Masked entry</th><th>Size</th><th>View</th></tr></thead>
       <tbody>
         {% for e in result.get('entries', []) %}
         <tr>
           <td class="mono">{{ e.index }}</td>
-          <td class="mono">{{ e.last_write_time or '—' }}</td>
-          <td class="img-name"><span class="mono">{{ e.name_masked }}</span></td>
+          <td class="mono">
+            {{ e.captured_at or '—' }}
+            {% if e.zip_mtime_utc and not e.zip_mtime_utc.startswith('0001-') %}
+            <div class="img-clip">ZIP mtime {{ e.zip_mtime_utc }} UTC</div>
+            {% endif %}
+          </td>
+          <td class="mono">{{ e.session_at or '—' }}</td>
+          <td>
+            {% if e.role %}
+            {% set role_label = {'start': 'Session start', 'in_window': 'Within window', 'near_window': 'Near window', 'other': '—'}.get(e.role, '—') %}
+            <span class="img-role {% if e.role == 'start' %}img-role-start{% elif e.role == 'in_window' %}img-role-end{% elif e.role == 'near_window' %}img-role-near{% endif %}">{{ role_label }}</span>
+            {% if e.delta_start_s is not none %}
+            <div class="img-clip">session {{ '%+.1f'|format(e.delta_start_s) }}s from start</div>
+            {% endif %}
+            {% else %}
+            —
+            {% endif %}
+          </td>
+          <td class="img-name">
+            <span class="mono">{{ e.name_masked }}</span>
+            {% if e.card_field_present %}
+            <small>Masked card field · display only, never the link</small>
+            {% endif %}
+          </td>
           <td title="{{ e.length|int }} bytes">{{ e.size_label or ('{:,}'.format(e.length|int) + ' B') }}</td>
           <td>
             {% if e.fetchable %}
@@ -85,7 +114,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="ej-empty">No image entries in this archive.</td></tr>
+        <tr><td colspan="7" class="ej-empty">No image entries in this archive.</td></tr>
         {% endfor %}
       </tbody>
     </table>

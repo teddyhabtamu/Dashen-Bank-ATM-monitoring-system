@@ -357,3 +357,55 @@ def test_http_server_refuses_a_missing_token_and_serves_the_allowlist(
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_zip_entries_rank_ncr_sessions_without_exposing_the_name(app,
+                                                                 monkeypatch):
+    zip_name = '172.23.248.4_102226_163377_16_1.zip'
+    zip_row = {
+        'index': 0, 'name': zip_name, 'name_masked': 'masked.zip',
+        'path': 'C:\\ISUITE\\ICAM\\Permit\\iCamImageZip\\' + zip_name,
+        'length': 163377, 'last_write_time': '', 'kind': 'zip',
+        'fetchable': True,
+    }
+    card = '123456789012345'
+    entries = [{
+        'index': 0,
+        'name': f'1.102226.103353.Default-PicOnly.1.102226.103353.1.{card}.jpg',
+        'name_masked': f'1.102226.103353.Default-PicOnly.1.102226.103353.1.1234*******2345.jpg',
+        'length': 1000, 'compressed_length': 800, 'crc32': 42,
+        'last_write_time': '2026-10-22T07:33:20.0000000',
+        'fetchable': True,
+    }, {
+        'index': 1,
+        'name': f'10.102226.103526.Default-PicOnly.1.102226.103353.1.{card}.jpg',
+        'name_masked': f'10.102226.103526.Default-PicOnly.1.102226.103353.1.1234*******2345.jpg',
+        'length': 1000, 'compressed_length': 800, 'crc32': 43,
+        'last_write_time': '2026-10-22T07:35:40.0000000',
+        'fetchable': True,
+    }, {
+        'index': 2,
+        'name': f'2.102226.104430.Default-PicOnly.1.102226.104155.1.{card}.jpg',
+        'name_masked': f'2.102226.104430.Default-PicOnly.1.102226.104155.1.1234*******2345.jpg',
+        'length': 1000, 'compressed_length': 800, 'crc32': 44,
+        'last_write_time': '2026-10-22T07:44:56.0000000',
+        'fetchable': True,
+    }]
+    monkeypatch.setattr(bridge, 'list_dir', lambda *a, **k: [zip_row])
+    monkeypatch.setattr(bridge, 'list_zip', lambda *a, **k: entries)
+
+    result = app.zip_entries(
+        'ATM-TEST-NCR', DAY, name_hmac(zip_name, KEY),
+        '2026-10-22 10:33:53', '2026-10-22 10:35:30')
+
+    assert result['confidence'] == 'high'
+    assert result['candidate_count'] == 2
+    assert result['start_anchor_count'] == 2
+    assert result['card_field_used_for_link'] is False
+    assert 'card field' in result['caveat']
+    assert [e['index'] for e in result['entries']] == [0, 1, 2]
+    assert result['entries'][0]['role'] == 'start'
+    assert result['entries'][0]['captured_at'] == '2026-10-22 10:33:53'
+    assert result['entries'][0]['session_at'] == '2026-10-22 10:33:53'
+    assert 'name' not in result['entries'][0]
+    assert '123456789012345' not in str(result)

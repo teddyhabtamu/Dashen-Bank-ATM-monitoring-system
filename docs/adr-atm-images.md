@@ -4,11 +4,13 @@
 >
 > The target paths, the agent keys, the chunk transport and the full image
 > SHA-256/MD5 match are proven against the real 22 October GRG image. The
-> admin-only portal viewer and host bridge are implemented. The **viewer is
-> still gated** by compliance, by the NCR zip entry format, and by the
-> retention answers below before operator or production exposure. This ADR
-> records the on-demand model as the chosen direction and keeps the
-> central-receiver design only as a fallback.
+> NCR zip entry format is confirmed; the listing groups entries by a session
+> timestamp, which must be cross-checked against the NCR EJ on the next live
+> session. The admin-only portal viewer and host bridge are implemented. The
+> **viewer is still gated** by compliance and by the retention answers below
+> before operator or production exposure. This ADR records the on-demand
+> model as the chosen direction and keeps the central-receiver design only as
+> a fallback.
 
 ## Decision
 
@@ -105,8 +107,21 @@ observed:
 
 `D:\Image\icamimages` does **not** exist on TESTMACHINE. The NCR
 `Snapshots` folder configured by `NDCSecurityCamera.xml` is empty; ICAM is
-the active path. The zip entry names and timestamps are still unknown; the
-PowerShell listing is the outstanding discovery item.
+the active path.
+
+The zip entry format was listed on 2026-10-22:
+
+```text
+1.102226.103353.Default-PicOnly.1.102226.103353.1.<masked-card>.jpg
+^camera ^capture date/time      ^type         ^session date/time
+```
+
+The first timestamp is the image capture time and the second groups entries
+by session; both are ATM-local wall-clock time. The session timestamp is the
+link anchor and must be cross-checked against the NCR EJ start on the next
+live session. The ZIP entry mtime is UTC and is not used for linking. A zip
+can hold several sessions. The card field is masked for display and never
+used as the link.
 
 ### The link rule is timestamp + event, not card
 
@@ -136,11 +151,14 @@ a read-only CLI, `scripts/find_atm_image.py`. It **ranks, never joins**:
 * the card field is displayed but the result always carries
   `card_field_used_for_link: false`.
 
-`confidence: high` means exactly one start anchor and one end anchor.
+For GRG, `confidence: high` means exactly one start anchor and one end anchor.
 `ambiguous: true` means more than one anchor matched, so the viewer must not
-pick one. For NCR the matcher stops at the **day zip**, because the entry
-naming/timestamps are not confirmed; it returns `confidence: low` with that
-caveat rather than inventing an entry-level link.
+pick one. For NCR the zip name selects the **day container**; entries inside
+it are ranked by the session timestamp (second timestamp in the name) and the
+capture timestamp (first). Both are ATM-local. The ZIP entry mtime is UTC and
+is not used. The card field is masked and never used. `confidence: high`
+means at least one entry's session timestamp matches the EJ start within 5 s
+and at least one capture falls inside the EJ interval.
 
 For a GRG **video**, the filename time is the clip start and the file mtime is
 the clip end. The matcher reports both (`captured_at`, `clip_end`,
@@ -277,9 +295,11 @@ The metadata still needs retention, access control, and audit.
 
 ## Remaining unknowns
 
-1. **NCR zip entry names and timestamps** — the PowerShell listing is pending.
-   Until the zip is listed, NCR images cannot be linked by event; the
-   transport can list them once the script is deployed.
+1. **NCR zip entry names and timestamps** — format resolved on 2026-10-22.
+   The first timestamp is the image capture time, the second groups entries
+   by session, both ATM-local; the ZIP entry mtime is UTC. Cross-check the
+   session timestamp against the NCR EJ and confirm the same format on a
+   second day/ATM before fleet rollout.
 2. **NCR and GRG retention** — how long the ATM keeps day folders and zips,
    and when ICAM archives/deletes them.
 3. **Production path** — does production use `C:\ISUITE\ICAM\Permit\icamimages`
@@ -300,9 +320,9 @@ The metadata still needs retention, access control, and audit.
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Read-only transport proof on GRG | Done: 114,843 bytes, SHA-256 and MD5 match |
-| 2 | Host bridge over Unix socket + admin viewer, HMAC locator, audit, no-store | Implemented; UAT install pending |
-| 3 | NCR zip entry listing and timestamp semantics | Pending `--list` after NCR deployment |
-| 4 | UAT pilot on both test ATMs; retention measured | Pending |
+| 2 | Host bridge over Unix socket + admin viewer, HMAC locator, audit, no-store | Implemented and installed on UAT; GRG image viewing proven |
+| 3 | NCR zip entry listing and timestamp semantics | Done: format confirmed; bridge ranks entries by session + capture time |
+| 4 | UAT pilot on both test ATMs; retention measured | In progress: NCR transport verification; GRG ATM offline |
 | 5 | Compliance sign-off, then fleet rollout; long-term file agent/tunnel if 1,300 ATMs outgrow chunking | Gate |
 
 A persistent metadata index (no bytes) is optional and deferred; it is not a
@@ -341,8 +361,8 @@ were superseded on 2026-10-22:
 * NCR images were found in the ICAM day folders and daily zips.
 * GRG images were found under `E:\pic\<YYYY>\<MM>\<DD>\`.
 * For GRG, there is still **no transaction ID in the image filename**. The
-  link remains timestamp + event, as recorded above. The NCR entry names are
-  still being listed.
+  link remains timestamp + event, as recorded above. NCR entry names were
+  listed on 2026-10-22 and carry ATM-local capture and session timestamps.
 
 The 2026-10-16 probes are retained here because they explain why the earlier
 plan expected a central receiver and why the current design does not.

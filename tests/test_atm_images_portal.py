@@ -139,6 +139,18 @@ def _zip_result():
         'zip_hmac': HMAC,
         'count': 1,
         'available': True,
+        'caveat': ('The entry name carries the ATM-local capture time and '
+                   'the session time. The masked card field is display-only '
+                   'and never used as the link.'),
+        'session_start': '2026-10-22 15:34:44',
+        'session_end': '2026-10-22 15:35:21',
+        'confidence': 'high',
+        'candidate_count': 1,
+        'entry_count': 1,
+        'unparsed_count': 0,
+        'start_anchor_count': 1,
+        'in_window_count': 1,
+        'card_field_used_for_link': False,
         'entries': [{
             'index': 0,
             'name_masked': 'PAN-************3456.jpg',
@@ -146,9 +158,51 @@ def _zip_result():
             'size_label': '112.2 KB',
             'compressed_length': 114000,
             'crc32': 42,
-            'last_write_time': '2026-10-22T16:33:00+03:00',
+            'last_write_time': '2026-10-22T07:34:44.0000000',
+            'zip_mtime_utc': '2026-10-22T07:34:44.0000000',
+            'captured_at': '2026-10-22 15:34:44',
+            'session_at': '2026-10-22 15:34:44',
+            'camera': 1,
+            'image_type': 'Default-PicOnly',
+            'kind': 'image',
+            'card_field': '1234********3456',
+            'card_field_present': True,
+            'role': 'start',
+            'score': 150,
+            'in_interval': True,
+            'delta_start_s': 0.0,
+            'delta_end_s': -37.0,
             'fetchable': True,
             'content_type': 'image/jpeg',
+        }],
+    }
+
+
+def _ncr_result():
+    return {
+        'kind': 'atm-image-candidates',
+        'vendor': 'NCR',
+        'host': '10.41.30.114',
+        'atm_id': 'ATM-TEST-NCR',
+        'session_start': '2026-10-22 10:33:53',
+        'session_end': '2026-10-22 10:35:30',
+        'available': True,
+        'confidence': 'low',
+        'caveat': 'The zip name identifies the day container, not a transaction link.',
+        'candidates': [{
+            'name_masked': '172.23.248.4_102226_***_16_1.zip',
+            'name_hmac': HMAC,
+            'day': '2026-10-22',
+            'zip_bytes': 163377,
+            'image_count': 16,
+            'camera': 1,
+            'length': 163377,
+            'size': 163377,
+            'size_label': '159.5 KB',
+            'last_write_time': '2026-10-22T16:33:00+03:00',
+            'kind': 'zip',
+            'content_type': 'application/zip',
+            'fetchable': True,
         }],
     }
 
@@ -331,6 +385,75 @@ def test_zip_page_links_entries_through_the_indexed_viewer(monkeypatch):
     assert 'source=zip' in body
     assert 'index=0' in body
     assert 'zip_hmac=' + HMAC in body
+    assert calls and calls[0][0] == 'IMAGE_SEARCH'
+
+
+def test_ncr_candidate_link_carries_the_session_window(monkeypatch):
+    app, calls = _app(monkeypatch)
+    monkeypatch.setattr(bpmod.bridge, 'candidates',
+                        lambda *a, **k: _ncr_result())
+    client = app.test_client()
+    _admin(client)
+
+    response = client.get(
+        '/ej-journal/ATM-TEST-NCR/images?'
+        'day=2026-10-22&start=10:33:53&end=10:35:30')
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'Open archive' in body
+    assert 'start=10:33:53' in body
+    assert 'end=10:35:30' in body
+
+
+def test_ncr_day_only_link_does_not_send_a_full_day_window(monkeypatch):
+    app, calls = _app(monkeypatch)
+    monkeypatch.setattr(bpmod.bridge, 'candidates',
+                        lambda *a, **k: _ncr_result())
+    client = app.test_client()
+    _admin(client)
+
+    response = client.get(
+        '/ej-journal/ATM-TEST-NCR/images?day=2026-10-22')
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'Open archive' in body
+    assert '&start=' not in body
+    assert '&end=' not in body
+
+
+def test_zip_page_passes_the_window_and_shows_local_times(monkeypatch):
+    app, calls = _app(monkeypatch)
+    seen = {}
+
+    def fake_zip_entries(atm_id, day, zip_hmac, start=None, end=None):
+        seen.update(atm_id=atm_id, day=day, start=start, end=end)
+        return _zip_result()
+
+    monkeypatch.setattr(bpmod.bridge, 'zip_entries', fake_zip_entries)
+    client = app.test_client()
+    _admin(client)
+
+    response = client.get(
+        f'/ej-journal/ATM-TEST-NCR/images/zip?'
+        f'day=2026-10-22&zip_hmac={HMAC}'
+        f'&start=15:34:44&end=15:35:21')
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert seen == {
+        'atm_id': 'ATM-TEST-NCR',
+        'day': '2026-10-22',
+        'start': '2026-10-22 15:34:44',
+        'end': '2026-10-22 15:35:21',
+    }
+    assert 'Captured (ATM local)' in body
+    assert 'Session (ATM local)' in body
+    assert 'Session start' in body
+    assert '2026-10-22 15:34:44' in body
+    assert 'ZIP mtime 2026-10-22T07:34:44.0000000 UTC' in body
+    assert 'never the link' in body
     assert calls and calls[0][0] == 'IMAGE_SEARCH'
 
 
