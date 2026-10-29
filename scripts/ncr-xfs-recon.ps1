@@ -40,10 +40,21 @@
 #>
 param(
   [ValidateSet('auto', '32', '64')]
-  [string]$Bit = 'auto'
+  [string]$Bit = 'auto',
+  # Hard limit for the whole run. WFSStartUp has no API-level timeout, and
+  # a broken NCR XFS manager can block inside the native call forever. The
+  # watchdog kills this process after N seconds and leaves a timeout file.
+  [int]$TimeoutSec = 180,
+  # Registry/DLL inventory only. Use this to prove the script runs on the
+  # ATM before touching the XFS manager.
+  [switch]$SkipXfs
 )
 
 $ErrorActionPreference = 'SilentlyContinue'
+
+# Printed before anything else so a silent window means PowerShell itself
+# did not start the script (or console QuickEdit has paused it).
+Write-Host "NCR XFS recon starting... (read-only; Ctrl+C is safe)"
 
 # ── Bitness ────────────────────────────────────────────────────────────────
 # [IntPtr]::Size works on PS 2.0/.NET 2.0; [Environment]::Is64BitProcess
@@ -59,7 +70,11 @@ if ($Bit -ne 'auto') {
       $exe = Join-Path $env:WINDIR 'SysWOW64\WindowsPowerShell\v1.0\powershell.exe'
     }
     if (Test-Path $exe) {
-      & $exe -NoProfile -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path -Bit $Bit
+      $childArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass',
+        '-File', $MyInvocation.MyCommand.Path, '-Bit', $Bit,
+        '-TimeoutSec', $TimeoutSec)
+      if ($SkipXfs) { $childArgs += '-SkipXfs' }
+      & $exe @childArgs
       exit $LASTEXITCODE
     }
     Write-Output "Requested $Bit-bit PowerShell not found: $exe"
@@ -80,6 +95,44 @@ try { Start-Transcript -Path $report -Force | Out-Null } catch {
   Write-Output "Copy the console output instead."
 }
 
+# Timestamped progress. Write-Output feeds the transcript; the explicit
+# flush makes the console show each step before a native call can block.
+function Write-Step([string]$text) {
+  $line = "[{0}] {1}" -f (Get-Date -Format 'HH:mm:ss'), $text
+  Write-Output $line
+  try { [Console]::Out.Flush() } catch {}
+}
+
+$timeoutFile = [IO.Path]::ChangeExtension($report, '.timeout.txt')
+$watchdog = $null
+$alive = $null
+if ($TimeoutSec -gt 0) {
+  $alive = Join-Path $env:TEMP ("ncr-xfs-recon-{0}.alive" -f $PID)
+  Set-Content -Path $alive -Value (Get-Date -Format o) -Encoding ASCII
+  try {
+    $watchdog = Start-Job -ScriptBlock {
+      param($parentPid, $alivePath, $timeoutPath, $seconds)
+      Start-Sleep -Seconds $seconds
+      if (Test-Path $alivePath) {
+        $msg = "TIMEOUT after $seconds seconds at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'). The script was killed inside a native call; the transcript's last line shows the step."
+        Set-Content -Path $timeoutPath -Value $msg -Encoding ASCII
+        Stop-Process -Id $parentPid -Force
+      }
+    } -ArgumentList $PID, $alive, $timeoutFile, $TimeoutSec
+    Write-Step "Watchdog: hard timeout ${TimeoutSec}s (timeout file: $timeoutFile)"
+  } catch {
+    Write-Step "Watchdog unavailable: $($_.Exception.Message)"
+  }
+}
+
+function Stop-ReconWatchdog {
+  if ($alive) { Remove-Item $alive -Force -ErrorAction SilentlyContinue }
+  if ($watchdog) {
+    Stop-Job $watchdog -ErrorAction SilentlyContinue
+    Remove-Job $watchdog -ErrorAction SilentlyContinue
+  }
+}
+
 Write-Output "NCR XFS ACCESS CHECK - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Write-Output "Host: $env:COMPUTERNAME"
 Write-Output "User: $(whoami)"
@@ -88,12 +141,17 @@ Write-Output "Report: $report"
 Write-Output ""
 
 # ── Zabbix agent account ───────────────────────────────────────────────────
-Write-Output "===== ZABBIX AGENT SERVICE ====="
+Write-Step "===== ZABBIX AGENT SERVICE ====="
 $zabbixFound = $false
-Get-WmiObject Win32_Service -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)zabbix' } | ForEach-Object {
+# Get-WmiObject can hang for minutes on an unhealthy ATM WMI repository.
+# Get-Service + sc.exe qc returns the same StartName/PathName without WMI.
+foreach ($svc in @(Get-Service -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)zabbix' })) {
   $zabbixFound = $true
-  Write-Output ("Name={0}  State={1}  StartName={2}" -f $_.Name, $_.State, $_.StartName)
-  Write-Output ("Path={0}" -f $_.PathName)
+  Write-Output ("Name={0}  State={1}" -f $svc.Name, $svc.Status)
+  $qc = @(& sc.exe qc $svc.Name 2>$null)
+  foreach ($line in $qc) {
+    if ($line -match '\S') { Write-Output ("  " + $line.Trim()) }
+  }
 }
 if (-not $zabbixFound) { Write-Output "No Zabbix service found (agent may be running as a console process)." }
 Write-Output ""
@@ -117,7 +175,7 @@ function Get-PeMachine([string]$path) {
   } catch { 'unknown' }
 }
 
-Write-Output "===== MSXFS.DLL ====="
+Write-Step "===== MSXFS.DLL ====="
 foreach ($dll in @(
   'C:\Windows\System32\msxfs.dll',
   'C:\Windows\SysWOW64\msxfs.dll'
@@ -133,7 +191,7 @@ foreach ($dll in @(
 Write-Output ""
 
 # ── XFS service providers ──────────────────────────────────────────────────
-Write-Output "===== XFS SERVICE PROVIDERS ====="
+Write-Step "===== XFS SERVICE PROVIDERS ====="
 foreach ($root in @(
   'HKLM:\SOFTWARE\XFS\SERVICE_PROVIDERS',
   'HKLM:\SOFTWARE\WOW6432Node\XFS\SERVICE_PROVIDERS'
@@ -187,7 +245,7 @@ function Get-XfsLogicalServices {
 }
 
 $services = @(Get-XfsLogicalServices)
-Write-Output "===== XFS LOGICAL SERVICES ====="
+Write-Step "===== XFS LOGICAL SERVICES ====="
 if ($services.Count -eq 0) {
   Write-Output "No logical services found under HKLM/HKCU/HKU."
 } else {
@@ -196,6 +254,14 @@ if ($services.Count -eq 0) {
 Write-Output ""
 
 # ── XFS P/Invoke (minimal, version-agnostic) ───────────────────────────────
+if ($SkipXfs) {
+  Write-Step "SkipXfs requested: stopping before Add-Type/WFSStartUp."
+  Stop-ReconWatchdog
+  try { Stop-Transcript | Out-Null } catch {}
+  exit 0
+}
+
+Write-Step "Add-Type C# probe (first run on old .NET can take 10-30s)"
 if (-not ('NcrXfsProbe' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -274,6 +340,7 @@ public static class NcrXfsProbe
 }
 '@
 }
+Write-Step "Add-Type complete"
 
 function New-XfsVersion {
   $v = New-Object NcrXfsVersion
@@ -283,11 +350,12 @@ function New-XfsVersion {
 }
 
 # ── WFSStartUp ─────────────────────────────────────────────────────────────
-Write-Output "===== WFSSTARTUP ====="
+Write-Step "===== WFSSTARTUP (no API timeout; watchdog armed) ====="
 $startupVersion = $null
 foreach ($v in @(0x00030203, 0x00030000, 0x00030003, 0x00031000, 0x00032000, 0x00033000, 0x00010001)) {
   $ver = New-XfsVersion
   $hr = -1
+  Write-Step ("Calling WFSStartUp 0x{0:X8}..." -f $v)
   try {
     $hr = [NcrXfsProbe]::WFSStartUp([uint32]$v, [ref]$ver)
   } catch {
@@ -300,6 +368,7 @@ foreach ($v in @(0x00030203, 0x00030000, 0x00030003, 0x00031000, 0x00032000, 0x0
 }
 if ($null -eq $startupVersion) {
   Write-Output "RESULT: WFSStartUp did not succeed from this process/account."
+  Stop-ReconWatchdog
   try { Stop-Transcript | Out-Null } catch {}
   exit 1
 }
@@ -324,15 +393,16 @@ $categories = @{
   'SIU' = @(801)        # sensors / doors / operator switch
 }
 
-Write-Output "===== WFSOPEN / WFSGETINFO ====="
+Write-Step "===== WFSOPEN / WFSGETINFO ====="
 foreach ($svc in $services) {
   if ($svc.Class -notmatch '^(CDM|IDC|PTR|PIN|SIU)$') { continue }
 
-  Write-Output ("--- {0}  class={1}  provider={2}" -f $svc.Name, $svc.Class, $svc.Provider)
+  Write-Step ("--- {0}  class={1}  provider={2}" -f $svc.Name, $svc.Class, $svc.Provider)
   $svcVer = New-XfsVersion
   $spiVer = New-XfsVersion
   [uint16]$hService = 0
   $openHr = -1
+  Write-Step ("  Calling WFSOpen({0})..." -f $svc.Name)
   try {
     $openHr = [NcrXfsProbe]::WFSOpen($svc.Name, $hApp, 'ZabbixATMRecon', 0, 3000,
       [uint32]$startupVersion, [ref]$svcVer, [ref]$spiVer, [ref]$hService)
@@ -347,6 +417,7 @@ foreach ($svc in $services) {
   foreach ($cat in $categories[$svc.Class]) {
     $resPtr = [IntPtr]::Zero
     $hr = -1
+    Write-Step ("  Calling WFSGetInfo {0}..." -f $cat)
     try {
       $hr = [NcrXfsProbe]::WFSGetInfo($hService, [uint32]$cat, [IntPtr]::Zero, 3000, [ref]$resPtr)
     } catch {
@@ -411,6 +482,7 @@ foreach ($svc in $services) {
   [void][NcrXfsProbe]::WFSClose($hService)
 }
 
+Write-Step "===== CLEANUP ====="
 if ($hApp -ne [IntPtr]::Zero) { [void][NcrXfsProbe]::WFSDestroyAppHandle($hApp) }
 [void][NcrXfsProbe]::WFSCleanUp()
 
@@ -425,4 +497,5 @@ Write-Output "VERSION: report the negotiated version; 3.02 uses older struct lay
 Write-Output "        than the GRG 3.20/3.30 probe, so parsing must be version-aware."
 Write-Output ""
 
+Stop-ReconWatchdog
 try { Stop-Transcript | Out-Null } catch {}

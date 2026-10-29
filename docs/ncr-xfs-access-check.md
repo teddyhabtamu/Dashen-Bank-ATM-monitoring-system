@@ -34,9 +34,51 @@ Each run writes `ncr-xfs-recon-<host>-<timestamp>.txt` to the Desktop (or
 `%TEMP%` when no Desktop is available).
 
 Then repeat the run that found the DLL **as the account the Zabbix agent
-uses** (`Get-WmiObject Win32_Service | Where Name -match zabbix`). XFS access
-is often account/session sensitive; the report prints `User:` so the result is
-unambiguous.
+uses** (`Get-Service | Where-Object Name -match zabbix`, then `sc.exe qc
+<name>` for its start account). XFS access is often account/session
+sensitive; the report prints `User:` so the result is unambiguous.
+
+## If it looks stuck
+
+The script prints a timestamped line before every risky call and writes the
+same line to the transcript. The three calls that can block are:
+
+| Step | Why it can hang | What to do |
+|---|---|---|
+| Zabbix service lookup | the old WMI query could hang on a sick WMI repository | removed; the script now uses `Get-Service` + `sc.exe qc` |
+| `Add-Type` | compiles the C# probe on old .NET; 10–30s is normal | wait; the next line says `Add-Type complete` |
+| `WFSStartUp` | the CEN/XFS call has **no timeout**; a stuck NCR service provider can block forever | the watchdog kills the process after `-TimeoutSec` (default 180s) |
+
+First run the inventory only, with no XFS calls:
+
+```powershell
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe `
+  -NoProfile -ExecutionPolicy Bypass `
+  -File C:\monitor\ncr-xfs-recon.ps1 -Bit 64 -SkipXfs
+```
+
+If that completes, the PowerShell/registry side is healthy and the hang is in
+the XFS call. Then run the real probe with a shorter watchdog:
+
+```powershell
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe `
+  -NoProfile -ExecutionPolicy Bypass `
+  -File C:\monitor\ncr-xfs-recon.ps1 -Bit 64 -TimeoutSec 120
+```
+
+If it times out, two files matter:
+
+- `ncr-xfs-recon-<host>-<timestamp>.txt` — the transcript; its **last line**
+  is the call that was running.
+- `ncr-xfs-recon-<host>-<timestamp>.timeout.txt` — written by the watchdog.
+
+Closing the PowerShell window or pressing `Ctrl+C` is safe: the probe only
+opens services and reads status, it never dispenses, resets or changes
+configuration.
+
+One Windows-specific false alarm: if the console title starts with
+**Select**, a QuickEdit selection has paused output. Press `Esc` and the
+script continues.
 
 ## What proves what
 
