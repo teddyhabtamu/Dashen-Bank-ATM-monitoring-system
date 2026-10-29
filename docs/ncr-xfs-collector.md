@@ -26,9 +26,10 @@ it without a second contract.
 - **CDM:** `CurrencyDispenser1` is selected by a successful `303` with cash
   units, not by the first service with a readable `301`.
 - **IDC:** `IDCardUnit1` is tried first, then `IDCardUnit2`. On the test core
-  unit 1 can return `-48` while the ATM application is running. Unit 2 can
-  open and return status while reporting `fwDevice=3` (no device); the probe
-  treats that as unusable and the portal falls back to WMI.
+  unit 1 can return `-48` while the ATM application is running. Unit 2 opens
+  and returns status but reports `fwDevice=3` (no device) — confirmed on
+  2026-10-29 — so the probe treats it as unusable and the portal falls back
+  to WMI.
 - **PIN:** `Pinpad1` is the only configured PIN service on the test core; if
   it returns `-48`, there is no XFS alternate and the portal uses WMI.
 - **PTR / SIU:** `ReceiptPrinter1` and `SIU` are the verified services.
@@ -189,11 +190,11 @@ XFS readings have been compared with the WMI readings for a full shift.
   the WMI card-reader/PIN rows for those two chips. The CDM and SIU data are
   unaffected.
   On the 2026-10-29 15:25 recon, `IDCardUnit1` returned `-48` but
-  `IDCardUnit2` opened and returned status. The live probe records unit 2's
-  `device` value in `attempts`; if it is `3` (no device), the probe
-  intentionally keeps the WMI fallback rather than showing a false red
-  "No device" chip. There is no working alternate for `Pinpad1`, so the PIN
-  chip stays on WMI.
+  `IDCardUnit2` opened and returned status. The live probe then showed
+  `IDCardUnit2` with `device=3` (no device), so the real reader is unit 1
+  and the ATM application owns it. The probe intentionally keeps the WMI
+  fallback rather than showing a false red "No device" chip. There is no
+  working alternate for `Pinpad1`, so the PIN chip stays on WMI.
 - **Cassette IDs:** the probe reuses the template's GRG-style IDs where the
   denomination matches. A site with different denominations gets `CU<n>`
   keys, which the existing template does not chart. A neutral NCR template
