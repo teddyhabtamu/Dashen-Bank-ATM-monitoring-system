@@ -621,7 +621,8 @@ if ($null -ne $startupVersion -and $hApp -ne [IntPtr]::Zero) {
     $attempts = @()
     $candidateNames = @($candidates | ForEach-Object { $_.Name })
     foreach ($svc in $candidates) {
-      $attempt = @{ service = $svc.Name; open_hresult = -1; status_hresult = -1 }
+      $attempt = @{ service = $svc.Name; open_hresult = -1; status_hresult = -1;
+                    device = 255 }
       $attempts += $attempt
       $open = Open-XfsService $svc.Name $hApp $version 3000
       $attempt.open_hresult = [int]$open.hr
@@ -702,6 +703,10 @@ if ($null -ne $startupVersion -and $hApp -ne [IntPtr]::Zero) {
       } else {
         $payloadItem.error = 'WFSGetInfo failed'
       }
+      $attempt.device = [int]$payloadItem.device
+      if ($payloadItem.ContainsKey('media')) {
+        $attempt.media = [int]$payloadItem.media
+      }
 
       if ($info.ptr -ne [IntPtr]::Zero) {
         [void][NcrXfsCollector]::WFSFreeResult($info.ptr)
@@ -709,6 +714,10 @@ if ($null -ne $startupVersion -and $hApp -ne [IntPtr]::Zero) {
       Close-XfsService $open.hService
 
       if ($fallback -eq $null) { $fallback = $payloadItem }
+      # A logical service can open and return status while reporting
+      # "no device" (IDCardUnit2 on the test core). Treat that as unusable
+      # so the portal keeps the WMI fallback instead of showing a red
+      # "No device" chip for a reader that is merely held elsewhere.
       if ($payloadItem.status_hresult -eq 0 -and $payloadItem.device -ne 3) {
         $payloadItem.candidates = $candidateNames
         $payloadItem.attempts = $attempts
