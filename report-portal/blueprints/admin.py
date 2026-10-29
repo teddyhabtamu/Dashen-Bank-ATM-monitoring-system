@@ -12,11 +12,16 @@ from db import get_db
 from audit import log_action
 from evidence import raw_info
 from state_summary import merge_live_in_service
-from helpers import STATE_ORDER
+from helpers import STATE_ORDER, state_label, state_colour
 from scheduler import REPORT_TYPE_LABELS
 from zabbix_modules.xfs_metrics import DISPENSE_UNITS, is_xfs, normalize
 
 logger = logging.getLogger(__name__)
+
+# The eight NetXMS states plus the two portal-only setup states the registry
+# can contain. The filter strip renders the eight always and the extras only
+# when their count is non-zero.
+FILTER_STATES = STATE_ORDER + ('NOT_PROVISIONED', 'INACTIVE')
 
 
 def _bg_zabbix_sync(rows):
@@ -601,7 +606,7 @@ def atm_list():
     vendor = request.args.get('vendor', '').strip()
     status = request.args.get('status', '').strip()
     state_filter = request.args.get('state', '').strip().upper()
-    if state_filter and state_filter not in STATE_ORDER:
+    if state_filter and state_filter not in FILTER_STATES:
         state_filter = ''
     region = request.args.get('region', '').strip()
     city = request.args.get('city', '').strip()
@@ -615,38 +620,42 @@ def atm_list():
     with get_db() as conn:
         cur = conn.cursor()
 
-        clauses = []
-        params = []
+        base_clauses = []
+        base_params = []
         if search:
             like = f'%{search}%'
-            clauses.append("(l.atm_id ILIKE %s OR l.branch ILIKE %s "
-                           "OR l.district ILIKE %s OR l.city ILIKE %s OR l.region ILIKE %s)")
-            params.extend([like, like, like, like, like])
+            base_clauses.append("(l.atm_id ILIKE %s OR l.branch ILIKE %s "
+                                "OR l.district ILIKE %s OR l.city ILIKE %s OR l.region ILIKE %s)")
+            base_params.extend([like, like, like, like, like])
         if vendor:
-            clauses.append("l.vendor = %s")
-            params.append(vendor)
+            base_clauses.append("l.vendor = %s")
+            base_params.append(vendor)
         if status:
-            clauses.append("l.status = %s")
-            params.append(status)
-        if state_filter:
-            # The list is paginated, so filter on the persisted state (the
-            # system of record, refreshed by state_manager every 30s) rather
-            # than fetching live state for the whole fleet on every request.
-            # The visible rows still get the fresh live overlay below.
-            clauses.append("COALESCE(s.state, 'UNKNOWN') = %s")
-            params.append(state_filter)
+            base_clauses.append("l.status = %s")
+            base_params.append(status)
         if region:
-            clauses.append("l.region = %s")
-            params.append(region)
+            base_clauses.append("l.region = %s")
+            base_params.append(region)
         if city:
-            clauses.append("l.city = %s")
-            params.append(city)
+            base_clauses.append("l.city = %s")
+            base_params.append(city)
 
-        where = "WHERE " + " AND ".join(clauses) if clauses else ""
+        # The list is paginated, so filter on the persisted state (the system
+        # of record, refreshed by state_manager every 30s) rather than fetching
+        # live state for the whole fleet on every request. The visible rows
+        # still get the fresh live overlay below.
+        list_clauses = list(base_clauses)
+        list_params = list(base_params)
+        if state_filter:
+            list_clauses.append("COALESCE(s.state, 'UNKNOWN') = %s")
+            list_params.append(state_filter)
+
         from_sql = ("FROM atm_locations l "
                     "LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id")
+        list_where = "WHERE " + " AND ".join(list_clauses) if list_clauses else ""
+        base_where = "WHERE " + " AND ".join(base_clauses) if base_clauses else ""
 
-        cur.execute(f"SELECT COUNT(*) {from_sql} {where}", params)
+        cur.execute(f"SELECT COUNT(*) {from_sql} {list_where}", list_params)
         total = cur.fetchone()[0]
         total_pages = max(1, (total + per_page - 1) // per_page)
         page = min(page, total_pages)
@@ -654,12 +663,29 @@ def atm_list():
         cur.execute(f"""SELECT l.*, s.state, s.last_seen AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa' as last_seen,
                                s.state_changed_at
                         {from_sql}
-                        {where}
+                        {list_where}
                         ORDER BY l.atm_id LIMIT %s OFFSET %s""",
-                    params + [per_page, (page - 1) * per_page])
+                    list_params + [per_page, (page - 1) * per_page])
 
         cols = [d[0] for d in cur.description]
         rows = cur.fetchall()
+
+        # Counts for every state chip. Deliberately excludes the state filter
+        # itself so the chips stay switchable while vendor/region/search are
+        # active. Persisted state, same source as the filter above.
+        cur.execute(f"""SELECT COALESCE(s.state, 'UNKNOWN') AS state, COUNT(*)
+                        {from_sql}
+                        {base_where}
+                        GROUP BY 1""", base_params)
+        raw_counts = {r[0]: int(r[1]) for r in cur.fetchall()}
+        state_all_count = sum(raw_counts.values())
+        state_counts = {key: raw_counts.get(key, 0) for key in STATE_ORDER}
+        state_extra = [
+            {'state': key, 'label': state_label(key),
+             'colour': state_colour(key), 'count': raw_counts[key]}
+            for key in ('NOT_PROVISIONED', 'INACTIVE')
+            if raw_counts.get(key)
+        ]
 
         # Fetch distinct filter options from the DB for the dropdowns
         cur.execute("SELECT DISTINCT region FROM atm_locations WHERE region IS NOT NULL ORDER BY region")
@@ -712,6 +738,8 @@ def atm_list():
                            search=search, fields=FIELDS, summary=summary,
                            f_vendor=vendor, f_status=status, f_region=region, f_city=city,
                            f_state=state_filter,
+                           state_counts=state_counts, state_all_count=state_all_count,
+                           state_extra=state_extra,
                            filter_options={'regions': region_options, 'cities': city_options},
                            vendor_options=vendor_options)
 

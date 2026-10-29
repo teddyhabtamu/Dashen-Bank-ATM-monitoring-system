@@ -63,10 +63,23 @@ def test_unknown_values_fall_back_without_crashing():
 
 def test_atm_registration_offers_the_eight_state_filter():
     html = (ROOT / 'report-portal' / 'templates' / 'admin_atm.html').read_text()
-    assert 'name="state"' in html
-    assert 'state_legend()' in html, (
+    chips = (ROOT / 'report-portal' / 'templates' / '_state_filter.html').read_text()
+    assert "_state_filter.html" in html, (
+        'the horizontal legend is the state filter, not a duplicate dropdown')
+    assert 'name="state"' in html, 'applyFilter must carry the hidden state value'
+    assert 'state_legend()' in chips, (
         'the filter options must come from the same eight-state map as the legend')
+    assert 'filterByState' in chips, 'each state chip must be clickable'
     assert "'state'" in html, 'applyFilter must carry the state parameter'
+
+
+def test_state_filter_counts_are_computed_without_the_state_clause():
+    src = (ROOT / 'report-portal' / 'blueprints' / 'admin.py').read_text()
+    assert 'state_counts' in src and 'state_all_count' in src
+    assert 'GROUP BY 1' in src, (
+        'one grouped query supplies every chip count; do not count per chip')
+    assert 'list_clauses = list(base_clauses)' in src, (
+        'chip counts must exclude the selected state so the user can switch')
 
 
 def test_atm_list_filters_on_the_persisted_state():
