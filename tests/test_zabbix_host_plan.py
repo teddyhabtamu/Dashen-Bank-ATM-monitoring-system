@@ -261,6 +261,36 @@ def test_changing_snmp_community_keeps_the_agent_interface(monkeypatch):
     assert by_type['2']['details']['community'] == 'new_community'
 
 
+def test_placeholder_community_never_overwrites_zabbix(monkeypatch):
+    """The UAT seed ships CHANGE_ME. A blind sync would push that into Zabbix
+    and stop SNMP collection on a host that was already working."""
+    install(monkeypatch, FakeZabbix(hosts={'ATM-0001': existing()}))
+    _, plans = zs.plan_hosts([row(snmp_community='CHANGE_ME')])
+    assert plans[0]['action'] == 'skipped'
+    assert plans[0]['params'] is None
+
+
+def test_a_real_community_still_updates_the_interface(monkeypatch):
+    install(monkeypatch, FakeZabbix(hosts={'ATM-0001': existing()}))
+    _, plans = zs.plan_hosts([row(snmp_community='rotated_community')])
+    assert 'interface/community' in plans[0]['changes']
+    snmp = [i for i in plans[0]['params']['interfaces']
+            if str(i['type']) == '2'][0]
+    assert snmp['details']['community'] == 'rotated_community'
+
+
+def test_ip_change_with_a_placeholder_keeps_the_zabbix_community(monkeypatch):
+    """A real change (the IP) must still apply without dragging the
+    placeholder credential along with it."""
+    install(monkeypatch, FakeZabbix(hosts={'ATM-0001': existing()}))
+    _, plans = zs.plan_hosts([row(ip_address='10.41.30.6',
+                                  snmp_community='CHANGE_ME')])
+    snmp = [i for i in plans[0]['params']['interfaces']
+            if str(i['type']) == '2'][0]
+    assert snmp['ip'] == '10.41.30.6'
+    assert snmp['details']['community'] == 'dashen_sim'
+
+
 def test_missing_templates_are_both_linked(monkeypatch):
     install(monkeypatch, FakeZabbix(hosts={'ATM-0001': existing(parentTemplates=[])}))
     _, plans = zs.plan_hosts([row()])

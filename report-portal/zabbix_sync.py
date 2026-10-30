@@ -28,6 +28,19 @@ TEMPLATE_WMI_NAME = "Dashen Bank ATM WMI Parts"
 AGENT_PORT = "10050"
 SNMP_PORT = "161"
 
+# The UAT seed ships CHANGE_ME until the bank supplies the real string.  A
+# placeholder (or an empty value) must never overwrite the community that is
+# already working in Zabbix -- doing so would stop SNMP collection on a host
+# that was healthy, and the operator would see a sync "success" that broke it.
+PLACEHOLDER_COMMUNITIES = {"CHANGE_ME", "CHANGEME", "PLACEHOLDER",
+                           "YOUR_COMMUNITY", "TODO"}
+
+
+def _real_community(value):
+    """The value, or '' when it is empty/placeholder."""
+    text = (value or "").strip()
+    return "" if text.upper() in PLACEHOLDER_COMMUNITIES else text
+
 TIMEOUT = int(os.environ.get("ZABBIX_SYNC_TIMEOUT", "8"))
 MAX_BATCH = int(os.environ.get("ZABBIX_SYNC_MAX_BATCH", "200"))
 
@@ -234,7 +247,7 @@ def _plan_update(a, cur, tids, groups, create_groups):
     if (cur.get("name") or "") != want_name:
         upd["name"] = want_name
         changed.append("visible name")
-    want_community = (a.get("snmp_community") or "").strip() or "dashen_sim"
+    portal_community = _real_community(a.get("snmp_community"))
     try:
         want_version = int(a.get("snmp_version") or "2")
     except (ValueError, TypeError):
@@ -256,8 +269,12 @@ def _plan_update(a, cur, tids, groups, create_groups):
     if snmp:
         det = snmp.get("details") or {}
         want_ip = (a.get("ip_address") or "").strip()
+        # Keep the Zabbix community when the portal has no real one yet.
+        effective_community = portal_community or det.get("community") or ""
+        community_differs = bool(portal_community) and \
+            det.get("community") != portal_community
         if (snmp.get("ip") != want_ip
-                or det.get("community") != want_community
+                or community_differs
                 or str(det.get("version")) != str(want_version)):
             if "interfaces" not in upd:   # do not clobber an agent-interface append
                 # host.update REPLACES the whole interface set. Sending only
@@ -283,14 +300,14 @@ def _plan_update(a, cur, tids, groups, create_groups):
                     if iface["interfaceid"] == snmp["interfaceid"]:
                         row["ip"] = want_ip
                         row["details"] = {"version": want_version, "bulk": 0,
-                                          "community": want_community}
+                                          "community": effective_community}
                     upd["interfaces"].append(row)
             else:
                 for i in upd["interfaces"]:
                     if i.get("interfaceid") == snmp["interfaceid"]:
                         i["ip"] = want_ip
                         i["details"] = {"version": want_version, "bulk": 0,
-                                        "community": want_community}
+                                        "community": effective_community}
             changed.append("interface/community")
     have_macros = {m.get("macro"): m.get("value") for m in (cur.get("macros") or [])}
     if have_macros.get("{$ATM_VENDOR}") != vendor:
