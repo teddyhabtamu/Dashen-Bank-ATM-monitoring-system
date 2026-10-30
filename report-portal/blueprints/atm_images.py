@@ -198,6 +198,11 @@ def atm_images(atm_id):
         form_error = str(exc)
         searched = False
 
+    # A full-day window is not a session.  Do not carry it into the archive
+    # page as a ranking window; it would mark every entry as "within window".
+    if start.time() == time.min and end.time() >= time(23, 59, 0):
+        has_window = False
+
     if searched and not form_error:
         try:
             result = bridge.candidates(
@@ -439,6 +444,14 @@ def atm_image_zip(atm_id):
         except ValueError as exc:
             return _no_store(Response(str(exc), status=400,
                                       mimetype='text/plain'))
+
+    # A full-day window is not a session.  Treat it as "no window" so the
+    # archive shows local capture/session times without pretending every
+    # entry is inside the session.
+    if (window_start is not None
+            and window_start.time() == time.min
+            and window_end.time() >= time(23, 59, 0)):
+        window_start = window_end = None
 
     result = None
     unavailable = False

@@ -71,6 +71,15 @@
   {{ result.get('caveat') or "The zip name identifies the day container, not a transaction link. Compare the entry capture/session time with the EJ interval; the card field is never the link." }}
 </div>
 
+{% if not result.get('session_start') %}
+<div class="banner banner-note">
+  <strong>No session window selected.</strong>
+  Entries are shown in archive order with their local capture and session
+  times. Open the archive from a transaction's <strong>Images</strong> link or
+  a candidate search with a session window to rank the entries.
+</div>
+{% endif %}
+
 <div class="card">
   <div class="card-header"><h2>Archive entries</h2></div>
   <div class="op-table-wrap" style="overflow-x:auto">

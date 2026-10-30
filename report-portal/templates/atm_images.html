@@ -152,7 +152,13 @@
 </div>
 {% endif %}
 
-{% if not result.get('start_anchor_count') and not result.get('end_anchor_count') and result.get('candidate_count') %}
+{% if result.get('vendor') == 'NCR' and result.get('candidate_count') %}
+<div class="banner banner-warn">
+  <strong>The zip is a day container.</strong>
+  Set the window to the session's card-inserted → card-returned interval, then
+  open the archive. The archive ranks entries by their ATM-local session time.
+</div>
+{% elif not result.get('start_anchor_count') and not result.get('end_anchor_count') and result.get('candidate_count') %}
 <div class="banner banner-warn">
   <strong>No start or end anchor is in this window.</strong>
   The files below fall inside the interval, but none is close enough to a

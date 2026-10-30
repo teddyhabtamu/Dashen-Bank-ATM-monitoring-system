@@ -423,6 +423,47 @@ def test_ncr_day_only_link_does_not_send_a_full_day_window(monkeypatch):
     assert '&end=' not in body
 
 
+def test_ncr_full_day_link_is_treated_as_no_session_window(monkeypatch):
+    app, calls = _app(monkeypatch)
+    monkeypatch.setattr(bpmod.bridge, 'candidates',
+                        lambda *a, **k: _ncr_result())
+    client = app.test_client()
+    _admin(client)
+
+    response = client.get(
+        '/ej-journal/ATM-TEST-NCR/images?'
+        'day=2026-10-22&start=00:00:00&end=23:59:59')
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'Open archive' in body
+    assert '&start=' not in body
+    assert '&end=' not in body
+
+
+def test_zip_page_ignores_a_full_day_window_for_ranking(monkeypatch):
+    app, calls = _app(monkeypatch)
+    seen = {}
+
+    def fake_zip_entries(*args, **kwargs):
+        seen['args'] = args
+        seen['kwargs'] = kwargs
+        return _zip_result()
+
+    monkeypatch.setattr(bpmod.bridge, 'zip_entries', fake_zip_entries)
+    client = app.test_client()
+    _admin(client)
+
+    response = client.get(
+        f'/ej-journal/ATM-TEST-NCR/images/zip?'
+        f'day=2026-10-22&zip_hmac={HMAC}'
+        f'&start=00:00:00&end=23:59:59')
+
+    assert response.status_code == 200
+    assert len(seen['args']) == 3
+    assert seen['kwargs'] == {}
+
+
 def test_zip_page_passes_the_window_and_shows_local_times(monkeypatch):
     app, calls = _app(monkeypatch)
     seen = {}
