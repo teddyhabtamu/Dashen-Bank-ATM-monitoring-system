@@ -305,20 +305,31 @@ def _zbx_call(method, params, auth, _retried=False):
     return None
 
 
-def fetch_zabbix_metrics(atm_id):
-    """{item_key: lastvalue} for the ATM's Zabbix host, or None.
+def fetch_zabbix_snapshot(atm_id):
+    """{'metrics', 'clocks', 'delays'} for the ATM's host, or None.
+
+    The clock is load-bearing: without it the portal cannot tell a fresh
+    reading from one Zabbix collected 25 minutes ago.  That is how the UAT
+    registry kept painting a dead agent's last XFS snapshot as LIVE with
+    "Hardware Faults" while the detail page correctly said unreachable.
 
     Cached for a few seconds (ZABBIX_METRICS_CACHE_TTL, default 10s). Telemetry
     itself only refreshes every 10-30s, so this costs no accuracy and removes
     the portal's own API stampede at fleet scale - see report-portal/zbx_cache.
     """
     from zbx_cache import get as _cached
-    return _cached(f'metrics:{atm_id}',
-                   lambda k: _fetch_zabbix_metrics(k.split(':', 1)[1]),
+    return _cached(f'zbx-snapshot:{atm_id}',
+                   lambda k: _fetch_zabbix_snapshot(k.split(':', 1)[1]),
                    cacheable=lambda v: v is not None)
 
 
-def _fetch_zabbix_metrics(atm_id):
+def fetch_zabbix_metrics(atm_id):
+    """{item_key: lastvalue} for the ATM's Zabbix host, or None."""
+    snapshot = fetch_zabbix_snapshot(atm_id)
+    return snapshot['metrics'] if snapshot else None
+
+
+def _fetch_zabbix_snapshot(atm_id):
     auth = _zbx_login()
     if not auth:
         return None
@@ -329,15 +340,23 @@ def _fetch_zabbix_metrics(atm_id):
             return None
         hostid = hosts[0]['hostid']
         items = _zbx_call('item.get', {'hostids': [hostid],
-                                       'output': ['key_', 'lastvalue', 'lastclock'],
+                                       'output': ['key_', 'lastvalue',
+                                                  'lastclock', 'delay'],
                                        'filter': {'status': 0}}, auth)
         if not items:
             return None
         # lastclock "0" = never collected (Zabbix still reports lastvalue "0"):
         # map to None so the detail page shows grey no-data instead of fake zeros.
-        raw = {it['key_']: (it.get('lastvalue') if str(it.get('lastclock')) != '0' else None)
-               for it in items}
-        return normalize(raw)
+        raw, clocks, delays = {}, {}, {}
+        for it in items:
+            key = it.get('key_')
+            if not key:
+                continue
+            clock = int(it.get('lastclock') or 0)
+            raw[key] = it.get('lastvalue') if clock else None
+            clocks[key] = clock
+            delays[key] = it.get('delay')
+        return {'metrics': normalize(raw), 'clocks': clocks, 'delays': delays}
     except Exception as e:
         # Silence here is why the first diagnosis produced an empty log: every
         # failure path in this function returned None without saying so.
@@ -370,6 +389,50 @@ def _item_delay_seconds(value):
     number = int(match.group(1))
     unit = match.group(2) or 's'
     return max(1, number * {'s': 1, 'm': 60, 'h': 3600, 'd': 86400}[unit])
+
+
+STATE_SOURCE_KEYS = ('atm.status', 'atm.net.link', 'atm.cash.cassette1')
+
+
+def _state_source_freshness(snapshot, now=None):
+    """(age_seconds, allowed_seconds) for the values that decide the state.
+
+    XFS hosts are judged on their XFS master/dependents, WMI hosts on the
+    atm.parts master, everything else on the SNMP core keys.  The budget comes
+    from the item's own polling interval (two missed polls plus slack), so a
+    5-minute WMI probe is not called dead after six minutes while a 30-second
+    SNMP item is.  (None, None) when nothing relevant has a clock.
+    """
+    if not snapshot:
+        return None, None
+    metrics = snapshot.get('metrics') or {}
+    clocks = snapshot.get('clocks') or {}
+    delays = snapshot.get('delays') or {}
+    if is_xfs(metrics):
+        keys = [k for k in metrics if str(k).startswith('atm.xfs.')]
+    elif metrics.get('atm.parts') not in (None, ''):
+        keys = ['atm.parts']
+    else:
+        keys = [k for k in STATE_SOURCE_KEYS if metrics.get(k) not in (None, '')]
+    seen = [(clocks.get(k) or 0, delays.get(k)) for k in keys]
+    seen = [(clock, delay) for clock, delay in seen if clock]
+    if not seen:
+        return None, None
+    newest = max(clock for clock, _delay in seen)
+    cadence = max(_item_delay_seconds(delay) for _clock, delay in seen)
+    allowed = min(900, max(120, int(cadence * 2.5) + 60))
+    return max(0, int((now or time.time()) - newest)), allowed
+
+
+def live_state_is_current(snapshot, now=None):
+    """True only when the state's own source is within its polling budget.
+
+    The registry and the dashboard donut must not override a persisted
+    UNREACHABLE with a fault recomputed from a stale snapshot: that is the
+    exact "Agent Disconnected chips + Hardware Faults rows" contradiction.
+    """
+    age, allowed = _state_source_freshness(snapshot, now)
+    return age is not None and age <= allowed
 
 
 def _age_label(seconds):
@@ -494,7 +557,6 @@ def batch_fetch_live_states(atms):
     def fetch_one(atm):
         atm_id = atm['atm_id']
         vendor = atm.get('vendor', 'NCR')
-        metrics = None
         if ENABLE_SIMULATORS:
             port = atm.get('sim_port')
             if not port:
@@ -506,10 +568,19 @@ def batch_fetch_live_states(atms):
                 metrics = _sim_to_zbx(r.json()) if r.status_code == 200 else None
             except Exception:
                 metrics = None
-        else:
-            metrics = fetch_zabbix_metrics(atm_id)
-        if metrics:
-            state = determine_live_state(vendor, metrics)
+            if metrics:
+                state = determine_live_state(vendor, metrics)
+                if state:
+                    return (atm_id, state, datetime.now(timezone.utc))
+            return (atm_id, None, None)
+
+        # Real Zabbix: the state is only "live" while the values that drive it
+        # are inside their polling budget.  A stale snapshot must not overwrite
+        # the persisted state with a fault recomputed from old data - that is
+        # how "Agent Disconnected" rows became "Hardware Faults" in UAT.
+        snapshot = fetch_zabbix_snapshot(atm_id)
+        if snapshot and live_state_is_current(snapshot):
+            state = determine_live_state(vendor, snapshot['metrics'])
             if state:
                 return (atm_id, state, datetime.now(timezone.utc))
         return (atm_id, None, None)
