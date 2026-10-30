@@ -250,6 +250,12 @@ services:
       - ./zabbix_modules:/app/zabbix_modules:ro
       - ./config/status_map.json:/app/config/status_map.json:ro
       - ./config/cassette_capacity.json:/app/config/cassette_capacity.json:ro
+    # The portal runs as the unprivileged appuser (uid 10001).  The bridge
+    # socket is owned by the deploy user and mode 0660, so the container needs
+    # that group as a supplementary group to connect.  Set this to `id -g`
+    # for the account running atm-image-bridge; 1000 is the usual UAT value.
+    group_add:
+      - "${ATM_IMAGE_BRIDGE_GID:-1000}"
     ports:
       - "8888:8888"
     depends_on:

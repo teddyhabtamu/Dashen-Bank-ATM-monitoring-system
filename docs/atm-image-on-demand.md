@@ -483,12 +483,19 @@ fi
 ```
 
 `docker-compose.yml` mounts `/run/atm-image-bridge` read-only into
-`report-portal` and passes `ATM_IMAGE_BRIDGE_TOKEN`. If the directory does not
-exist, create it with the service user before recreating the portal; otherwise
-Docker may create a root-owned directory that the service cannot use:
+`report-portal` and passes `ATM_IMAGE_BRIDGE_TOKEN`. The portal runs as an
+unprivileged user, so it must also join the bridge service's group to traverse
+the `0750` directory and connect to the `0660` socket. Set
+`ATM_IMAGE_BRIDGE_GID` in `.env` to that group (`id -g tewodros` on the UAT
+host; the template defaults to `1000`).
+
+If the directory does not exist, create it with the service user before
+recreating the portal; otherwise Docker may create a root-owned directory that
+the service cannot use:
 
 ```bash
 sudo install -d -o tewodros -g tewodros -m 0750 /run/atm-image-bridge
+# .env: ATM_IMAGE_BRIDGE_GID=$(id -g tewodros)
 docker compose build report-portal
 docker compose up -d --force-recreate report-portal
 docker compose exec report-portal python -c \
@@ -503,8 +510,9 @@ docker compose exec report-portal python -c \
 ```
 
 If it prints `False` or `Permission denied`, the bridge is not running, the
-mount was created before the socket directory existed, or SELinux is denying
-the bind mount. Fix the service/order first; do not disable SELinux. On an
+mount was created before the socket directory existed, `ATM_IMAGE_BRIDGE_GID`
+does not match the bridge service's group, or SELinux is denying the bind
+mount. Fix the service/order/GID first; do not disable SELinux. On an
 enforcing host, inspect `ausearch -m avc -ts recent` and label the shared
 directory under change control.
 
@@ -649,7 +657,7 @@ audit-retention policy.
 | `agent timeout` | Network, ACL, or agent load | Check TCP/10050 ACL and the agent log |
 | `agent_unreachable` | TCP/10050 refused or timed out during the 3-second preflight | Treat as ATM offline/off-network; do not treat it as missing evidence |
 | `zabbix_get not found` | Host tooling missing | Install the Zabbix agent package or set `ZBX_GET` |
-| Viewer says **Image bridge not configured** | Socket/token missing in the portal | Check `ATM_IMAGE_BRIDGE_*` in `.env`, the read-only `/run/atm-image-bridge` mount, and `systemctl status atm-image-bridge` |
+| Viewer says **Image bridge not configured** | Socket/token missing in the portal | Check `ATM_IMAGE_BRIDGE_*` in `.env`, the read-only `/run/atm-image-bridge` mount, `ATM_IMAGE_BRIDGE_GID` matching `id -g <bridge-user>`, and `systemctl status atm-image-bridge` |
 | Viewer says bridge not running right after a bridge restart | The running container is mounted to the old `/run/atm-image-bridge` inode; systemd removed and recreated it | Keep `RuntimeDirectoryPreserve=yes` in the unit. After adding it, restart the bridge and recreate the portal once. |
 | Viewer says **Image transport failed** | Bridge is down or the ATM did not answer | Check the bridge journal, `zabbix_get`, and TCP/10050; do not treat this as missing evidence |
 | Viewer says **ATM agent unreachable** | The 3-second TCP/10050 preflight failed | Check ATM power/link and the IP mapping; this is an outage, not missing evidence |

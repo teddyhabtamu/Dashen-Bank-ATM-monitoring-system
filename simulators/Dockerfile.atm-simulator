@@ -2,19 +2,26 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+ENV PYTHONDONTWRITEBYTECODE=1
+
 RUN pip install --no-cache-dir --only-binary :all: \
     psycopg2-binary==2.9.13 \
     pysnmp==6.2.6 \
-    requests==2.34.2
+    requests==2.34.2 \
+    && useradd --create-home --uid 10001 --shell /bin/false appuser \
+    && mkdir -p /var/log/atm-ej \
+    && chown -R appuser:appuser /var/log/atm-ej
 
-COPY simulators/common.py .
-COPY simulators/sim_engine.py .
-COPY simulators/snmp_agent.py .
-COPY simulators/txn_engine.py .
-COPY simulators/ej_engine.py .
-COPY simulators/state_manager.py .
-COPY zabbix_modules/ ./zabbix_modules/
-COPY config/status_map.json ./config/status_map.json
+COPY --chown=appuser:appuser simulators/common.py .
+COPY --chown=appuser:appuser simulators/sim_engine.py .
+COPY --chown=appuser:appuser simulators/snmp_agent.py .
+COPY --chown=appuser:appuser simulators/txn_engine.py .
+COPY --chown=appuser:appuser simulators/ej_engine.py .
+COPY --chown=appuser:appuser simulators/state_manager.py .
+COPY --chown=appuser:appuser zabbix_modules/ ./zabbix_modules/
+COPY --chown=appuser:appuser config/status_map.json ./config/status_map.json
+
+USER appuser
 
 # All services override command:; this only sets a safe default.
 CMD ["python3", "state_manager.py"]

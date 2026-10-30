@@ -2,8 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir --only-binary :all: psycopg2-binary==2.9.13
+ENV PYTHONDONTWRITEBYTECODE=1
 
-COPY iso8583_gateway.py .
+RUN pip install --no-cache-dir --only-binary :all: psycopg2-binary==2.9.13 \
+    && useradd --create-home --uid 10001 --shell /bin/false appuser
 
+COPY --chown=appuser:appuser iso8583_gateway.py .
+
+USER appuser
 CMD ["python3", "-u", "iso8583_gateway.py"]

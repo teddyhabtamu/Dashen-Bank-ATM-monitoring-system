@@ -305,6 +305,45 @@ def test_dockerfile_copies_requirements_before_installing_them():
         'pip install --no-cache-dir --requirement=requirements.lock')
 
 
+def test_runtime_images_run_as_a_non_root_user():
+    """The Sonar finding is only closed if the final image user is non-root.
+
+    A ``useradd`` without a later ``USER`` (or a ``USER root`` at the end)
+    would leave the container running as root and silently reopen the issue.
+    """
+    for rel in ('report-portal/Dockerfile',
+                'camel/Dockerfile.gateway',
+                'simulators/Dockerfile.atm-simulator'):
+        text = (REPO / rel).read_text()
+        assert 'useradd' in text, '%s must create the app user' % rel
+        assert 'USER appuser' in text, '%s must switch to it' % rel
+        assert text.rindex('USER appuser') > text.index('useradd'), (
+            '%s switches user before the account exists' % rel)
+        assert 'USER root' not in text, '%s must not end as root' % rel
+
+
+def test_portal_joins_the_bridge_socket_group():
+    """The portal is non-root now; the host bridge socket is 0660 and its
+    directory 0750.  Without the matching supplementary group the image
+    viewer fails with 'Image bridge not configured' even when it is running."""
+    compose = (REPO / 'docker-compose.yml').read_text()
+    block = compose[compose.index('  report-portal:'):compose.index('  cash-watcher:')]
+    assert 'group_add:' in block, 'report-portal must join the bridge group'
+    assert 'ATM_IMAGE_BRIDGE_GID' in block, (
+        'the bridge GID must be configurable per host')
+    assert '/run/atm-image-bridge:/run/atm-image-bridge:ro' in block
+
+
+def test_scheduler_lock_lives_in_the_app_users_home():
+    """The portal is non-root now.  A root-owned lock left in /tmp by an older
+    image would make every worker skip the scheduler without failing loudly."""
+    src = (REPO / 'report-portal' / 'scheduler.py').read_text()
+    assert 'PORTAL_SCHEDULER_LOCK' in src, 'the lock path needs an override'
+    assert "expanduser('~')" in src, 'the default must be the app user home'
+    assert "tempfile.gettempdir(), 'portal-scheduler.lock'" not in src, (
+        'the shared temp directory can contain a root-owned lock')
+
+
 def test_ncr_recon_has_progress_and_a_watchdog():
     """The recon runs on old ATM hardware where WFSStartUp can block forever.
     A silent window gives no clue; WMI can hang before XFS is even reached."""

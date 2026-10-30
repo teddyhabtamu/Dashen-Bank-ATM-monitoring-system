@@ -7,6 +7,7 @@ from flask import Blueprint, render_template, request, redirect, session, url_fo
 from urllib.parse import urlparse
 from audit import log_action
 from db import get_db
+from log_safety import safe_log
 from werkzeug.security import check_password_hash, generate_password_hash
 
 logger = logging.getLogger(__name__)
@@ -215,7 +216,8 @@ def _ldap_auth(username, password):
         return False, None, False
     except Exception as e:
         # Server answered (bad credentials, unknown user, ...): no fallback.
-        logger.warning('LDAP auth refused for user=%s: %s', username, e)
+        logger.warning('LDAP auth refused for user=%s: %s',
+                       safe_log(username), safe_log(e))
         return False, None, True
 
 
@@ -304,7 +306,7 @@ def role_required(*roles):
             required_level = min(ROLE_HIERARCHY.get(r, 0) for r in roles)
             if user_level < required_level:
                 logger.warning('Access denied: user=%s role=%s required=%s',
-                               session.get('username'), user_role, roles)
+                               safe_log(session.get('username')), user_role, roles)
                 return render_template('base.html', error='Access denied. Insufficient permissions.'), 403
             return f(*args, **kwargs)
         return decorated
@@ -359,15 +361,14 @@ def login():
                     cur.close()
             except Exception:
                 pass
-            logger.info('Login successful: user=%s role=%s from=%s',
-                        username, session['role'], request.remote_addr)
+            logger.info('Login successful: user=%s role=%s from=%s', safe_log(username), session['role'], request.remote_addr)  # NOSONAR: safe_log strips CR/LF
             log_action('LOGIN', f'User {username} (role={session["role"]}) logged in from {request.remote_addr}')
             if session.get('must_change_pw'):
                 flash('You must change your password before continuing.', 'warning')
                 return redirect(url_for('auth.profile'))
             return redirect(next_page)
 
-        logger.warning('Login failed: user=%s from=%s', username, request.remote_addr)
+        logger.warning('Login failed: user=%s from=%s', safe_log(username), request.remote_addr)  # NOSONAR: safe_log strips CR/LF
         try:
             log_action('LOGIN_FAILED', f'user={username} from={request.remote_addr}')
         except Exception:

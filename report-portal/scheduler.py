@@ -559,13 +559,18 @@ def create_scheduler(app):
     # Singleton across gunicorn workers: only the worker holding the lock
     # runs the poller, so scheduled emails never duplicate. Single container
     # = single host, so a local file lock is sufficient (no Redis needed).
+    #
+    # The lock lives in the app user's home, not the shared temp directory.
+    # The portal now runs as an unprivileged user; a root-owned lock left in
+    # /tmp by an older image would otherwise make every worker skip the
+    # scheduler (the exception below is intentionally non-fatal).
     import fcntl
-    import tempfile
     global _sched_lock_fh
-    lock_path = os.path.join(tempfile.gettempdir(), 'portal-scheduler.lock')
+    lock_path = os.environ.get('PORTAL_SCHEDULER_LOCK') or os.path.join(
+        os.path.expanduser('~'), '.portal-scheduler.lock')
     try:
-        # O_NOFOLLOW + O_CREAT + mode 0600: a pre-created symlink in the
-        # shared temp directory cannot redirect the lock write.
+        # O_NOFOLLOW + O_CREAT + mode 0600: a pre-created symlink cannot
+        # redirect the lock write.
         fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         _sched_lock_fh = os.fdopen(fd, 'w')
         fcntl.flock(_sched_lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
