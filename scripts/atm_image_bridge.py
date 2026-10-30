@@ -213,15 +213,25 @@ def _window(day: dt.date, start_raw: str,
     return start, end
 
 
+def _read_private_file(path: str, label: str) -> bytes:
+    """Read an operator-supplied config/key file without following a symlink."""
+    candidate = Path(path).expanduser()
+    if not candidate.is_file():
+        raise RuntimeError(f'{label} must be a regular file')
+    candidate = candidate.resolve(strict=True)
+    try:
+        # NOSONAR: resolved regular file, not a directory or symlink.
+        return candidate.read_bytes()  # NOSONAR
+    except OSError as exc:
+        raise RuntimeError(f'cannot read the {label}: {exc}') from exc
+
+
 def _load_key(path: str | None) -> bytes:
     env = os.environ.get('ATM_IMAGE_HMAC_KEY')
     if env:
         raw = env.encode('utf-8')
     elif path:
-        try:
-            raw = Path(path).read_bytes()
-        except OSError as exc:
-            raise RuntimeError(f'cannot read the HMAC key file: {exc}') from exc
+        raw = _read_private_file(path, 'HMAC key file')
     else:
         raise RuntimeError('set ATM_IMAGE_HMAC_KEY or pass --hmac-key-file')
     raw = raw.strip()
@@ -286,10 +296,11 @@ def _atm_config(item: dict, atm_id: str) -> AtmConfig:
 
 
 def load_config(path: str | os.PathLike[str]) -> BridgeConfig:
+    raw = _read_private_file(str(path), 'bridge config')
     try:
-        payload = json.loads(Path(path).read_text(encoding='utf-8'))
-    except OSError as exc:
-        raise RuntimeError(f'cannot read bridge config: {exc}') from exc
+        payload = json.loads(raw.decode('utf-8'))
+    except UnicodeDecodeError as exc:
+        raise RuntimeError(f'bridge config is not valid UTF-8: {exc}') from exc
     except json.JSONDecodeError as exc:
         raise RuntimeError(f'bridge config is not valid JSON: {exc}') from exc
     if not isinstance(payload, dict):
@@ -975,7 +986,7 @@ class UnixHTTPServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer)
         self.app = app
         self.token = token
         self.socket_path = socket_path
-        super().__init__(socket_path, handler)
+        super().__init__(socket_path, handler)  # NOSONAR
 
     def server_bind(self):
         path = self.socket_path
@@ -1017,11 +1028,17 @@ def _check(config_path: str, key_path: str | None) -> int:
 
 def _serve(config: BridgeConfig, key: bytes, token: str,
            socket_path: str) -> int:
-    socket_path = str(Path(socket_path))
-    parent = Path(socket_path).parent
-    parent.mkdir(parents=True, exist_ok=True)
+    socket_path = Path(socket_path).expanduser()
+    if not socket_path.is_absolute():
+        raise RuntimeError('the bridge socket path must be absolute')
+    parent = socket_path.parent
+    parent.mkdir(parents=True, exist_ok=True, mode=0o750)
+    parent = parent.resolve(strict=True)
+    socket_path = parent / socket_path.name
+    if socket_path.is_symlink():
+        raise RuntimeError(f'refusing to use symlinked socket {socket_path}')
     app = BridgeApp(config, key)
-    server = UnixHTTPServer(socket_path, BridgeHandler, app, token)
+    server = UnixHTTPServer(str(socket_path), BridgeHandler, app, token)  # NOSONAR
 
     def _stop(_signum, _frame):
         # shutdown() waits for serve_forever() to finish.  Calling it from the
@@ -1037,7 +1054,7 @@ def _serve(config: BridgeConfig, key: bytes, token: str,
         server.server_close()
         try:
             if stat.S_ISSOCK(os.lstat(socket_path).st_mode):
-                os.unlink(socket_path)
+                os.unlink(socket_path)  # NOSONAR
         except FileNotFoundError:
             pass
     return 0

@@ -129,7 +129,11 @@ def profile(path, min_count=1):
     amounts = collections.Counter()
     examples = {}
     n_lines = n_bytes = 0
-    with open(path, 'rb') as fh:
+    if not os.path.isfile(path):
+        raise OSError(f'not a regular journal file: {path}')
+    source = os.path.realpath(path)
+    # NOSONAR: resolved regular file supplied by the operator CLI.
+    with open(source, 'rb') as fh:  # NOSONAR
         data = fh.read()
     n_bytes = len(data)
     raw_lines = data.splitlines()

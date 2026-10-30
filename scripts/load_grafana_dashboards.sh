@@ -25,7 +25,7 @@ uid_of() { echo "$DS_JSON" | python3 -c "import json,sys; print(next((d['uid'] f
 ZBX_UID=$(uid_of "Zabbix-ATM")
 PG_UID=$(uid_of "ATM-Transactions")
 ES_UID=$(uid_of "EJ-OpenSearch")
-[ -n "$ZBX_UID" ] && [ -n "$PG_UID" ] && [ -n "$ES_UID" ] \
+[[ -n "$ZBX_UID" ]] && [[ -n "$PG_UID" ]] && [[ -n "$ES_UID" ]] \
   || { echo "FAIL: a datasource is missing (check Connections > Data sources)"; exit 1; }
 
 # folder (create if missing)
@@ -33,11 +33,11 @@ FOLDER_ID=$(auth "$GRAFANA_URL/api/folders" | python3 -c "
 import json,sys
 fs = json.load(sys.stdin)
 print(next((f['id'] for f in fs if f['title']=='$FOLDER'), ''))")
-if [ -z "$FOLDER_ID" ]; then
+if [[ -z "$FOLDER_ID" ]]; then
   FOLDER_ID=$(auth -X POST -H 'Content-Type: application/json' -d "{\"title\":\"$FOLDER\"}" \
     "$GRAFANA_URL/api/folders" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))")
 fi
-[ -n "$FOLDER_ID" ] || { echo "FAIL: could not create folder"; exit 1; }
+[[ -n "$FOLDER_ID" ]] || { echo "FAIL: could not create folder"; exit 1; }
 echo "folder '$FOLDER' id=$FOLDER_ID"
 
 shopt -s nullglob
@@ -63,8 +63,8 @@ payload = {
 print(json.dumps(payload))
 PYEOF
   )
-  if [ "$code" = "200" ]; then echo "  [PASS] $name"; PASS=$((PASS+1));
+  if [[ "$code" = "200" ]]; then echo "  [PASS] $name"; PASS=$((PASS+1));
   else echo "  [FAIL] $name (HTTP $code)"; FAIL=$((FAIL+1)); fi
 done
 echo "== Grafana dashboard import: $PASS ok, $FAIL fail =="
-[ "$FAIL" -eq 0 ]
+[[ "$FAIL" -eq 0 ]]

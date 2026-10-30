@@ -126,7 +126,7 @@ td.atm{white-space:nowrap;font-weight:600}
     <a class="btn {{ 'btn-primary' if filter_mode == 'healthy' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=healthy">Healthy</a>
     <form method="get" action="/admin/onboard/fleet" style="display:flex;gap:8px;align-items:center">
       <input type="hidden" name="filter" value="{{ filter_mode }}">
-      <input type="text" name="q" value="{{ q }}" placeholder="ATM ID, vendor or IP"
+      <input type="text" name="q" id="fleetSearch" aria-label="Search fleet" value="{{ q }}" placeholder="ATM ID, vendor or IP"
              style="padding:7px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;width:220px">
       <button type="submit" class="btn btn-outline">Filter</button>
     </form>
@@ -193,7 +193,7 @@ td.atm{white-space:nowrap;font-weight:600}
     sessionStorage.removeItem(KEY);
     return;
   }
-  var n = parseInt(sessionStorage.getItem(KEY) || '0', 10);
+  var n = Number.parseInt(sessionStorage.getItem(KEY) || '0', 10);
   if(n >= 40) return;
   sessionStorage.setItem(KEY, String(n + 1));
   setTimeout(function(){ window.location.reload(); }, 3000);

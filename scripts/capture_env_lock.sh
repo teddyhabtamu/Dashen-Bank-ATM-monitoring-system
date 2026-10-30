@@ -33,7 +33,7 @@ echo "==> Container image digests"
   for c in $(docker ps --format '{{.Names}}'); do
     ref=$(docker inspect -f '{{.Config.Image}}' "$c" 2>/dev/null) || continue
     dig=$(docker inspect -f '{{.Image}}' "$c" 2>/dev/null) || continue
-    [ -n "$ref" ] && printf '%-24s %-52s %s\n' "$c" "$ref" "$dig"
+    [[ -n "$ref" ]] && printf '%-24s %-52s %s\n' "$c" "$ref" "$dig"
   done
 } | tee "$OUT/images-$STAMP.txt"
 
@@ -64,7 +64,7 @@ echo "==> Suggested .env pins"
 
 echo
 echo "Done. Review $OUT/ and report-portal/requirements.lock before committing."
-if [ "${1:-}" = "--apply" ]; then
+if [[ "${1:-}" = "--apply" ]]; then
   echo "--apply: appending pins to .env (they stay commented until you uncomment)"
   cat "$OUT/env-pins-$STAMP.txt" >> .env
 fi

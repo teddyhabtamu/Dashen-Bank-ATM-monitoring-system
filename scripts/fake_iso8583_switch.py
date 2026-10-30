@@ -28,10 +28,13 @@ After the run, verify with source='ISO8583_REAL' rows, then DELETE the
 test rows — fake data must never linger under the REAL tag.
 """
 import argparse
-import random
+from random import SystemRandom
+
 import socket
 import struct
 import sys
+
+random = SystemRandom()
 
 PROCESSING_CODES = {
     'withdrawal': '012000',

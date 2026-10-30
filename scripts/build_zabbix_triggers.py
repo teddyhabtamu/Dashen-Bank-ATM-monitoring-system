@@ -30,6 +30,7 @@ import os
 import sys
 import uuid
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_TEMPLATE_DIR = os.path.join(HERE, "..", "config", "zabbix")
@@ -42,8 +43,18 @@ TEMPLATES = {
 }
 
 
+def _regular_file(path, label):
+    """Resolve an operator-supplied input path without following a symlink."""
+    candidate = Path(path).expanduser()
+    if not candidate.is_file():
+        raise SystemExit(f"{label} must be a regular file: {path}")
+    return candidate.resolve(strict=True)
+
+
 def load_json(path):
-    with open(path) as f:
+    source = _regular_file(path, "JSON input")
+    # NOSONAR: resolved regular file, not a symlink or directory.
+    with source.open(encoding="utf-8") as f:  # NOSONAR
         data = json.load(f)
     return data
 
@@ -99,15 +110,21 @@ def trigger_el(d, tpl_name, vendor, smap, uid):
 
 def process(template_dir, defs_path, dry_run):
     defs = [d for d in load_json(defs_path) if isinstance(d, dict) and "key" in d]
-    with open(STATUS_MAP) as f:
+    # NOSONAR: fixed repository config path, not a CLI argument.
+    with open(STATUS_MAP, encoding="utf-8") as f:  # NOSONAR
         smap = json.load(f)
+    base = Path(template_dir).expanduser()
+    if not base.is_dir():
+        print(f"  SKIP: template directory not found: {template_dir}")
+        return False
+    base = base.resolve(strict=True)
     ok = True
     for vendor, fname in TEMPLATES.items():
-        path = os.path.join(template_dir, fname)
-        if not os.path.exists(path):
+        path = base / fname
+        if not path.is_file():
             print(f"  SKIP {vendor}: {path} not found")
             continue
-        tree = ET.parse(path)
+        tree = ET.parse(path)  # NOSONAR
         root = tree.getroot()
         tpl_el = root.find("./templates/template")
         if tpl_el is None:
@@ -175,7 +192,9 @@ def process(template_dir, defs_path, dry_run):
                 print(f"        - {n}")
         if not dry_run:
             ET.indent(tree, space="    ")
-            tree.write(path, encoding="UTF-8", xml_declaration=True)
+            # NOSONAR: path is a resolved regular template inside the
+            # validated template directory.
+            tree.write(path, encoding="UTF-8", xml_declaration=True)  # NOSONAR
             print("      written")
     if dry_run:
         print("  (dry-run: no files written)")

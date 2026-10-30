@@ -160,8 +160,8 @@ details.wstep.pending>summary{opacity:.55}
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% macro fld(name, label, ph='', required=False, help='') %}
     <div class="form-group{% if errors.get(name) %} error{% endif %}">
-      <label>{{ label }}{% if required %} <span class="required">*</span>{% endif %}</label>
-      <input name="{{ name }}" value="{{ values.get(name,'')|e }}" placeholder="{{ ph }}"
+      <label for="field-{{ name }}">{{ label }}{% if required %} <span class="required">*</span>{% endif %}</label>
+      <input name="{{ name }}" id="field-{{ name }}" value="{{ values.get(name,'')|e }}" placeholder="{{ ph }}"
              {% if required %}required{% endif %}>
       {% if help %}<div class="field-help">{{ help }}</div>{% endif %}
       <span class="field-error">{{ errors.get(name, '') }}</span>
@@ -172,8 +172,8 @@ details.wstep.pending>summary{opacity:.55}
     {{ fld('atm_name', 'ATM name (optional)', '4 Kilo Branch ATM 3') }}
     {{ fld('branch', 'Branch', '4 Kilo Building BRANCH', True) }}
     <div class="form-group{% if errors.get('district') %} error{% endif %}">
-      <label>District <span class="required">*</span></label>
-      <select name="district">
+      <label for="field-district">District <span class="required">*</span></label>
+      <select name="district" id="field-district">
         <option value="">— choose —</option>
         {% for d in districts %}<option value="{{ d }}" {% if values.get('district')==d %}selected{% endif %}>{{ d }}</option>{% endfor %}
       </select>
@@ -185,7 +185,7 @@ details.wstep.pending>summary{opacity:.55}
     {{ fld('longitude', 'Longitude (optional)', '38.7896') }}
     {{ fld('terminal_id', 'Terminal ID', 'TID-UAT-107', True, 'Must match the switch record for this ATM.') }}
     <div class="form-group{% if errors.get('vendor') %} error{% endif %}">
-      <label>Vendor <span class="required">*</span></label>
+      <label for="vendorSel">Vendor <span class="required">*</span></label>
       <select name="vendor" id="vendorSel">
         <option value="">— choose —</option>
         {% for v in vendors %}<option value="{{ v }}" {% if values.get('vendor')==v %}selected{% endif %}>{{ v }}</option>{% endfor %}
@@ -193,7 +193,7 @@ details.wstep.pending>summary{opacity:.55}
       <span class="field-error">{{ errors.get('vendor', '') }}</span>
     </div>
     <div class="form-group{% if errors.get('model') %} error{% endif %}">
-      <label>Model <span class="required">*</span></label>
+      <label for="modelSel">Model <span class="required">*</span></label>
       <select name="model" id="modelSel"></select>
       <div class="field-help">Only models already in the approved list can pass. Anything else stops here and goes to engineer review.</div>
       <span class="field-error">{{ errors.get('model', '') }}</span>

@@ -21,25 +21,25 @@ remove_entry() {
     local current backup tmp
     current="$(crontab -l 2>/dev/null || true)"
     backup="$HOME/crontab.backup.ej-$(date +%Y%m%d-%H%M%S)"
-    if [ -n "$current" ]; then
+    if [[ -n "$current" ]]; then
         printf '%s\n' "$current" > "$backup"
         echo "backup: $backup"
     fi
     tmp="$(mktemp)"
-    if [ -n "$current" ]; then
+    if [[ -n "$current" ]]; then
         printf '%s\n' "$current" | grep -Fv "$LINE_MARK" > "$tmp" || true
     fi
     crontab "$tmp"
     rm -f "$tmp"
 }
 
-if [ "${1:-}" = "--remove" ]; then
+if [[ "${1:-}" = "--remove" ]]; then
     remove_entry
     echo "removed EJ ingestion cron entry (pull cron unchanged)."
     exit 0
 fi
 
-if [ ! -f "$ROOT/scripts/ingest_ej_shadow.py" ]; then
+if [[ ! -f "$ROOT/scripts/ingest_ej_shadow.py" ]]; then
     echo "missing $ROOT/scripts/ingest_ej_shadow.py" >&2
     exit 1
 fi
@@ -47,7 +47,7 @@ fi
 DOCKER="$(command -v docker || true)"
 PYTHON="$(command -v python3 || true)"
 FLOCK="$(command -v flock || true)"
-if [ -z "$DOCKER" ] || [ -z "$PYTHON" ] || [ -z "$FLOCK" ]; then
+if [[ -z "$DOCKER" ]] || [[ -z "$PYTHON" ]] || [[ -z "$FLOCK" ]]; then
     echo "docker, python3 and flock must all be available to the cron user." >&2
     exit 1
 fi
@@ -58,13 +58,13 @@ LINE="*/10 * * * * $FLOCK -n /tmp/atm-ej-ingest.lock -c 'cd $ROOT && PATH=$PATH_
 
 current="$(crontab -l 2>/dev/null || true)"
 backup="$HOME/crontab.backup.ej-$(date +%Y%m%d-%H%M%S)"
-if [ -n "$current" ]; then
+if [[ -n "$current" ]]; then
     printf '%s\n' "$current" > "$backup"
     echo "backup: $backup"
 fi
 
 tmp="$(mktemp)"
-if [ -n "$current" ]; then
+if [[ -n "$current" ]]; then
     printf '%s\n' "$current" | grep -Fv "$LINE_MARK" > "$tmp" || true
 fi
 printf '%s\n' "$LINE" >> "$tmp"

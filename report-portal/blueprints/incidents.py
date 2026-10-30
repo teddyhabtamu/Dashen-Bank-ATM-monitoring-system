@@ -14,6 +14,7 @@ import os
 import re
 import time
 from datetime import datetime, timezone, timedelta
+from markupsafe import Markup
 from flask import (Blueprint, render_template, request, jsonify, session,
                    Response)
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
@@ -456,14 +457,19 @@ def _clean_html(html, ticket_id=None):
                 self.out.append(f'</{tag}>')
 
         def handle_data(self, data):
-            self.out.append(data.replace('<', '&lt;').replace('>', '&gt;'))
+            self.out.append(
+                data.replace('&', '&amp;')
+                    .replace('<', '&lt;')
+                    .replace('>', '&gt;'))
 
     p = _P()
     try:
         p.feed(html or '')
     except Exception:
-        return re.sub(r'<[^>]+>', '', html or '')
-    return ''.join(p.out).strip()
+        return Markup(re.sub(r'<[^>]+>', '', html or ''))
+    # Markup is safe because every tag and attribute above is allow-listed;
+    # returning it here keeps the templates free of `|safe`.
+    return Markup(''.join(p.out).strip())
 
 
 def _is_portal_written(raw_content):

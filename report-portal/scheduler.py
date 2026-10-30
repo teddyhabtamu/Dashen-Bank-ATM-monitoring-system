@@ -560,9 +560,14 @@ def create_scheduler(app):
     # runs the poller, so scheduled emails never duplicate. Single container
     # = single host, so a local file lock is sufficient (no Redis needed).
     import fcntl
+    import tempfile
     global _sched_lock_fh
+    lock_path = os.path.join(tempfile.gettempdir(), 'portal-scheduler.lock')
     try:
-        _sched_lock_fh = open('/tmp/portal-scheduler.lock', 'w')
+        # O_NOFOLLOW + O_CREAT + mode 0600: a pre-created symlink in the
+        # shared temp directory cannot redirect the lock write.
+        fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        _sched_lock_fh = os.fdopen(fd, 'w')
         fcntl.flock(_sched_lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except (OSError, IOError):
         logger.info('Scheduler already running in a sibling worker — skipping')

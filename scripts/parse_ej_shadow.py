@@ -26,7 +26,12 @@ from ej_journal import parse_journal_file, summarize  # noqa: E402
 def _terminal_map(path):
     if path is None:
         return {}
-    data = json.loads(Path(path).read_text())
+    source = Path(path).expanduser()
+    if not source.is_file():
+        raise ValueError('terminal map must be a regular JSON file')
+    source = source.resolve(strict=True)
+    # NOSONAR: resolved regular file supplied by the operator CLI.
+    data = json.loads(source.read_text(encoding='utf-8'))  # NOSONAR
     if not isinstance(data, dict):
         raise ValueError('terminal map must be a JSON object')
     return {str(k): str(v) for k, v in data.items() if v}

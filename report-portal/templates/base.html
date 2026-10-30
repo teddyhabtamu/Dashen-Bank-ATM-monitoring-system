@@ -118,6 +118,7 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .profile-dropdown{overflow:hidden;max-height:0;transition:max-height .3s ease;padding:0 6px}
 .profile-dropdown.open{max-height:200px}
 .profile-item{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:6px;color:rgba(255,255,255,.5);text-decoration:none;font-size:12px;transition:all .15s;white-space:nowrap;overflow:hidden}
+button.profile-item{width:100%;background:none;border:0;font-family:inherit;text-align:left;cursor:pointer}
 .profile-item:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.75)}
 .profile-item svg{width:13px;height:13px;flex-shrink:0;color:rgba(255,255,255,.4)}
 .profile-item:hover svg{color:rgba(255,255,255,.75)}
@@ -564,7 +565,7 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
   <div class="sidebar-support">
     {% if session.get('logged_in') %}
     <div class="profile-section">
-      <div class="profile-trigger" onclick="toggleProfile()">
+      <div class="profile-trigger" role="button" tabindex="0" aria-expanded="false" onclick="toggleProfile()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
         <div class="profile-avatar">
           <i data-lucide="user" size="13"></i>
         </div>
@@ -580,21 +581,21 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
           <i data-lucide="key-round"></i>
           <span>Change Password</span>
         </a>
-        <a href="https://dashenbanksc.com/frequently-asked-questions/#:~:text=Our%20Customer%20Service%20Team%20is,via%206333%20for%20any%20support." target="_blank" class="profile-item">
+        <a href="https://dashenbanksc.com/frequently-asked-questions/#:~:text=Our%20Customer%20Service%20Team%20is,via%206333%20for%20any%20support." target="_blank" rel="noopener noreferrer" class="profile-item">
           <i data-lucide="help-circle"></i>
           <span>Support</span>
         </a>
-        <a href="javascript:void(0)" class="profile-item logout" onclick="document.getElementById('logoutModal').classList.add('show')">
+        <button type="button" class="profile-item logout" onclick="document.getElementById('logoutModal').classList.add('show')">
           <i data-lucide="log-out"></i>
           <span>Logout</span>
-        </a>
+        </button>
       </div>
     </div>
     {% endif %}
   </div>
 </div>
 
-<div class="overlay" id="overlay" onclick="closeMobile()"></div>
+<div class="overlay" id="overlay" aria-hidden="true"></div>
 
 <div class="toast-container" id="toastContainer">
 {% with messages = get_flashed_messages(with_categories=true) %}
@@ -742,6 +743,8 @@ function toggleProfile(){
   var c = document.querySelector('.profile-chevron');
   var isOpen = d.classList.toggle('open');
   if(c) c.classList.toggle('open', isOpen);
+  var trigger = document.querySelector('.profile-trigger');
+  if(trigger) trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
 }
 document.addEventListener('click', function(e){
   var section = document.querySelector('.profile-section');
@@ -926,8 +929,15 @@ function initCustomSelects(){
   });
 }
 initCustomSelects();
+
+document.getElementById('overlay').addEventListener('click', closeMobile);
+document.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('logoutModal').addEventListener('click', function(e){
+    if(e.target === this) this.classList.remove('show');
+  });
+});
 </script>
-<div class="modal-overlay" id="logoutModal" onclick="if(event.target===this)this.classList.remove('show')">
+<div class="modal-overlay" id="logoutModal">
   <div class="modal-confirm">
     <div class="modal-confirm-icon">
       <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>

@@ -9,11 +9,14 @@ transactions (visible on the Report Portal detail page and Grafana).
 import os
 import sys
 import time
-import random
+from random import SystemRandom
+
 from datetime import datetime
 
 import psycopg2
 import common
+
+random = SystemRandom()
 
 DB_HOST = os.environ.get('DB_HOST', 'postgres')
 DB_NAME = os.environ.get('DB_NAME', 'zabbix')

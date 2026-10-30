@@ -68,11 +68,7 @@
 </div>
 <div class="page-content">
 
-  {% if error %}
-  <div class="err-banner" id="mcErr">{{ error }}</div>
-  {% else %}
-  <div class="err-banner" id="mcErr" style="display:none"></div>
-  {% endif %}
+  <div class="err-banner" id="mcErr"{% if not error %} style="display:none"{% endif %}>{{ error }}</div>
 
   <div class="stat-row">
     <div class="stat-card"><div class="num" id="mcHosts">{{ summary.hosts }}</div><div class="lbl">Monitored Hosts</div></div>
@@ -86,13 +82,13 @@
     <div class="card-header">
       <h2>Active Problems (<span id="mcProbCount">{{ problems|length }}</span>){% if at_cap %} — latest 100{% endif %}</h2>
       <form method="get" action="/monitoring" class="filter-row">
-        <select name="severity" onchange="this.form.submit()">
+        <select name="severity" id="mcSeverity" aria-label="Severity" onchange="this.form.submit()">
           <option value="">All Severities</option>
           {% for sid, sname in severities.items() %}
           <option value="{{ sid }}" {% if f_severity == sid %}selected{% endif %}>{{ sname }}</option>
           {% endfor %}
         </select>
-        <select name="ack" onchange="this.form.submit()">
+        <select name="ack" id="mcAck" aria-label="Acknowledgement" onchange="this.form.submit()">
           <option value="">All</option>
           <option value="no" {% if f_ack == 'no' %}selected{% endif %}>Unacknowledged</option>
           <option value="yes" {% if f_ack == 'yes' %}selected{% endif %}>Acknowledged</option>

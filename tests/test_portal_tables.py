@@ -624,7 +624,7 @@ def test_the_restore_can_be_inspected_without_destroying_anything():
     # this test cut the block at the first "fi" and so stopped at the nested
     # --also-zabbix conditional, then failed for the wrong reason - exactly the
     # kind of test that lies about what it checked.
-    start = src.index('if [ "$DRY_RUN" -eq 1 ]; then')
+    start = src.index('if [[ "$DRY_RUN" -eq 1 ]]; then')
     stop = src.index('exit 0', start)
     drop = src.index('DROP DATABASE IF EXISTS', start)
     assert stop < drop, 'the dry-run must exit before anything is dropped'

@@ -24,30 +24,30 @@ remove_entry() {
     local current backup tmp
     current="$(crontab -l 2>/dev/null || true)"
     backup="$HOME/crontab.backup.grg-$(date +%Y%m%d-%H%M%S)"
-    if [ -n "$current" ]; then
+    if [[ -n "$current" ]]; then
         printf '%s\n' "$current" > "$backup"
         echo "backup: $backup"
     fi
     tmp="$(mktemp)"
-    if [ -n "$current" ]; then
+    if [[ -n "$current" ]]; then
         printf '%s\n' "$current" | grep -Fv "$LINE_MARK" > "$tmp" || true
     fi
     crontab "$tmp"
     rm -f "$tmp"
 }
 
-if [ "${1:-}" = "--remove" ]; then
+if [[ "${1:-}" = "--remove" ]]; then
     remove_entry
     echo "removed GRG EJ pull cron entry."
     exit 0
 fi
 
-if [ -n "${1:-}" ]; then
+if [[ -n "${1:-}" ]]; then
     echo "usage: $0 [--remove]" >&2
     exit 2
 fi
 
-if [ ! -f "$ROOT/scripts/pull_grg_ej_logs.py" ]; then
+if [[ ! -f "$ROOT/scripts/pull_grg_ej_logs.py" ]]; then
     echo "missing $ROOT/scripts/pull_grg_ej_logs.py" >&2
     exit 1
 fi
@@ -69,13 +69,13 @@ LINE="*/5 * * * * $FLOCK -n /tmp/atm-ej-grg-pull.lock -c 'cd $ROOT && PATH=$PATH
 
 current="$(crontab -l 2>/dev/null || true)"
 backup="$HOME/crontab.backup.grg-$(date +%Y%m%d-%H%M%S)"
-if [ -n "$current" ]; then
+if [[ -n "$current" ]]; then
     printf '%s\n' "$current" > "$backup"
     echo "backup: $backup"
 fi
 
 tmp="$(mktemp)"
-if [ -n "$current" ]; then
+if [[ -n "$current" ]]; then
     printf '%s\n' "$current" | grep -Fv "$LINE_MARK" > "$tmp" || true
 fi
 printf '%s\n' "$LINE" >> "$tmp"

@@ -20,9 +20,9 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BACKUP_ROOT="$REPO_DIR/config/backups"
 DATE=$(date +%Y%m%d_%H%M%S)
 DRY_RUN=0
-[ "${1:-}" = "--dry-run" ] && DRY_RUN=1
+[[ "${1:-}" = "--dry-run" ]] && DRY_RUN=1
 
-if [ -f "$REPO_DIR/.env" ]; then
+if [[ -f "$REPO_DIR/.env" ]]; then
   set -a; . "$REPO_DIR/.env"; set +a
 fi
 
@@ -36,13 +36,13 @@ BACKUP_DEST="${BACKUP_DEST:-}"
 log()  { echo "[backup-configs] $*"; }
 warn() { echo "[backup-configs] WARNING: $*" >&2; }
 
-if [ "$DRY_RUN" = 1 ]; then
+if [[ "$DRY_RUN" = 1 ]]; then
   log "DRY RUN — would collect into $BACKUP_ROOT/$DATE/:"
   log "  zabbix/hosts.json, mediatypes.json, templates/*.json (API export)"
   log "  zabbix/actions.json (raw; recreated by setup_zabbix_actions.py)"
   log "  grafana/datasources.json + dashboards/*.json (API export)"
   log "  files/ (.env, compose files, filebeat.yml, config/, glpi-plugins/)"
-  [ -n "$BACKUP_DEST" ] && log "  then scp bundle to $BACKUP_DEST" || log "  BACKUP_DEST unset: bundle would stay local (fix this)"
+  [[ -n "$BACKUP_DEST" ]] && log "  then scp bundle to $BACKUP_DEST" || log "  BACKUP_DEST unset: bundle would stay local (fix this)"
   log "Connectivity checks:"
   # api_jsonrpc.php only speaks POST (GET returns 412) — probe with apiinfo.version.
   if curl -sf -m 10 -H 'Content-Type: application/json-rpc' \
@@ -52,7 +52,7 @@ if [ "$DRY_RUN" = 1 ]; then
   else
     warn "  zabbix-web API NOT reachable"
   fi
-  if [ -n "$GRAFANA_ADMIN_PASSWORD" ]; then
+  if [[ -n "$GRAFANA_ADMIN_PASSWORD" ]]; then
     curl -sf -m 10 -o /dev/null -u "admin:$GRAFANA_ADMIN_PASSWORD" "$GRAFANA_URL/api/org" \
       && log "  grafana API reachable" || warn "  grafana API NOT reachable (check password/URL)"
   else
@@ -149,7 +149,7 @@ else
 fi
 
 # --- 2. Grafana --------------------------------------------------------------
-if [ -z "$GRAFANA_ADMIN_PASSWORD" ]; then
+if [[ -z "$GRAFANA_ADMIN_PASSWORD" ]]; then
   warn "GRAFANA_ADMIN_PASSWORD unset — skipping Grafana export"
 else
   if curl -sf -m 20 -u "admin:$GRAFANA_ADMIN_PASSWORD" "$GRAFANA_URL/api/datasources" -o "$DEST/grafana/datasources.json" 2>/dev/null; then
@@ -171,12 +171,12 @@ fi
 # NOTE: $DEST lives inside $REPO_DIR/config/backups/, so copy config/ via
 # tar --exclude=backups — a plain cp -r would recurse into the bundle itself.
 {
-  [ -f "$REPO_DIR/.env" ] && cp "$REPO_DIR/.env" "$DEST/files/.env"
+  [[ -f "$REPO_DIR/.env" ]] && cp "$REPO_DIR/.env" "$DEST/files/.env"
   cp "$REPO_DIR/docker-compose.yml" "$DEST/files/" 2>/dev/null
   cp "$REPO_DIR/docker-compose.gateway.yml" "$DEST/files/" 2>/dev/null
   cp "$REPO_DIR/filebeat.yml" "$DEST/files/" 2>/dev/null
   tar -czf "$DEST/files/config.tar.gz" --exclude=backups -C "$REPO_DIR" config 2>/dev/null
-  [ -d "$REPO_DIR/glpi-plugins" ] && tar -czf "$DEST/files/glpi-plugins.tar.gz" -C "$REPO_DIR" glpi-plugins 2>/dev/null
+  [[ -d "$REPO_DIR/glpi-plugins" ]] && tar -czf "$DEST/files/glpi-plugins.tar.gz" -C "$REPO_DIR" glpi-plugins 2>/dev/null
   chmod 600 "$DEST/files/.env" "$DEST/files/"*.tar.gz 2>/dev/null
   true
 } || warn "some files could not be copied"
@@ -189,7 +189,7 @@ chmod 600 "$TARBALL"
 log "Bundle: $TARBALL"
 ls -t "$BACKUP_ROOT"/configs_*.tar.gz 2>/dev/null | tail -n +8 | xargs -r rm
 
-if [ -n "$BACKUP_DEST" ]; then
+if [[ -n "$BACKUP_DEST" ]]; then
   if scp "$TARBALL" "$BACKUP_DEST"; then
     log "Copied off-host to $BACKUP_DEST"
   else

@@ -391,15 +391,32 @@ def detect_vendor(text):
 
 _NCR_HEADER = re.compile(
     r'^\*(\d+)\*(\d{2}/\d{2}/\d{4})\*(\d{2}):(\d{2})\*?')
-_NCR_EVENT = re.compile(r'^(\d{2}):(\d{2}):(\d{2})\s+(.*)$')
+_NCR_EVENT = re.compile(r'^(\d{2}):(\d{2}):(\d{2})[ \t]+([^\r\n]*)$')
 _NCR_RECEIPT_HEADER = re.compile(r'^DASHEN BANK\s*\d*$')
 _RECEIPT_DATE = re.compile(
     r'^(\d{2})/(\d{2})/(\d{2,4})\s+(\d{2}):(\d{2})\s+(\S+)$')
 _RECEIPT_PAN = re.compile(r'^(\d{4,6}\*+\d{4})$')
 _RECEIPT_ACC = re.compile(r'^ACC\s+(\S+)$')
 _RECEIPT_RECORD = re.compile(r'^RECORD\s+NO\.?\s*(\d+)$')
-_RECEIPT_TYPE_AMOUNT = re.compile(
-    r'^([A-Z][A-Z0-9 _/-]*?)\s+([\d,]+\.\d{2})$')
+_RECEIPT_TYPE = re.compile(r'^[A-Z][A-Z0-9 _/-]*$')
+_RECEIPT_AMOUNT = re.compile(r'^[\d,]+\.\d{2}$')
+
+
+def _split_receipt_type_amount(line):
+    """Return (type, amount) without an ambiguous whitespace regex.
+
+    Receipt lines look like ``WITHDRAWAL 1,000.00``.  Splitting once on the
+    final whitespace is linear and keeps the type's internal spaces intact.
+    """
+    parts = line.rsplit(None, 1)
+    if len(parts) != 2:
+        return None
+    head, tail = parts
+    if not _RECEIPT_TYPE.match(head) or not _RECEIPT_AMOUNT.match(tail):
+        return None
+    return head, tail
+
+
 _RECEIPT_TYPE_ONLY = re.compile(r'^([A-Z][A-Z0-9 _/-]*)$')
 _RECEIPT_BALANCE = re.compile(
     r'^(LEDGER|AVAIL)\s+BAL\s*([\d,]+\.\d{2})?$')
@@ -496,11 +513,11 @@ def _parse_receipt(lines):
         if line.startswith('THANK YOU') or line.startswith('DASHEN BANK |'):
             expecting_branch = False
             continue
-        m = _RECEIPT_TYPE_AMOUNT.match(line)
+        m = _split_receipt_type_amount(line)
         if m:
             if not line.upper().startswith(_RECEIPT_BLACKLIST):
-                receipt.txn_type = _normalise_type(m.group(1))
-                receipt.amount = _money(m.group(2))
+                receipt.txn_type = _normalise_type(m[0])
+                receipt.amount = _money(m[1])
             expecting_branch = False
             continue
         if expecting_branch:
@@ -800,7 +817,7 @@ def parse_ncr_text(text, *, atm_id=None, terminal_map=None, raw_ref=None):
 
 
 _GRG_LINE = re.compile(
-    r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)\s+(.*)$')
+    r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)[ \t]+([^\r\n]*)$')
 _GRG_PAN = re.compile(r'(?:CARD INSERTED|RFCARD INSERTED)\.?\s+PAN:\s*(\S+)')
 _GRG_CHIP_PAN = re.compile(r'CHIP CARD PAN:\s*(\S+)')
 _GRG_AMOUNT = re.compile(r'AMOUNT ENTERED\s+([\d,]+)')
@@ -809,7 +826,8 @@ _GRG_REPLY = re.compile(r'TRANSACTION REPLY NEXT\s+(\d+)')
 _GRG_SERIAL = re.compile(r'TRANSACTION SERIAL NUMBER:\s*(\d+)')
 _GRG_EMV = re.compile(r'EMV Completion with\s+([A-Z]+)')
 _GRG_CASH = re.compile(
-    r'\[CAS\s+([^\]]+)\]\s+OUT:\s*(\d+),\s*REJECT:\s*(\d+),\s+DENO:\s*(\d+)')
+    r'\[CAS[ \t]+([^\]\r\n]+)\][ \t]+OUT:[ \t]*(\d+),[ \t]*'
+    r'REJECT:[ \t]*(\d+),[ \t]+DENO:[ \t]*(\d+)')
 _GRG_START = re.compile(r'^-+>\s*TRANSACTION START\b(.*)$')
 _GRG_END = re.compile(r'^<-+\s*TRANSACTION END')
 _GRG_PIPE_LINE = re.compile(
@@ -1231,8 +1249,15 @@ def parse_journal_text(text, *, vendor=None, path='<memory>', atm_id=None,
 
 
 def parse_journal_file(path, *, atm_id=None, terminal_map=None):
-    path = Path(path)
-    raw = path.read_bytes()
+    path = Path(path).expanduser()
+    # Journals are local files chosen by the puller or an operator CLI.  Do
+    # not follow a symlinked leaf: evidence must be the file that was named.
+    if not path.is_file():
+        raise OSError(f'not a regular journal file: {path}')
+    path = path.resolve(strict=True)
+    # NOSONAR: the resolved path is a regular file and the caller is the
+    # trusted puller/CLI; no archive or user-upload path reaches this reader.
+    raw = path.read_bytes()  # NOSONAR
     text, encoding = decode_journal(raw)
     result = parse_journal_text(
         text, path=str(path), atm_id=atm_id, terminal_map=terminal_map)

@@ -20,12 +20,15 @@ import os
 import sys
 import json
 import time
-import random
+from random import SystemRandom
+
 import socket
 import struct
 import threading
 import psycopg2
 from datetime import datetime
+
+random = SystemRandom()
 
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 MODE = os.environ.get('MODE', 'simulation')

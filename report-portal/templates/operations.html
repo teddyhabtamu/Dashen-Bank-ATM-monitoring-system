@@ -207,7 +207,7 @@
     var c = a.querySelector('circle');
     if(!c) return;
     nodes.push({a: a, c: c,
-      x: parseFloat(c.getAttribute('cx')), y: parseFloat(c.getAttribute('cy')),
+      x: Number.parseFloat(c.getAttribute('cx')), y: Number.parseFloat(c.getAttribute('cy')),
       atm: a.getAttribute('data-atm'), health: c.getAttribute('data-health')});
   });
   if(nodes.length < 2) return;

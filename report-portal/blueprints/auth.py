@@ -311,14 +311,7 @@ def role_required(*roles):
     return decorator
 
 
-def csrf_exempt(f):
-    """Mark a view as exempt from CSRF protection (placeholder).
-    Actual exemption is done in create_app() after csrf.init_app(app)."""
-    return f
-
-
 @bp.route('/login', methods=['GET', 'POST'])
-@csrf_exempt
 def login():
     next_page = request.args.get('next') or '/'
     parsed = urlparse(next_page)

@@ -226,7 +226,8 @@ def generate_simulated_metrics(conn):
     based on transaction failure patterns in the DB.
     This keeps the correlation pipeline working during demo/dev mode.
     """
-    import random
+    from random import SystemRandom
+    random = SystemRandom()
     with conn.cursor() as cur:
         # Get current failure rates per ATM as a proxy for network issues
         cur.execute("""

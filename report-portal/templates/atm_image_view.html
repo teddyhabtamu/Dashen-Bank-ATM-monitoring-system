@@ -94,9 +94,9 @@
         </div>
 
         {% if kind == 'video' %}
-        <video id="ev-media" class="ev-media" controls playsinline preload="auto" hidden></video>
+        <video id="ev-media-video" class="ev-media" controls playsinline preload="auto" hidden></video>
         {% else %}
-        <img id="ev-media" class="ev-media" alt="ATM image evidence" hidden>
+        <img id="ev-media-img" class="ev-media" alt="ATM image evidence" hidden>
         {% endif %}
       </div>
 
@@ -148,7 +148,7 @@
 <script>
 (function () {
   var stage = document.getElementById('ev-stage');
-  var media = document.getElementById('ev-media');
+  var media = document.querySelector('.ev-media');
   var loading = document.getElementById('ev-loading');
   var error = document.getElementById('ev-error');
   var errorTitle = document.getElementById('ev-error-title');
@@ -236,7 +236,7 @@
     var size = response.headers.get('X-Evidence-Size');
     var sha = response.headers.get('X-Evidence-SHA256');
     if (size) {
-      expectedSize = parseInt(size, 10) || 0;
+      expectedSize = Number.parseInt(size, 10) || 0;
       sizeEl.textContent = humanSize(expectedSize);
       sizeWrap.hidden = false;
     }
