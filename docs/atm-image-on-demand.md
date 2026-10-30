@@ -565,6 +565,8 @@ docker exec -i zabbix-db psql -U zabbix -d portal \
 
 The columns are nullable. A journal with no end record keeps `ended_at` null,
 and the UI falls back to the recorded time rather than inventing a window.
+Re-run `scripts/ingest_ej_shadow.py --commit` after the migration to backfill
+the session edges for journals that are already staged.
 
 ### 6.5 What the audit records
 
