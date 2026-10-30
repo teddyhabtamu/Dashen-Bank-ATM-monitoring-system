@@ -116,7 +116,7 @@
         <tbody>
           {% for t in transactions %}
           {% set same_day = t.started_at and t.ended_at and t.started_at[:10] == t.ended_at[:10] %}
-          {% set evidence_href = url_for('atm_images.atm_images', atm_id=atm.atm_id, day=t.started_at[:10], start=t.started_at[11:19], end=t.ended_at[11:19]) if same_day else url_for('atm_images.atm_images', atm_id=atm.atm_id, at=t.recorded_at) %}
+          {% set evidence_href = url_for('atm_images.atm_images', atm_id=atm.atm_id, day=t.started_at[:10], start=t.started_at[11:19], end=t.ended_at[11:19]) if same_day else (url_for('atm_images.atm_images', atm_id=atm.atm_id, at=t.recorded_at) if t.recorded_at and t.recorded_at != '—' else '#') %}
           <tr>
             <td class="mono">
               {% if t.started_at %}
