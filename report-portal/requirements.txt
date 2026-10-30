@@ -1,26 +1,11 @@
 # Report Portal runtime dependencies.
 #
-# NAMED, NOT PINNED - deliberately, and this file is the first half of a
-# two-part fix.
-#
-# Why this file exists at all: the Dockerfile previously installed these with a
-# bare `pip install flask psycopg2-binary ...` and no requirements file anywhere
-# in the repo. That means UAT and production can be running DIFFERENT builds of
-# Flask from identical source, and nothing in version control records which.
-# For a bank system that fails the first reasonable audit question: "show me the
-# environment you tested".
-#
-# Part two is requirements.lock, captured from the container that is actually
-# running:
-#
-#     bash scripts/capture_env_lock.sh
-#
-# and committed. The lock is what you deploy with; this file is the declared
-# intent. Versions here should be bumped deliberately, in one commit, with the
+# This file is the declared intent: the packages the portal needs.  The
+# resolved versions live in requirements.lock, which is what the Dockerfile
+# installs.  Bump a version in the lock deliberately, in one commit, with the
 # reason in the message - never by an unattended rebuild.
 #
-# Keep this list and report-portal/Dockerfile in step. The Dockerfile installs
-# from this file, so they cannot drift by accident.
+# Keep this list and report-portal/requirements.lock in step.
 flask
 psycopg2-binary
 openpyxl

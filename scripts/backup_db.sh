@@ -8,7 +8,7 @@ DATE=$(date +%Y%m%d_%H%M%S)
 
 # DB credentials for the GLPI dump below (best effort — script still works
 # for Postgres-only backups when .env is absent).
-if [ -f "$(dirname "$0")/../.env" ]; then
+if [[ -f "$(dirname "$0")/../.env" ]]; then
   set -a; . "$(dirname "$0")/../.env"; set +a
 fi
 
@@ -29,13 +29,13 @@ source "$(dirname "$0")/portal_tables.sh"
 # Detection is shared with restore_db.sh, which needs the same answer and must
 # not come to a different one.
 PORTAL_DB="$(detect_portal_db || true)"
-if [ -z "$PORTAL_DB" ]; then
+if [[ -z "$PORTAL_DB" ]]; then
     echo "ERROR: could not find portal_schema_version in either the portal or"
     echo "       the zabbix database. Refusing to guess - a backup that silently"
     echo "       covers the wrong database is worse than no backup."
     exit 1
 fi
-if [ "$PORTAL_DB" = "zabbix" ]; then
+if [[ "$PORTAL_DB" = "zabbix" ]]; then
     echo "Portal tables live in database 'zabbix' (pre-split layout)."
 else
     echo "Portal tables live in database '$PORTAL_DB' (split layout)."
@@ -92,7 +92,7 @@ echo "  $BACKUP_DIR/zabbix_full_$DATE.sql.gz"
 # above no longer contains ANY of it. Without this line every nightly backup
 # would be complete-looking and portal-free, and nobody would find out until a
 # restore. This is the single most important line in this file after the switch.
-if [ "$PORTAL_DB" != "zabbix" ]; then
+if [[ "$PORTAL_DB" != "zabbix" ]]; then
     echo "Backing up full portal database..."
     docker exec zabbix-db pg_dump -U zabbix "$PORTAL_DB" --no-owner --no-acl \
       | gzip > "$BACKUP_DIR/portal_full_$DATE.sql.gz"

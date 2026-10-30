@@ -17,7 +17,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=portal_tables.sh
 source "$HERE/portal_tables.sh"
 PORTAL_DB="$(detect_portal_db || true)"
-if [ -z "$PORTAL_DB" ]; then
+if [[ -z "$PORTAL_DB" ]]; then
     echo "  [FAIL] could not determine which database holds the portal tables"
     echo "         (looked for portal_schema_version in 'portal' and 'zabbix')"
     fail=1
@@ -86,9 +86,9 @@ else
 fi
 
 echo "-- real OID mapping captured --"
-if [ -f config/snmp/oid_mapping.csv ]; then
+if [[ -f config/snmp/oid_mapping.csv ]]; then
   lines=$(wc -l < config/snmp/oid_mapping.csv 2>/dev/null || echo 0)
-  if [ "$lines" -gt 1 ]; then
+  if [[ "$lines" -gt 1 ]]; then
     ok "oid_mapping.csv has $lines rows (real walk captured)"
   else
     echo "  [WARN] oid_mapping.csv is still the stub — run capture_walk.sh then fill real OIDs"
@@ -98,21 +98,21 @@ else
 fi
 
 echo "-- template remap dry-run (guardrail preview) --"
-if command -v python3 >/dev/null 2>&1 && [ -f scripts/generate_zabbix_templates.py ]; then
+if command -v python3 >/dev/null 2>&1 && [[ -f scripts/generate_zabbix_templates.py ]]; then
   python3 scripts/generate_zabbix_templates.py --dry-run || echo "  [WARN] generator reported issues (guardrail will block the real run until resolved)"
 fi
 
 echo "-- EJ index reachable in OpenSearch --"
 ej_idx=$(curl -s --max-time 5 "http://${DATA_VM_IP}:9200/_cat/indices/atm-*?h=index" 2>/dev/null | head -1)
-if [ -n "$ej_idx" ]; then
+if [[ -n "$ej_idx" ]]; then
   ok "EJ index present: $ej_idx"
 else
   echo "  [WARN] no atm-* index in OpenSearch — EJ ingestion may not be running"
 fi
 
 echo "-- status_map.json + cassette_capacity.json present --"
-[ -f config/status_map.json ] && ok "status_map.json present" || bad "config/status_map.json missing"
-[ -f config/cassette_capacity.json ] && ok "cassette_capacity.json present" || bad "config/cassette_capacity.json missing"
+[[ -f config/status_map.json ]] && ok "status_map.json present" || bad "config/status_map.json missing"
+[[ -f config/cassette_capacity.json ]] && ok "cassette_capacity.json present" || bad "config/cassette_capacity.json missing"
 
-echo "== preflight $( [ $fail -eq 0 ] && echo PASS || echo FAILED ) =="
+echo "== preflight $( [[ $fail -eq 0 ]] && echo PASS || echo FAILED ) =="
 exit $fail

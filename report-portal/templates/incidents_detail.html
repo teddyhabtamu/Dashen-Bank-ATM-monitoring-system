@@ -82,14 +82,14 @@
       <span>Opened: <b>{{ ticket.created }}</b></span>
       <span>Updated: <b>{{ ticket.updated }}</b></span>
     </div>
-    {% if ticket.content %}<div class="t-desc">{{ ticket.content|safe }}</div>{% endif %}
+    {% if ticket.content %}<div class="t-desc">{{ ticket.content }}</div>{% endif %}
   </div>
 
   <div class="chat">
   {% for m in timeline %}
   {% if m.kind in ('solution', 'task') %}
   <div class="sys-note">{{ 'Solution' if m.kind == 'solution' else 'Task' }} by <b>{{ m.author }}</b> · {{ m.date }}</div>
-  <div class="tl-item" style="background:#F0FDF9;border:1px solid #A7F3D0;border-radius:12px;padding:12px 16px;font-size:13px;line-height:1.65">{{ m.html|safe }}
+  <div class="tl-item" style="background:#F0FDF9;border:1px solid #A7F3D0;border-radius:12px;padding:12px 16px;font-size:13px;line-height:1.65">{{ m.html }}
     {% if m.files %}
     <div class="files-row">
       {% for f in m.files %}
@@ -108,7 +108,7 @@
           <span class="bubble-time">{{ m.date }}</span>
           {% if m.private %}<span class="bubble-kind private">private</span>{% endif %}
         </div>
-        <div class="bubble-text">{{ m.html|safe }}</div>
+        <div class="bubble-text">{{ m.html }}</div>
         {% if m.files %}
         <div class="files-row">
           {% for f in m.files %}
@@ -137,7 +137,7 @@
 
   {% if session.get('role') in ('admin', 'operator') %}
   <div class="reply-box">    <div style="font-size:13px;font-weight:700;color:#012169;margin-bottom:8px">Reply as {{ session.get('username') }}</div>
-    <textarea id="replyText" placeholder="Type an update for the technician…"></textarea>
+    <textarea id="replyText" aria-label="Reply to ticket" placeholder="Type an update for the technician…"></textarea>
     <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
       <label for="replyFiles" class="act-btn" style="padding:8px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i data-lucide="paperclip" style="width:13px;height:13px"></i> Attach (max 3, 10MB each)</label>
       <input type="file" id="replyFiles" multiple style="display:none" onchange="showPickedFiles(this)">
@@ -153,7 +153,7 @@
       <button class="act-btn solve" id="solveBtn" onclick="replyAction('solve', null)" style="padding:8px 18px">Solve</button>
       {% endif %}
       {% if ticket.status_n == 4 %}
-      <button class="act-btn" id="reopenBtn" onclick="replyAction('reopen', null)" style="padding:8px 18px">Resume</button>
+      <button class="act-btn" id="resumeBtn" onclick="replyAction('reopen', null)" style="padding:8px 18px">Resume</button>
       {% endif %}
       {% if ticket.status_n in (5, 6) %}
       <button class="act-btn" id="reopenBtn" onclick="replyAction('reopen', null)" style="padding:8px 18px">Reopen</button>

@@ -111,7 +111,7 @@ reset_fixture
 copy_fixture
 load_script "$FIXTURE_DIR"
 out=$(verify_sequences); rc=$?
-if [ "$rc" -eq 0 ] && grep -q '^  ok  *atm_' <<<"$out"; then
+if [[ "$rc" -eq 0 ]] && grep -q '^  ok  *atm_' <<<"$out"; then
     ok "verify_sequences passes on a correct copy, having actually compared it"
 else
     bad "verify_sequences did not really compare: rc=$rc out=$out"
@@ -126,13 +126,13 @@ else bad "proxy_* sequences were judged"; fi
 # otherwise DROP silently refuses and the MISSING branch is never reached.
 psql_q "ALTER TABLE atm_transactions ALTER COLUMN id DROP DEFAULT;" portal >/dev/null
 psql_q "DROP SEQUENCE atm_transactions_id_seq;" portal >/dev/null
-if [ -n "$(psql_q "SELECT to_regclass('public.atm_transactions_id_seq');" portal)" ]; then
+if [[ -n "$(psql_q "SELECT to_regclass('public.atm_transactions_id_seq');" portal)" ]]; then
     bad "fixture could not drop the sequence - MISSING branch untested"
 else
     ok "fixture removed the sequence from the copy"
 fi
 out=$(verify_sequences); rc=$?
-if [ "$rc" -ne 0 ] && grep -q MISSING <<<"$out"; then
+if [[ "$rc" -ne 0 ]] && grep -q MISSING <<<"$out"; then
     ok "a sequence absent from the copy is reported MISSING, not silently ok"
 else
     bad "absent sequence not caught: rc=$rc out=$out"
@@ -142,7 +142,7 @@ reset_fixture; copy_fixture
 # ── 3. a sequence left behind must be reported BEHIND ─────────────────────────
 psql_q "SELECT setval('atm_transactions_id_seq', 5, true);" portal >/dev/null
 out=$(verify_sequences); rc=$?
-if [ "$rc" -ne 0 ] && grep -q BEHIND <<<"$out"; then
+if [[ "$rc" -ne 0 ]] && grep -q BEHIND <<<"$out"; then
     ok "a sequence left at 5 while the source is at 50 is reported BEHIND"
 else
     bad "lagging sequence not caught: rc=$rc out=$out"
@@ -158,7 +158,7 @@ reset_fixture; copy_fixture
 
 # ── 4. the copy must be proven to contain nothing extra ───────────────────────
 out=$(verify_no_zabbix_leakage); rc=$?
-if [ "$rc" -eq 0 ] && grep -q 'all expected' <<<"$out"; then
+if [[ "$rc" -eq 0 ]] && grep -q 'all expected' <<<"$out"; then
     ok "verify_no_zabbix_leakage passes on a scoped copy"
 else
     bad "leak check did not really run: rc=$rc out=$out"
@@ -167,7 +167,7 @@ fi
 # now simulate the empty-flag-list disaster: whole database copied
 psql_q "CREATE TABLE changelog (changelogid serial PRIMARY KEY, objectid int);" portal >/dev/null
 out=$(verify_no_zabbix_leakage); rc=$?
-if [ "$rc" -ne 0 ] && grep -q LEAK <<<"$out"; then
+if [[ "$rc" -ne 0 ]] && grep -q LEAK <<<"$out"; then
     ok "a copy containing Zabbix tables is caught"
 else
     bad "Zabbix leakage not caught: rc=$rc out=$out"
@@ -181,7 +181,7 @@ psql_q "CREATE TABLE zbase (id serial PRIMARY KEY, v int);" portal >/dev/null
 psql_q "INSERT INTO zbase(v) SELECT 1;" portal >/dev/null
 psql_q "CREATE VIEW zabbix_some_view AS SELECT id FROM zbase;" portal >/dev/null
 out=$(verify_no_zabbix_leakage); rc=$?
-if [ "$rc" -ne 0 ] && grep -q LEAK <<<"$out"; then
+if [[ "$rc" -ne 0 ]] && grep -q LEAK <<<"$out"; then
     ok "a stray view in the copy is caught, not just stray tables"
 else
     bad "stray view not caught: rc=$rc out=$out"
@@ -196,7 +196,7 @@ printf 'atm_portal_view\n' >> "$FIXTURE_DIR"
 load_script "$FIXTURE_DIR"
 psql_q "CREATE VIEW atm_portal_view AS SELECT 1 AS x;" portal >/dev/null
 out=$(verify_no_zabbix_leakage); rc=$?
-if [ "$rc" -eq 0 ] && grep -qE '1 view' <<<"$out"; then
+if [[ "$rc" -eq 0 ]] && grep -qE '1 view' <<<"$out"; then
     ok "the reported count includes views"
 else
     bad "view not counted: rc=$rc out=$out"
@@ -208,7 +208,7 @@ load_script "$FIXTURE_DIR"
 # ── 5. row-count comparison still works both ways ────────────────────────────
 psql_q "DELETE FROM atm_anomalies WHERE id > 7;" portal >/dev/null
 out=$(verify); rc=$?
-if [ "$rc" -ne 0 ] && grep -q MISMATCH <<<"$out"; then
+if [[ "$rc" -ne 0 ]] && grep -q MISMATCH <<<"$out"; then
     ok "verify catches a table whose rows do not match"
 else
     bad "row mismatch not caught: rc=$rc out=$out"
@@ -223,7 +223,7 @@ fi
 SOURCE_DB=no_such_database
 TARGET_DB=no_such_database
 out=$(verify); rc=$?
-if [ "$rc" -ne 0 ] && grep -q 'ERROR' <<<"$out" && ! grep -q 'All .* tables match' <<<"$out"; then
+if [[ "$rc" -ne 0 ]] && grep -q 'ERROR' <<<"$out" && ! grep -q 'All .* tables match' <<<"$out"; then
     ok "an unreachable database is reported as an error, never as a match"
 else
     bad "unreachable database silently passed: rc=$rc out=$out"
@@ -235,7 +235,7 @@ TARGET_DB=portal
 PORTAL_TABLES_FILE=/tmp/opencode/_empty_list
 : > /tmp/opencode/_empty_list
 out=$(verify); rc=$?
-if [ "$rc" -ne 0 ]; then ok "an empty table list is a failure, not a clean bill"
+if [[ "$rc" -ne 0 ]]; then ok "an empty table list is a failure, not a clean bill"
 else bad "empty table list passed: $out"; fi
 PORTAL_TABLES_FILE="$FIXTURE_DIR"
 
@@ -251,7 +251,7 @@ run_psql() { cat >/dev/null; printf '1\n'; }
 n=0
 while read -r _t; do n=$((n+1)); sql_of zabbix "SELECT 1;" >/dev/null; done \
     < <(printf 'a\nb\nc\nd\ne\n')
-if [ "$n" -eq 5 ]; then
+if [[ "$n" -eq 5 ]]; then
     ok "sql_of does not consume the caller's stdin"
 else
     bad "sql_of ate the loop's stdin: read $n of 5 lines"
@@ -268,7 +268,7 @@ fi
 portal_table_names() { printf 'atm_transactions\n'; }
 portal_table_count() { printf '5\n'; }
 out=$(verify); rc=$?
-if [ "$rc" -ne 0 ] && grep -q 'cut short' <<<"$out"; then
+if [[ "$rc" -ne 0 ]] && grep -q 'cut short' <<<"$out"; then
     ok "a verify that skipped tables fails instead of reporting a match"
 else
     bad "short loop not caught: rc=$rc out=$out"
@@ -287,7 +287,7 @@ load_script "$FIXTURE_DIR"
 reset_fixture; copy_fixture
 psql_q "INSERT INTO atm_transactions(amount) SELECT 1 FROM generate_series(1,7);" zabbix
 out=$(verify); rc=$?
-if [ "$rc" -eq 0 ] && grep -q 'source has since grown' <<<"$out"; then
+if [[ "$rc" -eq 0 ]] && grep -q 'source has since grown' <<<"$out"; then
     ok "a copy that is merely behind a live source still verifies"
 else
     bad "staleness treated as corruption: rc=$rc out=$out"
@@ -296,7 +296,7 @@ fi
 # The other half: being lenient must not mean being blind.
 psql_q "DELETE FROM atm_transactions WHERE id > 45;" portal
 out=$(verify); rc=$?
-if [ "$rc" -ne 0 ] && grep -q MISMATCH <<<"$out"; then
+if [[ "$rc" -ne 0 ]] && grep -q MISMATCH <<<"$out"; then
     ok "a copy that really lost rows still fails"
 else
     bad "real row loss not caught: rc=$rc out=$out"
@@ -305,7 +305,7 @@ fi
 # and a copy with no manifest has nothing trustworthy to compare against
 psql_q "DROP TABLE portal_split_manifest;" portal >/dev/null
 out=$(verify); rc=$?
-if [ "$rc" -ne 0 ] && grep -qi 'manifest' <<<"$out"; then
+if [[ "$rc" -ne 0 ]] && grep -qi 'manifest' <<<"$out"; then
     ok "a copy with no manifest refuses to pass rather than guessing"
 else
     bad "missing manifest not caught: rc=$rc out=$out"
@@ -319,7 +319,7 @@ fi
 # as "all expected" by a check that had not run.
 psql_q "CREATE TABLE zz_leak (id serial PRIMARY KEY);" portal >/dev/null
 out=$(verify_no_zabbix_leakage); rc=$?
-if [ "$rc" -ne 0 ] && grep -q LEAK <<<"$out"; then
+if [[ "$rc" -ne 0 ]] && grep -q LEAK <<<"$out"; then
     ok "a real leak is still reported after the error-handling change"
 else
     bad "leak detection regressed: rc=$rc out=$out"
@@ -331,14 +331,14 @@ psql_q "DROP TABLE zz_leak;" portal >/dev/null
 # the copy reads as clean.
 run_psql() { "$PGBIN/psql" -X -U zabbix "$@" -c 'SELECT nonexistent_column_xyz FROM nowhere;' >/dev/null 2>&1; return 1; }
 out=$(verify_no_zabbix_leakage); rc=$?
-if [ "$rc" -ne 0 ] && ! grep -q 'all expected' <<<"$out"; then
+if [[ "$rc" -ne 0 ]] && ! grep -q 'all expected' <<<"$out"; then
     ok "a query that errors is reported as an error, not as a clean copy"
 else
     bad "a broken query still reads as clean: rc=$rc out=$out"
 fi
 # and verify() must refuse too, rather than comparing markers as if they were counts
 out=$(verify); rc=$?
-if [ "$rc" -ne 0 ] && ! grep -qE 'All [0-9]+ tables match' <<<"$out"; then
+if [[ "$rc" -ne 0 ]] && ! grep -qE 'All [0-9]+ tables match' <<<"$out"; then
     ok "verify() also refuses when its queries fail"
 else
     bad "verify() passed on failing queries: rc=$rc out=$out"
@@ -380,7 +380,7 @@ run_psql() {
     esac
 }
 out=$(verify_no_zabbix_leakage); rc=$?
-if [ "$rc" -ne 0 ] && ! grep -q 'all expected' <<<"$out"; then
+if [[ "$rc" -ne 0 ]] && ! grep -q 'all expected' <<<"$out"; then
     ok "a broken leak query cannot certify a copy that does leak"
 else
     bad "a leaking copy was certified by a broken query: rc=$rc out=$out"
@@ -389,11 +389,11 @@ fi
 unset -f run_psql
 load_script "$FIXTURE_DIR"
 out=$(verify_no_zabbix_leakage); rc=$?
-if [ "$rc" -ne 0 ] && grep -q LEAK <<<"$out"; then
+if [[ "$rc" -ne 0 ]] && grep -q LEAK <<<"$out"; then
     ok "and the same copy is flagged as leaking once the query works"
 else
     bad "leak not detected with a working query: rc=$rc out=$out"
 fi
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
-[ "$FAIL" -eq 0 ]
+[[ "$FAIL" -eq 0 ]]

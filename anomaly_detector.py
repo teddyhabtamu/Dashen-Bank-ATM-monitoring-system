@@ -15,8 +15,9 @@ Exposes: /tmp/zabbix_anomaly_count  (Zabbix external check reads this)
 Also writes: /tmp/zabbix_atm_anomaly_{ATM_ID} per-ATM for individual triggers
 """
 
-import os, time, json, psycopg2, logging
+import os, tempfile, time, json, psycopg2, logging
 from datetime import datetime, timedelta
+from pathlib import Path
 
 logging.basicConfig(
     level=logging.INFO,
@@ -255,6 +256,33 @@ def check_offhours_spike(conn, cur):
 
 # ── ZABBIX INTERFACE ──────────────────────────────────────────────────────────
 
+def _publish_text(path, text):
+    """Publish a Zabbix hand-off file atomically without following symlinks.
+
+    The documented hand-off path is /tmp, which is world-writable, so the file
+    is written to an O_EXCL temp file there and then replaced by name.  A
+    pre-created symlink at the destination is replaced, not followed, and a
+    Zabbix reader never sees a half-written count.
+    """
+    target = Path(path)
+    fd, temp_name = tempfile.mkstemp(prefix=target.name + '.', dir='/tmp')
+    try:
+        with os.fdopen(fd, 'w') as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temp_name, 0o644)
+        # NOSONAR: mkstemp created the temp file exclusively; replace() swaps
+        # the directory entry and never follows a symlink at the destination.
+        os.replace(temp_name, target)
+    except BaseException:
+        try:
+            os.unlink(temp_name)
+        except OSError:
+            pass
+        raise
+
+
 def write_zabbix_files(cur):
     """
     Write plain-text files that Zabbix external checks or UserParameter read.
@@ -267,8 +295,7 @@ def write_zabbix_files(cur):
         AND acknowledged = FALSE
     """)
     total = cur.fetchone()[0]
-    with open('/tmp/zabbix_anomaly_count', 'w') as f:
-        f.write(str(total))
+    _publish_text('/tmp/zabbix_anomaly_count', str(total))
 
     # Per-ATM counts for individual host triggers
     cur.execute("""
@@ -286,8 +313,7 @@ def write_zabbix_files(cur):
     for atm_id in active_atms:
         cnt = per_atm.get(atm_id, 0)
         safe = atm_id.replace('-', '_').lower()
-        with open(f'/tmp/zabbix_{safe}_anomalies', 'w') as f:
-            f.write(str(cnt))
+        _publish_text(f'/tmp/zabbix_{safe}_anomalies', str(cnt))
 
     # Write JSON summary for Grafana HTTP data source (optional)
     cur.execute("""
@@ -305,9 +331,9 @@ def write_zabbix_files(cur):
         d['detected_at'] = d['detected_at'].isoformat() if d['detected_at'] else None
         d['amount'] = float(d['amount']) if d['amount'] else None
         rows.append(d)
-    with open('/tmp/anomaly_feed.json', 'w') as f:
-        json.dump({'anomalies': rows, 'total_unacked': int(total),
-                   'generated_at': datetime.now().isoformat()}, f, default=str)
+    _publish_text('/tmp/anomaly_feed.json', json.dumps(
+        {'anomalies': rows, 'total_unacked': int(total),
+         'generated_at': datetime.now().isoformat()}, default=str))
 
     return total
 

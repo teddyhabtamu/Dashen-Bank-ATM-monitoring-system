@@ -23,5 +23,6 @@ SELECT count(*) AS ncr_active_missing_hostname
   FROM atm_locations
  WHERE UPPER(vendor) = 'NCR'
    AND LOWER(COALESCE(status, 'active')) = 'active'
-   AND COALESCE(ip_address, '') <> ''
-   AND COALESCE(ej_hostname, '') = '';
+   AND ip_address IS NOT NULL
+   AND ip_address <> ''
+   AND (ej_hostname IS NULL OR ej_hostname = '');

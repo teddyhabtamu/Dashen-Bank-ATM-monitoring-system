@@ -67,7 +67,7 @@ for arg in "$@"; do
     esac
 done
 
-if [ "$CONFIRMED" -ne 1 ]; then
+if [[ "$CONFIRMED" -ne 1 ]]; then
     echo "REFUSING to run: this overwrites the portal database."
     echo "Usage: $0 --confirm [--also-zabbix]"
     echo "It takes a pre-restore dump first, so the current contents are recoverable."
@@ -88,13 +88,13 @@ for _ in $(seq 1 30); do
     echo "Database still warming up... waiting 3s"
     sleep 3
 done
-if [ "$ready" -ne 1 ]; then
+if [[ "$ready" -ne 1 ]]; then
     echo "ERROR: PostgreSQL never became ready. Aborting before any change."
     exit 1
 fi
 
 PORTAL_DB="$(detect_portal_db || true)"
-if [ -z "$PORTAL_DB" ]; then
+if [[ -z "$PORTAL_DB" ]]; then
     echo "ERROR: could not find portal_schema_version in either database."
     echo "       Refusing to guess which one to restore into."
     exit 1
@@ -107,8 +107,8 @@ PORTAL_DUMP="$(newest 'portal_full_*.sql.gz')"
 ZBX_DUMP="$(newest 'zabbix_full_*.sql.gz')"
 SCOPED_DUMP="$BACKUP_DIR/atm_custom_tables.sql"
 
-if [ -z "$PORTAL_DUMP" ]; then
-    if [ -f "$SCOPED_DUMP" ]; then
+if [[ -z "$PORTAL_DUMP" ]]; then
+    if [[ -f "$SCOPED_DUMP" ]]; then
         PORTAL_DUMP="$SCOPED_DUMP"
         echo "No portal_full_*.sql.gz found; falling back to the table-scoped dump."
         echo "NOTE: that dump carries only the portal relations, not the manifest,"
@@ -135,7 +135,7 @@ fi
 # and does it decompress? All three, before the DROP.
 echo ""
 echo "Checking the backup is usable before touching anything..."
-if [ ! -s "$PORTAL_DUMP" ]; then
+if [[ ! -s "$PORTAL_DUMP" ]]; then
     echo "ERROR: $PORTAL_DUMP is missing or empty."
     echo "       Nothing has been changed."
     exit 1
@@ -153,12 +153,12 @@ esac
 SIZE=$(du -h "$PORTAL_DUMP" | cut -f1)
 echo "  backup verified: $PORTAL_DUMP ($SIZE)"
 
-if [ "$DRY_RUN" -eq 1 ]; then
+if [[ "$DRY_RUN" -eq 1 ]]; then
     echo ""
     echo "DRY RUN. Nothing has been changed and nothing will be."
     echo "  would restore database : $PORTAL_DB"
     echo "  from                   : $PORTAL_DUMP"
-    if [ "$ALSO_ZABBIX" -eq 1 ]; then
+    if [[ "$ALSO_ZABBIX" -eq 1 ]]; then
         echo "  would also replace     : zabbix (from ${ZBX_DUMP:-no dump found})"
     fi
     echo ""
@@ -211,15 +211,15 @@ echo ""
 echo "Verifying every relation from the list of record is present..."
 missing=""
 while read -r t; do
-    [ -z "$t" ] && continue
+    [[ -z "$t" ]] && continue
     got=$(docker exec zabbix-db psql -U zabbix -d "$PORTAL_DB" -tAc \
         "SELECT to_regclass('public.$t') IS NOT NULL;" 2>/dev/null)
-    if [ "$got" != "t" ]; then
+    if [[ "$got" != "t" ]]; then
         missing="$missing $t"
     fi
 done < <(portal_table_names)
 
-if [ -n "$missing" ]; then
+if [[ -n "$missing" ]]; then
     echo "FAILED. These relations are in config/portal_tables.txt but are NOT in"
     echo "the restored database:$missing"
     echo ""
@@ -232,20 +232,20 @@ echo "All $RELATIONS relations present."
 echo ""
 echo "Row counts in the restored database:"
 while read -r t; do
-    [ -z "$t" ] && continue
+    [[ -z "$t" ]] && continue
     n=$(docker exec zabbix-db psql -U zabbix -d "$PORTAL_DB" -tAc \
         "SELECT count(*) FROM public.$t;" 2>/dev/null)
     printf '  %-28s %s\n' "$t" "${n:-<unreadable>}"
 done < <(portal_table_names)
 
-if [ "$ALSO_ZABBIX" -eq 1 ]; then
+if [[ "$ALSO_ZABBIX" -eq 1 ]]; then
     echo ""
     echo "================================================================"
     echo " --also-zabbix: replacing the WHOLE zabbix database."
     echo " Zabbix's own configuration, hosts, items, triggers and history"
     echo " are inside it. This is NOT a portal restore."
     echo "================================================================"
-    if [ -z "$ZBX_DUMP" ]; then
+    if [[ -z "$ZBX_DUMP" ]]; then
         echo "ERROR: no zabbix_full_*.sql.gz found. Nothing done."
         exit 1
     fi

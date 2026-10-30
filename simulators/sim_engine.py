@@ -10,13 +10,16 @@ next refresh cycle (every ~10s) and starts producing live data.
 import os
 import sys
 import time
-import random
+from random import SystemRandom
+
 import json
 import threading
 import urllib.request
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 import common
+
+random = SystemRandom()
 
 
 NCR_OID = {

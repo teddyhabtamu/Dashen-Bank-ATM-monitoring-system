@@ -235,7 +235,7 @@
     <div class="report-card">
       <div class="card-accent"></div>
       <div class="card-content">
-        <div class="card-header" onclick="toggleAccordion(this)">
+        <div class="card-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
           <div class="card-icon"><i data-lucide="alert-triangle" style="width:22px;height:22px;"></i></div>
           <h3>Daily ATM Outage</h3>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
@@ -259,7 +259,7 @@
     <div class="report-card">
       <div class="card-accent"></div>
       <div class="card-content">
-        <div class="card-header" onclick="toggleAccordion(this)">
+        <div class="card-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
           <div class="card-icon"><i data-lucide="bar-chart-2" style="width:22px;height:22px;"></i></div>
           <h3>Transaction Summary</h3>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
@@ -267,7 +267,7 @@
         <div class="card-body-inner">
           <div class="form-grid">
             <div class="form-group full">
-              <label>Branch</label>
+              <label for="txn-atm">Branch</label>
               <div class="custom-select">
                 <select id="txn-atm">
                   <option value="all" selected>All Branches</option>
@@ -291,7 +291,7 @@
     <div class="report-card">
       <div class="card-accent"></div>
       <div class="card-content">
-        <div class="card-header" onclick="toggleAccordion(this)">
+        <div class="card-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
           <div class="card-icon"><i data-lucide="coins" style="width:22px;height:22px;"></i></div>
           <h3>Cash Level Report</h3>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
@@ -313,7 +313,7 @@
     <div class="report-card">
       <div class="card-accent"></div>
       <div class="card-content">
-        <div class="card-header" onclick="toggleAccordion(this)">
+        <div class="card-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
           <div class="card-icon"><i data-lucide="alert-triangle" style="width:22px;height:22px;"></i></div>
           <h3>Error &amp; Incident Report</h3>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
@@ -335,7 +335,7 @@
     <div class="report-card">
       <div class="card-accent"></div>
       <div class="card-content">
-        <div class="card-header" onclick="toggleAccordion(this)">
+        <div class="card-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
           <div class="card-icon"><i data-lucide="zap" style="width:22px;height:22px;"></i></div>
           <h3>ATM Performance Report</h3>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
@@ -357,7 +357,7 @@
     <div class="report-card">
       <div class="card-accent"></div>
       <div class="card-content">
-        <div class="card-header" onclick="toggleAccordion(this)">
+        <div class="card-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
           <div class="card-icon"><i data-lucide="layers" style="width:22px;height:22px;"></i></div>
           <h3>Vendor Performance Report</h3>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
@@ -379,7 +379,7 @@
     <div class="report-card">
       <div class="card-accent"></div>
       <div class="card-content">
-        <div class="card-header" onclick="toggleAccordion(this)">
+        <div class="card-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
           <div class="card-icon"><i data-lucide="gauge" style="width:22px;height:22px;"></i></div>
           <h3>ATM Availability Report</h3>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
@@ -387,7 +387,7 @@
         <div class="card-body-inner">
           <div class="form-grid">
             <div class="form-group full">
-              <label>Branch</label>
+              <label for="avail-atm">Branch</label>
               <div class="custom-select">
                 <select id="avail-atm">
                   <option value="all" selected>All Branches</option>
@@ -467,8 +467,8 @@ function addDays(iso, n) {
   return d.toISOString().slice(0, 10);
 }
 function prevMonthRange(iso) {
-  var y = parseInt(iso.slice(0, 4), 10);
-  var m = parseInt(iso.slice(5, 7), 10);
+  var y = Number.parseInt(iso.slice(0, 4), 10);
+  var m = Number.parseInt(iso.slice(5, 7), 10);
   var start = new Date(Date.UTC(y, m - 2, 1));
   var end = new Date(Date.UTC(y, m - 1, 0));
   return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)];
@@ -609,6 +609,7 @@ function toggleAccordion(header){
   var wasOpen = card.classList.contains('expanded');
   document.querySelectorAll('.report-card.expanded').forEach(function(c){ c.classList.remove('expanded'); });
   if(!wasOpen) card.classList.add('expanded');
+  header.setAttribute('aria-expanded', wasOpen ? 'false' : 'true');
 }
 
 loadATMs();

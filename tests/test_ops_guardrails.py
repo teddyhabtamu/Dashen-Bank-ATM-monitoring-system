@@ -271,12 +271,11 @@ def test_requirements_file_matches_the_dockerfile():
         'apscheduler', 'flask-wtf', 'ldap3', 'gunicorn'}, reqs
 
 
-def test_dockerfile_installs_the_lock_when_present():
-    """The lock is the deployed truth; the named file is intent. Without the
-    conditional, a lock committed later would be silently ignored."""
+def test_dockerfile_installs_the_lock():
+    """The lock is the deployed truth; the named file is intent."""
     dockerfile = (REPO / 'report-portal' / 'Dockerfile').read_text()
     assert 'requirements.lock' in dockerfile, (
-        'the Dockerfile must apply requirements.lock when it exists')
+        'the Dockerfile must install requirements.lock')
 
 
 def test_dockerfile_copies_requirements_before_installing_them():
@@ -285,7 +284,7 @@ def test_dockerfile_copies_requirements_before_installing_them():
     container running."""
     dockerfile = (REPO / 'report-portal' / 'Dockerfile').read_text()
     assert dockerfile.index('COPY requirements.txt') < dockerfile.index(
-        'pip install --no-cache-dir -r requirements.txt')
+        'pip install --no-cache-dir --only-binary :all: -r requirements.lock')
 
 
 def test_ncr_recon_has_progress_and_a_watchdog():

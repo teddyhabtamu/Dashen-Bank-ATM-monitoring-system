@@ -113,6 +113,15 @@ _MD5_RE = re.compile(r'^[0-9a-f]{32}$')
 _SHA256_RE = re.compile(r'^[0-9a-f]{64}$')
 _RESERVED_RE = re.compile(
     r'^(?i:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$')
+# Hosts are inventory names or IPv4 addresses, never options or shell text.
+_HOST_RE = re.compile(
+    r'^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,253}[A-Za-z0-9])?$')
+# Every key this tool emits is one of the five read-only image keys.  Pinning
+# the shape here means a caller cannot smuggle an arbitrary Zabbix key (for
+# example system.run) through the transport.
+_KEY_RE = re.compile(
+    r'^atm\.image\.(?:info|chunk|dir|ziplist|zipentry)'
+    r'\["[A-Za-z0-9_-]+"(?:,[0-9]+){0,3}\]$')
 
 
 class ImageFetchError(RuntimeError):
@@ -149,10 +158,12 @@ def mask_sensitive(value: str) -> str:
 def _md5():
     """MD5 for transport integrity, not authentication; tolerate FIPS mode."""
     try:
-        return hashlib.md5(usedforsecurity=False)
+        # NOSONAR: MD5 is used only to match the ATM's integrity value; it
+        # never authenticates a file and the SHA-256 is verified as well.
+        return hashlib.md5(usedforsecurity=False)  # NOSONAR
     except TypeError:
         try:
-            return hashlib.md5()
+            return hashlib.md5()  # NOSONAR - same transport-integrity use
         except ValueError:
             return None
     except ValueError:
@@ -280,17 +291,30 @@ def validate_entry(value: str) -> str:
 
 def _resolve_zabbix_get(command: str | None = None) -> str:
     if command:
-        return command
-    env = os.environ.get('ZBX_GET')
-    if env:
-        return env
-    for candidate in ('/usr/bin/zabbix_get', '/usr/local/bin/zabbix_get'):
-        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
-            return candidate
-    found = shutil.which('zabbix_get')
-    if found:
-        return found
-    raise ImageFetchError('zabbix_get not found; install it or set ZBX_GET')
+        candidate = command
+    else:
+        candidate = os.environ.get('ZBX_GET', '')
+        if not candidate:
+            candidate = ''
+            for path in ('/usr/bin/zabbix_get', '/usr/local/bin/zabbix_get'):
+                if os.path.isfile(path) and os.access(path, os.X_OK):
+                    candidate = path
+                    break
+            if not candidate:
+                candidate = shutil.which('zabbix_get') or ''
+    if not candidate:
+        raise ImageFetchError('zabbix_get not found; install it or set ZBX_GET')
+    # The transport must run a real executable, not a shell fragment.  A
+    # relative name is resolved through PATH exactly once, here, and then
+    # passed to subprocess as an argv element (never through a shell).
+    if not os.path.isabs(candidate):
+        resolved = shutil.which(candidate)
+        if not resolved:
+            raise ImageFetchError('zabbix_get not found; install it or set ZBX_GET')
+        candidate = resolved
+    if not os.path.isfile(candidate) or not os.access(candidate, os.X_OK):
+        raise ImageFetchError('zabbix_get is not an executable file')
+    return candidate
 
 
 def zbx_get(host: str, key: str, *, timeout: int = DEFAULT_TIMEOUT,
@@ -302,13 +326,11 @@ def zbx_get(host: str, key: str, *, timeout: int = DEFAULT_TIMEOUT,
     `ZBX_NOTSUPPORTED` are deterministic: they are never retried.  Timeouts
     and empty responses are retried with a small backoff.
     """
-    if not key or len(key) > MAX_KEY_LENGTH:
-        raise ImageFetchError('E_KEY')
-    if any(ord(ch) < 32 or ord(ch) == 127 for ch in key):
-        raise ImageFetchError('E_KEY')
-    if (not host or host.startswith('-') or len(host) > 255
-            or any(ord(ch) <= 32 or ord(ch) == 127 for ch in host)):
+    if not isinstance(host, str) or not _HOST_RE.match(host):
         raise ImageFetchError('E_HOST')
+    if (not isinstance(key, str) or len(key) > MAX_KEY_LENGTH
+            or not _KEY_RE.match(key)):
+        raise ImageFetchError('E_KEY')
 
     binary = _resolve_zabbix_get(command)
     effective_timeout = max(1, min(int(timeout), 30))
@@ -317,10 +339,13 @@ def zbx_get(host: str, key: str, *, timeout: int = DEFAULT_TIMEOUT,
 
     for attempt in range(attempts):
         try:
-            proc = subprocess.run(
+            # NOSONAR: argv list with shell=False; host and key were matched
+            # against the strict allow-list patterns above.
+            proc = subprocess.run(  # NOSONAR
                 [binary, '-t', str(effective_timeout), '-s', host, '-k', key],
                 capture_output=True,
                 timeout=effective_timeout + 5,
+                check=False,
             )
         except subprocess.TimeoutExpired:
             last_error = ImageFetchError('agent timeout')
@@ -513,12 +538,24 @@ def _atomic_write(out: Path, chunks: Iterable[bytes], expected_size: int,
                   expected_md5: str | None = None,
                   expected_crc32: int | None = None,
                   content_name: str | None = None) -> dict:
-    """Write chunks to a private temp file, verify, then publish atomically."""
-    out = Path(out)
-    out.parent.mkdir(parents=True, exist_ok=True)
+    """Write chunks to a private temp file, verify, then publish atomically.
 
-    fd, temp_name = tempfile.mkstemp(
-        prefix=out.name + '.', suffix='.part', dir=str(out.parent))
+    The destination is an operator-supplied CLI argument, so it is resolved
+    once, its parent is created, and the leaf is refused if it is a symlink
+    or a directory.  The temp file is created inside that parent with mode
+    0600, so a local attacker cannot pre-create or swap the path.
+    """
+    out = Path(out).expanduser()
+    if not out.is_absolute():
+        out = Path.cwd() / out
+    out.parent.mkdir(parents=True, exist_ok=True)
+    parent = out.parent.resolve(strict=True)
+    out = parent / out.name
+    if out.is_symlink() or out.is_dir():
+        raise ImageFetchError('E_OUT')
+
+    fd, temp_name = tempfile.mkstemp(  # NOSONAR
+        prefix=out.name + '.', suffix='.part', dir=str(parent))
     temp = Path(temp_name)
     size = 0
     sha256 = hashlib.sha256()
@@ -557,7 +594,9 @@ def _atomic_write(out: Path, chunks: Iterable[bytes], expected_size: int,
                 and (crc & 0xFFFFFFFF) != (expected_crc32 & 0xFFFFFFFF):
             raise ImageFetchError('E_CRC32')
 
-        os.replace(temp, out)
+        # NOSONAR: both paths are resolved above; temp is created by mkstemp
+        # in the resolved parent and out is its fixed leaf name.
+        os.replace(temp, out)  # NOSONAR
         return {
             'bytes_written': size,
             'sha256': sha256.hexdigest(),

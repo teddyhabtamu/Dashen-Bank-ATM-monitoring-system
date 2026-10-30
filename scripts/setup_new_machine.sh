@@ -17,8 +17,8 @@ echo "======================================"
 # ── Step 1 — Check .env exists ─────────────────
 echo ""
 echo "Step 1: Checking .env file..."
-if [ ! -f ".env" ]; then
-    if [ -f ".env.example" ]; then
+if [[ ! -f ".env" ]]; then
+    if [[ -f ".env.example" ]]; then
         cp .env.example .env
         echo "  Created .env from .env.example — edit passwords before proceeding."
         echo "  At minimum set: ADMIN_PASS, FLASK_SECRET_KEY"
@@ -59,7 +59,7 @@ required_files=(
     "config/zabbix/template_grg_snmp.xml"
 )
 for f in "${required_files[@]}"; do
-    if [ ! -f "$f" ]; then
+    if [[ ! -f "$f" ]]; then
         echo "  Missing: $f"
         exit 1
     fi
@@ -105,8 +105,8 @@ for i in $(seq 1 24); do
     sleep 5
 done
 
-if [ "$OS_OK" = "1" ]; then
-    if [ -f "config/opensearch/atm_ej_parser.json" ]; then
+if [[ "$OS_OK" = "1" ]]; then
+    if [[ -f "config/opensearch/atm_ej_parser.json" ]]; then
         if curl -s -X PUT "http://localhost:9200/_ingest/pipeline/atm_ej_parser" \
                 -H 'Content-Type: application/json' \
                 -d @"config/opensearch/atm_ej_parser.json" | grep -q '"acknowledged":true'; then
@@ -119,7 +119,7 @@ if [ "$OS_OK" = "1" ]; then
     fi
 
     # Structured-schema index template for atm-ej-live-* (typed keyword/float mappings)
-    if [ -f "config/opensearch/ej_live_index_template.json" ]; then
+    if [[ -f "config/opensearch/ej_live_index_template.json" ]]; then
         if curl -s -X PUT "http://localhost:9200/_index_template/ej-live-template" \
                 -H 'Content-Type: application/json' \
                 -d @"config/opensearch/ej_live_index_template.json" | grep -q '"acknowledged":true'; then
@@ -141,7 +141,7 @@ fi
 # ── Step 7 — Restore database ──────────────────
 echo ""
 echo "Step 7: Restoring database..."
-if [ -f "config/postgres/atm_custom_tables.sql" ]; then
+if [[ -f "config/postgres/atm_custom_tables.sql" ]]; then
     bash scripts/restore_db.sh
 else
     echo "  No database backup found, creating fresh ATM locations..."
@@ -212,7 +212,7 @@ echo "Step 12: Configuring GLPI..."
 echo -n "  Waiting for GLPI installation (first-boot download)..."
 GLPI_FILES_OK=0
 for i in $(seq 1 60); do
-    if docker exec glpi sh -c '[ -f /var/www/html/glpi/bin/console ] && [ -f /var/www/html/glpi/apirest.php ] && [ -f /var/www/html/glpi/inc/includes.php ]' 2>/dev/null; then
+    if docker exec glpi sh -c '[ -f /var/www/html/glpi/bin/console ] && [ -f /var/www/html/glpi/apirest.php ] && [ -f /var/www/html/glpi/inc/includes.php ]' 2>/dev/null; then  # NOSONAR: POSIX sh inside the container
         echo " ready"
         GLPI_FILES_OK=1
         break
@@ -225,7 +225,7 @@ done
 # IMPORTANT: the image's own entrypoint may STILL be downloading in the background —
 # running two extractions concurrently corrupts the install (missing apirest.php ->
 # API returns 200 with empty body). Kill the image's wget/tar first.
-if [ "$GLPI_FILES_OK" = "0" ]; then
+if [[ "$GLPI_FILES_OK" = "0" ]]; then
     echo ""
     echo "  GLPI files missing — stopping image download and installing manually..."
     docker exec glpi sh -c 'pkill -9 -f "wget.*glpi-project" 2>/dev/null; pkill -9 -f "tar.*glpi" 2>/dev/null; rm -f /var/www/html/glpi-*.tgz; true'
@@ -236,11 +236,11 @@ if [ "$GLPI_FILES_OK" = "0" ]; then
         rm -f glpi-10.0.15.tgz &&
         chown -R www-data:www-data glpi
     ' 2>/dev/null
-    if [ "$?" != "0" ]; then
+    if [[ "$?" != "0" ]]; then
         echo "  Container cannot reach GitHub — downloading on host and copying in..."
         rm -f /tmp/glpi-10.0.15.tgz
         wget -q https://github.com/glpi-project/glpi/releases/download/10.0.15/glpi-10.0.15.tgz -O /tmp/glpi-10.0.15.tgz
-        if [ -f /tmp/glpi-10.0.15.tgz ]; then
+        if [[ -f /tmp/glpi-10.0.15.tgz ]]; then
             docker cp /tmp/glpi-10.0.15.tgz glpi:/var/www/html/
             rm -f /tmp/glpi-10.0.15.tgz
             docker exec glpi sh -c '
@@ -251,12 +251,12 @@ if [ "$GLPI_FILES_OK" = "0" ]; then
             '
         fi
     fi
-    if docker exec glpi sh -c '[ -f /var/www/html/glpi/bin/console ] && [ -f /var/www/html/glpi/apirest.php ] && [ -f /var/www/html/glpi/inc/includes.php ]' 2>/dev/null; then
+    if docker exec glpi sh -c '[ -f /var/www/html/glpi/bin/console ] && [ -f /var/www/html/glpi/apirest.php ] && [ -f /var/www/html/glpi/inc/includes.php ]' 2>/dev/null; then  # NOSONAR: POSIX sh inside the container
         GLPI_FILES_OK=1
     fi
 fi
 
-if [ "$GLPI_FILES_OK" = "0" ]; then
+if [[ "$GLPI_FILES_OK" = "0" ]]; then
     echo "  FATAL: GLPI files are missing and could not be downloaded."
     echo "  Check the glpi container logs: docker logs glpi"
     echo "  And ensure github.com is reachable from this machine."
@@ -269,7 +269,7 @@ fi
 # which breaks the GLPI 10 REST API (empty/HTML responses). Restart the
 # container now that the files exist so the entrypoint regenerates the vhost.
 VHOST_OK=$(docker exec glpi sh -c 'grep -q "/var/www/html/glpi/public" /etc/apache2/sites-enabled/000-default.conf 2>/dev/null && echo 1 || echo 0')
-if [ "$VHOST_OK" != "1" ]; then
+if [[ "$VHOST_OK" != "1" ]]; then
     echo "  Apache vhost outdated (GLPI downloaded after boot) — restarting glpi..."
     docker restart glpi >/dev/null
     echo -n "  Waiting for GLPI to come back..."
@@ -283,7 +283,7 @@ if [ "$VHOST_OK" != "1" ]; then
         echo -n "."
         sleep 5
     done
-    if [ "$VHOST_OK" = "0" ]; then
+    if [[ "$VHOST_OK" = "0" ]]; then
         echo "  WARNING: could not regenerate GLPI vhost — API may not work"
     fi
 fi
@@ -293,7 +293,7 @@ fi
 # public/. Without these Aliases, Apache rewrites /apirest.php to
 # index.php and returns an empty body.
 VHOST_ALIAS_OK=$(docker exec glpi sh -c 'grep -q "Alias.*/apirest.php" /etc/apache2/sites-enabled/000-default.conf 2>/dev/null && echo 1 || echo 0')
-if [ "$VHOST_ALIAS_OK" != "1" ]; then
+if [[ "$VHOST_ALIAS_OK" != "1" ]]; then
     echo "  Adding API Aliases to GLPI vhost..."
     docker exec glpi sh -c 'echo "Alias /apirest.php /var/www/html/glpi/apirest.php" >> /etc/apache2/sites-enabled/000-default.conf'
     docker exec glpi sh -c 'echo "Alias /apixmlrpc.php /var/www/html/glpi/apixmlrpc.php" >> /etc/apache2/sites-enabled/000-default.conf'
@@ -313,7 +313,7 @@ fi
 # Check if GLPI API actually works now.
 echo -n "  Checking GLPI API health... "
 API_HEALTH=$(docker exec glpi wget -q -O - http://localhost/apirest.php 2>/dev/null | head -c 1)
-if [ "$API_HEALTH" != "{" ]; then
+if [[ "$API_HEALTH" != "{" ]]; then
     echo "BROKEN — the GLPI container has corrupted files or a misconfigured vhost."
     echo "  Fix manually on the host:"
     echo "    docker rm -f glpi"
@@ -336,13 +336,13 @@ SMTP_USER_ENV=$(env_val SMTP_USER)
 SMTP_PASS_ENV=$(env_val SMTP_PASS)
 SMTP_FROM_ENV=$(env_val SMTP_FROM);    SMTP_FROM_ENV=${SMTP_FROM_ENV:-atm-monitor@dashenbank.com}
 AT_API_KEY_ENV=$(env_val AT_API_KEY)
-if [ -z "$GLPI_API_PASSWORD" ]; then
+if [[ -z "$GLPI_API_PASSWORD" ]]; then
     echo "  ERROR: GLPI_API_PASSWORD is not set in .env (needed to set the GLPI admin password)."
     exit 1
 fi
 GLPI_CONSOLE="php /var/www/html/glpi/bin/console"
 INSTALLED=$(docker exec glpi-db mysql -u glpi -p"$MYSQL_PASSWORD" glpi -e "SELECT COUNT(*) FROM glpi_configs WHERE name='version'" 2>/dev/null | tail -1 | tr -d ' ' || echo "0")
-if [ -z "$INSTALLED" ] || [ "$INSTALLED" = "0" ]; then
+if [[ -z "$INSTALLED" ]] || [[ "$INSTALLED" = "0" ]]; then
     echo "  GLPI not yet installed — running CLI installer..."
     # Ensure config/ directory is writable so db:install can create config_db.php
     docker exec glpi sh -c 'chown -R www-data:www-data /var/www/html/glpi/config'
@@ -352,7 +352,7 @@ if [ -z "$INSTALLED" ] || [ "$INSTALLED" = "0" ]; then
         --default-language=en --no-interaction 2>&1)
     DB_INSTALL_EXIT=$?
     echo "$DB_INSTALL_OUTPUT" | grep -v "already\|already exists" || true
-    if [ "$DB_INSTALL_EXIT" != "0" ]; then
+    if [[ "$DB_INSTALL_EXIT" != "0" ]]; then
         echo "  ERROR: GLPI db:install failed (exit code $DB_INSTALL_EXIT)."
         echo "  Check the GLPI container logs: docker logs glpi"
         exit 1
@@ -413,7 +413,7 @@ docker exec glpi wget -q -O /dev/null http://localhost/ 2>/dev/null || true
 sleep 3
 
 GLPI_APP_TOKEN=$(grep 'App-Token:' /tmp/glpi_app_token.txt | awk '{print $2}')
-if [ -n "$GLPI_APP_TOKEN" ]; then
+if [[ -n "$GLPI_APP_TOKEN" ]]; then
     # ── Step 12b — Render + import Zabbix mediatypes, then create the trigger action ──
     # The repo XML carries __PLACEHOLDER__ markers; real values come from .env
     # and the freshly generated app token. Nothing secret ever touches git.
@@ -479,7 +479,7 @@ docker exec -e GLPI_APP_TOKEN="$GLPI_APP_TOKEN" \
 # A broken/corrupt GLPI install (e.g. missing apirest.php from a racing download)
 # makes Apache return 200 with an EMPTY body. Verify AFTER glpi_setup.py
 # has bootstrapped the API so we catch real failures, not premature checks.
-if [ -n "$GLPI_APP_TOKEN" ]; then
+if [[ -n "$GLPI_APP_TOKEN" ]]; then
     echo "  Verifying GLPI REST API..."
     API_OK=0
     for i in $(seq 1 10); do
@@ -505,7 +505,7 @@ sys.exit(1)
         echo -n "."
         sleep 15
     done
-    if [ "$API_OK" = "0" ]; then
+    if [[ "$API_OK" = "0" ]]; then
         echo ""
         echo "  ERROR: GLPI API is not responding correctly."
         echo "  GLPI PHP error log (last 20 lines):"
@@ -530,11 +530,11 @@ docker exec zabbix-server zabbix_server -R config_cache_reload 2>/dev/null || tr
 # ── Step 16 — Fix permissions ──────────────────
 echo ""
 echo "Step 16: Fixing filesystem permissions..."
-if [ -d "ej-logs" ]; then
+if [[ -d "ej-logs" ]]; then
     sudo chown -R $USER:$USER ej-logs/ 2>/dev/null || true
     chmod 755 ej-logs/ 2>/dev/null || true
 fi
-if [ -f "filebeat.yml" ]; then
+if [[ -f "filebeat.yml" ]]; then
     sudo chown root:root filebeat.yml 2>/dev/null || true
     sudo chmod 644 filebeat.yml 2>/dev/null || true
 fi

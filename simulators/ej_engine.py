@@ -9,11 +9,14 @@ newly registered ATM automatically gets EJ history for the EJ Search feature.
 import os
 import sys
 import time
-import random
+from random import SystemRandom
+
 import threading
 from datetime import datetime, timedelta
 
 import common
+
+random = SystemRandom()
 
 EJ_DIR = os.environ.get('EJ_LOG_DIR', '/var/log/atm-ej')
 

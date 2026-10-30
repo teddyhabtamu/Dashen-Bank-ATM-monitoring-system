@@ -15,7 +15,7 @@ PASS=0; FAIL=0
 
 shopt -s nullglob
 files=("$DIR"/*.ndjson)
-if [ ${#files[@]} -eq 0 ]; then echo "No .ndjson files in $DIR"; exit 0; fi
+if [[ ${#files[@]} -eq 0 ]]; then echo "No .ndjson files in $DIR"; exit 0; fi
 
 for f in "${files[@]}"; do
   echo "Importing $(basename "$f") ..."
@@ -30,4 +30,4 @@ for f in "${files[@]}"; do
 done
 
 echo "== OSD saved-object import: $PASS ok, $FAIL fail =="
-[ "$FAIL" -eq 0 ]
+[[ "$FAIL" -eq 0 ]]

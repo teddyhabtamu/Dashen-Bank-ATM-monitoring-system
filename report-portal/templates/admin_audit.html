@@ -62,8 +62,8 @@ tr.audit-row:hover td.detail-cell{color:#012169}
   <div class="card-header">
     <h2>Activity Log ({{ total }})</h2>
     <form method="get" action="/admin/audit" class="search-bar" style="overflow:visible">
-      <input type="text" name="search" placeholder="Search username or detail..." value="{{ search }}">
-      <select name="action" onchange="this.form.submit()">
+      <input type="text" name="search" id="auditSearch" aria-label="Search audit log" placeholder="Search username or detail..." value="{{ search }}">
+      <select name="action" id="auditAction" aria-label="Action" onchange="this.form.submit()">
         <option value="">All Actions</option>
         {% for a in actions %}
         <option value="{{ a }}" {% if action_filter == a %}selected{% endif %}>{{ a }}</option>
@@ -89,7 +89,7 @@ tr.audit-row:hover td.detail-cell{color:#012169}
       <tbody>
         {% if logs %}
           {% for row in logs %}
-          <tr class="audit-row" style="--i: {{ loop.index0 }}" onclick="toggleAuditRow(this)" title="Click to expand full detail">
+          <tr class="audit-row" style="--i: {{ loop.index0 }}" tabindex="0" title="Click to expand full detail">
             <td style="font-size:11px;color:#64748B;white-space:nowrap">{{ row[1] if row[1] else '—' }}</td>
             <td style="font-weight:600;color:#0F172A">{{ row[2] }}</td>
             <td><span class="badge-action" style="background:#EEF2FF;color:#012169">{{ row[3] }}</span></td>
@@ -145,6 +145,12 @@ tr.audit-row:hover td.detail-cell{color:#012169}
 /* Click a row → full detail unwraps, one change per line. Click again to
    collapse. Text is re-inserted via textContent (never innerHTML on raw
    content), so no markup in audit details can execute. */
+document.querySelectorAll('.audit-row').forEach(function(row){
+  row.addEventListener('click', function(){ toggleAuditRow(this); });
+  row.addEventListener('keydown', function(e){
+    if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAuditRow(this); }
+  });
+});
 function toggleAuditRow(tr){
   var cell = tr.querySelector('.detail-cell');
   if(!cell) return;

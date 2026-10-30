@@ -157,22 +157,22 @@ input.field-bad{border-color:#FCA5A5 !important}
 
 </div>
 
-<div class="modal-overlay" id="createModal" onclick="if(event.target===this)closeModal('createModal')">
-  <div class="modal" onclick="event.stopPropagation()">
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
     <div class="modal-header">
       <h2>New User</h2>
-      <button class="modal-close" onclick="closeModal('createModal')"><i data-lucide="x"></i></button>
+      <button class="modal-close" aria-label="Close dialog" onclick="closeModal('createModal')"><i data-lucide="x"></i></button>
     </div>
     <form method="post" action="/admin/users/create" onsubmit="return validateUserForm(this, true)">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="form-grid">
         <div class="form-group full">
-          <label>Username</label>
+          <label for="createUsername">Username</label>
           <input type="text" id="createUsername" name="username" required placeholder="e.g. operator1" minlength="3" maxlength="100" pattern="[A-Za-z0-9_]+" title="Letters, numbers and underscore only" autocomplete="off" oninput="clearFieldErr(this)">
           <div class="field-err" data-err-for="username"></div>
         </div>
         <div class="form-group full">
-          <label>Password</label>
+          <label for="createPassword">Password</label>
           <div class="pw-wrap">
             <input type="password" id="createPassword" name="password" required placeholder="Min 10 chars: UPPER + lower + digit + symbol" minlength="10" autocomplete="new-password" title="At least 10 characters with uppercase, lowercase, digits and symbols" oninput="pwMeter(this);clearFieldErr(this)">
             <button type="button" class="pw-toggle" onclick="togglePW(this)" tabindex="-1" aria-label="Toggle password visibility">
@@ -184,7 +184,7 @@ input.field-bad{border-color:#FCA5A5 !important}
           <div class="field-err" data-err-for="password"></div>
         </div>
         <div class="form-group full">
-          <label>Confirm Password</label>
+          <label for="createPassword2">Confirm Password</label>
           <div class="pw-wrap">
             <input type="password" id="createPassword2" name="password_confirm" required placeholder="Repeat the password" minlength="10" autocomplete="new-password" oninput="clearFieldErr(this)">
             <button type="button" class="pw-toggle" onclick="togglePW(this)" tabindex="-1" aria-label="Toggle password visibility">
@@ -194,15 +194,15 @@ input.field-bad{border-color:#FCA5A5 !important}
           <div class="field-err" data-err-for="password_confirm"></div>
         </div>
         <div class="form-group full">
-          <label>Role</label>
-          <select name="role">
+          <label for="createRole">Role</label>
+          <select name="role" id="createRole">
             <option value="viewer">Viewer (read-only)</option>
             <option value="operator">Operator (can manage ATMs)</option>
             <option value="admin">Administrator (full access)</option>
           </select>
         </div>
         <div class="form-group full">
-          <label>Email <span style="color:#94A3B8;font-weight:400">(required — report recipients & account recovery)</span></label>
+          <label for="createEmail">Email <span style="color:#94A3B8;font-weight:400">(required — report recipients & account recovery)</span></label>
           <input type="email" id="createEmail" name="email" required placeholder="user@dashenbank.com" maxlength="255" autocomplete="off" oninput="clearFieldErr(this)">
           <div class="field-err" data-err-for="email"></div>
         </div>
@@ -215,18 +215,18 @@ input.field-bad{border-color:#FCA5A5 !important}
   </div>
 </div>
 
-<div class="modal-overlay" id="editModal" onclick="if(event.target===this)closeModal('editModal')">
-  <div class="modal" onclick="event.stopPropagation()">
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
     <div class="modal-header">
       <h2>Edit User: <span id="editUsernameLabel"></span></h2>
-      <button class="modal-close" onclick="closeModal('editModal')"><i data-lucide="x"></i></button>
+      <button class="modal-close" aria-label="Close dialog" onclick="closeModal('editModal')"><i data-lucide="x"></i></button>
     </div>
     <form method="post" action="/admin/users/edit" onsubmit="return validateUserForm(this, false)">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="username" id="editUsernameInput" value="">
       <div class="form-grid">
         <div class="form-group full">
-          <label>Role</label>
+          <label for="editRoleSelect">Role</label>
           <select name="role" id="editRoleSelect">
             <option value="viewer">Viewer (read-only)</option>
             <option value="operator">Operator (can manage ATMs)</option>
@@ -234,12 +234,12 @@ input.field-bad{border-color:#FCA5A5 !important}
           </select>
         </div>
         <div class="form-group full">
-          <label>Email <span style="color:#94A3B8;font-weight:400">(required — report recipients & account recovery)</span></label>
+          <label for="editEmail">Email <span style="color:#94A3B8;font-weight:400">(required — report recipients & account recovery)</span></label>
           <input type="email" id="editEmail" name="email" required placeholder="user@dashenbank.com" maxlength="255" autocomplete="off" oninput="clearFieldErr(this)">
           <div class="field-err" data-err-for="email"></div>
         </div>
         <div class="form-group full">
-          <label>New Password <span style="color:#94A3B8;font-weight:400">(leave blank to keep current)</span></label>
+          <label for="editPassword">New Password <span style="color:#94A3B8;font-weight:400">(leave blank to keep current)</span></label>
           <div class="pw-wrap">
             <input type="password" id="editPassword" name="password" placeholder="Min 10 chars: UPPER + lower + digit + symbol" minlength="10" autocomplete="new-password" title="At least 10 characters with uppercase, lowercase, digits and symbols" oninput="pwMeter(this);clearFieldErr(this)">
             <button type="button" class="pw-toggle" onclick="togglePW(this)" tabindex="-1" aria-label="Toggle password visibility">
@@ -251,7 +251,7 @@ input.field-bad{border-color:#FCA5A5 !important}
           <div class="field-err" data-err-for="password"></div>
         </div>
         <div class="form-group full">
-          <label>Confirm New Password</label>
+          <label for="editPassword2">Confirm New Password</label>
           <div class="pw-wrap">
             <input type="password" id="editPassword2" name="password_confirm" placeholder="Repeat the new password" minlength="10" autocomplete="new-password" oninput="clearFieldErr(this)">
             <button type="button" class="pw-toggle" onclick="togglePW(this)" tabindex="-1" aria-label="Toggle password visibility">
@@ -269,8 +269,8 @@ input.field-bad{border-color:#FCA5A5 !important}
   </div>
 </div>
 
-<div class="modal-overlay" id="deleteModal" onclick="if(event.target===this)closeModal('deleteModal')">
-  <div class="modal-confirm" onclick="event.stopPropagation()">
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal-confirm">
     <div class="modal-confirm-icon"><i data-lucide="alert-triangle"></i></div>
     <h3>Delete User</h3>
     <p>Are you sure you want to delete <strong id="deleteUsername"></strong>?</p>
@@ -287,6 +287,10 @@ input.field-bad{border-color:#FCA5A5 !important}
 </div>
 
 <script>
+['createModal', 'editModal', 'deleteModal'].forEach(function(id){
+  var el = document.getElementById(id);
+  if(el) el.addEventListener('click', function(e){ if(e.target === this) closeModal(id); });
+});
 function openCreateModal(){
   var m = document.getElementById('createModal');
   m.querySelectorAll('.field-err.show').forEach(function(b){ b.textContent = ''; b.classList.remove('show'); });
@@ -374,6 +378,13 @@ function pwMeter(input){
   label.textContent = issues.length ? lvl.t + ' — ' + issues[0] : lvl.t;
   label.style.color = lvl.c;
 }
+function _validEmail(value){
+  var v = String(value || '').trim();
+  var parts = v.split('@');
+  if(parts.length !== 2 || /\s/.test(v)) return false;
+  return parts[0].length > 0 && parts[1].indexOf('.') > 0 &&
+    parts[1].split('.').every(function(label){ return label.length > 0; });
+}
 function validateUserForm(form, isCreate){
   var uname = form.querySelector('[name="username"]');
   var pw = form.querySelector('[name="password"]');
@@ -394,7 +405,7 @@ function validateUserForm(form, isCreate){
     if(issues.length){ setFieldErr(form, 'password', 'Password ' + issues[0] + '.'); ok = false; }
     if(pw2 && pw.value !== pw2.value){ setFieldErr(form, 'password_confirm', 'Passwords do not match.'); ok = false; }
   }
-  if(email && email.value.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.value.trim())){
+  if(email && email.value.trim() && !_validEmail(email.value.trim())){
     setFieldErr(form, 'email', 'Email address looks invalid.'); ok = false;
   }
   return ok;

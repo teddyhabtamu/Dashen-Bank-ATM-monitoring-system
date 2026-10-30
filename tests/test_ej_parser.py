@@ -207,10 +207,11 @@ def test_parser_function_if_importable():
     ncr = ("2026-08-26 13:22:47 | ATM-002 | TID002 | TXN | WITHDRAWAL | "
            "SEQ=284461 | CARD=************0123 | AMOUNT=2000.00 | "
            "CURRENCY=ETB | STATUS=APPROVED | AUTH=803616")
-    out = parse(ncr)
-    assert out.get("transaction", {}).get("status") == "APPROVED"
-    assert " " not in out.get("transaction", {}).get("status", "")
-    assert out.get("card", {}).get("masked") == "************0123"
+    out = parse({'message': ncr})
+    assert out.get("status") == "APPROVED"
+    assert " " not in out.get("status", "")
+    assert out.get("card_masked") == "************0123"
+    assert out.get("atm_id") == "ATM-002"
 
 
 def _load_search_parser():

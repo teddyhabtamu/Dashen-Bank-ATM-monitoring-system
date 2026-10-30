@@ -176,7 +176,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
     <h2>Registered ATMs ({{ atm_count }})</h2>
     <div style="display:flex;gap:8px;align-items:center">
       <form method="get" action="/atms" id="searchForm" style="display:flex;gap:6px;align-items:center" onsubmit="event.preventDefault(); applyFilter();">
-        <input type="text" name="search" placeholder="Search ATM ID, branch, city…" value="{{ search }}" maxlength="100"
+        <input type="text" name="search" id="atmSearch" aria-label="Search ATMs" placeholder="Search ATM ID, branch, city…" value="{{ search }}" maxlength="100"
                style="padding:7px 12px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;width:220px;transition:border-color .2s"
                onfocus="this.style.borderColor='#012169'" onblur="this.style.borderColor='#E4E9F1'">
         <button type="submit" class="btn btn-outline" style="padding:7px 12px" onclick="event.preventDefault(); applyFilter();"><i data-lucide="search" style="width:14px;height:14px"></i></button>
@@ -193,21 +193,21 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
   <div class="filter-bar">
     <span class="filter-label">Filter by</span>
     <input type="hidden" name="state" value="{{ f_state }}">
-    <select name="vendor" onchange="applyFilter()">
+    <select name="vendor" id="filterVendor" aria-label="Vendor" onchange="applyFilter()">
       <option value="">All Vendors</option>
       <option value="NCR" {{ 'selected' if f_vendor=='NCR' }}>NCR</option>
       <option value="GRG" {{ 'selected' if f_vendor=='GRG' }}>GRG</option>
     </select>
-    <select name="status" onchange="applyFilter()">
+    <select name="status" id="filterStatus" aria-label="Monitored status" onchange="applyFilter()">
       <option value="">All Monitored</option>
       <option value="active" {{ 'selected' if f_status=='active' }}>Active</option>
       <option value="inactive" {{ 'selected' if f_status=='inactive' }}>Inactive</option>
     </select>
-    <select name="region" onchange="applyFilter()">
+    <select name="region" id="filterRegion" aria-label="Region" onchange="applyFilter()">
       <option value="">All Regions</option>
       {% for r in filter_options.regions %}<option value="{{ r }}" {{ 'selected' if f_region==r }}>{{ r }}</option>{% endfor %}
     </select>
-    <select name="city" onchange="applyFilter()">
+    <select name="city" id="filterCity" aria-label="City" onchange="applyFilter()">
       <option value="">All Cities</option>
       {% for c in filter_options.cities %}<option value="{{ c }}" {{ 'selected' if f_city==c }}>{{ c }}</option>{% endfor %}
     </select>
@@ -229,7 +229,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
       <table>
       <thead><tr>
         {% if session.get('role') in ('admin', 'operator') %}
-        <th style="width:36px;padding:8px 6px;text-align:center"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" style="cursor:pointer;width:15px;height:15px"></th>
+        <th style="width:36px;padding:8px 6px;text-align:center"><input type="checkbox" id="selectAll" aria-label="Select all ATMs" onchange="toggleSelectAll()" style="cursor:pointer;width:15px;height:15px"></th>
         {% endif %}
         <th>ATM ID</th><th>Name</th><th>Branch</th><th>City</th><th>Vendor</th><th>Model</th>
          <th>Monitored</th><th title="Live Zabbix state when available; otherwise last known state.">Current State</th><th>Last Seen</th>{% if session.get('role') in ('admin', 'operator') %}<th></th>{% endif %}
@@ -239,7 +239,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
           {% for d in atms %}
            <tr data-atm-id="{{ d.atm_id }}" style="--i: {{ loop.index0 }}" {% if (d.status or 'active') != 'active' %}class="retired"{% endif %}>
             {% if session.get('role') in ('admin', 'operator') %}
-            <td style="padding:8px 6px;text-align:center"><input type="checkbox" class="row-checkbox" value="{{ d.atm_id }}" onchange="updateSelection()" style="cursor:pointer;width:15px;height:15px"></td>
+            <td style="padding:8px 6px;text-align:center"><input type="checkbox" class="row-checkbox" id="rowCheck{{ d.atm_id }}" aria-label="Select ATM {{ d.atm_id }}" value="{{ d.atm_id }}" onchange="updateSelection()" style="cursor:pointer;width:15px;height:15px"></td>
             {% endif %}
             <td>
               <button type="button" class="row-toggle" onclick="toggleRowDetail(this)" title="Show details" aria-label="Show details">&#9656;</button>{{ d.atm_id }}
@@ -314,7 +314,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
         <div class="atm-card-top">
           <div style="display:flex;align-items:center;gap:10px">
             {% if session.get('role') in ('admin', 'operator') %}
-            <input type="checkbox" class="row-checkbox" value="{{ d.atm_id }}" onchange="updateSelection()" style="cursor:pointer;width:16px;height:16px;flex-shrink:0">
+            <input type="checkbox" class="row-checkbox" id="rowCheckMobile{{ d.atm_id }}" aria-label="Select ATM {{ d.atm_id }}" value="{{ d.atm_id }}" onchange="updateSelection()" style="cursor:pointer;width:16px;height:16px;flex-shrink:0">
             {% endif %}
             <div class="atm-card-id">{{ d.atm_id }}</div>
           </div>
@@ -343,7 +343,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
             <span class="atm-card-value">{{ d.region or '—' }}</span>
           </div>
         </div>
-        <div class="atm-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+        <div class="atm-toggle" role="button" tabindex="0" aria-expanded="false" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open');this.setAttribute('aria-expanded',this.classList.contains('open'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
           <i data-lucide="chevron-down"></i> More Details
         </div>
         <div class="atm-card-details">
@@ -394,11 +394,11 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
 </div>
 </div>
 
-<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+<div class="modal-overlay" id="modalOverlay">
   <div class="modal">
     <div class="modal-header">
       <h2 id="modalTitle">Add New ATM</h2>
-      <button class="modal-close" onclick="closeModal()"><i data-lucide="x"></i></button>
+      <button class="modal-close" aria-label="Close dialog" onclick="closeModal()"><i data-lucide="x"></i></button>
     </div>
     <form method="post" action="/atms/save" id="atmForm" novalidate>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -407,7 +407,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
         {% for name, label, typ, maxlen in fields %}
           {% set optional = name == 'atm_name' or name in ('ip_address', 'snmp_community', 'snmp_version', 'ej_log_format', 'ej_hostname') %}
           <div class="form-group" data-field="{{ name }}">
-            <label>{{ label }} {% if not optional %}<span class="required">*</span>{% endif %}</label>
+            <label for="field-{{ name }}">{{ label }} {% if not optional %}<span class="required">*</span>{% endif %}</label>
             {% if name == 'snmp_version' %}
               <select name="snmp_version" id="field-snmp_version">
                 <option value="">-- Select --</option>
@@ -430,7 +430,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
                 {% endfor %}
                 <option value="__new__">+ Add new vendor…</option>
               </select>
-              <input type="text" id="field-vendor-new" placeholder="Enter new vendor name" maxlength="{{ maxlen or 50 }}" style="display:none;margin-top:8px">
+              <input type="text" id="field-vendor-new" aria-label="New vendor name" placeholder="Enter new vendor name" maxlength="{{ maxlen or 50 }}" style="display:none;margin-top:8px">
             {% elif typ == 'select' %}
               <select name="{{ name }}" id="field-{{ name }}" required>
                 <option value="">-- Select --</option>
@@ -459,7 +459,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
   </div>
 </div>
 
-<div class="modal-overlay" id="bulkDeleteOverlay" onclick="if(event.target===this)closeBulkDeleteModal()">
+<div class="modal-overlay" id="bulkDeleteOverlay">
   <div class="modal-confirm">
     <div class="modal-confirm-icon"><i data-lucide="alert-triangle"></i></div>
     <h3>Delete <span id="bulkDeleteCount">0</span> ATMs</h3>
@@ -473,11 +473,11 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
   </div>
 </div>
 
-<div class="modal-overlay" id="importOverlay" onclick="if(event.target===this)closeImportModal()">
+<div class="modal-overlay" id="importOverlay">
   <div class="modal" style="width:920px;max-width:96vw">
     <div class="modal-header">
       <h2>Import ATMs from CSV</h2>
-      <button class="modal-close" onclick="closeImportModal()"><i data-lucide="x"></i></button>
+      <button class="modal-close" aria-label="Close dialog" onclick="closeImportModal()"><i data-lucide="x"></i></button>
     </div>
     <div id="importStepFile" style="padding:36px 32px;text-align:center">
       <p style="font-size:14px;color:#475569;margin:0 0 8px;line-height:1.6">
@@ -494,11 +494,11 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
            ondragover="event.preventDefault();this.style.borderColor='#012169';this.style.background='#EEF2FF'"
            ondragleave="this.style.borderColor='#CBD5E1';this.style.background='#FAFBFC'"
            ondrop="event.preventDefault();selectImportFile(event.dataTransfer.files[0])"
-           onclick="document.getElementById('importFileInput').click()">
+           role="button" tabindex="0" aria-label="Choose a CSV file" onclick="document.getElementById('importFileInput').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
         <i data-lucide="file-up" style="width:44px;height:44px;color:#94A3B8;margin-bottom:10px"></i>
         <div style="font-size:15px;font-weight:600;color:#475569">Drop CSV here or click to browse</div>
         <div style="font-size:12px;color:#94A3B8;margin-top:4px">Maximum 10,000 rows</div>
-        <input type="file" id="importFileInput" accept=".csv" style="display:none" onchange="selectImportFile(this.files[0])">
+        <input type="file" id="importFileInput" aria-label="CSV file" accept=".csv" style="display:none" onchange="selectImportFile(this.files[0])">
       </div>
     </div>
 
@@ -520,7 +520,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
       <div style="padding:0 24px 24px;max-height:480px;overflow-y:auto;overflow-x:visible">
         <div class="modal-alert" id="importAlert"></div>
         <table style="font-size:11px;margin-top:0;table-layout:fixed;width:100%">
-          <thead id="importPreviewHead"><tr></tr></thead>
+          <thead id="importPreviewHead"><tr><th scope="col">Field</th></tr></thead>
           <tbody id="importPreviewBody"></tbody>
         </table>
       </div>
@@ -529,7 +529,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
   </div>
 </div>
 
-<div class="modal-overlay" id="deleteOverlay" onclick="if(event.target===this)closeDeleteModal()">
+<div class="modal-overlay" id="deleteOverlay">
   <div class="modal-confirm">
     <div class="modal-confirm-icon"><i data-lucide="alert-triangle"></i></div>
     <h3>Delete ATM</h3>
@@ -580,6 +580,13 @@ function filterByState(state){
       if(dataRow) dataRow.classList.toggle('expanded');
       if(detailRow) detailRow.classList.toggle('open');
     }
+[['modalOverlay', closeModal], ['bulkDeleteOverlay', closeBulkDeleteModal],
+ ['importOverlay', closeImportModal], ['deleteOverlay', closeDeleteModal]]
+  .forEach(function(pair){
+    var el = document.getElementById(pair[0]);
+    if(el) el.addEventListener('click', function(e){ if(e.target === this) pair[1](); });
+  });
+
 var FIELDS = JSON.parse(document.querySelector('.page-content').dataset.fields);
 var KNOWN_VENDORS = JSON.parse(document.querySelector('.page-content').dataset.vendors || '["NCR","GRG"]');
 var KNOWN_VENDORS_UC = KNOWN_VENDORS.map(function(v){ return String(v).toUpperCase(); });
@@ -595,8 +602,7 @@ function openModal(data){
     var el = document.getElementById('field-' + name);
     if(!el) return;
     var val = data ? (data[name] || '') : '';
-    if(typ === 'select') el.value = val;
-    else el.value = val;
+    el.value = val;
   });
   // Reset the "add new vendor" input each time the modal opens.
   var vNew = document.getElementById('field-vendor-new');
@@ -763,14 +769,14 @@ var VALIDATORS = {
   },
   latitude: function(v){
     if(!v) return 'Latitude is required';
-    var n = parseFloat(v);
-    if(isNaN(n)) return 'Latitude must be a number';
+    var n = Number.parseFloat(v);
+    if(Number.isNaN(n)) return 'Latitude must be a number';
     if(n < -90 || n > 90) return 'Latitude must be between -90 and 90';
   },
   longitude: function(v){
     if(!v) return 'Longitude is required';
-    var n = parseFloat(v);
-    if(isNaN(n)) return 'Longitude must be a number';
+    var n = Number.parseFloat(v);
+    if(Number.isNaN(n)) return 'Longitude must be a number';
     if(n < -180 || n > 180) return 'Longitude must be between -180 and 180';
   },
   terminal_id: function(v){
@@ -798,8 +804,8 @@ var VALIDATORS = {
     var parts = v.split('.');
     if(parts.length !== 4) return 'Must be a valid IPv4 address';
     for(var i = 0; i < 4; i++){
-      var n = parseInt(parts[i], 10);
-      if(isNaN(n) || n < 0 || n > 255 || !/^\d{1,3}$/.test(parts[i])) return 'Must be a valid IPv4 address';
+      var n = Number.parseInt(parts[i], 10);
+      if(Number.isNaN(n) || n < 0 || n > 255 || !/^\d{1,3}$/.test(parts[i])) return 'Must be a valid IPv4 address';
     }
   },
   snmp_community: function(v){
@@ -1026,13 +1032,13 @@ function validateRow(row){
   if(!row.model) errs.model = 'Required';
   else if(row.model.length < 2) errs.model = 'Min 2 chars';
   if(row.latitude){
-    var lat = parseFloat(row.latitude);
-    if(isNaN(lat)) errs.latitude = 'Not a number';
+    var lat = Number.parseFloat(row.latitude);
+    if(Number.isNaN(lat)) errs.latitude = 'Not a number';
     else if(lat < -90 || lat > 90) errs.latitude = 'Out of range';
   }
   if(row.longitude){
-    var lng = parseFloat(row.longitude);
-    if(isNaN(lng)) errs.longitude = 'Not a number';
+    var lng = Number.parseFloat(row.longitude);
+    if(Number.isNaN(lng)) errs.longitude = 'Not a number';
     else if(lng < -180 || lng > 180) errs.longitude = 'Out of range';
   }
   if(row.install_date && !/^\d{4}-\d{2}-\d{2}$/.test(row.install_date)){
@@ -1045,8 +1051,8 @@ function validateRow(row){
     var _parts = row.ip_address.split('.');
     var _bad = _parts.length !== 4;
     for(var _i = 0; !_bad && _i < 4; _i++){
-      var _n = parseInt(_parts[_i], 10);
-      if(isNaN(_n) || _n < 0 || _n > 255 || !/^\d{1,3}$/.test(_parts[_i])) _bad = true;
+      var _n = Number.parseInt(_parts[_i], 10);
+      if(Number.isNaN(_n) || _n < 0 || _n > 255 || !/^\d{1,3}$/.test(_parts[_i])) _bad = true;
     }
     if(_bad) errs.ip_address = 'Invalid IPv4';
   }

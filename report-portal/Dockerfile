@@ -2,17 +2,23 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Dependencies first. The previous order ran pip before COPY, so a clean
-# build failed with "No such file or directory: requirements.txt". Copying
-# only the requirements keeps the pip layer cached across code-only builds.
-COPY requirements.txt ./
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir -r requirements.txt
+# Dependencies first.  requirements.txt is the named intent; the lock carries
+# the resolved versions and is what actually gets installed.  Copy both before
+# the source so the pip layer is cached across code-only builds.
+COPY requirements.txt requirements.lock ./
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir --only-binary :all: -r requirements.lock
 
-COPY . .
-# A committed lock is optional; apply it after the source copy so the
-# image is reproducible whenever requirements.lock is present.
-RUN if [ -f requirements.lock ]; then pip install --no-cache-dir -r requirements.lock; fi
+# Copy only what the portal serves.  A recursive `COPY . .` would also ship
+# local .env files, caches and editor state if .dockerignore ever drifted.
+COPY *.py ./
+COPY blueprints/ ./blueprints/
+COPY templates/ ./templates/
+COPY static/ ./static/
+COPY config/ ./config/
+COPY zabbix_modules/ ./zabbix_modules/
 
 EXPOSE 8888
 

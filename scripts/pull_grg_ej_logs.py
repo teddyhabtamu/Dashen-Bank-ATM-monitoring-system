@@ -35,6 +35,8 @@ import codecs
 import datetime as dt
 import fcntl
 import os
+import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -51,6 +53,19 @@ DEFAULT_SOURCE_DIR = os.environ.get(
     'GRG_EJ_DIR', r'D:\Program Files\DTATMW\Bin\ATMAPP\Log')
 ZBX_GET = os.environ.get('ZBX_GET', 'zabbix_get')
 FETCH_TIMEOUT = int(os.environ.get('GRG_EJ_TIMEOUT', '120'))
+_HOST_RE = re.compile(
+    r'^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,253}[A-Za-z0-9])?$')
+
+
+def _zabbix_get_binary():
+    candidate = ZBX_GET
+    if os.path.isabs(candidate):
+        if not os.path.isfile(candidate) or not os.access(candidate, os.X_OK):
+            raise OSError(f'zabbix_get is not runnable: {candidate}')
+        return candidate
+    # A bare name is resolved through PATH; if it is absent, subprocess raises
+    # OSError and the caller reports it as a fetch failure.
+    return shutil.which(candidate) or candidate
 
 
 def candidate_names(day: dt.date):
@@ -136,12 +151,21 @@ def write_append_only(path: Path, data: bytes):
 
 def zabbix_fetch(ip: str, remote: str):
     """Return (raw bytes, None) or (None, reason)."""
+    if not _HOST_RE.match(ip or ''):
+        return None, 'invalid ATM host'
+    if (not remote or len(remote) > 260
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in remote)
+            or '"' in remote or remote.startswith('-')):
+        return None, 'invalid journal path'
     # Quote the parameter: GRG's default directory contains a space.
     key = f'vfs.file.contents["{remote}"]'
     try:
-        proc = subprocess.run(
-            [ZBX_GET, '-s', ip, '-k', key],
-            capture_output=True, timeout=FETCH_TIMEOUT)
+        binary = _zabbix_get_binary()
+        # NOSONAR: argv list with shell=False; host and path are validated
+        # above and the path cannot contain a quote or control character.
+        proc = subprocess.run(  # NOSONAR
+            [binary, '-s', ip, '-k', key],
+            capture_output=True, timeout=FETCH_TIMEOUT, check=False)
     except (OSError, subprocess.SubprocessError) as exc:
         return None, str(exc)
     if proc.returncode != 0:

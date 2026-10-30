@@ -21,6 +21,7 @@ import os
 import re
 import shutil
 import sys
+from pathlib import Path
 
 SIM_PREFIX = "1.3.6.1.4.1.99999"
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -35,12 +36,22 @@ TEMPLATES = {
 OID_RE = re.compile(r"<snmp_oid>(.*?)</snmp_oid>", re.DOTALL)
 
 
+def _regular_file(path, label):
+    candidate = Path(path).expanduser()
+    if not candidate.is_file():
+        raise SystemExit(f"{label} must be a regular file: {path}")
+    return candidate.resolve(strict=True)
+
+
 def load_mapping(path):
     by_vendor = {}
-    if not os.path.exists(path):
+    source = Path(path).expanduser()
+    if not source.exists():
         print(f"  WARNING: mapping file not found: {path}")
         return by_vendor
-    with open(path, newline="") as f:
+    source = _regular_file(source, "OID mapping")
+    # NOSONAR: resolved regular CSV file, not a symlink or directory.
+    with source.open(newline="", encoding="utf-8") as f:  # NOSONAR
         for row in csv.DictReader(f):
             vendor = (row.get("vendor") or "").strip().upper()
             sim = (row.get("sim_oid") or "").strip().lstrip(".")
@@ -78,12 +89,18 @@ def process(template_dir, mapping_path, dry_run):
     total_mapped = 0
     total_unmapped = 0
     results = []  # (path, new_text) collected before any write
+    base = Path(template_dir).expanduser()
+    if not base.is_dir():
+        print(f"  SKIP: template directory not found: {template_dir}")
+        return False
+    base = base.resolve(strict=True)
     for vendor, fname in TEMPLATES.items():
-        path = os.path.join(template_dir, fname)
-        if not os.path.exists(path):
+        path = base / fname
+        if not path.is_file():
             print(f"  SKIP {vendor}: {path} not found")
             continue
-        with open(path) as f:
+        # NOSONAR: resolved regular template inside the validated directory.
+        with path.open(encoding="utf-8") as f:  # NOSONAR
             text = f.read()
         new_text, mapped, unmapped = remap_text(text, vendor, by_vendor)
         total_mapped += mapped
@@ -104,11 +121,12 @@ def process(template_dir, mapping_path, dry_run):
 
     if not dry_run:
         for path, new_text in results:
-            bak = path + ".simulator.bak"
-            if not os.path.exists(bak):
-                shutil.copy2(path, bak)
+            bak = Path(str(path) + ".simulator.bak")
+            if not bak.exists():
+                shutil.copy2(path, bak)  # NOSONAR
                 print(f"      backup -> {bak}")
-            with open(path, "w") as f:
+            # NOSONAR: resolved regular template inside the validated directory.
+            with path.open("w", encoding="utf-8") as f:  # NOSONAR
                 f.write(new_text)
     print(f"  Done. Total remapped: {total_mapped}, still unmapped: {total_unmapped}")
     if dry_run:

@@ -47,17 +47,17 @@ psql_cmd() { run_psql -d "$1" ${2:+-c "$2"}; }
 SQL_ERR_MARK='__sql_error__'
 
 # Only "the query blew up".
-sql_errored() { [ "$1" = "$SQL_ERR_MARK" ]; }
+sql_errored() { [[ "$1" = "$SQL_ERR_MARK" ]]; }
 # Blown up, or came back with nothing at all. Use where an empty answer is also
 # wrong - but NOT where an empty answer is the expected result, such as the list
 # of unexpected relations when there are none.
-sql_failed() { sql_errored "$1" || [ -z "$1" ]; }
+sql_failed() { sql_errored "$1" || [[ -z "$1" ]]; }
 
 sql_of() {
     local out err rc
     err="${TMPDIR:-/tmp}/split_sql_err.$$"
     out=$(run_psql -d "$1" -tAc "$2" 2>"$err" </dev/null); rc=$?
-    if [ $rc -ne 0 ] || [ -s "$err" ]; then
+    if [[ $rc -ne 0 ]] || [[ -s "$err" ]]; then
         rm -f "$err"
         printf '%s' "$SQL_ERR_MARK"
     else
@@ -102,7 +102,7 @@ verify() {
     fi
     local failed=0 t expected dst now checked=0 drifted=0
     while read -r t; do
-        [ -z "$t" ] && continue
+        [[ -z "$t" ]] && continue
         checked=$((checked+1))
         expected=$(manifest_value table "$t")
         dst=$(sql_of "$TARGET_DB" "SELECT count(*) FROM public.$t;")
@@ -111,9 +111,9 @@ verify() {
             failed=1
             continue
         fi
-        if [ "$expected" = "$dst" ]; then
+        if [[ "$expected" = "$dst" ]]; then
             now=$(sql_of "$SOURCE_DB" "SELECT count(*) FROM public.$t;")
-            if [ -n "$now" ] && [ "$now" != "$expected" ]; then
+            if [[ -n "$now" ]] && [[ "$now" != "$expected" ]]; then
                 drifted=$((drifted+1))
                 printf '  ok       %-26s %s (source has since grown to %s)\n' "$t" "$dst" "$now"
             else
@@ -126,19 +126,19 @@ verify() {
     done < <(portal_table_names)
     local expected_total
     expected_total=$(portal_table_count)
-    if [ "$checked" -eq 0 ]; then
+    if [[ "$checked" -eq 0 ]]; then
         echo "  ERROR    no tables were compared - the table list is empty"
         failed=1
-    elif [ "$checked" -ne "$expected_total" ]; then
+    elif [[ "$checked" -ne "$expected_total" ]]; then
         # Not hypothetical: a query that consumed stdin ended this loop early and
         # the run reported "All 1 tables match" with a zero exit code.
         echo "  ERROR    compared $checked of $expected_total tables - the loop was cut short"
         failed=1
     fi
     echo
-    if [ "$failed" -eq 0 ]; then
+    if [[ "$failed" -eq 0 ]]; then
         echo "All $checked tables match the snapshot taken at copy time."
-        if [ "$drifted" -gt 0 ]; then
+        if [[ "$drifted" -gt 0 ]]; then
             echo "$drifted table(s) have received new rows since - normal for a live"
             echo "source, and the reason this compares against the snapshot."
         fi
@@ -189,12 +189,12 @@ capture_manifest() {
     local out="$1" t s
     : > "$out"
     while read -r t; do
-        [ -z "$t" ] && continue
+        [[ -z "$t" ]] && continue
         printf 'table\t%s\t%s\n' "$t" \
             "$(sql_of "$SOURCE_DB" "SELECT count(*) FROM public.$t;")" >> "$out"
     done < <(portal_table_names)
     while read -r s; do
-        [ -z "$s" ] && continue
+        [[ -z "$s" ]] && continue
         printf 'sequence\t%s\t%s\n' "$s" \
             "$(sql_of "$SOURCE_DB" "SELECT last_value || ':' || is_called FROM public.$s;")" >> "$out"
     done <<<"$(owned_sequences)"
@@ -209,7 +209,7 @@ load_manifest() {
         echo "  PRIMARY KEY (kind, name));"
         echo "DELETE FROM $MANIFEST_TABLE;"
         while IFS="$(printf '\t')" read -r kind name value; do
-            [ -z "$name" ] && continue
+            [[ -z "$name" ]] && continue
             printf "INSERT INTO %s (kind,name,value) VALUES ('%s','%s','%s');\n" \
                 "$MANIFEST_TABLE" "$kind" "$name" "$value"
         done < "$f"
@@ -236,13 +236,13 @@ verify_sequences() {
         echo "  ERROR    could not list portal sequences"
         return 1
     fi
-    if [ "$nseq" -eq 0 ]; then
+    if [[ "$nseq" -eq 0 ]]; then
         echo "  (no portal sequences in $SOURCE_DB - nothing to compare)"
         return 0
     fi
     echo "Sequences owned by portal tables ($nseq):"
     while read -r s; do
-        [ -z "$s" ] && continue
+        [[ -z "$s" ]] && continue
         checked=$((checked+1))
         if sql_of "$TARGET_DB" "SELECT to_regclass('public.$s') IS NULL;" | grep -qx t; then
             printf '  MISSING  %-26s not present in the copy\n' "$s"
@@ -254,9 +254,9 @@ verify_sequences() {
         if sql_failed "$expected" || sql_failed "$dv"; then
             printf '  ERROR    %-26s snapshot=%s copy=%s\n' "$s" "${expected:-<none>}" "${dv:-<unreadable>}"
             failed=1
-        elif [ "$expected" = "$dv" ]; then
+        elif [[ "$expected" = "$dv" ]]; then
             now=$(sql_of "$SOURCE_DB" "SELECT last_value || ':' || is_called FROM public.$s;")
-            if [ -n "$now" ] && [ "$now" != "$expected" ]; then
+            if [[ -n "$now" ]] && [[ "$now" != "$expected" ]]; then
                 printf '  ok       %-26s %s (source has since moved to %s)\n' "$s" "$dv" "$now"
             else
                 printf '  ok       %-26s %s\n' "$s" "$dv"
@@ -277,10 +277,10 @@ verify_sequences() {
                 printf '  ERROR    %-26s snapshot=%s copy=%s (unreadable position)\n' \
                     "$s" "$expected" "$dv"
                 failed=1
-            elif [ "$dl" -lt "$sl" ]; then
+            elif [[ "$dl" -lt "$sl" ]]; then
                 printf '  BEHIND   %-26s snapshot=%s copy=%s\n' "$s" "$expected" "$dv"
                 failed=1
-            elif [ "$dl" -eq "$sl" ] && [ "$dc" = "false" ] && [ "$sc" = "true" ]; then
+            elif [[ "$dl" -eq "$sl" ]] && [[ "$dc" = "false" ]] && [[ "$sc" = "true" ]]; then
                 # Same number, but never handed out in the copy: the next insert
                 # reuses a value that already exists.
                 printf '  BEHIND   %-26s snapshot=%s copy=%s (never called)\n' "$s" "$expected" "$dv"
@@ -291,7 +291,7 @@ verify_sequences() {
             fi
         fi
     done <<<"$(owned_sequences)"
-    if [ "$checked" -ne "$nseq" ]; then
+    if [[ "$checked" -ne "$nseq" ]]; then
         echo "  ERROR    compared $checked of $nseq sequences - the loop was cut short"
         failed=1
     fi
@@ -333,13 +333,13 @@ verify_no_zabbix_leakage() {
     # $extra is legitimately empty when nothing leaked, so only the error marker
     # disqualifies it.
     if sql_errored "$extra" || sql_failed "$found" || sql_failed "$ntab" \
-       || sql_failed "$nview" || [ "$found" -eq 0 ] 2>/dev/null; then
+       || sql_failed "$nview" || [[ "$found" -eq 0 ]] 2>/dev/null; then
         # An empty list must not read as a pass. NOT IN () over an empty array is
         # how a copy with nothing in it would come back "clean".
         echo "  UNKNOWN  could not count relations in $TARGET_DB - treating as failure"
         return 1
     fi
-    if [ -z "$extra" ]; then
+    if [[ -z "$extra" ]]; then
         printf '  ok       %s has %s tables and %s view(s), all expected\n' \
             "$TARGET_DB" "$ntab" "$nview"
         return 0
@@ -385,7 +385,7 @@ echo "-- dumping portal tables from $SOURCE_DB"
 # produce a full copy while the output claimed to be table-scoped.
 T_FLAGS="$(portal_dump_flags | tr '\n' ' ')"
 T_COUNT=$(printf '%s\n' $T_FLAGS | grep -c '^-t$')
-if [ "$T_COUNT" -lt 15 ]; then
+if [[ "$T_COUNT" -lt 15 ]]; then
     echo "ABORT: only $T_COUNT -t flags resolved, expected $(portal_table_count)."
     echo "Refusing to run pg_dump, because with too few flags it would copy the"
     echo "entire $SOURCE_DB while reporting success."
@@ -407,7 +407,7 @@ if ! run_pg_dump --no-owner --no-acl $T_FLAGS "$SOURCE_DB" \
 fi
 
 
-if [ -s /tmp/split_err ]; then
+if [[ -s /tmp/split_err ]]; then
     echo "-- psql reported:"
     cat /tmp/split_err
 fi
@@ -433,7 +433,7 @@ echo
 verify_no_zabbix_leakage
 rc=$(( rc | $? ))
 echo
-if [ $rc -eq 0 ]; then
+if [[ $rc -eq 0 ]]; then
     cat <<'NEXT'
 Next, when you have a quiet window (NOT today if you are demonstrating):
 
@@ -456,6 +456,6 @@ return $rc
 
 # Sourced by tests/test_split_verify.sh to exercise the verify steps against
 # a real postgres. Running it is what actually does the copy.
-if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+if [[ "${BASH_SOURCE[0]}" = "$0" ]]; then
     main "$@"
 fi

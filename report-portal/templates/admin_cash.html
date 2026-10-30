@@ -29,8 +29,8 @@
     <input type="hidden" name="cash_token" value="{{ cash_token }}">
     <div class="form-grid">
       <div class="form-group">
-        <label>ATM</label>
-        <select name="atm_id" required>
+        <label for="cashAtm">ATM</label>
+        <select name="atm_id" id="cashAtm" required>
           <option value="">-- Select ATM --</option>
           {% for a in atms %}
           <option value="{{ a.atm_id }}" {% if a.atm_id == atm_filter %}selected{% endif %}>{{ a.atm_id }} — {{ a.atm_name }}</option>
@@ -38,8 +38,8 @@
         </select>
       </div>
       <div class="form-group">
-        <label>Cassette</label>
-        <select name="cassette" required>
+        <label for="cashCassette">Cassette</label>
+        <select name="cassette" id="cashCassette" required>
           <option value="1">Cassette 1</option>
           <option value="2">Cassette 2</option>
           <option value="3">Cassette 3</option>
@@ -47,12 +47,12 @@
         </select>
       </div>
       <div class="form-group">
-        <label>Notes added</label>
-        <input type="number" name="notes_added" min="1" max="100000" required placeholder="e.g. 2000">
+        <label for="cashNotesAdded">Notes added</label>
+        <input type="number" name="notes_added" id="cashNotesAdded" min="1" max="100000" required placeholder="e.g. 2000">
       </div>
       <div class="form-group full">
-        <label>Note (optional)</label>
-        <input type="text" name="notes" maxlength="500" placeholder="e.g. scheduled CIT visit">
+        <label for="cashNote">Note (optional)</label>
+        <input type="text" name="notes" id="cashNote" maxlength="500" placeholder="e.g. scheduled CIT visit">
       </div>
     </div>
     <div class="form-actions">
@@ -66,7 +66,7 @@
     <span class="card-title">Recent loads{% if atm_filter %} — {{ atm_filter }}{% endif %}</span>
     <div>
       <form method="get" action="/cash" style="display:flex;gap:8px;align-items:center">
-        <select name="atm_id" onchange="this.form.submit()">
+        <select name="atm_id" id="cashFilterAtm" aria-label="Filter by ATM" onchange="this.form.submit()">
           <option value="">All ATMs</option>
           {% for a in atms %}
           <option value="{{ a.atm_id }}" {% if a.atm_id == atm_filter %}selected{% endif %}>{{ a.atm_id }}</option>

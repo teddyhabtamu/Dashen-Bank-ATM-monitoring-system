@@ -2121,8 +2121,13 @@ def schedule_get():
 
 
 def _valid_email(v):
-    import re
-    return bool(re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', v or ''))
+    value = (v or '').strip()
+    if value.count('@') != 1 or any(ch.isspace() for ch in value):
+        return False
+    local, _, domain = value.partition('@')
+    if not local or not domain or '.' not in domain:
+        return False
+    return all(label for label in domain.split('.'))
 
 
 @bp.route('/admin/users')

@@ -15,6 +15,6 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install test runner only (suite is dependency-free by design)
-        run: pip install pytest
+        run: pip install --only-binary :all: pytest==9.1.1
       - name: Run suite (lab-dependent cases skip, never fail)
         run: python -m pytest tests/ -v

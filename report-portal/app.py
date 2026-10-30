@@ -85,8 +85,6 @@ def create_app():
     app.register_blueprint(incidents_bp)
     app.register_blueprint(report_bp)
 
-    csrf.exempt(app.view_functions['auth.login'])
-
     init_audit_schema()
     init_admin_user()
     init_scheduler_table()

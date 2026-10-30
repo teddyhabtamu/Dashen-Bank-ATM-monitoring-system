@@ -67,7 +67,7 @@ fi
 # nightly CSV snapshot from scripts/backup_db.sh. The resolver logs its source
 # and any skipped ATMs to stderr, which lands in the cron log.
 ATMS="$(python3 "$(dirname "$0")/ej_pull_targets.py")"
-if [ -z "$ATMS" ]; then
+if [[ -z "$ATMS" ]]; then
   echo "ej: no pull targets resolved — read the resolver line above" >&2
   echo "ej: (source + skip reasons) before assuming the fleet is empty." >&2
   exit 1
@@ -86,7 +86,7 @@ pull_one() {
   # never re-fetched the one that was growing.
   local live
   live="$(ls -t "$OUTDIR"/*_"$tag"_EJDATA.log 2>/dev/null | head -1)"
-  if [ -z "$live" ]; then
+  if [[ -z "$live" ]]; then
     # Defensive: if we hold files but cannot pick the newest (odd tag, glob
     # quirk), fall back to probing today. Otherwise every existing file would be
     # classed "closed" and the growing journal would go unrefreshed - silent
@@ -115,7 +115,7 @@ pull_one() {
   for i in $(seq 0 $((span - 1))); do
     day_list="$day_list $(date -u -d "$i days ago" +%F 2>/dev/null || date -u -v-"$i"d +%F)"
   done
-  if [ -n "$live" ] && [ -f "$live" ]; then
+  if [[ -n "$live" ]] && [[ -f "$live" ]]; then
     live_day="$(basename "$live")"
     live_day="${live_day%%_*}"
     case " $day_list " in
@@ -125,10 +125,10 @@ pull_one() {
   fi
   for day in $day_list; do
     f="${day}_${tag}_EJDATA.log"
-    if [ "$EJ_FAST" = "1" ]; then
-      if [ -n "$live" ] && [ "$live" = "$OUTDIR/$f" ]; then
+    if [[ "$EJ_FAST" = "1" ]]; then
+      if [[ -n "$live" ]] && [[ "$live" = "$OUTDIR/$f" ]]; then
         : # the live journal: always re-fetch, it grows between runs
-      elif [ -s "$OUTDIR/$f" ]; then
+      elif [[ -s "$OUTDIR/$f" ]]; then
         continue # a closed journal we already have: pure load, no new data
       elif find "$STAMPDIR/$tag-$f.stamp" -mmin -"$EJ_ABSENT_RETRY_MIN" -print -quit 2>/dev/null | grep -q .; then
         continue # recently confirmed absent; retried every EJ_ABSENT_RETRY_MIN
@@ -145,11 +145,11 @@ pull_one() {
         norm="$RAWDIR/$f.norm"
         tr '\r' '\n' < "$RAWDIR/$f" > "$norm"
         old=0
-        [ -s "$OUTDIR/$f" ] && old="$(wc -c < "$OUTDIR/$f")"
-        if [ "$old" -gt 0 ] && cmp -s "$norm" "$OUTDIR/$f"; then
+        [[ -s "$OUTDIR/$f" ]] && old="$(wc -c < "$OUTDIR/$f")"
+        if [[ "$old" -gt 0 ]] && cmp -s "$norm" "$OUTDIR/$f"; then
           rm -f "$norm"
           echo "  $atm_id $f unchanged ($old bytes, not re-written)"
-        elif [ "$old" -gt 0 ] && head -c "$old" "$norm" | cmp -s - "$OUTDIR/$f"; then
+        elif [[ "$old" -gt 0 ]] && head -c "$old" "$norm" | cmp -s - "$OUTDIR/$f"; then
           tail -c "+$((old + 1))" "$norm" >> "$OUTDIR/$f"
           rm -f "$norm"
           echo "  $atm_id $f +$(( $(wc -c < "$OUTDIR/$f") - old )) bytes (appended, now $(wc -c < "$OUTDIR/$f"))"
@@ -170,20 +170,20 @@ pull_one() {
   return $rc
 }
 
-if [ "${EJ_DRY_RUN:-0}" = "1" ]; then
+if [[ "${EJ_DRY_RUN:-0}" = "1" ]]; then
   echo "ej: dry run - $(echo "$ATMS" | wc -w) target(s), DAYS=$DAYS, fast=$EJ_FAST, parallel=$EJ_PARALLEL"
   exit 0
 fi
 
 fail=0
-if [ "$EJ_FAST" = "1" ] && [ "$EJ_PARALLEL" -gt 1 ]; then
+if [[ "$EJ_FAST" = "1" ]] && [[ "$EJ_PARALLEL" -gt 1 ]]; then
   # Bounded parallelism: never more than EJ_PARALLEL fetches in flight, so a
   # per-minute cron cannot open 1,300 sockets at the Zabbix server at once.
   running=0
   for spec in $ATMS; do
     pull_one "$spec" &
     running=$((running + 1))
-    if [ "$running" -ge "$EJ_PARALLEL" ]; then
+    if [[ "$running" -ge "$EJ_PARALLEL" ]]; then
       wait -n 2>/dev/null || wait
       running=$((running - 1))
     fi

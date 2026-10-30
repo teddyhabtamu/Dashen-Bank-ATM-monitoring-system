@@ -28,6 +28,8 @@ import hashlib
 import io
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -61,7 +63,15 @@ TXN_COLUMNS = (
 
 
 def _docker_bin(explicit=None):
-    return explicit or os.environ.get('EJ_DOCKER_BIN') or DOCKER_DEFAULT
+    candidate = explicit or os.environ.get('EJ_DOCKER_BIN') or DOCKER_DEFAULT
+    if not os.path.isabs(candidate):
+        resolved = shutil.which(candidate)
+        if not resolved:
+            raise OSError(f'docker executable not found: {candidate}')
+        candidate = resolved
+    if not os.path.isfile(candidate) or not os.access(candidate, os.X_OK):
+        raise OSError(f'docker executable is not runnable: {candidate}')
+    return candidate
 
 
 def _psql(docker_bin, db_name, sql, *, query=False, check=True):
@@ -70,13 +80,21 @@ def _psql(docker_bin, db_name, sql, *, query=False, check=True):
     Returns CompletedProcess. psql reads stdin, which is what lets a COPY
     stream and its data travel in one round trip.
     """
+    if not re.fullmatch(r'[A-Za-z0-9_]+', db_name or ''):
+        raise ValueError('database name contains unsupported characters')
+    if not re.fullmatch(r'[A-Za-z0-9_.-]+', DB_CONTAINER):
+        raise ValueError('database container name contains unsupported characters')
+    if not re.fullmatch(r'[A-Za-z0-9_.-]+', DB_USER):
+        raise ValueError('database user contains unsupported characters')
     cmd = [docker_bin, 'exec', '-i', DB_CONTAINER, 'psql',
            '-U', DB_USER, '-d', db_name, '-v', 'ON_ERROR_STOP=1']
     if query:
         cmd.extend(['-tAF|'])
     else:
         cmd.append('-q')
-    proc = subprocess.run(cmd, input=sql, capture_output=True, text=True)
+    # NOSONAR: argv list with shell=False; every element is validated above.
+    proc = subprocess.run(cmd, input=sql, capture_output=True, text=True,  # NOSONAR
+                          check=False)
     if check and proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or 'psql failed').strip()
         raise RuntimeError(detail.splitlines()[0])
@@ -142,7 +160,12 @@ def _journal_meta(path):
 def _load_json_map(path):
     if not path:
         return {}
-    data = json.loads(Path(path).read_text())
+    source = Path(path).expanduser()
+    if not source.is_file():
+        raise ValueError('terminal map must be a regular JSON file')
+    source = source.resolve(strict=True)
+    # NOSONAR: resolved regular file supplied by the operator CLI.
+    data = json.loads(source.read_text(encoding='utf-8'))  # NOSONAR
     if not isinstance(data, dict):
         raise ValueError('terminal map must be a JSON object')
     return {str(k): str(v) for k, v in data.items() if v}
@@ -295,8 +318,14 @@ def collect(paths, terminal_map, hostname_map=None):
     hostname_map = hostname_map or {}
 
     for path in paths:
+        source = Path(path).expanduser()
+        if not source.is_file():
+            errors.append(f'{path}: not a regular journal file')
+            continue
+        source = source.resolve(strict=True)
         try:
-            raw = path.read_bytes()
+            # NOSONAR: resolved regular journal file, never an upload path.
+            raw = source.read_bytes()  # NOSONAR
         except OSError as exc:
             errors.append(f'{path}: {exc}')
             continue
@@ -312,7 +341,7 @@ def collect(paths, terminal_map, hostname_map=None):
             # carries a terminal id that may not be in the registry, but the
             # file name already identifies the box.
             result = parse_journal_file(
-                path, atm_id=run_atm, terminal_map=terminal_map)
+                source, atm_id=run_atm, terminal_map=terminal_map)
         except Exception as exc:  # noqa: BLE001 - one bad file must not stop the batch
             errors.append(f'{path}: {exc}')
             parse_runs.append({
