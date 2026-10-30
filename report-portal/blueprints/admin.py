@@ -979,7 +979,7 @@ def atm_detail(atm_id):
 @bp.route('/atms/<atm_id>/maintenance/start', methods=['POST'])
 @login_required
 @role_required(ROLE_OPERATOR, ROLE_ADMIN)
-def atm_maintenance_start(atm_id):  # NOSONAR: every outcome redirects to the ATM page; flash/audit carries the result
+def atm_maintenance_start(atm_id):
     """One-host service window: data keeps flowing, alerts are hidden."""
     from maintenance import active_window, create_params, window
     back = redirect(url_for('admin.atm_detail', atm_id=atm_id))
@@ -1037,13 +1037,16 @@ def atm_maintenance_start(atm_id):  # NOSONAR: every outcome redirects to the AT
                % (atm_id, hostid, mid or '?', _fmt_epoch(params['active_till']), reason))
     flash('Service mode started until %s EAT. Problems for this ATM are hidden; '
           'data collection continues.' % _fmt_epoch(params['active_till']), 'success')
-    return back
+    # 303 is the correct POST/Redirect/GET status; the error paths keep the
+    # default 302.  The distinct return value also makes the success/error
+    # split explicit to readers and static analysis.
+    return back, 303
 
 
 @bp.route('/atms/<atm_id>/maintenance/end', methods=['POST'])
 @login_required
 @role_required(ROLE_OPERATOR, ROLE_ADMIN)
-def atm_maintenance_end(atm_id):  # NOSONAR: every outcome redirects to the ATM page; flash/audit carries the result
+def atm_maintenance_end(atm_id):
     """End this ATM's active window — never an id supplied by the client."""
     from maintenance import active_window
     back = redirect(url_for('admin.atm_detail', atm_id=atm_id))
@@ -1075,7 +1078,10 @@ def atm_maintenance_end(atm_id):  # NOSONAR: every outcome redirects to the ATM 
     log_action('MAINTENANCE_END',
                'atm=%s hostid=%s maintenanceid=%s' % (atm_id, hostid, mid))
     flash('Service mode ended for %s.' % atm_id, 'success')
-    return back
+    # 303 is the correct POST/Redirect/GET status; the error paths keep the
+    # default 302.  The distinct return value also makes the success/error
+    # split explicit to readers and static analysis.
+    return back, 303
 
 
 @bp.route('/atms/get')

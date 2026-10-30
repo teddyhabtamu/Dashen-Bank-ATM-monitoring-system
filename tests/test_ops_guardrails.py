@@ -322,6 +322,28 @@ def test_runtime_images_run_as_a_non_root_user():
         assert 'USER root' not in text, '%s must not end as root' % rel
 
 
+def test_copied_resources_stay_root_owned():
+    """Sonar docker:S6504: sensitive resources copied into the image must not
+    be owned or writable by a non-root user.
+
+    The app user only needs read access to its code and config.  Copying them
+    with ``--chown=appuser`` would let a compromised process rewrite the code
+    it is running; only runtime data directories (such as the simulator's EJ
+    log dir) may be handed to appuser.
+    """
+    for rel in ('report-portal/Dockerfile',
+                'camel/Dockerfile.gateway',
+                'simulators/Dockerfile.atm-simulator'):
+        text = (REPO / rel).read_text()
+        copies = [line for line in text.splitlines()
+                  if line.lstrip().startswith('COPY ')]
+        assert copies, '%s must copy its application files' % rel
+        for line in copies:
+            assert '--chown' not in line, (
+                '%s: %r would make the copy writable by a non-root user'
+                % (rel, line.strip()))
+
+
 def test_portal_joins_the_bridge_socket_group():
     """The portal is non-root now; the host bridge socket is 0660 and its
     directory 0750.  Without the matching supplementary group the image

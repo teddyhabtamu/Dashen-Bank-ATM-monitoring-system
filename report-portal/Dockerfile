@@ -20,12 +20,15 @@ RUN apt-get update \
 
 # Copy only what the portal serves.  A recursive `COPY . .` would also ship
 # local .env files, caches and editor state if .dockerignore ever drifted.
-COPY --chown=appuser:appuser *.py ./
-COPY --chown=appuser:appuser blueprints/ ./blueprints/
-COPY --chown=appuser:appuser templates/ ./templates/
-COPY --chown=appuser:appuser static/ ./static/
-COPY --chown=appuser:appuser config/ ./config/
-COPY --chown=appuser:appuser zabbix_modules/ ./zabbix_modules/
+# Files stay root-owned and read-only to appuser: --chown here would let the
+# portal rewrite its own code (Sonar docker:S6504).  The scheduler lock lives
+# in the app user's home, so nothing under /app needs to be writable.
+COPY *.py ./
+COPY blueprints/ ./blueprints/
+COPY templates/ ./templates/
+COPY static/ ./static/
+COPY config/ ./config/
+COPY zabbix_modules/ ./zabbix_modules/
 
 EXPOSE 8888
 

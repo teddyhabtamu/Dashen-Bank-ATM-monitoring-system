@@ -12,14 +12,16 @@ RUN pip install --no-cache-dir --only-binary :all: \
     && mkdir -p /var/log/atm-ej \
     && chown -R appuser:appuser /var/log/atm-ej
 
-COPY --chown=appuser:appuser simulators/common.py .
-COPY --chown=appuser:appuser simulators/sim_engine.py .
-COPY --chown=appuser:appuser simulators/snmp_agent.py .
-COPY --chown=appuser:appuser simulators/txn_engine.py .
-COPY --chown=appuser:appuser simulators/ej_engine.py .
-COPY --chown=appuser:appuser simulators/state_manager.py .
-COPY --chown=appuser:appuser zabbix_modules/ ./zabbix_modules/
-COPY --chown=appuser:appuser config/status_map.json ./config/status_map.json
+# Application code stays root-owned and read-only to appuser (Sonar
+# docker:S6504); /var/log/atm-ej above is the one directory the runtime owns.
+COPY simulators/common.py .
+COPY simulators/sim_engine.py .
+COPY simulators/snmp_agent.py .
+COPY simulators/txn_engine.py .
+COPY simulators/ej_engine.py .
+COPY simulators/state_manager.py .
+COPY zabbix_modules/ ./zabbix_modules/
+COPY config/status_map.json ./config/status_map.json
 
 USER appuser
 

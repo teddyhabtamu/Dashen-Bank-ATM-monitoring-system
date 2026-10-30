@@ -7,7 +7,10 @@ ENV PYTHONDONTWRITEBYTECODE=1
 RUN pip install --no-cache-dir --only-binary :all: psycopg2-binary==2.9.13 \
     && useradd --create-home --uid 10001 --shell /bin/false appuser
 
-COPY --chown=appuser:appuser iso8583_gateway.py .
+# Root-owned and read-only to appuser on purpose: a compromised gateway must
+# not be able to rewrite its own code (Sonar docker:S6504).  Do not add
+# --chown=appuser here.
+COPY iso8583_gateway.py .
 
 USER appuser
 CMD ["python3", "-u", "iso8583_gateway.py"]
