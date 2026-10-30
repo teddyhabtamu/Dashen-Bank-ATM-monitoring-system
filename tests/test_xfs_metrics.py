@@ -78,7 +78,9 @@ def test_missing_peripherals_stay_missing_not_red():
     assert got['Card reader'] == 'unknown'
     assert got['Printer'] == 'unknown'
     assert got['PIN pad'] == 'unknown'
-    assert got['Network'] == 'ok'
+    # normalize() forces atm.net.link=1 for every XFS host; a green chip would
+    # be a false claim. Reachability is the agent-status card.
+    assert got['Network'] == 'unknown'
     assert got['UPS'] == 'unknown'
 
 

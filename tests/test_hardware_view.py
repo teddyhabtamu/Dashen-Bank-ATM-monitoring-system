@@ -145,6 +145,15 @@ def test_xfs_fault_still_wins_over_wmi():
     assert got['PIN pad'] == 'error'
 
 
+def test_xfs_network_is_unknown_not_forced_ok():
+    """normalize() sets atm.net.link=1 for every XFS host. A green Network
+    chip would be a false claim; agent reachability is the separate card."""
+    m = {'atm.xfs.cdm': '{}', 'atm.net.link': '1'}
+    got, source = chips(m, vendor='GRG')
+    assert source == 'XFS'
+    assert got['Network'] == 'unknown'
+
+
 def test_wmi_missing_part_is_grey_never_red():
     m = {'atm.parts': '{}', 'atm.part.part_status[Card Reader]': 2}
     got, source = chips(m)

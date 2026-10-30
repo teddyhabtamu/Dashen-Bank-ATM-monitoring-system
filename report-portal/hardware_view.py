@@ -291,8 +291,10 @@ def _xfs_hardware(m):
     rejects = _xfs_num(m, 'atm.xfs.cdm.reject_count')
     reject = 'unknown' if rejects is None else ('warn' if rejects >= 250 else 'ok')
 
-    net = _xfs_num(m, 'atm.net.link')
-    network = 'unknown' if net is None else ('ok' if net == 1 else 'error')
+    # XFS has no network-link signal. normalize() forces atm.net.link=1
+    # whenever the XFS master exists, so a green Network chip would be a
+    # false positive. The agent-reachability card is the real signal.
+    network = 'unknown'
 
     comps = [
         ('Cash dispenser', cash),

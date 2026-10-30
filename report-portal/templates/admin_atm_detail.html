@@ -181,7 +181,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
             <rect x="{{ c.x }}" y="{{ c.y }}" width="{{ c.w }}" height="{{ c.h }}" rx="8" fill="#23272E" stroke="#3A4049"/>
             <rect x="{{ c.x }}" y="{{ c.fill_y }}" width="{{ c.w }}" height="{{ c.fill_h }}" rx="8" fill="{{ fill }}"/>
             <text x="{{ c.x + c.w / 2 }}" y="{{ c.y + 17 }}" fill="#E5E7EB" font-size="10" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">{{ c.label }}</text>
-            <text x="{{ c.x + c.w / 2 }}" y="{{ c.y + c.h - 11 }}" fill="#E5E7EB" font-size="11" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">{% if c.pct is not none %}{{ c.pct }}%{% else %}No data{% endif %}</text>
+            <text x="{{ c.x + c.w / 2 }}" y="{{ c.y + c.h - 11 }}" fill="#E5E7EB" font-size="11" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">{% if c.notes is not none and c.notes == 0 %}Empty{% elif c.notes is not none and c.pct == 0 %}{{ c.notes }} notes{% elif c.pct is not none %}{{ c.pct }}%{% else %}No data{% endif %}</text>
             {% endfor %}
           </svg>
           <div class="atm-cap">{% if (atm.status or 'active') != 'active' %}Last known telemetry (retired ATM){% elif hardware %}Live telemetry from {{ hw_source or 'SNMP' }}{% else %}No live telemetry — showing last known state{% endif %}</div>
