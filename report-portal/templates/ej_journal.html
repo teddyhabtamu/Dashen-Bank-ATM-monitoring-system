@@ -71,7 +71,7 @@
 {% set health_base = health_total if health_total else 1 %}
 <div class="ev-kpi-grid">
   {{ kpi('Active ATMs', summary.get('active_atms', 0), 'in the selected fleet') }}
-  {{ kpi('Reporting files', summary.get('reporting_atms', 0), 'ATMs with at least one journal') }}
+  {{ kpi('Reporting ATMs', summary.get('reporting_atms', 0), 'ATMs with at least one journal') }}
   {{ kpi('Parse failures', summary.get('parse_errors', 0), 'files that failed to parse', 'bad' if summary.get('parse_errors', 0) else 'good') }}
   {{ kpi('Stale', h.get('stale', 0), 'no journal for 2+ days', 'warn' if h.get('stale', 0) else 'good') }}
 </div>

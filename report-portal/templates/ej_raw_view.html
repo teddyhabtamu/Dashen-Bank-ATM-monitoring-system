@@ -3,7 +3,6 @@
 {% block title %}{{ atm_id }} raw EJ · {{ file_label }}{% endblock %}
 {% block extra_style %}
 {% include "_ej_journal_style.html" %}
-<style>
 .raw-shell{background:#fff;border-radius:12px;overflow:auto;max-height:72vh;border:1px solid var(--ev-border);box-shadow:var(--ev-shadow)}
 .raw-lines{width:100%;border-collapse:collapse;table-layout:fixed}
 .raw-lines th{position:sticky;top:0;z-index:1;text-align:left;background:#F8FAFC;color:var(--ev-muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;border-bottom:1px solid var(--ev-border)}
@@ -22,7 +21,6 @@
 .raw-search input{width:100% !important;min-width:0 !important}
 .raw-toolbar .raw-actions .btn[aria-pressed="true"]{background:var(--ev-brand-soft);border-color:#B2DDFF;color:var(--ev-brand)}
 @media(max-width:640px){.raw-lines th.ln,.raw-lines td.ln{width:48px}.raw-lines td,.raw-lines th{padding-left:8px;padding-right:8px}}
-</style>
 {% endblock %}
 {% block body %}
 <div class="page-header">

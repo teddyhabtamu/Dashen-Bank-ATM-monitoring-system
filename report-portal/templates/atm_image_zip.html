@@ -3,7 +3,6 @@
 {% block title %}{{ atm.atm_id }} · ATM image archive{% endblock %}
 {% block extra_style %}
 {% include "_ej_journal_style.html" %}
-<style>
 .img-caveat{background:#F8FAFC;border:1px solid var(--ev-border);color:#475569;border-radius:10px;padding:10px 13px;font-size:11.5px;line-height:1.55;margin-bottom:14px}
 .img-caveat b{color:var(--ev-text)}
 .ev-entry-card{background:var(--ev-surface);border:1px solid var(--ev-border);border-radius:11px;padding:11px 12px;box-shadow:var(--ev-shadow);display:flex;flex-direction:column;gap:7px;min-width:0}
@@ -15,7 +14,6 @@
 .ev-entry-actions{margin-top:auto;display:flex;align-items:center;gap:8px;padding-top:3px}
 .ev-entry-actions .btn{padding:5px 10px;font-size:11px}
 .ev-session-panel .ev-entry-grid{margin-top:2px}
-</style>
 {% endblock %}
 {% block body %}
 {% set sessions = result.get('sessions', []) if result else [] %}

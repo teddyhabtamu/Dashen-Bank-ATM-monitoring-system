@@ -406,3 +406,21 @@ def test_raw_view_uses_the_light_portal_surface():
     template = (ROOT / 'report-portal' / 'templates' / 'ej_raw_view.html').read_text()
     assert '.raw-shell{background:#fff' in template
     assert '.raw-lines td.code{color:#0F172A' in template
+
+
+def test_evidence_templates_do_not_nest_style_tags_in_the_base_style_block():
+    """The base template puts extra_style inside a <style> element.
+
+    A template that opens another <style> there produces invalid nested CSS,
+    and the browser silently drops part of the page's styling.  Keep the
+    per-page additions as raw CSS.
+    """
+    for name in (
+        'atm_images.html',
+        'atm_image_zip.html',
+        'atm_image_view.html',
+        'ej_raw_view.html',
+    ):
+        template = (ROOT / 'report-portal' / 'templates' / name).read_text()
+        assert '<style>' not in template, name
+        assert '</style>' not in template, name

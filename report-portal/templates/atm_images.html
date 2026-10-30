@@ -3,7 +3,6 @@
 {% block title %}{{ atm.atm_id }} · ATM image evidence{% endblock %}
 {% block extra_style %}
 {% include "_ej_journal_style.html" %}
-<style>
 .img-preview-note{font-size:11.5px;color:var(--ev-muted);line-height:1.55;margin:-4px 0 16px}
 .fp-field{position:relative;display:flex;align-items:center;width:260px;min-width:220px}
 .fp-field input{width:100% !important;min-width:0 !important;padding-right:32px}
@@ -35,7 +34,6 @@
 .ev-group-head .ev-group-count{font-size:10px;font-weight:700;color:var(--ev-muted);background:#F1F5F9;border-radius:999px;padding:1px 7px}
 @media(max-width:980px){.fp-field{width:100%;min-width:100%}}
 @media(max-width:720px){.ev-hero{padding:13px}.ev-hero h2{font-size:14px}}
-</style>
 {% endblock %}
 {% block body %}
 {% set is_ncr = result and result.get('vendor') == 'NCR' %}
@@ -145,9 +143,10 @@
   </div>
 </form>
 <p class="img-preview-note">
-  Tip: open a transaction in EJ Journal and use its <strong>Images</strong> link. That fills a ±2 minute window around the
-  transaction. Adjust the window to the session's card-inserted → card-returned interval when you have it.
-  Only the last {{ max_days_back }} days can be requested. Times are ATM local (EAT).
+  Tip: open a transaction in EJ Journal and use its <strong>Images</strong> link. That uses the session's
+  card-inserted → card-returned window when the journal has both edges; otherwise it falls back to ±2 minutes around
+  the recorded time. Adjust the window when you have a better session interval. Only the last {{ max_days_back }} days
+  can be requested. Times are ATM local (EAT).
 </p>
 
 {% if result %}
@@ -197,10 +196,13 @@
             <span class="ev-cam"><i data-lucide="archive" style="width:12px;height:12px"></i> Day archive</span>
             <span class="ev-role ev-role-start">NCR zip</span>
           </div>
-          <div class="ev-evidence-time">{{ c.last_write_time or '—' }}</div>
+          <div class="ev-evidence-time">{{ c.day or day_value }}</div>
           <div class="ev-evidence-meta">
             <span>{{ c.image_count }} image{% if c.image_count != 1 %}s{% endif %}</span>
             <span>{{ c.size_label or ('{:,}'.format(c.size|int) + ' B') }}</span>
+            {% if c.last_write_time %}
+            <span>Modified {{ c.last_write_time[:16]|replace('T', ' ') }}</span>
+            {% endif %}
           </div>
           <div class="ev-evidence-name">{{ c.name_masked }}</div>
           <div class="ev-evidence-actions">

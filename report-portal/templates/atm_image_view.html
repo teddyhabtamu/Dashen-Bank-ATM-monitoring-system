@@ -3,7 +3,6 @@
 {% block title %}{{ atm.atm_id }} · ATM evidence{% endblock %}
 {% block extra_style %}
 {% include "_ej_journal_style.html" %}
-<style>
 .ev-stage{position:relative;background:#0B1220;border:1px solid #1E293B;border-radius:14px;min-height:460px;display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:0 8px 30px rgba(1,33,105,.12)}
 .ev-media{max-width:100%;max-height:72vh;display:block;opacity:0;transition:opacity .2s ease}
 .ev-media[hidden]{display:none}
@@ -25,7 +24,6 @@
 .ev-stage-note code{font-size:10.5px}
 .ev-sha{word-break:break-all}
 @media(max-width:720px){.ev-stage{min-height:300px}.ev-media{max-height:62vh}.ev-error{padding:20px}}
-</style>
 {% endblock %}
 {% block body %}
 <div class="page-header">
