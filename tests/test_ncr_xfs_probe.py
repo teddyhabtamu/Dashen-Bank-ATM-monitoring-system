@@ -88,3 +88,9 @@ def test_probe_identifies_its_version_and_path():
     """A stale copy on the ATM is otherwise indistinguishable from a code bug."""
     assert "probe_version = '2026-10-29.3'" in PROBE
     assert 'probe_path = [string]$MyInvocation.MyCommand.Path' in PROBE
+
+
+def test_probe_has_a_siu_only_mode_for_sensor_mapping():
+    assert '[switch]$SiuOnly' in PROBE
+    assert 'if ($SiuOnly)' in PROBE
+    assert "Get-PeripheralStatus 'SIU'" in PROBE

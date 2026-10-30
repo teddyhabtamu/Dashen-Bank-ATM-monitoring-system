@@ -167,6 +167,39 @@ After the pilot, remove or disable the WMI master on the NCR host (or change
 the precedence explicitly) to let XFS drive state. Do not do that until the
 XFS readings have been compared with the WMI readings for a full shift.
 
+## Mapping the SIU doors and tamper sensor
+
+The SIU service **does** report door and tamper sensors, but the NCR service
+provider's sensor order is not the fixed CEN/XFS order. The CDM `301`
+`fwSafeDoor=1` means `WFS_CDM_SAFEDOORNOTSUPPORTED`: the dispenser service
+itself does not expose the safe door. The SIU is the right source, but its
+indices must be identified on the actual core.
+
+Do not guess from a single reading. Run the probe in SIU-only mode and change
+one sensor at a time:
+
+```powershell
+while ($true) {
+  $out = & C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe `
+    -NoProfile -ExecutionPolicy Bypass -File C:\monitor\ncr-xfs-probe.ps1 -SiuOnly
+  if ($out -match '"raw":\[([^\]]*)\]') {
+    "{0}  {1}" -f (Get-Date -Format HH:mm:ss), $matches[1]
+  }
+  Start-Sleep -Milliseconds 700
+}
+```
+
+1. Leave everything closed for 10 seconds.
+2. Open the cabinet door, hold it, then close it; note which index changes and
+   the two values.
+3. Repeat for the safe/vault door.
+4. Repeat for the tamper sensor if it can be triggered safely.
+
+Send the before/after arrays. Once the indices and value meanings are known,
+map them in the probe's SIU branch and enable the corresponding portal chips.
+Until then `cabinet_door`, `safe_door` and `tamper_sensor` stay `255`
+(not queried), which is safer than a false door-open alarm.
+
 ## Known gaps
 
 - **SIU doors and tamper:** only the operator switch is mapped. The probe

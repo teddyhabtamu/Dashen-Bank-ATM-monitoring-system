@@ -24,7 +24,12 @@ param(
   # 32 is the safe default for NCR APTRA 3.02. 64 exists for a future core
   # whose XFS manager is x64; auto uses the current process.
   [ValidateSet('auto', '32', '64')]
-  [string]$Bit = '32'
+  [string]$Bit = '32',
+
+  # Skip CDM/IDC/PTR/PIN and query only the SIU. Used while mapping the
+  # NCR door/tamper sensor offsets: open and close one door at a time and
+  # watch which siu.raw index changes.
+  [switch]$SiuOnly
 )
 
 $ErrorActionPreference = 'SilentlyContinue'
@@ -481,6 +486,7 @@ if ($null -ne $startupVersion) {
 }
 
 if ($null -ne $startupVersion -and $hApp -ne [IntPtr]::Zero) {
+  if (-not $SiuOnly) {
   # The real dispenser is a CurrencyDispenser/MediaDispenser service. Sort
   # those first so the probe does not waste six seconds opening the absent
   # BillDispenser/CoinDispenser/BRMDispenser services.
@@ -589,6 +595,7 @@ if ($null -ne $startupVersion -and $hApp -ne [IntPtr]::Zero) {
       $payload.cdm.cassettes = $mapped.cassettes
       $payload.cdm.summary = $mapped.summary
     }
+  }
   }
 
   # ── Peripherals ─────────────────────────────────────────────────────────
@@ -734,10 +741,14 @@ if ($null -ne $startupVersion -and $hApp -ne [IntPtr]::Zero) {
              candidates = $candidateNames; attempts = $attempts }
   }
 
-  $payload.idc = Get-PeripheralStatus 'IDC' $hApp ([uint32]$startupVersion)
-  $payload.ptr = Get-PeripheralStatus 'PTR' $hApp ([uint32]$startupVersion)
-  $payload.pin = Get-PeripheralStatus 'PIN' $hApp ([uint32]$startupVersion)
-  $payload.siu = Get-PeripheralStatus 'SIU' $hApp ([uint32]$startupVersion)
+  if ($SiuOnly) {
+    $payload.siu = Get-PeripheralStatus 'SIU' $hApp ([uint32]$startupVersion)
+  } else {
+    $payload.idc = Get-PeripheralStatus 'IDC' $hApp ([uint32]$startupVersion)
+    $payload.ptr = Get-PeripheralStatus 'PTR' $hApp ([uint32]$startupVersion)
+    $payload.pin = Get-PeripheralStatus 'PIN' $hApp ([uint32]$startupVersion)
+    $payload.siu = Get-PeripheralStatus 'SIU' $hApp ([uint32]$startupVersion)
+  }
 }
 
 if ($hApp -ne [IntPtr]::Zero) {
