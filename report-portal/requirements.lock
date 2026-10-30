@@ -1,14 +1,30 @@
-# Resolved Report Portal runtime versions.
+# Resolved Report Portal runtime versions, captured from the running UAT
+# portal with `pip freeze` (setuptools, pip and wheel omitted).
 #
-# Generated from the environment used for the UAT rebuild.  The Dockerfile
-# sets PIP_ONLY_BINARY=:all:, so every dependency is a wheel and no package
-# can execute a setup script during deployment.
-Flask==3.1.3
-psycopg2-binary==2.9.13
-openpyxl==3.1.5
-reportlab==5.1.0
-requests==2.34.2
+# The Dockerfile sets PIP_ONLY_BINARY=:all:, so every dependency is a wheel
+# and no package can execute a setup script during deployment.
 APScheduler==3.11.3
+blinker==1.9.0
+certifi==2026.7.22
+charset-normalizer==3.5.2
+click==8.5.0
+et_xmlfile==2.0.0
+Flask==3.1.3
 Flask-WTF==1.3.0
-ldap3==2.9.1
 gunicorn==26.2.0
+idna==3.20
+itsdangerous==2.2.0
+Jinja2==3.1.6
+ldap3==2.9.1
+MarkupSafe==3.0.4
+openpyxl==3.1.5
+packaging==26.3
+pillow==12.3.0
+psycopg2-binary==2.9.13
+pyasn1==0.6.4
+reportlab==5.0.1
+requests==2.34.2
+tzlocal==5.4.4
+urllib3==2.8.0
+Werkzeug==3.1.9
+WTForms==3.2.2

@@ -280,6 +280,22 @@ def test_dockerfile_installs_the_lock():
         'the Dockerfile must keep the wheel-only install guarantee')
 
 
+def test_lock_pins_every_declared_runtime_dependency():
+    """The lock is what the image installs, so it must cover every package
+    named in requirements.txt with an exact version."""
+    reqs = {
+        line.strip().lower() for line in
+        (REPO / 'report-portal' / 'requirements.txt').read_text().split('\n')
+        if line.strip() and not line.startswith('#')
+    }
+    pinned = {
+        line.split('==', 1)[0].strip().lower() for line in
+        (REPO / 'report-portal' / 'requirements.lock').read_text().split('\n')
+        if '==' in line and not line.lstrip().startswith('#')
+    }
+    assert reqs <= pinned, sorted(reqs - pinned)
+
+
 def test_dockerfile_copies_requirements_before_installing_them():
     """A clean build has an empty /app. Running pip before COPY used to fail
     with 'No such file or directory: requirements.txt' and leave the old
