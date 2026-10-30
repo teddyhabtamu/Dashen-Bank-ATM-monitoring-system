@@ -11,7 +11,9 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .sidebar-brand{display:flex;align-items:center;gap:10px;padding:15px 10px 15px 15px;border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0;overflow:hidden;min-height:60px}
 .sidebar.collapsed .sidebar-brand{justify-content:center;padding:16px 8px;gap:0}
 .sidebar-logo{width:28px;height:28px;object-fit:contain;flex-shrink:0}
-.sidebar.collapsed .sidebar-logo{display:none}
+/* .sidebar.collapsed .sidebar-logo{display:none} removed: it was left here by
+   the Phase 3 extraction and still loaded, so the collapsed rail rendered an
+   empty brand box while the base.html copy of the fix passed its own test. */
 .sidebar.collapsed .sidebar-actions{margin-left:0}
 .sidebar-brand-text{display:flex;flex-direction:column;white-space:nowrap;opacity:1;transition:opacity .2s ease .15s}
 .sidebar.collapsed .sidebar-brand-text{opacity:0;width:0;overflow:hidden;padding:0;margin:0;pointer-events:none;flex-shrink:0}
@@ -27,12 +29,17 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .nav-item:hover svg{color:#fff}
 .sidebar.collapsed .nav-item svg{color:rgba(255,255,255,.7)}
 .nav-item.active{background:rgba(255,255,255,.12);color:#fff;font-weight:600}
-.nav-item.active::before{content:'';position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:0 3px 3px 0;background:#FDD79A}
+/* .nav-item.active::before - the 3px brand-gold active bar - removed. It was
+   removed from base.html in 2ad68ed but survived here, where nothing overrides
+   it, so the bar kept rendering on the live portal. */
 .nav-item.active svg{color:#fff}
 .nav-item span{opacity:1;transition:opacity .2s ease .15s}
 .sidebar.collapsed .nav-item span{opacity:0;width:0;margin:0;padding:0;pointer-events:none}
 .nav-section-label{padding:16px 12px 6px;font-size:9px;font-weight:600;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.8px;overflow:hidden;white-space:nowrap;transition:opacity .2s ease}
-.sidebar.collapsed .nav-section-label{opacity:0;height:0;padding:0 12px;margin:0;overflow:hidden;pointer-events:none}
+/* .sidebar.collapsed .nav-section-label{opacity:0;height:0;...} removed: it hid
+   the section labels in the 60px rail, contradicting the hairline-divider
+   design. base.html restored them behind a media query, so the two files
+   disagreed about the same selector. */
 
 /* ── PROFILE DROPDOWN ── */
 .sidebar-support{border-top:1px solid rgba(255,255,255,.06);flex-shrink:0}
@@ -215,6 +222,35 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
 .badge.active,.badge.APPROVED{background:rgba(5,150,105,.1);color:#059669}
 .badge.inactive,.badge.DECLINED{background:rgba(220,38,38,.08);color:#DC2626}
 .badge.TIMEOUT,.badge.ERROR{background:rgba(217,119,6,.1);color:#D97706}
+
+/* ── ATM STATE BADGE + LEGEND ──
+   Colours come from helpers.py (the NetXMS eight-state palette). The pill
+   carries the state colour; the legend is the same list rendered in order. */
+.state-pill{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;
+  font-weight:700;line-height:1.45;white-space:nowrap}
+.state-legend{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;
+  font-size:11px;color:#475569;line-height:1.6}
+.state-legend-item{display:inline-flex;align-items:center;white-space:nowrap}
+.state-legend-dot{width:10px;height:10px;border-radius:50%;display:inline-block;
+  margin-right:5px;flex:0 0 auto}
+.state-legend-bar{padding:10px 16px;background:#F8FAFC;border:1px solid #EEF1F6;
+  border-radius:8px;margin-bottom:16px}
+
+/* Clickable state filter: the legend doubles as the control. */
+.state-filter{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.state-filter-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;
+  border:1px solid #E4E9F1;border-radius:999px;background:#fff;font-family:inherit;
+  font-size:11px;font-weight:600;color:#334155;cursor:pointer;line-height:1.4;
+  transition:border-color .15s,background .15s,box-shadow .15s}
+.state-filter-chip:hover{border-color:#CBD5E1;background:#F8FAFC}
+.state-filter-chip:focus-visible{outline:2px solid #012169;outline-offset:2px}
+.state-filter-chip.active{border-color:var(--chip,#012169);background:#EEF2FF;
+  color:#012169;box-shadow:inset 0 0 0 1px var(--chip,#012169)}
+.state-filter-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.state-filter-count{min-width:18px;padding:0 5px;border-radius:999px;background:#F1F5F9;
+  color:#475569;font-size:10px;font-weight:700;line-height:16px;text-align:center}
+.state-filter-chip.active .state-filter-count{background:#012169;color:#fff}
+.state-filter-hint{margin-top:6px;text-align:right;font-size:10px;color:#94A3B8;white-space:nowrap}
 
 /* ── ALERT CARDS ── */
 .alert-card {

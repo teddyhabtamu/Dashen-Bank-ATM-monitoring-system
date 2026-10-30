@@ -1,0 +1,75 @@
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.14.0
+    container_name: opensearch
+    environment:
+      - discovery.type=single-node
+      - OPENSEARCH_JAVA_OPTS=-Xms2g -Xmx2g
+      - DISABLE_SECURITY_PLUGIN=true
+      - compatibility.override_main_response_version=true
+    volumes:
+      - os-data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.14.0
+    container_name: opensearch-dashboards
+    environment:
+      - OPENSEARCH_HOSTS=http://opensearch:9200
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+    volumes:
+      - ./config/osd/opensearch_dashboards.yml:/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml:ro
+      - ./config/osd/ui_brand/dashen-logo.png:/usr/share/opensearch-dashboards/src/core/server/core_app/assets/dashen-logo.png:ro
+      - ./config/osd/ui_brand/dashen-mark.png:/usr/share/opensearch-dashboards/src/core/server/core_app/assets/dashen-mark.png:ro
+      - ./config/osd/ui_brand/dashen-favicon.png:/usr/share/opensearch-dashboards/src/core/server/core_app/assets/dashen-favicon.png:ro
+    ports:
+      - "5601:5601"
+    depends_on:
+      - opensearch
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  iso8583-gateway:
+    build:
+      context: ./camel
+      dockerfile: Dockerfile.gateway
+    container_name: iso8583-gateway
+    environment:
+      MODE: "${ISO8583_MODE:-simulation}"
+      # Kill-switch: sim loop exits unless explicitly true (UAT keeps
+      # simulation ON until switch integration; production sets false).
+      ENABLE_SIMULATORS: "${ENABLE_SIMULATORS:-false}"
+      SWITCH_HOST: "${SWITCH_HOST:-0.0.0.0}"
+      SWITCH_PORT: "${SWITCH_PORT:-9876}"
+      DB_HOST: "${APPS_VM_IP}"
+      # Portal database. Defaults to "zabbix", the pre-split layout where
+      # portal tables shared a database with Zabbix's own configuration. Set
+      # PORTAL_DB_NAME=portal in .env to use the split database. This service
+      # writes atm_transactions, so it has to move with the rest or simulator
+      # transactions land in a database the portal no longer reads.
+      DB_NAME: "${PORTAL_DB_NAME:-zabbix}"
+      DB_USER: "zabbix"
+      DB_PASS: "${DB_PASS}"
+      INTERVAL: "10"
+    ports:
+      - "9876:9876"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+volumes:
+  os-data:

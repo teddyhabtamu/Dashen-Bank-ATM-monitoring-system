@@ -2,11 +2,15 @@
 blueprints/anomalies.py
 Alert management and acknowledgement routes.
 """
+import logging
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, render_template, request, session, jsonify
 from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN
 from db import get_db
 from audit import log_action
+from anomaly_dates import eat_day_start_utc, eat_day_end_utc
+
+log = logging.getLogger(__name__)
 
 EAT = timezone(timedelta(hours=3))
 
@@ -19,7 +23,7 @@ def to_eat(dt, fmt='%Y-%m-%d %H:%M'):
         return dt.astimezone(EAT).strftime(fmt)
     return str(dt)
 
-bp = Blueprint('anomalies', __name__, url_prefix='/admin')
+bp = Blueprint('anomalies', __name__)
 
 SEVERITIES = ['HIGH', 'MEDIUM', 'LOW']
 ANOMALY_TYPES = ['VELOCITY', 'FAILURE_SPIKE', 'LARGE_TXN', 'RAPID_SEQ', 'OFFHOURS_SPIKE']
@@ -51,19 +55,32 @@ TYPE_COLORS = {
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def anomaly_list():
-    page = max(1, int(request.args.get('page', 1)))
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (ValueError, TypeError):
+        page = 1
     per_page = 50
 
     severity = request.args.get('severity', '').strip()
     anomaly_type = request.args.get('type', '').strip()
     atm_search = request.args.get('atm_id', '').strip()
-    acknowledged = request.args.get('acknowledged', 'no').strip()
+    acknowledged = request.args.get('acknowledged', 'no').strip().lower()
+    if acknowledged not in ('yes', 'no'):
+        acknowledged = 'no'
     date_from = request.args.get('from', '').strip()
     date_to = request.args.get('to', '').strip()
 
     open_count = 0
     ack_count = 0
+    all_atms = []
+    rows = []
+    total = 0
+    total_pages = 1
+    load_error = None
     try:
+        from_utc = eat_day_start_utc(date_from) if date_from else None
+        to_utc = eat_day_end_utc(date_to) if date_to else None
+
         with get_db() as conn:
             cur = conn.cursor()
 
@@ -91,12 +108,12 @@ def anomaly_list():
                 where_clauses.append("acknowledged = TRUE")
             elif acknowledged == 'no':
                 where_clauses.append("acknowledged = FALSE")
-            if date_from:
-                where_clauses.append("detected_at >= %s::timestamp")
-                params.append(date_from)
-            if date_to:
-                where_clauses.append("detected_at <= %s::timestamp + interval '1 day'")
-                params.append(date_to)
+            if from_utc:
+                where_clauses.append("detected_at >= %s")
+                params.append(from_utc)
+            if to_utc:
+                where_clauses.append("detected_at < %s")
+                params.append(to_utc)
 
             where_sql = ' AND '.join(where_clauses) if where_clauses else 'TRUE'
 
@@ -119,11 +136,19 @@ def anomaly_list():
         for r in rows:
             r[1] = to_eat(r[1], '%Y-%m-%d %H:%M')
             r[11] = to_eat(r[11], '%Y-%m-%d %H:%M')
-    except Exception as e:
+    except ValueError:
+        log.warning("Invalid anomaly date filter: from=%r to=%r", date_from, date_to)
+        load_error = "Invalid date filter. Use YYYY-MM-DD."
         rows = []
         total = 0
         total_pages = 1
         all_atms = []
+    except Exception:
+        log.exception("Failed to load anomaly alerts")
+        load_error = "Anomaly data is unavailable right now. The detector or database may be down."
+        rows = []
+        total = 0
+        total_pages = 1
 
     anomalies = [{
         'id': r[0],
@@ -154,6 +179,7 @@ def anomaly_list():
                            anomaly_labels=ANOMALY_LABELS,
                            severity_colors=SEVERITY_COLORS,
                            type_colors=TYPE_COLORS,
+                           load_error=load_error,
                            filters={
                                'severity': severity,
                                'type': anomaly_type,
@@ -226,7 +252,8 @@ def anomaly_bulk_acknowledge():
             cur.close()
 
         log_action('ANOMALY_BULK_ACK',
-                   f'{updated} anomalies acknowledged by {username}: {",".join(str(i) for i in ids)}')
+                   f'{updated} anomalies acknowledged by {username}: {",".join(str(i) for i in ids[:10])}'
+                   f'{f" (+{len(ids) - 10} more)" if len(ids) > 10 else ""}')
         return jsonify({'success': True, 'updated': updated})
     except Exception as e:
         return jsonify({'error': True, 'message': str(e)}), 500

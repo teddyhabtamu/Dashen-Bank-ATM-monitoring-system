@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version='1.0' encoding='UTF-8'?>
 <zabbix_export>
     <version>6.4</version>
     <template_groups>
@@ -34,6 +34,16 @@
                             <expression>last(/Dashen Bank ATM Hardware/atm.cam.cam1)&lt;&gt;1</expression>
                             <name>Camera 1 Fault on {HOST.NAME}</name>
                             <priority>AVERAGE</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>camera</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -53,6 +63,16 @@
                             <expression>last(/Dashen Bank ATM Hardware/atm.cam.cam2)&lt;&gt;1</expression>
                             <name>Camera 2 Fault on {HOST.NAME}</name>
                             <priority>AVERAGE</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>camera</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -72,6 +92,16 @@
                             <expression>last(/Dashen Bank ATM Hardware/atm.cam.storage)&lt;&gt;1</expression>
                             <name>Camera Storage Issue on {HOST.NAME}</name>
                             <priority>HIGH</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>camera</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -89,7 +119,17 @@
                             <expression>last(/Dashen Bank ATM Hardware/atm.card.captures)&gt;5</expression>
                             <name>High Card Capture Count on {HOST.NAME}</name>
                             <priority>AVERAGE</priority>
-                            <description>Unusual number of card captures — possible card reader fault or skimming device.</description>
+                            <description>Unusual number of card captures — possible card reader fault.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>card</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -106,9 +146,19 @@
                     <triggers>
                         <trigger>
                             <uuid>a59abf16cb454ffa89463e347bc1742a</uuid>
-                            <expression>last(/Dashen Bank ATM Hardware/atm.card.reader)&lt;&gt;1</expression>
+                            <expression>last(/Dashen Bank ATM Hardware/atm.card.reader)=2</expression>
                             <name>Card Reader Error on {HOST.NAME}</name>
                             <priority>HIGH</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>card</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -128,6 +178,16 @@
                             <expression>last(/Dashen Bank ATM Hardware/atm.card.shutter)&lt;&gt;1</expression>
                             <name>Card Shutter Failure on {HOST.NAME}</name>
                             <priority>HIGH</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>card</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -145,6 +205,16 @@
                             <expression>last(/Dashen Bank ATM Hardware/atm.cash.cassette1)=0</expression>
                             <name>Cash Empty — Cassette 1 on {HOST.NAME}</name>
                             <priority>DISASTER</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>cash</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                         <trigger>
                             <uuid>4ec5eed465b24cd78d45fb6d47a662ed</uuid>
@@ -152,6 +222,16 @@
                             <name>Cash Low — Cassette 1 on {HOST.NAME}</name>
                             <priority>HIGH</priority>
                             <description>Cassette 1 has fewer than 200 notes remaining. Schedule replenishment.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>cash</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -169,12 +249,33 @@
                             <expression>last(/Dashen Bank ATM Hardware/atm.cash.cassette2)=0</expression>
                             <name>Cash Empty — Cassette 2 on {HOST.NAME}</name>
                             <priority>DISASTER</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>cash</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                         <trigger>
                             <uuid>3b50a992b5ae48f5b4dc4f8bdfde2d37</uuid>
                             <expression>last(/Dashen Bank ATM Hardware/atm.cash.cassette2)&lt;200</expression>
                             <name>Cash Low — Cassette 2 on {HOST.NAME}</name>
                             <priority>HIGH</priority>
+                            <description>Cassette 2 has fewer than 200 notes remaining. Schedule replenishment.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>cash</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -188,10 +289,37 @@
                     <snmp_oid>1.3.6.1.4.1.99999.1.4.0</snmp_oid>
                     <triggers>
                         <trigger>
+                            <uuid>88b504c2a0fd4f6c82ebed2bdd850188</uuid>
+                            <expression>last(/Dashen Bank ATM Hardware/atm.cash.cassette3)=0</expression>
+                            <name>Cash Empty — Cassette 3 on {HOST.NAME}</name>
+                            <priority>DISASTER</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>cash</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                        <trigger>
                             <uuid>4fdeaa96cc8749a6b54d645fa9987312</uuid>
                             <expression>last(/Dashen Bank ATM Hardware/atm.cash.cassette3)&lt;200</expression>
                             <name>Cash Low — Cassette 3 on {HOST.NAME}</name>
                             <priority>HIGH</priority>
+                            <description>Cassette 3 has fewer than 200 notes remaining. Schedule replenishment.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>cash</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -205,10 +333,37 @@
                     <snmp_oid>1.3.6.1.4.1.99999.1.5.0</snmp_oid>
                     <triggers>
                         <trigger>
+                            <uuid>c62fa9a45ae24d5ca3e07d8a6e3202e8</uuid>
+                            <expression>last(/Dashen Bank ATM Hardware/atm.cash.cassette4)=0</expression>
+                            <name>Cash Empty — Cassette 4 on {HOST.NAME}</name>
+                            <priority>DISASTER</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>cash</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                        <trigger>
                             <uuid>c0bf6430c4d64b629c3bb58e1c027991</uuid>
                             <expression>last(/Dashen Bank ATM Hardware/atm.cash.cassette4)&lt;200</expression>
                             <name>Cash Low — Cassette 4 on {HOST.NAME}</name>
                             <priority>HIGH</priority>
+                            <description>Cassette 4 has fewer than 200 notes remaining. Schedule replenishment.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>cash</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -229,6 +384,16 @@
                             <name>CASH JAM Detected on {HOST.NAME}</name>
                             <priority>DISASTER</priority>
                             <description>Cash jam detected. ATM may be dispensing incorrectly.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>cash</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -246,6 +411,16 @@
                             <expression>last(/Dashen Bank ATM Hardware/atm.cash.rejectbin)&gt;80</expression>
                             <name>Reject Bin Nearly Full on {HOST.NAME}</name>
                             <priority>WARNING</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>cash</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -269,17 +444,37 @@
                     <snmp_oid>1.3.6.1.4.1.99999.4.3.0</snmp_oid>
                     <triggers>
                         <trigger>
-                            <uuid>3005d7af42fe4422b134f6a21e721a17</uuid>
-                            <expression>last(/Dashen Bank ATM Hardware/atm.env.temperature)&gt;50</expression>
-                            <name>Critical Temperature on {HOST.NAME}</name>
-                            <priority>DISASTER</priority>
-                        </trigger>
-                        <trigger>
                             <uuid>8a776e031d394c11b7d0cd23a42561e9</uuid>
                             <expression>last(/Dashen Bank ATM Hardware/atm.env.temperature)&gt;40</expression>
                             <name>High Temperature on {HOST.NAME}</name>
                             <priority>HIGH</priority>
                             <description>ATM enclosure temperature exceeding safe limits.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>environment</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                        <trigger>
+                            <uuid>3005d7af42fe4422b134f6a21e721a17</uuid>
+                            <expression>last(/Dashen Bank ATM Hardware/atm.env.temperature)&gt;50</expression>
+                            <name>Critical Temperature on {HOST.NAME}</name>
+                            <priority>DISASTER</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>environment</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -297,7 +492,17 @@
                             <expression>avg(/Dashen Bank ATM Hardware/atm.net.latency,5m)&gt;500</expression>
                             <name>High Network Latency on {HOST.NAME}</name>
                             <priority>HIGH</priority>
-                            <description>Average latency over 500ms for last 5 minutes — transactions likely timing out.</description>
+                            <description>Average latency over 500ms for last 5 minutes — transactions may time out.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>network</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -317,6 +522,16 @@
                             <expression>last(/Dashen Bank ATM Hardware/atm.net.link)=2</expression>
                             <name>Network Link Down on {HOST.NAME}</name>
                             <priority>DISASTER</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>network</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -334,6 +549,16 @@
                             <expression>last(/Dashen Bank ATM Hardware/atm.net.packetloss)&gt;10</expression>
                             <name>Packet Loss Detected on {HOST.NAME}</name>
                             <priority>HIGH</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>network</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -347,17 +572,37 @@
                     <snmp_oid>1.3.6.1.4.1.99999.6.3.0</snmp_oid>
                     <triggers>
                         <trigger>
+                            <uuid>6641d598bb67493eae17bf527bb96c88</uuid>
+                            <expression>last(/Dashen Bank ATM Hardware/atm.power.battery)&lt;20</expression>
+                            <name>UPS Battery Low on {HOST.NAME}</name>
+                            <priority>HIGH</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>power</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                        <trigger>
                             <uuid>a4fccb6376da469585843bb3e5f2f05f</uuid>
                             <expression>last(/Dashen Bank ATM Hardware/atm.power.battery)&lt;5</expression>
                             <name>UPS Battery Critical on {HOST.NAME}</name>
                             <priority>DISASTER</priority>
                             <description>UPS battery near empty — ATM shutdown imminent.</description>
-                        </trigger>
-                        <trigger>
-                            <uuid>6641d598bb67493eae17bf527bb96c88</uuid>
-                            <expression>last(/Dashen Bank ATM Hardware/atm.power.battery)&lt;20</expression>
-                            <name>UPS Battery Low on {HOST.NAME}</name>
-                            <priority>HIGH</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>power</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -377,6 +622,16 @@
                             <expression>last(/Dashen Bank ATM Hardware/atm.power.main)=2</expression>
                             <name>Main Power Failure on {HOST.NAME}</name>
                             <priority>DISASTER</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>power</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -397,6 +652,16 @@
                             <name>UPS on Battery on {HOST.NAME}</name>
                             <priority>WARNING</priority>
                             <description>ATM running on UPS battery. Check main power supply.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>power</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -416,6 +681,16 @@
                             <expression>last(/Dashen Bank ATM Hardware/atm.printer.journal)&lt;&gt;1</expression>
                             <name>Journal Printer Fault on {HOST.NAME}</name>
                             <priority>AVERAGE</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>printer</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -429,16 +704,36 @@
                     <snmp_oid>1.3.6.1.4.1.99999.3.2.0</snmp_oid>
                     <triggers>
                         <trigger>
-                            <uuid>cb867a21b98a402dab0403c93471f103</uuid>
-                            <expression>last(/Dashen Bank ATM Hardware/atm.printer.paper)&lt;20</expression>
-                            <name>Receipt Paper Low on {HOST.NAME}</name>
-                            <priority>WARNING</priority>
-                        </trigger>
-                        <trigger>
                             <uuid>61ec2c8afdc14700a8d4fccbeb1b3ec1</uuid>
                             <expression>last(/Dashen Bank ATM Hardware/atm.printer.paper)=0</expression>
                             <name>Receipt Paper Out on {HOST.NAME}</name>
                             <priority>HIGH</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>printer</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                        <trigger>
+                            <uuid>cb867a21b98a402dab0403c93471f103</uuid>
+                            <expression>last(/Dashen Bank ATM Hardware/atm.printer.paper)&lt;20</expression>
+                            <name>Receipt Paper Low on {HOST.NAME}</name>
+                            <priority>WARNING</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>printer</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -458,6 +753,16 @@
                             <expression>last(/Dashen Bank ATM Hardware/atm.printer.receipt)=4</expression>
                             <name>Receipt Printer Fault on {HOST.NAME}</name>
                             <priority>AVERAGE</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>printer</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -477,6 +782,16 @@
                             <expression>last(/Dashen Bank ATM Hardware/atm.security.cabdoor)=1</expression>
                             <name>Cabinet Door Open on {HOST.NAME}</name>
                             <priority>HIGH</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>security</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -497,6 +812,16 @@
                             <name>INTRUSION ALERT on {HOST.NAME}</name>
                             <priority>DISASTER</priority>
                             <description>Intrusion alert triggered. Contact security immediately.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>security</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -517,6 +842,16 @@
                             <name>SAFE DOOR OPEN on {HOST.NAME}</name>
                             <priority>DISASTER</priority>
                             <description>ATM safe door has been opened. Verify authorized maintenance.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>security</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -537,6 +872,16 @@
                             <name>Vibration Alert on {HOST.NAME}</name>
                             <priority>DISASTER</priority>
                             <description>Vibration detected — possible ATM tampering or attack.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>security</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -552,23 +897,70 @@
                     <snmp_oid>1.3.6.1.4.1.99999.1.1.0</snmp_oid>
                     <triggers>
                         <trigger>
+                            <uuid>5c8c621c358e40de89f5874f77019335</uuid>
+                            <expression>last(/Dashen Bank ATM Hardware/atm.status)=2</expression>
+                            <name>ATM {HOST.NAME} is Out of Service</name>
+                            <priority>DISASTER</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>system</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                        <trigger>
                             <uuid>1b30a93e4e874f5f88c450e8a06b39bf</uuid>
                             <expression>last(/Dashen Bank ATM Hardware/atm.status)=3</expression>
                             <name>ATM {HOST.NAME} in Partial Service</name>
                             <priority>HIGH</priority>
                             <description>ATM is operating with degraded functionality.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>system</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                         <trigger>
                             <uuid>cc1b1ee6a0924b7ea1258d184f90e748</uuid>
                             <expression>last(/Dashen Bank ATM Hardware/atm.status)=4</expression>
                             <name>ATM {HOST.NAME} in Supervisor/Maintenance Mode</name>
                             <priority>WARNING</priority>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>system</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                         <trigger>
-                            <uuid>5c8c621c358e40de89f5874f77019335</uuid>
-                            <expression>last(/Dashen Bank ATM Hardware/atm.status)=2</expression>
-                            <name>ATM {HOST.NAME} is Out of Service</name>
+                            <uuid>67e634b767934153b484eeb5c5421fec</uuid>
+                            <expression>nodata(/Dashen Bank ATM Hardware/atm.status,5m)=1</expression>
+                            <name>No SNMP data from {HOST.NAME} for 5 minutes</name>
                             <priority>DISASTER</priority>
+                            <description>All SNMP items stale — ATM unreachable, SNMP broken, or poller down. Other triggers freeze on stale data; this one catches the silence.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>system</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
                         </trigger>
                     </triggers>
                 </item>
@@ -580,6 +972,25 @@
                     <delay>30s</delay>
                     <units>txns</units>
                     <snmp_oid>1.3.6.1.4.1.99999.5.2.0</snmp_oid>
+                    <triggers>
+                        <trigger>
+                            <uuid>f99e5a22a53c4823bb3c37ca8a234f87</uuid>
+                            <expression>last(/Dashen Bank ATM Hardware/atm.txn.failed)&gt;last(/Dashen Bank ATM Hardware/atm.txn.total)*0.2</expression>
+                            <name>High Transaction Failure Rate on {HOST.NAME}</name>
+                            <priority>HIGH</priority>
+                            <description>More than 20% of transactions are failing.</description>
+                            <tags>
+                                <tag>
+                                    <tag>component</tag>
+                                    <value>transactions</value>
+                                </tag>
+                                <tag>
+                                    <tag>scope</tag>
+                                    <value>atm</value>
+                                </tag>
+                            </tags>
+                        </trigger>
+                    </triggers>
                 </item>
                 <item>
                     <uuid>ec77605af3e04f4ea37cedb2f9a89e92</uuid>
@@ -733,12 +1144,5 @@
         </template>
     </templates>
     <triggers>
-        <trigger>
-            <uuid>f99e5a22a53c4823bb3c37ca8a234f87</uuid>
-            <expression>last(/Dashen Bank ATM Hardware/atm.txn.failed)&gt;last(/Dashen Bank ATM Hardware/atm.txn.total)*0.2</expression>
-            <name>High Transaction Failure Rate on {HOST.NAME}</name>
-            <priority>HIGH</priority>
-            <description>More than 20% of transactions are failing.</description>
-        </trigger>
-    </triggers>
+        </triggers>
 </zabbix_export>

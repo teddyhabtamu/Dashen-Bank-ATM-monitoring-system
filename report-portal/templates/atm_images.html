@@ -1,0 +1,433 @@
+{% extends "base.html" %}
+{% from "_evidence_ui.html" import confidence_chip, role_chip, empty_state, status_chip %}
+{% block title %}{{ atm.atm_id }} · ATM image evidence{% endblock %}
+{% block extra_style %}
+{% include "_ej_journal_style.html" %}
+.img-preview-note{font-size:11.5px;color:var(--ev-muted);line-height:1.55;margin:-4px 0 16px}
+.fp-field{position:relative;display:flex;align-items:center;width:260px;min-width:220px}
+.fp-field input{width:100% !important;min-width:0 !important;padding-right:32px}
+.fp-field svg{position:absolute;right:10px;width:14px;height:14px;color:var(--ev-faint);pointer-events:none}
+.flatpickr-calendar.noCalendar.hasTime{width:200px;padding:0}
+.fp-time-head{padding:9px 10px 1px;font-size:9.5px;font-weight:700;color:var(--ev-faint);text-transform:uppercase;letter-spacing:.5px;text-align:left}
+.flatpickr-time{max-height:none;line-height:38px;padding:0 4px;justify-content:center;overflow:visible}
+.flatpickr-calendar .flatpickr-time .numInputWrapper{flex:0 0 30%;width:30%}
+.flatpickr-calendar .flatpickr-time .flatpickr-time-separator{flex:0 0 8px;width:8px}
+.flatpickr-time input{font-family:'Inter',sans-serif;font-weight:700;color:var(--ev-text);font-size:15px}
+.flatpickr-time input:hover,.flatpickr-time input:focus{background:#EEF2FF;color:var(--ev-brand)}
+.flatpickr-time .flatpickr-time-separator{color:var(--ev-faint);font-weight:600}
+.fp-time-foot{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--ev-border);margin:4px 4px 0;padding:6px 2px 2px}
+.fp-time-foot button{border:none;background:none;color:var(--ev-brand);font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;padding:4px 7px;border-radius:5px}
+.fp-time-foot button:hover{background:#EEF2FF}
+.fp-time-foot .fp-time-done{background:var(--ev-brand);color:#fff;padding:4px 10px}
+.fp-time-foot .fp-time-done:hover{background:#001a52}
+.ev-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;background:var(--ev-surface);border:1px solid var(--ev-border);border-radius:var(--ev-radius);box-shadow:var(--ev-shadow);padding:15px 16px;margin-bottom:14px}
+.ev-hero h2{font-size:15px;font-weight:750;margin:0 0 4px}
+.ev-hero p{font-size:12px;color:var(--ev-muted);line-height:1.55;margin:0;max-width:760px}
+.ev-hero .ev-hero-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ev-summary-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--ev-muted);margin-top:7px}
+.ev-summary-line b{color:var(--ev-text)}
+.ev-caveat{background:#F8FAFC;border:1px solid var(--ev-border);color:#475569;border-radius:3px;padding:10px 13px;font-size:11.5px;line-height:1.55;margin-bottom:14px}
+.ev-caveat b{color:var(--ev-text)}
+.ev-group{margin-bottom:18px}
+.ev-group-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.ev-group-head h2{font-size:12.5px;font-weight:750;margin:0}
+.ev-group-head .ev-group-count{font-size:10px;font-weight:700;color:var(--ev-muted);background:none;border-radius:0;padding:0}
+@media(max-width:980px){.fp-field{width:100%;min-width:100%}}
+@media(max-width:720px){.ev-hero{padding:13px}.ev-hero h2{font-size:14px}}
+{% endblock %}
+{% block body %}
+{% set is_ncr = result and result.get('vendor') == 'NCR' %}
+{% set start_n = (result.get('candidates', []) | selectattr('role', 'equalto', 'start') | list | length) if result else 0 %}
+{% set during_n = (result.get('candidates', []) | selectattr('role', 'equalto', 'in_window') | list | length) if result else 0 %}
+{% set end_n = (result.get('candidates', []) | selectattr('role', 'equalto', 'end') | list | length) if result else 0 %}
+{% set near_n = (result.get('candidates', []) | selectattr('role', 'equalto', 'near_window') | list | length) if result else 0 %}
+{% set total_zip_images = namespace(value=0) %}
+{% if is_ncr %}
+  {% for c in result.get('candidates', []) %}
+    {% set total_zip_images.value = total_zip_images.value + (c.image_count or 0) %}
+  {% endfor %}
+{% endif %}
+
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="camera"></i></div>
+  <div>
+    <div class="ev-breadcrumb">
+      <a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id) }}">EJ Journal</a>
+      <span class="sep">/</span>
+      <a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id, tab='files') }}">{{ atm.atm_id }}</a>
+      <span class="sep">/</span>
+      <span>Image evidence</span>
+    </div>
+    <h1 class="page-title">{{ atm.atm_id }} · ATM image evidence</h1>
+    <p class="page-subtitle">{{ atm.branch or 'Unknown branch' }} · {{ atm.vendor or '—' }} · on demand from the ATM</p>
+    <div class="ev-context">
+      <span class="ev-chip">Admin only</span>
+      <span class="ev-chip">Not stored centrally</span>
+      <span class="ev-chip">Audited views</span>
+    </div>
+  </div>
+  <div class="page-actions">
+    {% if result %}
+    <a class="btn btn-outline" href="#evidence-search">
+      <i data-lucide="sliders-horizontal" style="width:14px;height:14px"></i> Change window
+    </a>
+    {% endif %}
+    <a class="btn btn-outline" href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id) }}">
+      <i data-lucide="book-open" style="width:14px;height:14px"></i> EJ Journal
+    </a>
+  </div>
+</div>
+<div class="page-content">
+
+<div class="ev-page-note">
+  <i data-lucide="shield-check"></i>
+  <span><b>Read-only evidence, not a central archive.</b> The portal asks the host bridge for one image at a time.
+    The image is held in memory, streamed to this browser, and discarded. Filenames are masked because a GRG filename
+    can contain card data. The card field is display-only and is <b>not</b> used to link an image to a transaction.</span>
+</div>
+
+{% if not bridge_configured %}
+<div class="banner banner-warn">
+  <strong>Image bridge not configured.</strong>
+  The host-side image bridge is not running or the portal has no bridge token. This is a transport problem, not an empty ATM.
+  Start <code>atm-image-bridge</code> on the monitoring host, then reload this page.
+</div>
+{% endif %}
+
+{% if form_error %}
+<div class="banner banner-error"><strong>Invalid search.</strong> {{ form_error }}</div>
+{% endif %}
+{% if bridge_error %}
+<div class="banner banner-error">
+  <strong>{% if bridge_error_code == 'agent_unreachable' %}ATM agent unreachable.{% else %}Image transport failed.{% endif %}</strong>
+  {{ bridge_error }}
+</div>
+{% endif %}
+{% if unavailable %}
+<div class="banner banner-warn">
+  <strong>{{ not_available_text }}</strong>
+  The day folder or the requested source is no longer present on this ATM. This can happen after the ATM rotates its
+  image folder. It does not mean the portal lost a copy — the portal never keeps one.
+</div>
+{% endif %}
+
+<form method="get" action="{{ url_for('atm_images.atm_images', atm_id=atm.atm_id) }}" class="ej-filters" id="evidence-search">
+  <div class="fg">
+    <label for="img-day">ATM day</label>
+    <div class="fp-field">
+      <input id="img-day" name="day" type="text" class="flatpickr-date"
+             value="{{ day_value }}" data-max="{{ today_value }}"
+             placeholder="YYYY-MM-DD" autocomplete="off" required>
+      <i data-lucide="calendar"></i>
+    </div>
+  </div>
+  <div class="fg">
+    <label for="img-start">Window start (ATM local)</label>
+    <div class="fp-field">
+      <input id="img-start" name="start" type="text" class="flatpickr-time"
+             value="{{ start_value }}" placeholder="HH:MM:SS" autocomplete="off">
+      <i data-lucide="clock"></i>
+    </div>
+  </div>
+  <div class="fg">
+    <label for="img-end">Window end (ATM local)</label>
+    <div class="fp-field">
+      <input id="img-end" name="end" type="text" class="flatpickr-time"
+             value="{{ end_value }}" placeholder="HH:MM:SS" autocomplete="off">
+      <i data-lucide="clock"></i>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn btn-primary" type="submit"><i data-lucide="search" style="width:14px;height:14px"></i> Find evidence</button>
+    {% if searched %}<a class="btn btn-outline" href="{{ url_for('atm_images.atm_images', atm_id=atm.atm_id) }}">Clear</a>{% endif %}
+  </div>
+</form>
+<p class="img-preview-note">
+  Tip: open a transaction in EJ Journal and use its <strong>Images</strong> link. That uses the session's
+  card-inserted → card-returned window when the journal has both edges; otherwise it falls back to ±2 minutes around
+  the recorded time. Adjust the window when you have a better session interval. Only the last {{ max_days_back }} days
+  can be requested. Times are ATM local (EAT).
+</p>
+
+{% if result %}
+  {% if result.get('ambiguous') %}
+  <div class="banner banner-warn">
+    <strong>Ambiguous evidence.</strong>
+    More than one start or end anchor matched. Do not pick one image as the transaction's evidence; compare the adjacent
+    sessions and narrow the window.
+  </div>
+  {% endif %}
+
+  {% if is_ncr %}
+  <div class="ev-hero">
+    <div>
+      <h2>Day archive</h2>
+      <p>The NCR zip is the day container, not a transaction link. Open an archive, then pick the session whose time
+        matches the EJ session. The archive groups entries by their ATM-local session timestamp.</p>
+      <div class="ev-summary-line">
+        <span class="ev-chip">Day container</span>
+        <span><b>{{ result.get('candidate_count', 0) }}</b> archive{% if result.get('candidate_count', 0) != 1 %}s{% endif %}</span>
+        <span><b>{{ total_zip_images.value }}</b> image{% if total_zip_images.value != 1 %}s{% endif %}</span>
+        {% if has_window and result.get('session_start') %}<span>Window <b class="mono">{{ result.get('session_start') }} → {{ result.get('session_end') }}</b></span>{% endif %}
+      </div>
+    </div>
+    <div class="ev-hero-actions">
+      {% if result.get('caveat') %}
+      <details class="ev-details" style="border:0;margin:0;padding:0;max-width:420px">
+        <summary>How matching works</summary>
+        <div class="ev-details-body">{{ result.get('caveat') }}</div>
+      </details>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="ev-card">
+    <div class="ev-card-head">
+      <div>
+        <h2>Archives for this day</h2>
+        <div class="ev-card-sub">Entries are addressed by archive index, never by name.</div>
+      </div>
+    </div>
+    <div class="ev-card-body">
+      <div class="ev-evidence-grid">
+        {% for c in result.get('candidates', []) %}
+        <div class="ev-evidence-card is-anchor">
+          <div class="ev-evidence-head">
+            <span class="ev-cam"><i data-lucide="archive" style="width:12px;height:12px"></i> Day archive</span>
+            <span class="ev-role ev-role-start">NCR zip</span>
+          </div>
+          <div class="ev-evidence-time">{{ c.day or day_value }}</div>
+          <div class="ev-evidence-meta">
+            <span>{{ c.image_count }} image{% if c.image_count != 1 %}s{% endif %}</span>
+            <span>{{ c.size_label or ('{:,}'.format(c.size|int) + ' B') }}</span>
+            {% if c.last_write_time %}
+            <span>Modified {{ c.last_write_time[:16]|replace('T', ' ') }}</span>
+            {% endif %}
+          </div>
+          <div class="ev-evidence-name">{{ c.name_masked }}</div>
+          <div class="ev-evidence-actions">
+            {% if c.fetchable %}
+            <a class="btn btn-primary"
+               href="{{ url_for('atm_images.atm_image_zip', atm_id=atm.atm_id, day=day_value, zip_hmac=c.name_hmac) }}{% if searched and has_window %}&start={{ start_value }}&end={{ end_value }}{% endif %}">
+              <i data-lucide="archive" style="width:13px;height:13px"></i> Open archive
+            </a>
+            {% else %}
+            <span class="btn btn-outline" style="color:#94A3B8">Too large</span>
+            {% endif %}
+          </div>
+        </div>
+        {% else %}
+        <div class="ev-empty" style="grid-column:1/-1">
+          <strong>No day archive in this window.</strong>
+          <p>Try another day, or check that the ATM has not rotated its image folder.</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {% else %}
+  <div class="ev-hero">
+    <div>
+      <h2>Session evidence</h2>
+      <p>Images are ranked by capture time and event sequence, never by the card field in the filename.</p>
+      <div class="ev-summary-line">
+        {{ confidence_chip(result.get('confidence')) }}
+        {% if start_n %}<span><b>{{ start_n }}</b> at card insertion</span>{% endif %}
+        {% if during_n %}<span><b>{{ during_n }}</b> during the session</span>{% endif %}
+        {% if end_n %}<span><b>{{ end_n }}</b> at card return</span>{% endif %}
+        {% if near_n %}<span><b>{{ near_n }}</b> near the window</span>{% endif %}
+        {% if not start_n and not during_n and not end_n and not near_n %}<span>No image matched this window.</span>{% endif %}
+      </div>
+    </div>
+    <div class="ev-hero-actions">
+      {% if has_window and result.get('session_start') %}
+      <span class="ev-chip">Window {{ result.get('session_start') }} → {{ result.get('session_end') }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% set timeline = (result.get('candidates', []) | rejectattr('service') | sort(attribute='captured_at') | list) %}
+  {% if timeline %}
+  <div class="ev-card">
+    <div class="ev-card-head">
+      <div><h2>Session timeline</h2><div class="ev-card-sub">Capture times, ATM local</div></div>
+      <span class="ev-faint" style="font-size:11px">{{ timeline|length }} marker{% if timeline|length != 1 %}s{% endif %}</span>
+    </div>
+    <div class="ev-card-body" style="padding-top:4px">
+      <div class="ev-timeline">
+        {% for c in timeline %}
+        <div class="ev-timeline-mark {% if c.role == 'start' %}is-start{% elif c.role == 'end' %}is-end{% elif c.role == 'near_window' %}is-near{% endif %}">
+          <span class="ev-timeline-dot" aria-hidden="true"></span>
+          <div class="ev-timeline-time">{{ c.captured_at[11:19] if c.captured_at|length >= 19 else c.captured_at }}</div>
+          <div class="ev-timeline-label">CAM {{ c.camera if c.camera is not none else '—' }}{% if c.event %} · {{ c.event }}{% endif %}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if result.get('vendor') == 'NCR' and result.get('candidate_count') %}
+  <div class="banner banner-warn">
+    <strong>The zip is a day container.</strong>
+    Set the window to the session's card-inserted → card-returned interval, then open the archive. The archive ranks
+    entries by their ATM-local session time.
+  </div>
+  {% elif has_window and not result.get('start_anchor_count') and not result.get('end_anchor_count') and result.get('candidate_count') %}
+  <div class="banner banner-warn">
+    <strong>No start or end anchor is in this window.</strong>
+    The files below fall inside the interval, but none is close enough to a <code>CardInserted</code> or
+    <code>CardReturned</code> event to rank as an anchor. Set the window to the actual session — for example
+    <span class="mono">15:34:44 → 15:35:21</span> — or open the transaction's <strong>Images</strong> link and adjust from there.
+  </div>
+  {% endif %}
+
+  {% if result.get('caveat') %}
+  <details class="ev-caveat">
+    <summary style="cursor:pointer;font-weight:700;color:#334155">How matching works</summary>
+    <div style="margin-top:6px">{{ result.get('caveat') }}</div>
+    <div class="ev-faint" style="margin-top:4px;font-family:var(--ev-mono);font-size:10px">
+      card_field_used_for_link={{ result.get('card_field_used_for_link') }}
+      {% if result.get('directory_masked') %} · folder {{ result.get('directory_masked') }}{% endif %}
+    </div>
+  </details>
+  {% endif %}
+
+  {% macro candidate_card(c) %}
+  <div class="ev-evidence-card {% if c.role == 'start' or c.role == 'end' %}is-anchor{% endif %}">
+    <div class="ev-evidence-head">
+      <span class="ev-cam"><i data-lucide="camera" style="width:12px;height:12px"></i> CAM {{ c.camera if c.camera is not none else '—' }}</span>
+      {{ role_chip(c.role) }}
+    </div>
+    <div class="ev-evidence-time">{{ c.captured_at[11:19] if c.captured_at|length >= 19 else c.captured_at }}</div>
+    <div class="ev-evidence-meta">
+      <span>{{ c.event or c.kind }}</span>
+      <span>{{ c.size_label or ('{:,}'.format(c.size|int) + ' B') }}</span>
+      {% if c.kind == 'video' and c.clip_duration_s %}<span>{{ c.clip_duration_s }}s clip</span>{% endif %}
+    </div>
+    {% if c.clip_end %}<div class="ev-evidence-meta"><span>ends {{ c.clip_end[11:19] if c.clip_end|length >= 19 else c.clip_end }}</span></div>{% endif %}
+    <div class="ev-evidence-name" title="Masked evidence name">{{ c.name_masked }}</div>
+    <div class="ev-evidence-actions">
+      {% if c.fetchable %}
+      <a class="btn btn-primary"
+         href="{{ url_for('atm_images.atm_image_view', atm_id=atm.atm_id, day=day_value, name_hmac=c.name_hmac, kind=c.kind, start=start_value, end=end_value) }}">
+        <i data-lucide="{{ 'play' if c.kind == 'video' else 'eye' }}" style="width:13px;height:13px"></i>
+        {{ 'View clip' if c.kind == 'video' else 'View image' }}
+      </a>
+      {% else %}
+      <span class="btn btn-outline" style="color:#94A3B8">Too large</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endmacro %}
+
+  {% set start_items = result.get('candidates', []) | selectattr('role', 'equalto', 'start') | list %}
+  {% set during_items = result.get('candidates', []) | selectattr('role', 'equalto', 'in_window') | list %}
+  {% set end_items = result.get('candidates', []) | selectattr('role', 'equalto', 'end') | list %}
+  {% set near_items = result.get('candidates', []) | selectattr('role', 'equalto', 'near_window') | list %}
+  {% set service_items = result.get('candidates', []) | selectattr('role', 'equalto', 'service') | list %}
+
+  {% if start_items %}
+  <div class="ev-group">
+    <div class="ev-group-head"><h2>Card inserted</h2><span class="ev-group-count">{{ start_items|length }}</span></div>
+    <div class="ev-evidence-grid">{% for c in start_items %}{{ candidate_card(c) }}{% endfor %}</div>
+  </div>
+  {% endif %}
+  {% if during_items %}
+  <div class="ev-group">
+    <div class="ev-group-head"><h2>During the session</h2><span class="ev-group-count">{{ during_items|length }}</span></div>
+    <div class="ev-evidence-grid">{% for c in during_items %}{{ candidate_card(c) }}{% endfor %}</div>
+  </div>
+  {% endif %}
+  {% if end_items %}
+  <div class="ev-group">
+    <div class="ev-group-head"><h2>Card returned</h2><span class="ev-group-count">{{ end_items|length }}</span></div>
+    <div class="ev-evidence-grid">{% for c in end_items %}{{ candidate_card(c) }}{% endfor %}</div>
+  </div>
+  {% endif %}
+  {% if near_items %}
+  <details class="ev-caveat">
+    <summary style="cursor:pointer;font-weight:700;color:#334155">Near the session ({{ near_items|length }})</summary>
+    <div class="ev-evidence-grid" style="margin-top:10px">{% for c in near_items %}{{ candidate_card(c) }}{% endfor %}</div>
+  </details>
+  {% endif %}
+  {% if service_items %}
+  <details class="ev-caveat">
+    <summary style="cursor:pointer;font-weight:700;color:#334155">Service checks ({{ service_items|length }})</summary>
+    <div class="ev-evidence-grid" style="margin-top:10px">{% for c in service_items %}{{ candidate_card(c) }}{% endfor %}</div>
+  </details>
+  {% endif %}
+  {% endif %}
+{% elif searched and not unavailable and not bridge_error and not form_error %}
+  {{ empty_state('search-x', 'No result for this search', 'Check the ATM day and window. The ATM may have rotated the folder, or the session may be outside the requested interval.', url_for('atm_images.atm_images', atm_id=atm.atm_id), 'Clear search') }}
+{% endif %}
+
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script src="/static/flatpickr.min.js"></script>
+<script>
+(function () {
+  if (typeof flatpickr === 'undefined') return;
+
+  document.querySelectorAll('.flatpickr-date').forEach(function (el) {
+    flatpickr(el, {
+      dateFormat: 'Y-m-d',
+      maxDate: el.dataset.max || null,
+      allowInput: true,
+      disableMobile: true,
+      monthSelectorType: 'static'
+    });
+  });
+
+  document.querySelectorAll('.flatpickr-time').forEach(function (el) {
+    flatpickr(el, {
+      enableTime: true,
+      noCalendar: true,
+      time_24hr: true,
+      enableSeconds: true,
+      minuteIncrement: 1,
+      dateFormat: 'H:i:S',
+      allowInput: true,
+      disableMobile: true,
+      onReady: function (_, __, instance) {
+        var calendar = instance.calendarContainer;
+        if (calendar.querySelector('.fp-time-head')) return;
+
+        var head = document.createElement('div');
+        head.className = 'fp-time-head';
+        head.textContent = 'Time · 24-hour';
+        calendar.insertBefore(head, calendar.firstChild);
+
+        var foot = document.createElement('div');
+        foot.className = 'fp-time-foot';
+
+        var clear = document.createElement('button');
+        clear.type = 'button';
+        clear.textContent = 'Clear';
+        clear.addEventListener('click', function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          instance.clear();
+        });
+
+        var done = document.createElement('button');
+        done.type = 'button';
+        done.className = 'fp-time-done';
+        done.textContent = 'Done';
+        done.addEventListener('click', function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          instance.close();
+        });
+
+        foot.appendChild(clear);
+        foot.appendChild(done);
+        calendar.appendChild(foot);
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

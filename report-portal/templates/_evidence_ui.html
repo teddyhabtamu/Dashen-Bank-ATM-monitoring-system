@@ -1,0 +1,75 @@
+{# Shared presentation helpers for the EJ / evidence screens.
+
+   The goal is progressive disclosure: the page says what happened in plain
+   language, while the technical name stays available in a title or in the
+   "Technical details" section.  No helper here reads data or changes a
+   security decision. #}
+
+{% macro status_chip(status, label=None) -%}
+{% set key = (status or 'no data')|lower|replace(' ', '-') %}
+{% set names = {'ok': 'Healthy', 'stale': 'Stale', 'error': 'Parse error', 'no-data': 'No data'} %}
+{% set text = label or names.get(key, status or 'No data') %}
+<span class="ev-chip ev-status ev-status-{{ key }}" title="{{ text }}">
+  <span class="ev-dot" aria-hidden="true"></span>{{ text }}
+</span>
+{%- endmacro %}
+
+
+{% macro role_chip(role, label=None) -%}
+{% set keys = {'start': 'start', 'end': 'end', 'in_window': 'during', 'near_window': 'near', 'service': 'service', 'other': 'other'} %}
+{% set names = {'start': 'Card inserted', 'end': 'Card returned', 'in_window': 'During session', 'near_window': 'Near session', 'service': 'Service check', 'other': 'Other image'} %}
+{% set technical = {'start': 'Start anchor', 'end': 'End anchor', 'in_window': 'Within window', 'near_window': 'Near window', 'service': 'Service file', 'other': 'Other'} %}
+{% set text = label or names.get(role, role or 'Image') %}
+<span class="ev-role ev-role-{{ keys.get(role, 'other') }}" title="{{ technical.get(role, role or 'Image') }}">{{ text }}</span>
+{%- endmacro %}
+
+
+{% macro confidence_chip(confidence) -%}
+{% set key = (confidence or 'none')|lower %}
+{% set names = {'high': 'Strong match', 'medium': 'Possible match', 'low': 'Weak match', 'none': 'No match'} %}
+{% set classes = {'high': 'strong', 'medium': 'possible', 'low': 'weak', 'none': 'none'} %}
+{% set text = names.get(key, confidence or 'No match') %}
+<span class="ev-chip ev-confidence ev-confidence-{{ classes.get(key, 'none') }}" title="Match confidence: {{ text }}">{{ text }}</span>
+{%- endmacro %}
+
+
+{% macro kpi(label, value, sub=None, tone='') -%}
+<div class="ev-kpi{% if tone %} ev-kpi-{{ tone }}{% endif %}">
+  <div class="ev-kpi-value">{{ value }}</div>
+  <div class="ev-kpi-label">{{ label }}</div>
+  {% if sub %}<div class="ev-kpi-sub">{{ sub }}</div>{% endif %}
+</div>
+{%- endmacro %}
+
+
+{% macro empty_state(icon, title, body, primary_href=None, primary_label=None, secondary_href=None, secondary_label=None) -%}
+<div class="ev-empty">
+  <div class="ev-empty-icon"><i data-lucide="{{ icon }}"></i></div>
+  <strong>{{ title }}</strong>
+  <p>{{ body }}</p>
+  {% if (primary_href and primary_label) or (secondary_href and secondary_label) %}
+  <div class="ev-empty-actions">
+    {% if primary_href and primary_label %}<a class="btn btn-primary" href="{{ primary_href }}">{{ primary_label }}</a>{% endif %}
+    {% if secondary_href and secondary_label %}<a class="btn btn-outline" href="{{ secondary_href }}">{{ secondary_label }}</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{%- endmacro %}
+
+
+{% macro meta_item(label, value, mono=False) -%}
+<span class="ev-meta-item">
+  <small>{{ label }}</small>
+  <b{% if mono %} class="mono"{% endif %}>{{ value }}</b>
+</span>
+{%- endmacro %}
+
+
+{% macro warn_chips(warnings, limit=2) -%}
+{% if warnings %}
+  {% for w in warnings[:limit] %}<span class="warn-chip">{{ w }}</span>{% endfor %}
+  {% if warnings|length > limit %}<span class="warn-chip warn-chip-more">+{{ warnings|length - limit }} more</span>{% endif %}
+{% else %}
+  <span class="ev-faint">—</span>
+{% endif %}
+{%- endmacro %}

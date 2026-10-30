@@ -4,7 +4,8 @@ __pycache__/
 .git/
 node_modules/
 report-portal/
-config/
+config/*
+!config/status_map.json
 docs/
 *.md
 .DS_Store

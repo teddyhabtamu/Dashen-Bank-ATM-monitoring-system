@@ -1,0 +1,14 @@
+{
+  "_comment": "Tunable ATM status/fault codes. During UAT, the bank may report that a vendor uses different codes than assumed here. Edit ONLY the integer values; keys must stay. 'default' applies to all vendors unless a vendor-specific block overrides it. interpret_state() in zabbix_modules/status_rules.py reads this file.",
+  "default": {
+    "in_service": 1,
+    "out_of_service": 2,
+    "partial_service": 3,
+    "supervisor": 4,
+    "offline_net_link": 2,
+    "cash_jam_fault": 1,
+    "card_reader_fault": 2
+  },
+  "NCR": {},
+  "GRG": {}
+}

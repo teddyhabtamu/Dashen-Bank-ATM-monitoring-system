@@ -1,17 +1,58 @@
+# OPS WARNING: filebeat 7.x REFUSES to start unless this file is owned by
+# root. `git pull` (run as a human user) re-breaks ownership on every
+# update touching this file — always follow with:
+#   sudo chown root:root filebeat.yml && docker restart filebeat
+# (Outage signature 2026-10-13: container Restarting loop, log line
+# "must be owned by the user identifier (uid=0) or root".)
 filebeat.inputs:
   - type: log
     enabled: true
     paths:
-      - /var/log/atm-ej/*.log
+      # Only real pulled journals use this canonical name. Local demo/fixture
+      # files such as GRG-001.log must never reach the EJ index.
+      - /var/log/atm-ej/*_EJDATA.log
     fields:
       log_type: atm_ej
     fields_under_root: true
-    multiline.pattern: '^\d{4}-\d{2}-\d{2}'
+    multiline.pattern: '(\[020t\s*\*[^*]*\*\d{2}/\d{2}/\d{4}\*|^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'
     multiline.negate: true
     multiline.match: after
+    # NDC record split (proven live 2026-10-13, corrected same day): a NEW
+    # event starts ONLY at a full marker — [020t*SEQ*MM/DD/YYYY*HH:MM*.
+    # GRG's pipe/verbose journal starts every record with an ISO timestamp;
+    # without that alternative every GRG line glued into one giant event.
+    # Spaced/partial markers ([020t CARD ..., [020t *1177* supervisor key
+    # echoes) carry no date and MUST glue onto the running record, or the
+    # index fills with dateless fragments stamped ingest time (815 rows of
+    # which ~790 said nothing — seen live). The rule mirrors the pipeline's
+    # record grok by construction: every split event is grok-able, every
+    # grok-able marker splits. Non-NDC (pipe-delimited) lines pass through
+    # as single-line events, caught by the pipeline's legacy patterns.
+
+  # Real-ATM EJ collection: the 2 UAT test ATMs forward their Electronic Journal via
+  # syslog (UDP/TCP 514). filebeat parses each message and ships it through the same
+  # atm_ej_parser pipeline as the file-based path. Tune the parser for real NCR/GRG EJ
+  # formats during UAT Phase 0.
+  - type: syslog
+    enabled: true
+    protocol.udp:
+      host: "0.0.0.0:514"
+    fields:
+      log_type: atm_ej
+    fields_under_root: true
+
+  - type: syslog
+    enabled: true
+    protocol.tcp:
+      host: "0.0.0.0:514"
+    fields:
+      log_type: atm_ej
+    fields_under_root: true
 
 output.elasticsearch:
-  hosts: ["opensearch:9200"]
+  # ES_HOST comes from the compose environment (DATA_VM_IP); the default
+  # preserves the UAT-02 target so existing deploys behave identically.
+  hosts: ["${ES_HOST:-172.22.10.60:9200}"]
   index: "atm-ej-live-%{+yyyy.MM.dd}"
   pipeline: "atm_ej_parser"
 

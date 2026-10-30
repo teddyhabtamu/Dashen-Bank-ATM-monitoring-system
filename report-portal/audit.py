@@ -53,9 +53,12 @@ VENDOR_CONSTRAINTS = [
 ]
 
 
+
 SCHEMA_MIGRATIONS = [
     "ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45)",
     "ALTER TABLE atm_locations ADD COLUMN IF NOT EXISTS sim_port INTEGER",
+    "ALTER TABLE app_users ADD COLUMN IF NOT EXISTS email VARCHAR(255)",
+    "ALTER TABLE app_users ADD COLUMN IF NOT EXISTS must_change_pw BOOLEAN NOT NULL DEFAULT FALSE",
 ]
 
 # fault_type_map: raw vendor fault codes -> standard fault types.
@@ -106,11 +109,17 @@ def init_audit_schema():
                 logger.info('Schema init skipped (another container holds the lock)')
                 return
             try:
+                # Each statement runs in its own savepoint: on a fresh deploy,
+                # tables owned by other services (e.g. atm_anomalies) may not
+                # exist yet — skip those statements instead of aborting the
+                # whole init (which would leave app_users uncreated and break
+                # login until the next restart).
+                from txn_sources import POLICY_DDL
                 for q in [
                     AUDIT_TABLE_SQL, USERS_TABLE_SQL,
                 ] + USERS_MIGRATIONS + SCHEMA_MIGRATIONS + [
                     FAULT_TYPE_MAP_SQL,
-                ] + VENDOR_CONSTRAINTS + [
+                ] + VENDOR_CONSTRAINTS + POLICY_DDL + [
                     "CREATE INDEX IF NOT EXISTS idx_audit_performed ON audit_log(performed_at DESC)",
                     "CREATE INDEX IF NOT EXISTS idx_audit_username  ON audit_log(username)",
                     "CREATE INDEX IF NOT EXISTS idx_audit_action    ON audit_log(action)",
@@ -126,7 +135,13 @@ def init_audit_schema():
                     "CREATE INDEX IF NOT EXISTS idx_loc_terminal         ON atm_locations(terminal_id)",
                     "CREATE INDEX IF NOT EXISTS idx_anomaly_severity     ON atm_anomalies(severity, detected_at DESC)",
                 ]:
-                    cur.execute(q)
+                    try:
+                        cur.execute("SAVEPOINT sp_init")
+                        cur.execute(q)
+                        cur.execute("RELEASE SAVEPOINT sp_init")
+                    except Exception as e:
+                        cur.execute("ROLLBACK TO SAVEPOINT sp_init")
+                        logger.warning('Schema init skipped a statement: %.80s (%s)', q, e)
                 conn.commit()
             finally:
                 cur.execute("SELECT pg_advisory_unlock(999888777)")

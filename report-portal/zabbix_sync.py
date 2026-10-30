@@ -1,0 +1,588 @@
+"""
+zabbix_sync.py — shared Zabbix host-sync logic for the ATM Monitoring System.
+
+Extracted from scripts/sync_atms_to_zabbix.py so the portal can create /
+disable hosts server-side (no SSH, no CSV refresh). All entry points are
+best-effort: they return a summary dict and never raise — a Zabbix outage
+must never fail a portal save.
+
+Env (already in docker-compose for report-portal):
+  ZABBIX_URL / ZBX_URL, ZABBIX_USER / ZBX_USER, ZABBIX_PASS / ZBX_PASS
+"""
+import logging
+import os
+
+import requests
+
+logger = logging.getLogger(__name__)
+
+TEMPLATE_NCR_NAME = "Dashen Bank ATM Hardware"
+TEMPLATE_GRG_NAME = "Dashen Bank ATM Hardware - GRG"
+TEMPLATE_GRG_XFS_NAME = "Dashen Bank ATM Hardware - GRG XFS"
+# NCR hardware facts come from WMI through the Zabbix agent, not from SNMP:
+# the NCR SNMP OIDs are unmapped simulator-era roots (see admin.build_hardware).
+# So an NCR host needs this template AND an agent interface, or its parts items
+# sit unsupported forever — proven on the pilot host, which needed the agent
+# row added by hand before Latest data flowed. GRG prefers XFS, falling back to SNMP.
+TEMPLATE_WMI_NAME = "Dashen Bank ATM WMI Parts"
+AGENT_PORT = "10050"
+SNMP_PORT = "161"
+
+TIMEOUT = int(os.environ.get("ZABBIX_SYNC_TIMEOUT", "8"))
+MAX_BATCH = int(os.environ.get("ZABBIX_SYNC_MAX_BATCH", "200"))
+
+
+def _cfg():
+    url = os.environ.get("ZABBIX_URL") or os.environ.get("ZBX_URL") or \
+        "http://zabbix-web:8080/api_jsonrpc.php"
+    user = os.environ.get("ZABBIX_USER") or os.environ.get("ZBX_USER") or "Admin"
+    pwd = os.environ.get("ZABBIX_PASS") or os.environ.get("ZBX_PASS") or ""
+    return url, user, pwd
+
+
+class _Client:
+    def __init__(self):
+        self.url, self.user, self.pwd = _cfg()
+        self.token = None
+        self.session = requests.Session()
+        self.last_error = ""
+
+    def call(self, method, params):
+        if method != "user.login" and not self.token:
+            self.login()
+            if not self.token:
+                return None
+        try:
+            r = self.session.post(self.url, json={
+                "jsonrpc": "2.0", "method": method,
+                "params": params, "auth": self.token, "id": 1,
+            }, timeout=TIMEOUT)
+            data = r.json()
+            if "error" in data:
+                self.last_error = str(data["error"].get("data") or data["error"].get("message") or data["error"])
+                logger.warning("Zabbix API [%s]: %s", method, self.last_error)
+                return None
+            self.last_error = ""
+            return data.get("result")
+        except Exception as e:
+            self.last_error = str(e)
+            logger.warning("Zabbix API [%s] failed: %s", method, e)
+            return None
+
+    def login(self):
+        try:
+            r = self.session.post(self.url, json={
+                "jsonrpc": "2.0", "method": "user.login",
+                "params": {"username": self.user, "password": self.pwd}, "id": 1,
+            }, timeout=TIMEOUT)
+            self.token = r.json().get("result")
+        except Exception as e:
+            logger.warning("Zabbix login failed: %s", e)
+            self.token = None
+        return self.token
+
+
+def _template_ids(z):
+    out = {}
+    for name in (TEMPLATE_NCR_NAME, TEMPLATE_GRG_XFS_NAME, TEMPLATE_GRG_NAME, TEMPLATE_WMI_NAME):
+        res = z.call("template.get", {"output": ["templateid"], "filter": {"name": [name]}})
+        out[name] = res[0]["templateid"] if res else None
+    return out
+
+
+def _group_id(z, name, cache, create=True):
+    """Host group id, creating it when missing. create=False is read-only and
+    returns None instead of writing — that is what makes plan_hosts() a true
+    dry run rather than a dry run that quietly creates groups."""
+    if name in cache:
+        return cache[name]
+    res = z.call("hostgroup.get", {"output": ["groupid"], "filter": {"name": [name]}})
+    if res:
+        cache[name] = res[0]["groupid"]
+        return cache[name]
+    gid = None
+    if create:
+        res = z.call("hostgroup.create", {"name": name})
+        gid = res["groupids"][0] if res else None
+    cache[name] = gid
+    return gid
+
+
+def _new_summary():
+    return {"created": 0, "reenabled": 0, "macros_fixed": 0, "updated": 0,
+            "skipped": 0, "no_ip": 0, "failed": 0, "details": []}
+
+
+HOST_STATE_CHUNK = int(os.environ.get("ZABBIX_HOST_STATE_CHUNK", "250"))
+
+
+HOST_STATE_SELECT = {
+    # type/port/main are needed to tell an SNMP interface from an agent one
+    # when reconciling.
+    "selectInterfaces": ["interfaceid", "ip", "dns", "useip",
+                         "port", "type", "main", "details"],
+    "selectMacros": ["macro", "value"],
+    "selectParentTemplates": ["templateid"],
+    "selectGroups": ["groupid"],
+}
+
+
+def _host_states(z, hosts, chunk=None):
+    """Zabbix state for many hosts in a handful of calls, keyed by technical name.
+
+    _build_plans() asked host.get once per ATM. That was invisible at three
+    ATMs and became the fleet report's bottleneck: the verify sweep had already
+    been batched (see verify._zabbix_snapshot, which documents the same mistake
+    being fixed there), but the provisioning dry run runs after it and
+    reintroduced it — 1,300 ATMs meant 1,300 serial round-trips *on top of* the
+    sweep that had just been made cheap.
+
+    Host.get accepts an array in `filter`, so this is the same shape as the
+    verify path. Chunked so the request stays bounded at fleet scale.
+
+    Returns (states, ok). ok is False when any chunk could not be read: the
+    caller must NOT interpret that as "these hosts do not exist", or a failed
+    read plans a create for every host in the fleet. _Client.call() signals an
+    API error by returning None, which is easy to fold into an empty result by
+    accident - that mistake made the fleet report claim ATM-TEST-GRG needed a
+    host created while verify, reading the same Zabbix, called it provisioned.
+    """
+    out = {}
+    wanted = [h for h in (hosts or []) if h]
+    if not wanted:
+        return out, True
+    step = chunk or HOST_STATE_CHUNK
+    ok = True
+    for i in range(0, len(wanted), step):
+        part = wanted[i:i + step]
+        try:
+            res = z.call("host.get", {
+                # `host` is the TECHNICAL name - the one that equals atm_id, and
+                # the one the filter matches on. It MUST be in output: the
+                # results are keyed by it below, and leaving it out made the key
+                # silently fall back to `name` (the VISIBLE name, e.g. "4 Kilo
+                # ATM"), so every lookup by atm_id missed and the plan reported
+                # "create host" for hosts that already existed. verify.py's
+                # snapshot documents the same trap from the other direction.
+                "output": ["hostid", "host", "status", "name"],
+                "filter": {"host": part},
+                **HOST_STATE_SELECT})
+        except Exception as e:
+            logger.warning("host.get batch failed (%d hosts): %s", len(part), e)
+            ok = False
+            continue
+        if res is None:
+            logger.warning("host.get batch returned no result (%d hosts): %s",
+                           len(part), getattr(z, 'last_error', '') or 'no error text')
+            ok = False
+            continue
+        for h in res:
+            key = (h.get("host") or "").strip()
+            if not key:
+                # Only reachable if `host` is dropped from output above. Say so
+                # loudly rather than keying by the visible name, which is what
+                # made every existing host look absent.
+                logger.warning('host.get returned no technical name for %r; '
+                               'this host will look unprovisioned',
+                               h.get('name'))
+                key = (h.get("name") or "").strip()
+            if key:
+                out[key] = h
+    return out, ok
+
+
+def _agent_interface(ip):
+    """Zabbix agent interface. WMI items are agent items: without this they
+    never collect, which is what made the pilot host need a hand-added row."""
+    return {"type": 1, "main": 1, "useip": 1, "ip": ip, "dns": "",
+            "port": AGENT_PORT}
+
+
+def _snmp_interface(ip, community, version):
+    return {"type": 2, "main": 1, "useip": 1, "ip": ip, "dns": "",
+            "port": SNMP_PORT,
+            "details": {"version": version, "bulk": 0, "community": community}}
+
+
+def _templates_for(vendor, tids):
+    """Template ids an ATM of this vendor must be linked to. NCR carries the
+    WMI Parts template too; GRG prefers XFS and falls back to SNMP."""
+    if vendor == "NCR":
+        names = [TEMPLATE_NCR_NAME]
+    elif vendor == "GRG":
+        names = [TEMPLATE_GRG_XFS_NAME if tids.get(TEMPLATE_GRG_XFS_NAME)
+                 else TEMPLATE_GRG_NAME]
+    else:
+        names = []
+    ids = [tids.get(n) for n in names]
+    if vendor == "NCR" and tids.get(TEMPLATE_WMI_NAME):
+        ids.append(tids.get(TEMPLATE_WMI_NAME))
+    return [i for i in ids if i]
+
+
+def _plan_update(a, cur, tids, groups, create_groups):
+    """Reconciliation plan for an EXISTING host. Additive only: the portal
+    links/adds what it owns and never unlinks templates or drops groups a human
+    may have added. Returns (params_or_None, changed_labels)."""
+    upd = {"hostid": cur["hostid"]}
+    changed = []
+    vendor = (a.get("vendor") or "").strip()
+    if str(cur.get("status")) == "1":
+        upd["status"] = 0
+        changed.append("re-enabled")
+    want_name = (a.get("atm_name") or "").strip() or (a.get("atm_id") or "").strip()
+    if (cur.get("name") or "") != want_name:
+        upd["name"] = want_name
+        changed.append("visible name")
+    want_community = (a.get("snmp_community") or "").strip() or "dashen_sim"
+    try:
+        want_version = int(a.get("snmp_version") or "2")
+    except (ValueError, TypeError):
+        want_version = 2
+    ifaces = cur.get("interfaces") or []
+    snmp = next((i for i in ifaces if str(i.get("type")) == "2"), None)
+    has_agent = any(str(i.get("type")) == "1" for i in ifaces)
+    if vendor == "NCR" and not has_agent:
+        # Additive: keep every existing interface exactly as it is and append
+        # the agent row, so we never rewrite a field a human tuned by hand.
+        upd["interfaces"] = [{"interfaceid": i["interfaceid"], "type": i.get("type", "2"),
+                              "main": i.get("main", "1"), "useip": i.get("useip", "1"),
+                              "ip": i.get("ip"), "dns": i.get("dns", ""),
+                              "port": i.get("port", SNMP_PORT),
+                              **({"details": i.get("details")} if i.get("details") else {})}
+                             for i in ifaces if i.get("interfaceid")] + \
+                            [_agent_interface((a.get("ip_address") or "").strip())]
+        changed.append("agent interface")
+    if snmp:
+        det = snmp.get("details") or {}
+        if (snmp.get("ip") != (a.get("ip_address") or "").strip()
+                or det.get("community") != want_community
+                or str(det.get("version")) != str(want_version)):
+            if "interfaces" not in upd:   # do not clobber an agent-interface append
+                # Always an array: Zabbix documents interfaces as a list, and
+                # now that agent rows can be appended the two branches would
+                # otherwise disagree on the payload shape.
+                upd["interfaces"] = [{
+                    "interfaceid": snmp["interfaceid"],
+                    "ip": (a.get("ip_address") or "").strip(),
+                    "details": {"version": want_version, "bulk": 0,
+                                "community": want_community}}]
+            else:
+                for i in upd["interfaces"]:
+                    if i.get("interfaceid") == snmp["interfaceid"]:
+                        i["ip"] = (a.get("ip_address") or "").strip()
+                        i["details"] = {"version": want_version, "bulk": 0,
+                                        "community": want_community}
+            changed.append("interface/community")
+    have_macros = {m.get("macro"): m.get("value") for m in (cur.get("macros") or [])}
+    if have_macros.get("{$ATM_VENDOR}") != vendor:
+        upd["macros"] = [{"macro": "{$ATM_VENDOR}", "value": vendor}]
+        changed.append("vendor macro")
+    have_tids = {t.get("templateid")
+                 for t in (cur.get("parentTemplates") or []) if t.get("templateid")}
+    missing_tids = [t for t in _templates_for(vendor, tids) if t not in have_tids]
+    if missing_tids:
+        # host.update REPLACES the template set — proven on UAT: sending only
+        # the missing WMI template silently unlinked "Dashen Bank ATM Hardware".
+        # Send the union so templates a human linked are preserved. (Groups
+        # already do this; interfaces echo their rows back for the same reason.)
+        ordered = [t for t in (list(have_tids) + missing_tids)]
+        upd["templates"] = [{"templateid": t} for t in ordered]
+        changed.append("vendor template" if len(missing_tids) == 1
+                       else "vendor + WMI templates")
+    district = (a.get("district") or "").strip() or "UNKNOWN"
+    dgroup = _group_id(_CLIENT[0], f"ATM-{district}", groups, create=create_groups)
+    want_groups = {g for g in [groups.get("ATMs"),
+                               groups.get("ATM-NCR") if vendor == "NCR"
+                               else groups.get("ATM-GRG") if vendor == "GRG" else None,
+                               dgroup] if g}
+    have_groups = {g.get("groupid") for g in (cur.get("groups") or []) if g.get("groupid")}
+    if want_groups and not want_groups <= have_groups:
+        upd["groups"] = [{"groupid": g} for g in (have_groups | want_groups)]
+        changed.append("groups")
+    return (upd if changed else None), changed
+
+
+def _create_params(a, tids, groups, create_groups=True):
+    """host.create payload for a NEW host — byte-for-byte the shape the portal
+    has always sent. create_groups=False (dry run) never creates a district
+    group; it is reported in pending_groups instead. Returns
+    (params, error_or_None, pending_groups)."""
+    host = (a.get("atm_id") or "").strip()
+    ip = (a.get("ip_address") or "").strip()
+    vendor = (a.get("vendor") or "").strip()
+    want_tids = _templates_for(vendor, tids)
+    if not want_tids:
+        return None, f"skipped: unknown vendor '{vendor}'", []
+    district = (a.get("district") or "").strip() or "UNKNOWN"
+    pending = []
+    dgroup = _group_id(_CLIENT[0], f"ATM-{district}", groups, create=create_groups)
+    if dgroup is None:
+        pending.append(f"ATM-{district}")
+    community = (a.get("snmp_community") or "").strip() or "dashen_sim"
+    try:
+        version = int((a.get("snmp_version") or "2"))
+    except (ValueError, TypeError):
+        version = 2
+    params = {
+        "host": host,
+        "name": (a.get("atm_name") or "").strip() or host,
+        "templates": [{"templateid": tid} for tid in want_tids],
+        "groups": [{"groupid": g} for g in
+                   [groups.get("ATMs"),
+                    groups.get("ATM-NCR") if vendor == "NCR" else groups.get("ATM-GRG"),
+                    dgroup] if g],
+        # NCR carries an SNMP interface AND an agent interface: the WMI parts
+        # items ride the agent (10050), the legacy SNMP items ride 161.
+        "interfaces": ([_snmp_interface(ip, community, version)]
+                       + ([_agent_interface(ip)] if vendor == "NCR" else [])),
+        "macros": [{"macro": "{$ATM_VENDOR}", "value": vendor}],
+        "status": 0,
+    }
+    return params, None, pending
+
+
+# The planners need the API client for host-group lookups. Holder instead of
+# threading a client through every signature keeps the payloads testable.
+_CLIENT = [None]
+
+
+def _build_plans(atm_dicts, create_groups=True, max_batch=MAX_BATCH):
+    """Read Zabbix state and decide, per ATM, what must change. Only reads,
+    plus hostgroup.create when create_groups=True. Returns (summary, plans,
+    client); every plan is {atm_id, action, params, changes, error} with
+    action in create|update|skipped|no_ip|blank. One calculation feeds both the
+    dry run and the real run, so the two can never disagree."""
+    summary = _new_summary()
+    plans = []
+    rows = (atm_dicts or [])[:max_batch]
+    if not rows:
+        return summary, plans, None
+    # Truncation used to be silent. A caller passing 1,300 ATMs got 200 plans
+    # and a summary that counted only those 200, so the fleet report said
+    # "3 ATMs checked" on a fleet of 1,300 - wrong rather than merely partial.
+    # The cap is real and deliberate (Zabbix request size), so it stays; what
+    # changes is that the caller can now see it happened.
+    truncated = len(atm_dicts or []) - len(rows)
+    if truncated > 0:
+        logger.warning("host planning capped at %d of %d ATMs; %d not planned",
+                       len(rows), len(atm_dicts or []), truncated)
+    try:
+        z = _Client()
+        _CLIENT[0] = z
+        if not z.login():
+            summary["failed"] = len(rows)
+            summary["details"] = [{"atm_id": r.get("atm_id"), "error": "Zabbix login failed"}
+                                  for r in rows]
+            return summary, plans, z
+        tids = _template_ids(z)
+        if (not tids.get(TEMPLATE_NCR_NAME) and not tids.get(TEMPLATE_GRG_XFS_NAME)
+                and not tids.get(TEMPLATE_GRG_NAME)):
+            summary["failed"] = len(rows)
+            summary["details"] = [{"atm_id": r.get("atm_id"), "error": "ATM templates not found in Zabbix"}
+                                  for r in rows]
+            return summary, plans, z
+        groups = {}
+        for gname in ("ATMs", "ATM-NCR", "ATM-GRG"):
+            _group_id(z, gname, groups, create=create_groups)
+
+        # One batched read for every host in the batch, instead of one host.get
+        # per ATM inside the loop. The per-ATM version made the fleet report
+        # scale linearly in serial round-trips, which is what made "Recompute
+        # now" feel hung on a fleet of three and would have taken minutes at
+        # 1,300 - see _host_states().
+        known, read_ok = _host_states(
+            z, [(a.get("atm_id") or "").strip() for a in rows])
+        if not read_ok:
+            # Do not plan against a read we know failed: an absent host means
+            # "create", so guessing here would report the whole fleet as
+            # unprovisioned and, on a real sync, attempt duplicate creates.
+            summary["failed"] = len(rows)
+            summary["details"] = [
+                {"atm_id": r.get("atm_id"),
+                 "error": "Could not read host state from Zabbix"}
+                for r in rows]
+            return summary, plans, _CLIENT[0]
+
+        for a in rows:
+            host = (a.get("atm_id") or "").strip()
+            if not host:
+                plans.append({"atm_id": host, "action": "blank", "params": None,
+                              "changes": [], "error": None, "pending_groups": []})
+                continue
+            if not (a.get("ip_address") or "").strip():
+                plans.append({"atm_id": host, "action": "no_ip", "params": None,
+                              "changes": [], "error": "skipped: no IP address", "pending_groups": []})
+                continue
+            cur = known.get(host)
+            if cur:
+                upd, changed = _plan_update(a, cur, tids, groups, create_groups)
+                if changed:
+                    plans.append({"atm_id": host, "action": "update", "params": upd,
+                                  "changes": changed, "error": None})
+                else:
+                    plans.append({"atm_id": host, "action": "skipped", "params": None,
+                                  "changes": [], "error": None, "pending_groups": []})
+                continue
+            params, err, pending = _create_params(a, tids, groups, create_groups)
+            if err:
+                plans.append({"atm_id": host, "action": "skipped", "params": None,
+                              "changes": [], "error": err})
+                continue
+            plans.append({"atm_id": host, "action": "create", "params": params,
+                          "changes": ["host"], "error": None, "pending_groups": pending})
+    except Exception as e:
+        logger.warning("host planning aborted: %s", e)
+    return summary, plans, _CLIENT[0]
+
+
+def _summarise(plans):
+    """Planned-outcome summary (what a dry run reports)."""
+    summary = _new_summary()
+    for p in plans:
+        act = p["action"]
+        if act == "create":
+            summary["created"] += 1
+        elif act == "update":
+            summary["updated"] += 1
+        elif act == "no_ip":
+            summary["no_ip"] += 1
+            summary["details"].append({"atm_id": p["atm_id"], "error": p["error"]})
+        elif act in ("skipped", "blank"):
+            summary["skipped"] += 1
+            if p["error"]:
+                summary["details"].append({"atm_id": p["atm_id"], "error": p["error"]})
+    return summary
+
+
+def plan_hosts(atm_dicts, max_batch=MAX_BATCH):
+    """DRY RUN. What would change in Zabbix for these ATMs, changing nothing.
+    Returns (summary, plans) — the summary counts would-be outcomes.
+
+    max_batch is explicit so a fleet-wide caller can raise the cap rather than
+    silently receiving a 200-row slice of a 1,300-row fleet."""
+    summary, plans, _z = _build_plans(atm_dicts, create_groups=False,
+                                      max_batch=max_batch)
+    if not plans and summary["failed"]:
+        return summary, plans
+    return _summarise(plans), plans
+
+
+def _sync(atm_dicts):
+    """Plan, then apply. Returns (summary, applied) where applied[i] is the
+    plan plus `applied` (bool) and `error` (str) so a caller can report what
+    actually happened per ATM, not just totals."""
+    summary = _new_summary()
+    rows = (atm_dicts or [])[:MAX_BATCH]
+    if not rows:
+        return summary, []
+    planned, plans, z = _build_plans(atm_dicts, create_groups=True)
+    if not plans and planned["failed"]:
+        return planned, []
+    applied = []
+    try:
+        if z is None or not z.login():
+            summary["failed"] = len(rows)
+            summary["details"] = [{"atm_id": r.get("atm_id"), "error": "Zabbix login failed"}
+                                  for r in rows]
+            return summary, applied
+        for p in plans:
+            act, host = p["action"], p["atm_id"]
+            rec = {"atm_id": host, "action": act, "changes": p.get("changes") or [],
+                   "pending_groups": p.get("pending_groups") or [], "applied": False,
+                   "error": p.get("error") or ""}
+            if act == "no_ip":
+                summary["no_ip"] += 1
+                summary["details"].append({"atm_id": host, "error": rec["error"]})
+                applied.append(rec)
+                continue
+            if act in ("skipped", "blank"):
+                summary["skipped"] += 1
+                if rec["error"]:
+                    summary["details"].append({"atm_id": host, "error": rec["error"]})
+                applied.append(rec)
+                continue
+            if act == "create":
+                if z.call("host.create", p["params"]):
+                    summary["created"] += 1
+                    rec["applied"] = True
+                else:
+                    summary["failed"] += 1
+                    rec["error"] = z.last_error or "host.create failed"
+                    summary["details"].append({"atm_id": host, "error": rec["error"]})
+                applied.append(rec)
+                continue
+            if z.call("host.update", p["params"]):
+                rec["applied"] = True
+                if "re-enabled" in p["changes"]:
+                    summary["reenabled"] += 1
+                else:
+                    summary["updated"] += 1
+            else:
+                summary["failed"] += 1
+                rec["error"] = (z.last_error or "host.update failed") + \
+                    f" (wanted: {', '.join(p['changes'])})"
+                summary["details"].append({"atm_id": host, "error": rec["error"]})
+            applied.append(rec)
+    except Exception as e:
+        logger.warning("sync_hosts aborted: %s", e)
+        summary["failed"] += (len(rows) - summary["created"] - summary["reenabled"]
+                              - summary["macros_fixed"] - summary["updated"]
+                              - summary["skipped"] - summary["no_ip"])
+    return summary, applied
+
+
+def sync_hosts(atm_dicts):
+    """Create missing Zabbix hosts; re-enable ones disabled by portal delete.
+    Never raises. Same summary keys as before the plan/apply split."""
+    return _sync(atm_dicts)[0]
+
+
+def sync_hosts_detailed(atm_dicts):
+    """Same as sync_hosts but also returns the per-ATM outcome, for callers
+    that must show what happened (onboarding wizard, repair report)."""
+    return _sync(atm_dicts)
+
+
+def disable_hosts(atm_ids):
+    """Disable (not delete) Zabbix hosts so history is preserved. Never raises."""
+    summary = {"disabled": 0, "skipped": 0, "failed": 0, "details": []}
+    ids = [i.strip() for i in (atm_ids or []) if (i or "").strip()][:MAX_BATCH]
+    if not ids:
+        return summary
+    try:
+        z = _Client()
+        if not z.login():
+            summary["failed"] = len(ids)
+            return summary
+        for host in ids:
+            existing = z.call("host.get", {"output": ["hostid"], "filter": {"host": [host]}})
+            if not existing:
+                summary["skipped"] += 1
+                continue
+            res = z.call("host.update", {"hostid": existing[0]["hostid"], "status": 1})
+            if res:
+                summary["disabled"] += 1
+            else:
+                summary["failed"] += 1
+                summary["details"].append({"atm_id": host, "error": "host.update failed"})
+    except Exception as e:
+        logger.warning("disable_hosts aborted: %s", e)
+    return summary
+
+
+def host_exists_map(atm_ids):
+    """Return {atm_id: bool} for UI badges. Never raises."""
+    out = {i: False for i in (atm_ids or [])}
+    if not out:
+        return out
+    try:
+        z = _Client()
+        if not z.login():
+            return out
+        res = z.call("host.get", {"output": ["host"], "filter": {"host": list(out)}})
+        for h in res or []:
+            out[h["host"]] = True
+    except Exception as e:
+        logger.warning("host_exists_map failed: %s", e)
+    return out

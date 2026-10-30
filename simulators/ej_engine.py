@@ -7,6 +7,7 @@ Writes Electronic Journal logs for EVERY ATM in `atm_locations` to
 newly registered ATM automatically gets EJ history for the EJ Search feature.
 """
 import os
+import sys
 import time
 import random
 import threading
@@ -121,6 +122,9 @@ def run_atm(atm):
 
 
 def main():
+    if os.environ.get('ENABLE_SIMULATORS', 'false').lower() not in ('1', 'true', 'yes', 'on'):
+        print("ENABLE_SIMULATORS is not set — refusing to write simulator EJ logs. Exiting.")
+        sys.exit(0)
     registry = {}
     while True:
         try:

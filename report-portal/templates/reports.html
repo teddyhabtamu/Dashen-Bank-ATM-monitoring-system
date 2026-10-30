@@ -1,0 +1,616 @@
+{% extends "base.html" %}
+{% block title %}Reports — ATM Monitoring{% endblock %}
+{% block extra_style %}
+/* ── MAIN ── */
+.main-container { padding: 20px 36px 48px; }
+
+/* ── HERO BANNER ── */
+.hero-report {
+  background: var(--dashen-navy);
+  border-radius: var(--radius);
+  padding: 30px 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow-xl);
+  margin-bottom: 28px;
+  gap: 28px; flex-wrap: wrap;
+  position: relative; z-index: 5; overflow: visible;
+}
+.hero-content { display: flex; align-items: center; gap: 20px; color: #fff; position: relative; z-index: 1; }
+.hero-icon {
+  width: 54px; height: 54px; border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--dashen-gold); flex-shrink: 0;
+}
+.hero-icon i { width: 24px; height: 24px; }
+.hero-title h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; letter-spacing: -0.3px; }
+.hero-title p { font-size: 13px; color: rgba(255,255,255,0.55); font-weight: 400; line-height: 1.5; max-width: 420px; }
+.hero-actions { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; position: relative; z-index: 1; }
+.hero-actions .form-group label { color: rgba(255,255,255,0.5); font-size: 10px; }
+.hero-actions .btn-gold { padding: 10px 20px; font-size: 13px; border: none; font-weight: 600; }
+.hero-actions .btn-white {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.15);
+  backdrop-filter: blur(4px);
+}
+.hero-actions .btn-white:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.25); }
+
+/* ── SHARED REPORTING PERIOD ── */
+.range-bar { background:#fff; border:1px solid var(--border-light); border-radius:var(--radius); box-shadow:var(--shadow-sm); padding:18px 22px; margin-bottom:20px; display:flex; gap:18px; align-items:flex-end; flex-wrap:wrap; position:relative; z-index:6; }
+.range-copy { flex:1; min-width:220px; }
+.range-title { font-size:13px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:8px; }
+.range-title i { width:16px; height:16px; color:var(--dashen-navy); }
+.range-sub { font-size:11px; color:var(--text-tertiary); margin-top:4px; line-height:1.5; }
+.range-controls { display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; }
+.range-field { display:flex; flex-direction:column; gap:5px; }
+.range-field label { font-size:10px; font-weight:600; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.7px; }
+.range-field input { width:150px; padding:9px 10px; border:1px solid var(--border); border-radius:var(--radius-xs); font-size:12px; font-family:inherit; color:var(--text-primary); background:#fff; cursor:pointer; }
+.range-field input:focus { outline:none; border-color:var(--dashen-navy); box-shadow:0 0 0 3px rgba(1,33,105,.06); }
+.range-sep { font-size:12px; color:var(--text-tertiary); padding-bottom:10px; }
+.range-presets { display:flex; gap:6px; flex-wrap:wrap; padding-bottom:2px; }
+.range-chip { background:#F1F5F9; border:1px solid transparent; color:var(--text-secondary); font-size:11px; font-weight:600; padding:7px 10px; border-radius:100px; cursor:pointer; font-family:inherit; }
+.range-chip:hover { background:#EEF2FF; color:var(--dashen-navy); }
+.range-label { width:100%; font-size:11px; font-weight:600; color:var(--dashen-navy); margin-top:4px; }
+.range-error { width:100%; display:none; font-size:11px; color:#DC2626; font-weight:600; }
+.range-error.show { display:block; }
+@media(max-width:768px){ .range-bar{padding:14px 16px;gap:12px} .range-controls{width:100%} .range-field{flex:1} .range-field input{width:100%} .range-presets{width:100%} .range-chip{flex:1;text-align:center} }
+
+/* ── SECTION TITLE ── */
+.section-title {
+  font-size: 13px; font-weight: 700; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 0.8px;
+  margin-bottom: 18px; display: flex; align-items: center; gap: 10px;
+}
+.section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* ── REPORT CARDS ── */
+.reports-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 22px; }
+.report-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
+  display: flex; flex-direction: column;
+  transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+  overflow: visible; position: relative; z-index: 1;
+}
+.report-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: rgba(39,50,116,0.12); z-index: 10; }
+.card-accent {
+  height: 3px; width: 100%;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--dashen-navy); opacity: 0.8;
+  transition: background 0.3s ease, opacity 0.3s ease;
+}
+.report-card:hover .card-accent { background: var(--dashen-gold); opacity: 1; }
+.card-content { padding: 24px 26px; flex: 1; display: flex; flex-direction: column; }
+.card-header { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
+.card-icon {
+  width: 42px; height: 42px; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(1,33,105,0.05); color: var(--dashen-navy);
+  flex-shrink: 0;
+  transition: background var(--transition), color var(--transition);
+}
+.report-card:hover .card-icon { background: rgba(39,50,116,0.08); color: var(--dashen-blue); }
+.card-icon i { width: 18px; height: 18px; }
+.card-header h3 { font-size: 15px; font-weight: 700; color: var(--text-primary); margin: 0; letter-spacing: -0.1px; }
+
+/* ── CUSTOM SELECT (portal white variant) ── */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: auto; }
+.form-group.full { grid-column: 1 / -1; }
+.form-group label { font-size: 10px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.7px; }
+.custom-select { position: relative; font-family: inherit; width: 100%; }
+.custom-select select { display: none; }
+.select-white .cust-trigger { background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.15); }
+.select-white .cust-trigger:after { border-top-color: rgba(255,255,255,0.5); }
+.select-white .cust-trigger:hover { background: rgba(255,255,255,0.13); border-color: rgba(255,255,255,0.25); }
+.select-white .cust-trigger.open { background: rgba(255,255,255,0.15); box-shadow: 0 0 0 3px rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.3); }
+.select-white .cust-drop { border-color: rgba(255,255,255,0.15); }
+.select-white .cust-opt { color: #0F172A; }
+.select-white .cust-opt:hover { background: #EEF2FF; color: #012169; }
+
+/* ── BUTTONS & FOOTER ── */
+.card-actions {
+  padding: 16px 26px 20px;
+  background: #FAFBFC;
+  border-top: 1px solid var(--border-light);
+  display: flex; flex-wrap: wrap; gap: 8px;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 14px; border-radius: var(--radius-xs); border: 1px solid transparent; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit; text-decoration: none; line-height: 1; transition: all var(--transition); }
+.btn i { width: 14px; height: 14px; }
+.btn-outline { background: #fff; color: var(--text-secondary); border-color: var(--border); }
+.btn-outline:hover { color: var(--dashen-blue); border-color: var(--dashen-blue); background: rgba(39,50,116,0.03); box-shadow: 0 1px 4px rgba(39,50,116,0.06); transform: translateY(-1px); }
+.btn-primary { background: var(--dashen-navy); color: #fff; font-weight: 600; }
+.btn-primary:hover { background: var(--dashen-blue); box-shadow: 0 4px 16px rgba(1,33,105,0.25); transform: translateY(-1px); }
+.btn-gold { background: var(--dashen-gold); color: var(--dashen-navy); font-weight: 700; border: none; letter-spacing: -0.1px; }
+.btn-gold:hover { background: #C49A00; box-shadow: 0 4px 16px rgba(253,215,154,0.3); transform: translateY(-1px); }
+.btn-ghost { background:transparent; color:var(--text-tertiary); border-color:transparent; }
+.btn-ghost:hover { background:#F1F5F9; color:var(--text-secondary); transform:translateY(-1px); }
+/* ── SECTION DIVIDER ── */
+.section-divider { display:flex; align-items:center; gap:14px; margin:32px 0 22px; }
+.section-divider::before, .section-divider::after { content:''; flex:1; height:1px; background:var(--border); }
+.section-divider .divider-badge { display:inline-flex; align-items:center; gap:8px; padding:6px 16px; border-radius:100px; background:#fff; border:1px solid var(--border-light); font-size:11px; font-weight:600; color:var(--text-secondary); white-space:nowrap; }
+.section-divider .divider-badge i { width:14px;height:14px;color:var(--dashen-navy); }
+/* ── LOADER ── */
+.loading-wrapper { display: none; margin-top: 12px; width: 100%; }
+.loading-wrapper.active { display: block; }
+.loading-bar { height: 3px; width: 0%; border-radius: 3px; background: var(--dashen-navy); animation: loading 1.8s ease-in-out infinite; }
+.loading-text { font-size: 11px; font-weight: 500; color: var(--text-secondary); margin-top: 8px; text-align: center; }
+@keyframes loading { 0% { width: 0%; opacity: 1; } 50% { width: 100%; opacity: 1; } 100% { width: 100%; opacity: 0; } }
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 100px; }
+::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+/* ── ACCORDION (mobile: collapsed by default) ── */
+@media(max-width:768px){
+  .report-card .card-body-inner { display:none; }
+  .report-card.expanded .card-body-inner { display:block; }
+  .report-card .card-header { cursor:pointer; user-select:none; position:relative; }
+  .report-card .card-header .accordion-chevron { position:absolute; right:18px; top:50%; transform:translateY(-50%) rotate(-90deg); transition:transform .25s; color:var(--text-tertiary); }
+  .report-card.expanded .card-header .accordion-chevron { transform:translateY(-50%) rotate(0deg); color:var(--dashen-navy); }
+}
+@media(min-width:769px){
+  .report-card .card-header .accordion-chevron { display:none; }
+  .report-card .card-body-inner { display:block !important; }
+}
+
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="file-text"></i></div>
+  <div>
+    <h1 class="page-title">Reports</h1>
+    <p class="page-subtitle">Downloadable management and operational reports.</p>
+  </div>
+</div>
+
+<main class="main-container">
+
+  <!-- Shared Reporting Period -->
+  <div class="range-bar">
+    <div class="range-copy">
+      <div class="range-title"><i data-lucide="calendar-range"></i> Reporting period</div>
+      <div class="range-sub">All historical reports use this period. Days are EAT and the end date is inclusive. Maximum span: 90 days. Availability is measured from each ATM&rsquo;s first retained state; the report shows coverage.</div>
+    </div>
+    <div class="range-controls">
+      <div class="range-field">
+        <label for="report-start">Start date</label>
+        <input type="text" id="report-start" class="flatpickr-range" readonly value="{{ default_start }}" autocomplete="off">
+      </div>
+      <span class="range-sep">to</span>
+      <div class="range-field">
+        <label for="report-end">End date</label>
+        <input type="text" id="report-end" class="flatpickr-range" readonly value="{{ default_end }}" autocomplete="off">
+      </div>
+      <div class="range-presets">
+        <button type="button" class="range-chip" data-range="today">Today</button>
+        <button type="button" class="range-chip" data-range="7d">7 days</button>
+        <button type="button" class="range-chip" data-range="30d">30 days</button>
+        <button type="button" class="range-chip" data-range="this-month">This month</button>
+        <button type="button" class="range-chip" data-range="last-month">Last month</button>
+      </div>
+      <div class="range-label" id="range-label"></div>
+      <div class="range-error" id="range-error" role="alert"></div>
+    </div>
+  </div>
+
+  <!-- Hero Report Banner -->
+  <div class="hero-report">
+    <div class="hero-content">
+      <div class="hero-icon"><i data-lucide="folder-check"></i></div>
+      <div class="hero-title">
+        <h2>Complete Management Report</h2>
+        <p>Comprehensive document containing transactions, cash, errors, and performance data.</p>
+      </div>
+    </div>
+    <div class="hero-actions">
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-gold" onclick="gen('full','excel')">
+          <i data-lucide="file-spreadsheet"></i> Excel Workbook
+        </button>
+        <button class="btn btn-white" onclick="gen('full','pdf')">
+          <i data-lucide="file-text"></i> PDF Report
+        </button>
+      </div>
+    </div>
+    <div class="loading-wrapper" id="lw-full" style="width:100%;">
+      <div class="loading-bar" style="background:var(--dashen-gold);"></div>
+      <div class="loading-text" style="color:rgba(255,255,255,0.7);">Compiling Complete Report...</div>
+    </div>
+  </div>
+
+  <!-- Individual Reports -->
+  <div class="section-divider">
+    <div class="divider-badge"><i data-lucide="layers"></i> Individual Reports</div>
+  </div>
+
+  <div class="reports-grid">
+
+    <!-- Daily ATM Outage (the team's everyday report — first) -->
+    <div class="report-card">
+      <div class="card-accent"></div>
+      <div class="card-content">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <div class="card-icon"><i data-lucide="alert-triangle" style="width:22px;height:22px;"></i></div>
+          <h3>Daily ATM Outage</h3>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
+        </div>
+        <div class="card-body-inner">
+          <p style="font-size:12px;color:#64748B;margin-bottom:8px">One row per down ATM — location, outage days and suspected cause filled automatically (confirmed from the GLPI ticket where one is linked); the team verifies and completes the rest.</p>
+          <p style="font-size:11px;color:#94A3B8;margin-bottom:12px">Current snapshot — the reporting period above does not apply.</p>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="gen('outage','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('outage','pdf')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-outline" onclick="gen('outage','csv')"><i data-lucide="file"></i> CSV</button>
+            <div class="loading-wrapper" id="lw-outage">
+              <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transaction Summary -->
+    <div class="report-card">
+      <div class="card-accent"></div>
+      <div class="card-content">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <div class="card-icon"><i data-lucide="bar-chart-2" style="width:22px;height:22px;"></i></div>
+          <h3>Transaction Summary</h3>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
+        </div>
+        <div class="card-body-inner">
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Branch</label>
+              <div class="custom-select">
+                <select id="txn-atm">
+                  <option value="all" selected>All Branches</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="gen('transaction','excel','txn-atm')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('transaction','pdf','txn-atm')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-outline" onclick="gen('transaction','csv','txn-atm')"><i data-lucide="file"></i> CSV</button>
+            <div class="loading-wrapper" id="lw-transaction">
+              <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cash Level -->
+    <div class="report-card">
+      <div class="card-accent"></div>
+      <div class="card-content">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <div class="card-icon"><i data-lucide="coins" style="width:22px;height:22px;"></i></div>
+          <h3>Cash Level Report</h3>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
+        </div>
+        <div class="card-body-inner">
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="gen('cash','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('cash','pdf')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-outline" onclick="gen('cash','csv')"><i data-lucide="file"></i> CSV</button>
+            <div class="loading-wrapper" id="lw-cash">
+              <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error & Incident -->
+    <div class="report-card">
+      <div class="card-accent"></div>
+      <div class="card-content">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <div class="card-icon"><i data-lucide="alert-triangle" style="width:22px;height:22px;"></i></div>
+          <h3>Error &amp; Incident Report</h3>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
+        </div>
+        <div class="card-body-inner">
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="gen('error','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('error','pdf')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-outline" onclick="gen('error','csv')"><i data-lucide="file"></i> CSV</button>
+            <div class="loading-wrapper" id="lw-error">
+              <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ATM Performance -->
+    <div class="report-card">
+      <div class="card-accent"></div>
+      <div class="card-content">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <div class="card-icon"><i data-lucide="zap" style="width:22px;height:22px;"></i></div>
+          <h3>ATM Performance Report</h3>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
+        </div>
+        <div class="card-body-inner">
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="gen('performance','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('performance','pdf')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-outline" onclick="gen('performance','csv')"><i data-lucide="file"></i> CSV</button>
+            <div class="loading-wrapper" id="lw-performance">
+              <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vendor Performance -->
+    <div class="report-card">
+      <div class="card-accent"></div>
+      <div class="card-content">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <div class="card-icon"><i data-lucide="layers" style="width:22px;height:22px;"></i></div>
+          <h3>Vendor Performance Report</h3>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
+        </div>
+        <div class="card-body-inner">
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="gen('vendor','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('vendor','pdf')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-outline" onclick="gen('vendor','csv')"><i data-lucide="file"></i> CSV</button>
+            <div class="loading-wrapper" id="lw-vendor">
+              <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ATM Availability -->
+    <div class="report-card">
+      <div class="card-accent"></div>
+      <div class="card-content">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <div class="card-icon"><i data-lucide="gauge" style="width:22px;height:22px;"></i></div>
+          <h3>ATM Availability Report</h3>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
+        </div>
+        <div class="card-body-inner">
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Branch</label>
+              <div class="custom-select">
+                <select id="avail-atm">
+                  <option value="all" selected>All Branches</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="gen('availability','excel','avail-atm')"><i data-lucide="file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-outline" onclick="gen('availability','pdf','avail-atm')"><i data-lucide="file-text"></i> PDF</button>
+            <button class="btn btn-outline" onclick="gen('availability','csv','avail-atm')"><i data-lucide="file"></i> CSV</button>
+            <div class="loading-wrapper" id="lw-availability">
+              <div class="loading-bar"></div><div class="loading-text">Generating...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+{% endblock %}
+{% block extra_scripts %}
+<script src="/static/flatpickr.min.js"></script>
+<script>
+lucide.createIcons();
+function populateATMSelect(selectId, atms) {
+  const sel = document.getElementById(selectId);
+  while (sel.options.length > 1) sel.remove(1);
+  atms.forEach(a => { sel.add(new Option(a.id + ' \u2014 ' + a.branch, a.id)); });
+  // Rebuild cust-select dropdown UI
+  const wrap = sel.closest('.cust-select');
+  if (!wrap) return;
+  const trig = wrap.querySelector('.cust-trigger');
+  const drop = wrap.querySelector('.cust-drop');
+  if (!trig || !drop) return;
+  trig.textContent = sel.options[0].text;
+  drop.innerHTML = '';
+  for (var i = 0; i < sel.length; i++) {
+    (function(idx) {
+      var o = document.createElement('div');
+      o.className = 'cust-opt' + (idx === sel.selectedIndex ? ' sel' : '');
+      o.textContent = sel.options[idx].text;
+      o.addEventListener('click', function() {
+        sel.selectedIndex = idx;
+        trig.textContent = sel.options[idx].text;
+        drop.querySelectorAll('.cust-opt').forEach(function(c){c.classList.remove('sel')});
+        o.classList.add('sel');
+        trig.classList.remove('open');
+        drop.classList.remove('show');
+        sel.dispatchEvent(new Event('change'));
+      });
+      drop.appendChild(o);
+    })(i);
+  }
+}
+
+async function loadATMs() {
+  try {
+    const r = await fetch('/api/atms');
+    if (!r.ok) throw new Error('Server returned ' + r.status);
+    const atms = await r.json();
+    if (atms.error) throw new Error(atms.error);
+    populateATMSelect('txn-atm', atms);
+    populateATMSelect('avail-atm', atms);
+  } catch(e){
+    showToast('Could not load ATM list: ' + e.message, 'error', 8000);
+  }
+}
+
+function eatToday() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Addis_Ababa' }).format(new Date());
+}
+function addDays(iso, n) {
+  var d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function prevMonthRange(iso) {
+  var y = parseInt(iso.slice(0, 4), 10);
+  var m = parseInt(iso.slice(5, 7), 10);
+  var start = new Date(Date.UTC(y, m - 2, 1));
+  var end = new Date(Date.UTC(y, m - 1, 0));
+  return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)];
+}
+function fmtReportDate(iso) {
+  return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC'
+  });
+}
+var reportStart = document.getElementById('report-start');
+var reportEnd = document.getElementById('report-end');
+var rangeLabel = document.getElementById('range-label');
+var rangeError = document.getElementById('range-error');
+var startPicker = null;
+var endPicker = null;
+function syncPickerBounds() {
+  var s = reportStart.value;
+  var e = reportEnd.value;
+  var today = eatToday();
+  if (startPicker) startPicker.set('maxDate', e || today);
+  if (endPicker) {
+    endPicker.set('minDate', s || null);
+    endPicker.set('maxDate', today);
+  }
+}
+function rangeDays() {
+  var s = reportStart.value;
+  var e = reportEnd.value;
+  if (!s || !e) return 0;
+  return Math.round((new Date(e + 'T00:00:00Z') - new Date(s + 'T00:00:00Z')) / 86400000) + 1;
+}
+function validateRange(showError) {
+  var s = reportStart.value;
+  var e = reportEnd.value;
+  var today = eatToday();
+  var msg = '';
+  if (!s || !e) msg = 'Choose both a start date and an end date.';
+  else if (s > e) msg = 'Start date must be on or before the end date.';
+  else if (e > today) msg = 'End date cannot be in the future.';
+  else if (rangeDays() > 90) msg = 'Reporting period cannot exceed 90 days.';
+  if (rangeError) {
+    rangeError.textContent = msg;
+    rangeError.classList.toggle('show', !!msg);
+  }
+  if (msg && showError) showToast(msg, 'warning');
+  return !msg;
+}
+function refreshRangeLabel() {
+  if (!rangeLabel) return;
+  var s = reportStart.value;
+  var e = reportEnd.value;
+  rangeLabel.textContent = (s && e)
+    ? fmtReportDate(s) + ' \u2013 ' + fmtReportDate(e) + ' (EAT)' : '';
+}
+function setReportRange(start, end) {
+  if (startPicker) startPicker.setDate(start, false);
+  if (endPicker) endPicker.setDate(end, false);
+  reportStart.value = start;
+  reportEnd.value = end;
+  syncPickerBounds();
+  refreshRangeLabel();
+  validateRange(false);
+}
+if (typeof flatpickr !== 'undefined') {
+  startPicker = flatpickr(reportStart, {
+    dateFormat: 'Y-m-d', maxDate: eatToday(), disableMobile: true,
+    allowInput: false, monthSelectorType: 'static',
+    onChange: function(){ syncPickerBounds(); refreshRangeLabel(); validateRange(false); }
+  });
+  endPicker = flatpickr(reportEnd, {
+    dateFormat: 'Y-m-d', maxDate: eatToday(), disableMobile: true,
+    allowInput: false, monthSelectorType: 'static',
+    onChange: function(){ syncPickerBounds(); refreshRangeLabel(); validateRange(false); }
+  });
+}
+syncPickerBounds();
+refreshRangeLabel();
+document.querySelectorAll('.range-chip').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var kind = this.getAttribute('data-range');
+    var today = eatToday();
+    var start = today;
+    var end = today;
+    if (kind === '7d') start = addDays(today, -6);
+    else if (kind === '30d') start = addDays(today, -29);
+    else if (kind === 'this-month') start = today.slice(0, 7) + '-01';
+    else if (kind === 'last-month') { var r = prevMonthRange(today); start = r[0]; end = r[1]; }
+    setReportRange(start, end);
+  });
+});
+
+function gen(type, fmt, atmId) {
+  const atm = atmId ? document.getElementById(atmId).value : 'all';
+  const params = new URLSearchParams({ atm: atm });
+  if (type !== 'outage') {
+    if (!validateRange(true)) return;
+    params.set('start', reportStart.value);
+    params.set('end', reportEnd.value);
+  }
+  const lw = document.getElementById('lw-' + type);
+  const url = `/report/${type}/${fmt}?${params.toString()}`;
+  const names = { transaction:'Transaction', cash:'Cash Level', error:'Error & Incident',
+                  performance:'Performance', vendor:'Vendor Performance',
+                  availability:'Availability', outage:'Daily Outage', full:'Complete Report' };
+  lw.classList.add('active');
+
+  fetch(url)
+    .then(function(r){
+      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+      var ct = r.headers.get('Content-Type') || '';
+      if (ct.includes('text/html')) throw new Error('Session expired. Please refresh and log in again.');
+      var disposition = r.headers.get('Content-Disposition') || '';
+      var filename = 'report.' + (fmt === 'pdf' ? 'pdf' : fmt === 'excel' ? 'xlsx' : 'csv');
+      var match = disposition.match(/filename\*?=(?:UTF-8'')?([^;\n]+)/i);
+      if (match) filename = match[1].replace(/["']/g, '');
+      return r.blob().then(function(blob){ return { blob: blob, filename: filename }; });
+    })
+    .then(function(result){
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(result.blob);
+      a.download = result.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+      lw.classList.remove('active');
+    })
+    .catch(function(err){
+      lw.classList.remove('active');
+      showToast('Failed to generate ' + (names[type] || type) + ' report: ' + err.message, 'error', 8000);
+    });
+}
+
+// Accordion: toggle one card at a time on mobile
+function toggleAccordion(header){
+  if(window.innerWidth > 768) return;
+  var card = header.closest('.report-card');
+  var wasOpen = card.classList.contains('expanded');
+  document.querySelectorAll('.report-card.expanded').forEach(function(c){ c.classList.remove('expanded'); });
+  if(!wasOpen) card.classList.add('expanded');
+}
+
+loadATMs();
+</script>
+{% endblock %}

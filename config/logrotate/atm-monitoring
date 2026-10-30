@@ -1,0 +1,28 @@
+# Log rotation for the cron-driven logs under <repo>/logs/.
+#
+# Install with:
+#   sudo cp config/logrotate/atm-monitoring /etc/logrotate.d/atm-monitoring
+#   sudo chown root:root /etc/logrotate.d/atm-monitoring
+#   sudo chmod 644 /etc/logrotate.d/atm-monitoring
+#   logrotate -d /etc/logrotate.d/atm-monitoring   # dry run, prints the plan
+#   logrotate -f /etc/logrotate.d/atm-monitoring   # force once, optional
+#
+# copytruncate, not the default create: cron opens logs/<name>.log with ">>" and
+# keeps that descriptor for the life of the run. Without copytruncate a rotating
+# file is written to by the old inode until the next cron tick, so the tail of
+# every run lands in a rotated .log.1 that nobody reads.
+#
+# Size matters here because of the EJ puller. At 1,300 ATMs with a per-minute
+# cron, logs/ej-pull.log gains ~1,300 lines per minute (~1.9M lines/day) because
+# it logs one line per ATM per file. Rotated daily and kept for a fortnight, that
+# is bounded instead of unbounded.
+/data/atm-monitoring/logs/*.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    su root root
+}

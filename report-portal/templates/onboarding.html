@@ -1,0 +1,456 @@
+{% extends "base.html" %}
+{% block title %}Onboard ATM — ATM Monitoring{% endblock %}
+{% block extra_style %}
+/* ── Canonical admin form rhythm (Cash Load / Schedules / Users) ── */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;padding:24px}
+.form-grid .full{grid-column:1/-1}
+.form-actions{padding:0 24px 24px;display:flex;gap:10px;justify-content:flex-end}
+.form-actions .btn{padding:10px 20px}
+.form-group.error input,.form-group.error select{border-color:#DC2626;background:#FEF2F2}
+.field-error{display:none;color:#DC2626;font-size:11px;margin-top:3px;font-weight:500}
+.form-group.error .field-error{display:block}
+.required{color:#DC2626}
+.field-help{font-size:10px;color:#94A3B8;margin-top:2px;line-height:1.5}
+.badge.preview{background:rgba(217,119,6,.1);color:#D97706;vertical-align:middle}
+.card-hint{font-size:11px;color:#94A3B8}
+.card-body{padding:24px}
+.check-list{padding:24px}
+.check-list .alert-card:last-child{margin-bottom:0}
+.check-fix{font-size:12px;color:#012169;margin-top:6px;font-weight:500}
+
+/* ── Step flow: one step in view, finished steps collapsed ──
+   Append-everything-below-the-fold was the problem: the user could not see
+   where they were, and each new result arrived off-screen. */
+.stepper{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.step{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:100px;
+      font-size:12px;font-weight:600;color:#64748B;background:#fff;border:1px solid #EEF1F6}
+.step .n{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+         font-size:11px;background:#EEF1F6;color:#64748B}
+.step.done{color:#059669;border-color:rgba(5,150,105,.25)}
+.step.done .n{background:rgba(5,150,105,.12);color:#059669}
+.step.current{color:#012169;border-color:#012169;background:rgba(1,33,105,.04)}
+.step.current .n{background:#012169;color:#fff}
+.step.pending{opacity:.6}
+.stepper form{margin:0}
+button.step{border:1px solid #EEF1F6;cursor:pointer;font-family:inherit}
+button.step:hover{border-color:#CBD5E1;color:#012169}
+button.step.done{color:#059669;border-color:rgba(5,150,105,.25)}
+button.step.done:hover{background:rgba(5,150,105,.06)}
+
+details.wstep{margin-bottom:0;overflow:visible}
+details.wstep[open]{margin-bottom:24px}
+details.wstep>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;
+                      padding:18px 24px;background:#FAFBFC;border-bottom:1px solid #EEF1F6;
+                      border-radius:12px 12px 0 0;user-select:none}
+details.wstep[open]>summary{border-radius:12px 12px 0 0}
+details.wstep>summary::-webkit-details-marker{display:none}
+details.wstep .step-title{font-size:15px;font-weight:700;color:#012169}
+details.wstep .step-sum{font-size:12px;color:#64748B;margin-left:auto;padding-right:8px;
+                        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:45%}
+details.wstep .chev{width:14px;height:14px;color:#94A3B8;transition:transform .2s;flex-shrink:0}
+details.wstep[open] .chev{transform:rotate(90deg)}
+details.wstep.pending>summary{opacity:.55}
+.step-body{padding:24px}
+.step-body .alert-card:last-child{margin-bottom:0}
+.step-note{font-size:12px;color:#64748B;margin-top:12px}
+.wiz-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+@media(max-width:768px){
+  details.wstep .step-sum{max-width:100%;margin-left:0}
+  .stepper{gap:6px}
+}
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="user-plus"></i></div>
+  <div>
+    <h1 class="page-title">Onboard a new ATM <span class="badge preview">ADMIN</span></h1>
+    <p class="page-subtitle">Four steps. Nothing is sent to Zabbix until you confirm the preview, and an ATM is only called live once it is actually reporting.</p>
+  </div>
+</div>
+
+<div class="page-content">
+{% set facts_done = checks or saved or plan or provision or verification %}
+{% set provisioned = provision or (verification and verification.verdict != 'not_provisioned') %}
+{% set verified_ok = verification and verification.ok %}
+{% if values.atm_id %}
+{% set state, state_tone, state_icon = (
+     ('Live and reporting', 'success', 'circle-check')
+     if verified_ok else
+     ('Provisioned, but not reporting', 'error', 'alert-triangle')
+     if provisioned else
+     ('Saved, not provisioned yet', 'warning', 'circle-minus')
+     if saved else
+     ('Not saved yet', 'info', 'info')) %}
+<div class="alert-card {{ state_tone }}" id="wiz-summary" style="margin-bottom:20px">
+  <i data-lucide="{{ state_icon }}" class="alert-icon"></i>
+  <div class="alert-content">
+    <div class="alert-title">{{ values.atm_id }} — {{ state }}</div>
+    <div class="alert-message">
+      {% if verified_ok %}
+        Vendor telemetry is arriving. This ATM counts as live.
+      {% elif provisioned and verification %}
+        {{ verification.facts.items_reporting }}/{{ verification.facts.items_total }} items reporting.
+        {% for b in verification.blockers %}<div>&rarr; {{ b }}</div>{% endfor %}
+      {% elif provisioned %}
+        Host exists in Zabbix. Run step 4 to prove it is reporting.
+      {% elif saved %}
+        The record is saved. Step 3 will preview and provision the Zabbix host.
+      {% else %}
+        Fill in the facts to continue.
+      {% endif %}
+    </div>
+    <div class="alert-action">
+      {% if blocking %}
+        <a class="btn btn-outline" href="/admin/onboard/stage">Fix the failing check</a>
+      {% elif not saved %}
+        <a class="btn btn-primary" href="/admin/onboard">Start the wizard</a>
+      {% elif not provisioned %}
+        <a class="btn btn-primary" href="/admin/onboard/stage">Go to provisioning</a>
+      {% elif not verification %}
+        <a class="btn btn-primary" href="/admin/onboard/stage">Verify reporting</a>
+      {% endif %}
+      <a class="btn btn-outline" href="/admin/onboard">Start over</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="stepper">
+  {% set steps = [
+        ('facts', '1', 'ATM facts', stage == 'facts'),
+        ('checks', '2', 'Pre-flight', stage == 'checks' or (not stage == 'facts' and facts_done)),
+        ('provision', '3', 'Provision', stage == 'provision' or provisioned),
+        ('verify', '4', 'Verify', stage == 'verify')] %}
+  {% for key, num, label, reached in steps %}
+    {% if reached and stage != key %}
+      <form method="post" action="/admin/onboard/stage">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="stage" value="{{ key }}">
+        <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+        <button type="submit" class="step {{ 'done' if stage != key }}">
+          <span class="n">{{ num }}</span>{{ label }}
+        </button>
+      </form>
+    {% else %}
+      <div class="step {{ 'current' if stage == key else 'pending' }}"><span class="n">{{ num }}</span>{{ label }}</div>
+    {% endif %}
+  {% endfor %}
+</div>
+
+<!-- ── Step 1 · ATM facts ─────────────────────────────────────────── -->
+<details class="card wstep" id="step1" {% if stage == 'facts' %}open{% endif %}>
+  <summary>
+    <i data-lucide="chevron-right" class="chev"></i>
+    <span class="step-title">1 · ATM facts</span>
+    {% if facts_done and values.atm_id %}
+      <span class="step-sum">{{ values.atm_id }}{% if values.vendor %} · {{ values.vendor }} {{ values.model }}{% endif %}{% if values.ip_address %} · {{ values.ip_address }}{% endif %}</span>
+    {% else %}
+      <span class="step-sum">Fields marked * are required</span>
+    {% endif %}
+    {% if stage != 'facts' and values.atm_id %}
+      <form method="post" action="/admin/onboard/stage" style="margin-left:auto">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="stage" value="facts">
+        <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+        <button type="submit" class="btn btn-outline" style="padding:5px 12px;font-size:11px">Edit</button>
+      </form>
+    {% endif %}
+  </summary>
+  <form method="post" action="/admin/onboard" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% macro fld(name, label, ph='', required=False, help='') %}
+    <div class="form-group{% if errors.get(name) %} error{% endif %}">
+      <label>{{ label }}{% if required %} <span class="required">*</span>{% endif %}</label>
+      <input name="{{ name }}" value="{{ values.get(name,'')|e }}" placeholder="{{ ph }}"
+             {% if required %}required{% endif %}>
+      {% if help %}<div class="field-help">{{ help }}</div>{% endif %}
+      <span class="field-error">{{ errors.get(name, '') }}</span>
+    </div>
+    {% endmacro %}
+    <div class="form-grid">
+    {{ fld('atm_id', 'ATM ID', 'ATM-0107', True) }}
+    {{ fld('atm_name', 'ATM name (optional)', '4 Kilo Branch ATM 3') }}
+    {{ fld('branch', 'Branch', '4 Kilo Building BRANCH', True) }}
+    <div class="form-group{% if errors.get('district') %} error{% endif %}">
+      <label>District <span class="required">*</span></label>
+      <select name="district">
+        <option value="">— choose —</option>
+        {% for d in districts %}<option value="{{ d }}" {% if values.get('district')==d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+      </select>
+      <span class="field-error">{{ errors.get('district', '') }}</span>
+    </div>
+    {{ fld('city', 'City', 'Addis Ababa', True) }}
+    {{ fld('region', 'Region', 'Addis Ababa') }}
+    {{ fld('latitude', 'Latitude (optional)', '9.0050') }}
+    {{ fld('longitude', 'Longitude (optional)', '38.7896') }}
+    {{ fld('terminal_id', 'Terminal ID', 'TID-UAT-107', True, 'Must match the switch record for this ATM.') }}
+    <div class="form-group{% if errors.get('vendor') %} error{% endif %}">
+      <label>Vendor <span class="required">*</span></label>
+      <select name="vendor" id="vendorSel">
+        <option value="">— choose —</option>
+        {% for v in vendors %}<option value="{{ v }}" {% if values.get('vendor')==v %}selected{% endif %}>{{ v }}</option>{% endfor %}
+      </select>
+      <span class="field-error">{{ errors.get('vendor', '') }}</span>
+    </div>
+    <div class="form-group{% if errors.get('model') %} error{% endif %}">
+      <label>Model <span class="required">*</span></label>
+      <select name="model" id="modelSel"></select>
+      <div class="field-help">Only models already in the approved list can pass. Anything else stops here and goes to engineer review.</div>
+      <span class="field-error">{{ errors.get('model', '') }}</span>
+    </div>
+    {{ fld('ip_address', 'IP address', '172.23.0.101', True) }}
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary"><i data-lucide="shield-check" style="width:14px;height:14px"></i> Run pre-flight checks</button>
+    </div>
+  </form>
+</details>
+
+<!-- ── Step 2 · Pre-flight ───────────────────────────────────────── -->
+<details class="card wstep {% if not checks %}pending{% endif %}" id="step2" {% if stage == 'checks' %}open{% endif %}>
+  <summary>
+    <i data-lucide="chevron-right" class="chev"></i>
+    <span class="step-title">2 · Pre-flight checks</span>
+    <span class="step-sum">{% if checks %}Read-only — nothing was created{% else %}Read-only checks — safe to re-run any time{% endif %}</span>
+    {% if values.atm_id and stage != 'checks' %}
+      <form method="post" action="/admin/onboard/stage" style="margin-left:auto">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="stage" value="checks">
+        <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+        <button type="submit" class="btn btn-outline" style="padding:5px 12px;font-size:11px">Re-run</button>
+      </form>
+    {% endif %}
+  </summary>
+  <div class="step-body">
+    {% if checks %}
+      {% for label, ok, detail, fixer, blocking in checks %}
+        {% if ok is true %}{% set tone = 'success' %}{% set icon = 'circle-check' %}
+        {% elif ok is false %}{% set tone = 'error' %}{% set icon = 'circle-x' %}
+        {% else %}{% set tone = 'info' %}{% set icon = 'circle-minus' %}{% endif %}
+        <div class="alert-card {{ tone }}">
+          <i data-lucide="{{ icon }}" class="alert-icon"></i>
+          <div class="alert-content">
+            <div class="alert-title">{{ label }}{% if blocking %} — must be fixed{% endif %}</div>
+            <div class="alert-message">{{ detail }}</div>
+            {% if fixer and fixer != '—' %}<div class="check-fix">→ {{ fixer }}</div>{% endif %}
+          </div>
+        </div>
+      {% endfor %}
+      {% if blocking %}
+        <div class="wiz-actions" style="justify-content:space-between;align-items:center">
+          <span class="step-note" style="margin:0">
+            Fix the failing check{% if blocking|length > 1 %}s{% endif %} above — Step 3 stays closed until it passes.
+          </span>
+          <form method="post" action="/admin/onboard/stage">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="stage" value="facts">
+            <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+            <button type="submit" class="btn btn-outline"><i data-lucide="pencil" style="width:14px;height:14px"></i> Fix the facts</button>
+          </form>
+        </div>
+      {% else %}
+        <div class="wiz-actions" style="justify-content:space-between;align-items:center">
+          <form method="post" action="/admin/onboard/stage">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="stage" value="facts">
+            <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+            <button type="submit" class="btn btn-outline">&larr; Back</button>
+          </form>
+          <form method="post" action="/admin/onboard/save">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% for k, v in values.items() %}{% if v is not none %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+            <button type="submit" class="btn btn-primary">Save ATM &amp; preview provisioning <i data-lucide="arrow-right" style="width:14px;height:14px"></i></button>
+          </form>
+        </div>
+      {% endif %}
+    {% else %}
+      <p class="step-note">Fill in the facts and run the checks first.</p>
+    {% endif %}
+  </div>
+</details>
+
+<!-- ── Step 3 · Provision ────────────────────────────────────────── -->
+{% if step_error %}
+<div class="alert-card error" style="margin-bottom:20px">
+  <i data-lucide="wifi-off" class="alert-icon"></i>
+  <div class="alert-content">
+    <div class="alert-title">Could not reach Zabbix</div>
+    <div class="alert-message">{{ step_error }} Nothing was changed — retry when the connection is back.</div>
+    <div class="alert-action">
+      {% if stage == 'provision' %}
+      <form method="post" action="/admin/onboard/provision">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+        <button type="submit" class="btn btn-outline"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Retry provisioning</button>
+      </form>
+      {% else %}
+      <form method="post" action="/admin/onboard/verify">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+        <button type="submit" class="btn btn-outline"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Retry verification</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<details class="card wstep {% if not facts_done %}pending{% endif %}" id="step3" {% if stage == 'provision' %}open{% endif %}>
+  <summary>
+    <i data-lucide="chevron-right" class="chev"></i>
+    <span class="step-title">3 · Provision in Zabbix</span>
+    <span class="step-sum">
+      {% if provision %}Host {{ provision.results[0].action if provision.results else 'created' }} in Zabbix
+      {% elif provisioned %}Host exists in Zabbix
+      {% elif plan %}{{ plan.results[0].action if plan.results else 'ready' }} — preview only
+      {% elif saved %}Saved — preview not generated
+      {% else %}Waiting for the checks{% endif %}
+    </span>
+    {% if values.atm_id and saved and stage != 'provision' %}
+      <form method="post" action="/admin/onboard/stage" style="margin-left:auto">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="stage" value="provision">
+        <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+        <button type="submit" class="btn btn-outline" style="padding:5px 12px;font-size:11px">Open</button>
+      </form>
+    {% endif %}
+  </summary>
+  <div class="step-body">
+    {% if save_errors %}
+      <div class="alert-card error">
+        <i data-lucide="alert-circle" class="alert-icon"></i>
+        <div class="alert-content">
+          <div class="alert-title">The ATM was not saved</div>
+          <div class="alert-message">{% for field, msg in save_errors.items() %}<div>{{ field }}: {{ msg }}</div>{% endfor %}</div>
+        </div>
+      </div>
+    {% elif not saved %}
+      <p class="step-note">Saving writes one row to the portal database, then shows exactly what would change in Zabbix. Nothing is sent until you confirm.</p>
+      <form method="post" action="/admin/onboard/save">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% for k, v in values.items() %}{% if v is not none %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+        <div class="wiz-actions"><button type="submit" class="btn btn-primary"><i data-lucide="save" style="width:14px;height:14px"></i> Save ATM &amp; preview provisioning</button></div>
+      </form>
+    {% else %}
+      {% if plan and not provision %}
+        <p class="step-note">Preview — <strong>nothing has been sent to Zabbix yet</strong>:</p>
+        {% for r in plan.results %}
+          <div class="alert-card {{ 'success' if r.action in ('create','skipped') else 'warning' if r.action == 'update' else 'error' }}">
+            <i data-lucide="{{ 'circle-check' if r.action in ('create','skipped') else 'refresh-cw' }}" class="alert-icon"></i>
+            <div class="alert-content">
+              <div class="alert-title">{{ r.atm_id }} — {{ r.action }}</div>
+              {% if r.changes %}<div class="alert-message">Will change: {{ r.changes|join(', ') }}</div>{% endif %}
+              {% if r.pending_groups %}<div class="alert-message">Host groups to create: {{ r.pending_groups|join(', ') }}</div>{% endif %}
+              {% if r.error %}<div class="check-fix">{{ r.error }}</div>{% endif %}
+            </div>
+          </div>
+        {% endfor %}
+        <div class="wiz-actions" style="justify-content:space-between;align-items:center">
+          <form method="post" action="/admin/onboard/stage">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="stage" value="checks">
+            <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+            <button type="submit" class="btn btn-outline">&larr; Back</button>
+          </form>
+          <form method="post" action="/admin/onboard/provision">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+            <button type="submit" class="btn btn-primary"><i data-lucide="zap" style="width:14px;height:14px"></i> Provision in Zabbix</button>
+          </form>
+        </div>
+      {% elif provision %}
+        {% for r in provision.results %}
+          <div class="alert-card {{ 'success' if r.action in ('create','skipped') else 'error' if r.action == 'failed' else 'warning' }}">
+            <i data-lucide="{{ 'circle-check' if r.action in ('create','skipped') else 'alert-circle' }}" class="alert-icon"></i>
+            <div class="alert-content">
+              <div class="alert-title">{{ r.atm_id }} — {{ r.action }}</div>
+              {% if r.changes %}<div class="alert-message">Changed: {{ r.changes|join(', ') }}</div>{% endif %}
+              {% if r.error %}<div class="check-fix">{{ r.error }}</div>{% endif %}
+            </div>
+          </div>
+        {% endfor %}
+        <p class="step-note">Idempotent — running it again changes nothing if the host is already correct.</p>
+        <div class="wiz-actions">
+          <form method="post" action="/admin/onboard/verify">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+            <button type="submit" class="btn btn-primary"><i data-lucide="activity" style="width:14px;height:14px"></i> Verify it is reporting</button>
+          </form>
+        </div>
+      {% endif %}
+    {% endif %}
+  </div>
+</details>
+
+<!-- ── Step 4 · Verify ───────────────────────────────────────────── -->
+<details class="card wstep {% if not provisioned %}pending{% endif %}" id="step4" {% if stage == 'verify' %}open{% endif %}>
+  <summary>
+    <i data-lucide="chevron-right" class="chev"></i>
+    <span class="step-title">4 · Verify it is reporting</span>
+    <span class="step-sum">
+      {% if verification %}{{ verification.verdict|replace('_',' ') }}
+      {% elif provisioned %}Ready — run the check
+      {% else %}Available once the host is provisioned{% endif %}
+    </span>
+  </summary>
+  <div class="step-body">
+    {% if verification %}
+      <div class="alert-card {{ 'success' if verification.ok else 'error' if verification.verdict != 'unknown' else 'warning' }}">
+        <i data-lucide="{{ 'circle-check' if verification.ok else 'alert-triangle' }}" class="alert-icon"></i>
+        <div class="alert-content">
+          <div class="alert-title">{{ verification.verdict|replace('_',' ')|title }}</div>
+          <div class="alert-message">
+            {{ verification.facts.items_reporting }}/{{ verification.facts.items_total }} items reporting
+            ({{ verification.facts.items_internal }} internal, which never count as proof).
+          </div>
+        </div>
+      </div>
+      {% for b in verification.blockers %}<div class="check-fix">→ {{ b }}</div>{% endfor %}
+      <p class="step-note">Checked {{ verification.checked_at }}. This is the only signal allowed to call an ATM live — the Status field alone just records intent.</p>
+      <div class="wiz-actions">
+        <form method="post" action="/admin/onboard/verify">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+          <button type="submit" class="btn btn-outline"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Re-run check</button>
+        </form>
+        <a class="btn btn-outline" href="/atms/{{ values.atm_id }}"><i data-lucide="external-link" style="width:14px;height:14px"></i> Open ATM page</a>
+      </div>
+    {% elif provisioned %}
+      <p class="step-note">Proving it reports is the only thing allowed to call an ATM live. This is read-only.</p>
+      <div class="wiz-actions">
+        <form method="post" action="/admin/onboard/verify">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="atm_id" value="{{ values.atm_id }}">
+          <button type="submit" class="btn btn-primary"><i data-lucide="activity" style="width:14px;height:14px"></i> Verify it is reporting</button>
+        </form>
+      </div>
+    {% else %}
+      <p class="step-note">Available once the host has been provisioned.</p>
+    {% endif %}
+  </div>
+</details>
+</div>
+<script>
+// Keep the active step in view without hijacking the page: steps above it are
+// collapsed summaries, so scrolling to the open one lands the user on the work.
+(function(){
+  var open = document.querySelector('details.wstep[open]');
+  if(open && open.id !== 'step1') open.scrollIntoView({behavior:'smooth', block:'start'});
+})();
+</script>
+<script>
+var MODELS = {{ vendors|tojson }};
+var vsel = document.getElementById('vendorSel'), msel = document.getElementById('modelSel');
+var cur = {{ values.get('model','')|tojson }};
+function fillModels(){
+  var v = vsel.value;
+  msel.innerHTML = '<option value="">— choose —</option>';
+  (MODELS[v]||[]).forEach(function(m){ var o=document.createElement('option'); o.value=m; o.textContent=m; if(m===cur) o.selected=true; msel.appendChild(o); });
+  // Model options are built here, after the shared enhancer ran — repaint the
+  // custom dropdown from the new option list or it would stay empty.
+  if(window.refreshCustomSelect) refreshCustomSelect(msel);
+}
+vsel.addEventListener('change', function(){ cur=''; fillModels(); });
+fillModels();
+</script>
+{% endblock %}

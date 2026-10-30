@@ -2,16 +2,67 @@
 blueprints/admin.py
 ATM Admin registration routes.
 """
-import csv, io, re, os, concurrent.futures
+import csv, io, re, os, json, logging, secrets, threading, time, concurrent.futures, urllib.request
 import requests
 from datetime import datetime, timezone, timedelta
-from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response, current_app, abort
+from flask import Blueprint, render_template, request, redirect, jsonify, flash, Response, current_app, abort, session, url_for
 from werkzeug.security import generate_password_hash
-from blueprints.auth import login_required, role_required, ROLE_ADMIN, ROLE_OPERATOR, ROLE_VIEWER
+from blueprints.auth import login_required, role_required, ROLE_ADMIN, ROLE_OPERATOR, ROLE_VIEWER, password_error
 from db import get_db
 from audit import log_action
+from evidence import raw_info
+from state_summary import merge_live_in_service
+from helpers import STATE_ORDER, state_label, state_colour
+from scheduler import REPORT_TYPE_LABELS
+from zabbix_modules.xfs_metrics import DISPENSE_UNITS, is_xfs, normalize
+
+logger = logging.getLogger(__name__)
+
+# The eight NetXMS states plus the two portal-only setup states the registry
+# can contain. The filter strip renders the eight always and the extras only
+# when their count is non-zero.
+FILTER_STATES = STATE_ORDER + ('NOT_PROVISIONED', 'INACTIVE')
+
+
+def _bg_zabbix_sync(rows):
+    """Best-effort background host creation - never fails the request.
+
+    Routed through provision.provision_atms() (the single provisioning front
+    door) instead of calling zabbix_sync directly, so the onboarding wizard
+    provisions through the exact same code path. dry_run=False because this is
+    the real write; the provisioner reads the COMMITTED DB row (the save has
+    already committed before this thread starts) rather than the submitted form
+    dict, so what gets provisioned is what is actually stored.
+    """
+    try:
+        from provision import provision_atms
+        ids = [r.get('atm_id') for r in (rows or []) if (r.get('atm_id') or '').strip()]
+        if not ids:
+            return
+        out = provision_atms(ids, dry_run=False, actor='registration-save')
+        if out.get('error'):
+            logger.warning('background provisioning read failed: %s', out['error'])
+        summary = out.get('summary') or {}
+        log_action('ZABBIX_SYNC', 'auto: created={} reenabled={} macros={} updated={} skipped={} no_ip={} failed={}'.format(
+            summary.get('created', 0), summary.get('reenabled', 0), summary.get('macros_fixed', 0),
+            summary.get('updated', 0), summary.get('skipped', 0), summary.get('no_ip', 0),
+            summary.get('failed', 0)))
+    except Exception as e:
+        logger.warning('background Zabbix sync failed: %s', e)
+
+
+def _bg_zabbix_disable(atm_ids):
+    """Best-effort background host disable on portal delete."""
+    try:
+        from zabbix_sync import disable_hosts
+        s = disable_hosts(atm_ids)
+        log_action('ZABBIX_DISABLE', f'auto: disabled={s["disabled"]} skipped={s["skipped"]} failed={s["failed"]}')
+    except Exception as e:
+        logger.warning('background Zabbix disable failed: %s', e)
 
 EAT = timezone(timedelta(hours=3))
+
+ENABLE_SIMULATORS = os.environ.get('ENABLE_SIMULATORS', 'false').lower() in ('1', 'true', 'yes', 'on')
 
 def to_eat(dt, fmt='%Y-%m-%d %H:%M'):
     if not dt:
@@ -22,7 +73,51 @@ def to_eat(dt, fmt='%Y-%m-%d %H:%M'):
         return dt.astimezone(EAT).strftime(fmt)
     return str(dt)
 
-bp = Blueprint('admin', __name__, url_prefix='/admin')
+# No url_prefix. It was '/admin' for everything in this file, which made the
+# prefix describe which FILE the code lives in rather than who may reach it -
+# so a viewer read the ATM registry at /admin/atm. Admin-only routes now say
+# /admin explicitly; shared surfaces sit at /atms and /cash, where the path
+# matches the gate. A test enforces that /admin/* is always ADMIN-gated.
+bp = Blueprint('admin', __name__)
+
+# The registry and cash surfaces used to live behind /admin because that was the
+# file's url_prefix, not because they were privileged. Anything bookmarked,
+# pasted into a runbook or cited in a ticket keeps working via redirect, query
+# string included so saved searches and filters survive the move.
+#
+# 308, not 301: this prefix also fronted /admin/atm/save, /import and /delete, and
+# a 301 makes the browser re-issue those as GET - so a stale form would post into a
+# 405 instead of saving. 308 is permanent AND preserves the method and body.
+@bp.route('/admin/atm')
+@bp.route('/admin/atm/<path:rest>')
+def _legacy_registry_paths(rest=''):
+    target = '/atms' + (('' if rest.startswith('/') else '/') + rest if rest else '')
+    if request.query_string:
+        target += '?' + request.query_string.decode()
+    return redirect(target, code=308)
+
+
+@bp.route('/admin/cash')
+def _legacy_cash_path():
+    if request.query_string:
+        return redirect('/cash?' + request.query_string.decode(), code=308)
+    return redirect('/cash', code=308)
+
+# Credential fields: operator+ only. Viewers keep inventory visibility
+# (branch, city, IP) but must never receive shared secrets. Deliberately
+# NOT masking ip_address — it's ops inventory, not a credential.
+_CRED_FIELDS = ('snmp_community',)
+
+
+def _strip_secrets(row):
+    """Remove credential fields for viewer sessions (in place)."""
+    try:
+        if session.get('role') == ROLE_VIEWER:
+            for f in _CRED_FIELDS:
+                row.pop(f, None)
+    except Exception:
+        pass
+    return row
 
 ROLES = [ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN]
 
@@ -34,11 +129,28 @@ ATM_PORTS = {
     'ATM-004': 1164, 'ATM-005': 1165,
     'GRG-001': 1166, 'GRG-002': 1167,
 }
-CASSETTE_MAX = 2500  # notes-per-cassette capacity used for fill %
+CASSETTE_MAX = 2500  # default notes-per-cassette capacity used for fill %
+
+_CASSETTE_CAP_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                  'config', 'cassette_capacity.json')
+
+
+def load_cassette_capacity():
+    """Per-ATM notes-per-cassette capacity override (avoids a DB schema change).
+    config/cassette_capacity.json maps atm_id -> int; falls back to CASSETTE_MAX."""
+    try:
+        with open(_CASSETTE_CAP_PATH) as f:
+            data = json.load(f)
+        data.pop('_comment', None)
+        return data
+    except Exception:
+        return {}
 
 
 def get_sim_port(atm_id):
     """Return the simulator port for an ATM (from atm_locations.sim_port)."""
+    if not ENABLE_SIMULATORS:
+        return None
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -61,6 +173,8 @@ def assign_sim_port(atm_id, vendor):
     Uses a single global sequence (MAX(sim_port)+1) shared by NCR and GRG so
     ports never collide. Legacy ATMs keep their historical ports.
     """
+    if not ENABLE_SIMULATORS:
+        return
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -76,8 +190,37 @@ def assign_sim_port(atm_id, vendor):
         print(f"[assign_sim_port] {atm_id}: {e}")
 
 
+# Map legacy simulator metric OIDs to the Zabbix item keys the detail page
+# consumes. Used only to keep the (legacy, simulator-based) path keyed the same
+# way as the real-Zabbix path. Best-effort for OIDs that collide across vendors.
+SIM_TO_ZBX = {
+    '1.1.0': 'atm.status',
+    '1.2.0': 'atm.cash.cassette1', '1.3.0': 'atm.cash.cassette2',
+    '1.4.0': 'atm.cash.cassette3', '1.5.0': 'atm.cash.cassette4',
+    '1.6.0': 'atm.cash.rejectbin', '1.7.0': 'atm.cash.jam',
+    '2.1.0': 'atm.cash.cassette1', '2.2.0': 'atm.cash.cassette2',
+    '2.3.0': 'atm.cash.cassette3', '2.4.0': 'atm.cash.rejectbin',
+    '2.5.0': 'atm.cash.jam',
+    '3.1.0': 'atm.card.reader', '4.1.0': 'atm.printer.paper',
+    '4.2.0': 'atm.card.reader', '4.3.0': 'atm.hw.pinpad',
+    '4.4.0': 'atm.hw.dispenser', '4.5.0': 'atm.printer.receipt',
+    '4.6.0': 'atm.printer.journal', '5.1.0': 'atm.security.cabdoor',
+    '5.2.0': 'atm.security.vibration', '5.3.0': 'atm.env.temperature',
+    '6.1.0': 'atm.net.status', '6.2.0': 'atm.net.latency',
+    '6.3.0': 'atm.power.ups', '7.1.0': 'atm.net.link',
+    '7.2.0': 'atm.power.ups', '7.3.0': 'atm.security.alarm',
+    '8.1.0': 'atm.net.link', '8.2.0': 'atm.txn.total',
+    '8.3.0': 'atm.txn.failed', '9.1.0': 'atm.op.uptime',
+    '9.2.0': 'atm.op.downtime',
+}
+
+
+def _sim_to_zbx(raw):
+    return {SIM_TO_ZBX.get(k, k): v for k, v in (raw or {}).items()}
+
+
 def fetch_metrics(atm_id, port=None):
-    """Return the simulator /metrics JSON, or None if unreachable."""
+    """Return live metrics (keyed by Zabbix item keys) from the simulator, or None."""
     if port is None:
         port = get_sim_port(atm_id)
     if not port:
@@ -85,63 +228,283 @@ def fetch_metrics(atm_id, port=None):
     try:
         r = requests.get(f"http://{GATEWAY_IP}:{port}/metrics", timeout=3)
         if r.status_code == 200:
-            return r.json()
+            return _sim_to_zbx(r.json())
     except Exception:
         return None
     return None
 
 
-def determine_live_state(vendor, metrics):
-    """Derive ATM state from live metrics (mirrors state_manager.determine_state)."""
-    if not metrics:
+# ─── Zabbix API (real-ATM live telemetry) ────────────────────────────────────
+ZABBIX_URL = os.environ.get('ZABBIX_URL', 'http://zabbix-web:8080/api_jsonrpc.php')
+ZABBIX_USER = os.environ.get('ZABBIX_USER', 'Admin')
+ZABBIX_PASS = os.environ.get('ZABBIX_PASS', 'zabbix')
+
+_zbx_auth = {'token': None}
+
+
+def _zbx_post(payload):
+    req = urllib.request.Request(
+        ZABBIX_URL,
+        data=json.dumps(payload).encode(),
+        headers={'Content-Type': 'application/json-rpc'},
+    )
+    # 5s per call: LAN to zabbix-web answers in ms; a hung server must not
+    # pin a Flask worker (Monitoring Center fans out to 3+ sequential
+    # calls, so every second here multiplies on the page budget).
+    with urllib.request.urlopen(req, timeout=5) as r:
+        return json.loads(r.read().decode())
+
+
+def _zbx_login():
+    if _zbx_auth['token']:
+        return _zbx_auth['token']
+    try:
+        res = _zbx_post({'jsonrpc': '2.0', 'method': 'user.login',
+                         'params': {'username': ZABBIX_USER, 'password': ZABBIX_PASS}, 'id': 1})
+        _zbx_auth['token'] = res.get('result')
+    except Exception as e:
+        print(f"[ZABBIX] login failed: {e}")
+        _zbx_auth['token'] = None
+    return _zbx_auth['token']
+
+
+def _zbx_call(method, params, auth, _retried=False):
+    from zbx_session import error_text, is_auth_error
+    try:
+        res = _zbx_post({'jsonrpc': '2.0', 'method': method, 'params': params,
+                         'auth': auth, 'id': 1})
+    except Exception as e:
+        print(f"[ZABBIX] call {method} failed: {e}")
         return None
-    def m(oid, default=0):
-        v = metrics.get(oid)
-        return int(v) if v is not None else default
-    status = m('1.1.0')
-    if vendor == 'GRG':
-        cash1 = m('2.1.0'); cash2 = m('2.2.0')
-        cash_jam = m('2.5.0')
-        card = m('3.1.0')
-        net = m('8.1.0')
-    else:
-        cash1 = m('1.2.0'); cash2 = m('1.3.0')
-        cash_jam = m('1.7.0')
-        card = m('2.1.0')
-        net = m('7.1.0')
-    if net == 2:
-        return 'OFFLINE'
-    if status == 2:
-        return 'OUT_OF_SERVICE'
-    if status == 4:
-        return 'IN_SUPERVISOR'
-    if cash1 == 0 and cash2 == 0:
-        return 'OUT_OF_CASH'
-    if cash_jam == 1 or card == 2:
-        return 'HARDWARE_FAULT'
-    if status == 1:
-        return 'IN_SERVICE'
-    return 'UNKNOWN'
+
+    err = res.get('error')
+    if not err:
+        return res.get('result')
+
+    # An error response carries no 'result' key, so the old code returned None
+    # with no log at all. A dead session token therefore looked exactly like an
+    # ATM that was not reporting, and left nothing behind to diagnose - the
+    # container log was empty while the page said "not reachable".
+    text = error_text(err)
+    print(f"[ZABBIX] {method} error {err.get('code')}: {text}")
+
+    # The token is cached per worker and was never revalidated, so once a
+    # session expired that worker returned None for every ATM until the
+    # container was restarted - with three workers, that is a page that seems
+    # to work about two reloads in three.
+    if not _retried and is_auth_error(text):
+        _zbx_auth['token'] = None
+        fresh = _zbx_login()
+        if fresh and fresh != auth:
+            return _zbx_call(method, params, fresh, _retried=True)
+    return None
+
+
+def fetch_zabbix_metrics(atm_id):
+    """{item_key: lastvalue} for the ATM's Zabbix host, or None.
+
+    Cached for a few seconds (ZABBIX_METRICS_CACHE_TTL, default 10s). Telemetry
+    itself only refreshes every 10-30s, so this costs no accuracy and removes
+    the portal's own API stampede at fleet scale - see report-portal/zbx_cache.
+    """
+    from zbx_cache import get as _cached
+    return _cached(f'metrics:{atm_id}',
+                   lambda k: _fetch_zabbix_metrics(k.split(':', 1)[1]),
+                   cacheable=lambda v: v is not None)
+
+
+def _fetch_zabbix_metrics(atm_id):
+    auth = _zbx_login()
+    if not auth:
+        return None
+    try:
+        hosts = _zbx_call('host.get', {'output': ['hostid'],
+                                       'filter': {'host': [atm_id]}}, auth)
+        if not hosts:
+            return None
+        hostid = hosts[0]['hostid']
+        items = _zbx_call('item.get', {'hostids': [hostid],
+                                       'output': ['key_', 'lastvalue', 'lastclock'],
+                                       'filter': {'status': 0}}, auth)
+        if not items:
+            return None
+        # lastclock "0" = never collected (Zabbix still reports lastvalue "0"):
+        # map to None so the detail page shows grey no-data instead of fake zeros.
+        raw = {it['key_']: (it.get('lastvalue') if str(it.get('lastclock')) != '0' else None)
+               for it in items}
+        return normalize(raw)
+    except Exception as e:
+        # Silence here is why the first diagnosis produced an empty log: every
+        # failure path in this function returned None without saying so.
+        print(f"[ZABBIX] read failed for {atm_id}: {e!r}")
+        return None
+
+
+def fetch_agent_status(atm_id):
+    """Return whether Zabbix is still receiving data from the ATM's agent.
+
+    This is deliberately separate from the device's own ``Network`` chip:
+    that chip is XFS/WMI link state reported by the ATM, while this answers a
+    different question -- did the monitoring server hear from the agent
+    recently?  The two can disagree during an outage, and the page must never
+    make one look like the other.
+    """
+    from zbx_cache import get as _cached
+    return _cached(
+        f'agent-status:{atm_id}',
+        lambda key: _fetch_agent_status(key.split(':', 1)[1]),
+        cacheable=lambda value: value is not None,
+    )
+
+
+def _item_delay_seconds(value):
+    """Zabbix item delay ('30s', '1m', '5m', '1m/1m') -> seconds."""
+    match = re.match(r'\s*(\d+)\s*([smhd]?)', str(value or ''))
+    if not match:
+        return 60
+    number = int(match.group(1))
+    unit = match.group(2) or 's'
+    return max(1, number * {'s': 1, 'm': 60, 'h': 3600, 'd': 86400}[unit])
+
+
+def _age_label(seconds):
+    seconds = max(0, int(seconds))
+    if seconds < 90:
+        return f'{seconds} s ago'
+    if seconds < 5400:
+        return f'{seconds // 60} min ago'
+    if seconds < 172800:
+        return f'{seconds // 3600} h ago'
+    return f'{seconds // 86400} day{"s" if seconds >= 345600 else ""} ago'
+
+
+def _fetch_agent_status(atm_id):
+    auth = _zbx_login()
+    if not auth:
+        return None
+    hosts = _zbx_call('host.get', {'output': ['hostid'],
+                                   'filter': {'host': [atm_id]}}, auth)
+    if not hosts:
+        return {
+            'state': 'unknown',
+            'reason': 'This ATM is not enrolled in Zabbix, so agent '
+                      'reachability cannot be checked.',
+        }
+    items = _zbx_call('item.get', {
+        'hostids': [hosts[0]['hostid']],
+        'output': ['key_', 'lastclock', 'delay', 'type'],
+        'filter': {'status': 0},
+    }, auth)
+    if items is None:
+        return None
+
+    # Only Zabbix-agent item types prove the agent answered.  SNMP and HTTP
+    # agent items can stay fresh while TCP/10050 is dead, which is exactly the
+    # "Network OK / agent unreachable" disagreement this strip must expose.
+    # Dependent items inherit their master's clock and have delay 0; using
+    # them would guess the wrong cadence.
+    readings = []
+    for item in items:
+        if str(item.get('type')) not in ('0', '7'):
+            continue
+        if str(item.get('delay', '0')) == '0':
+            continue
+        try:
+            clock = int(item.get('lastclock') or 0)
+        except (TypeError, ValueError):
+            continue
+        if clock > 0:
+            readings.append((clock, _item_delay_seconds(item.get('delay'))))
+
+    if not readings:
+        return {
+            'state': 'unknown',
+            'reason': 'Zabbix has no collected agent reading for this ATM yet.',
+        }
+
+    clock, delay = max(readings, key=lambda row: row[0])
+    age = max(0, int(time.time()) - clock)
+    # One missed poll is normal; two plus slack is not.  The cap keeps a
+    # once-an-hour item from hiding an agent that stopped answering.
+    allowed = min(900, max(120, int(delay * 2.5) + 60))
+    reachable = age <= allowed
+    return {
+        'state': 'reachable' if reachable else 'unreachable',
+        'last_clock': clock,
+        'last_seen': to_eat(datetime.fromtimestamp(clock, tz=timezone.utc),
+                            '%d %b %H:%M'),
+        'age_seconds': age,
+        'age_label': _age_label(age),
+        'allowed_seconds': allowed,
+        'reason': ('Zabbix received agent data within the expected interval.'
+                   if reachable else
+                   'Zabbix has not received agent data within the expected '
+                   'interval.'),
+    }
+
+
+def determine_live_state(vendor, metrics):
+    """Derive ATM state from live Zabbix item values (mirrors state_manager.determine_state)."""
+    try:
+        import sys as _sys, os as _os
+        _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '..', '..'))
+        from zabbix_modules.status_rules import interpret_state
+        return interpret_state(vendor, metrics)
+    except Exception:
+        # Fallback kept in sync with zabbix_modules/status_rules.py
+        if not metrics:
+            return None
+        def m(key, default=0):
+            v = metrics.get(key)
+            try:
+                return int(v) if v is not None else default
+            except (TypeError, ValueError):
+                return default
+        status = m('atm.status')
+        net = m('atm.net.link')
+        cash1 = m('atm.cash.cassette1')
+        cash2 = m('atm.cash.cassette2')
+        cash_jam = m('atm.cash.jam')
+        card = m('atm.card.reader')
+        if net == 2:
+            return 'OFFLINE'
+        if status == 2:
+            return 'OUT_OF_SERVICE'
+        if status == 4:
+            return 'IN_SUPERVISOR'
+        if cash1 == 0 and cash2 == 0:
+            return 'OUT_OF_CASH'
+        if cash_jam == 1 or card == 2:
+            return 'HARDWARE_FAULT'
+        if status == 1:
+            return 'IN_SERVICE'
+        return 'UNKNOWN'
 
 
 def batch_fetch_live_states(atms):
-    """Fetch live metrics for a list of ATM dicts in parallel.
+    """Fetch live state for a list of ATM dicts in parallel.
     Returns dict: {atm_id: (state, datetime)} for reachable ATMs only.
+    Uses the Zabbix API when simulators are disabled (UAT), else the sim engine.
     """
     def fetch_one(atm):
         atm_id = atm['atm_id']
         vendor = atm.get('vendor', 'NCR')
-        port = atm.get('sim_port')
-        if not port:
-            return (atm_id, None, None)
-        try:
-            r = requests.get(f"http://{GATEWAY_IP}:{port}/metrics", timeout=2)
-            if r.status_code == 200:
-                state = determine_live_state(vendor, r.json())
-                if state:
-                    return (atm_id, state, datetime.now(timezone.utc))
-        except Exception:
-            pass
+        metrics = None
+        if ENABLE_SIMULATORS:
+            port = atm.get('sim_port')
+            if not port:
+                return (atm_id, None, None)
+            try:
+                r = requests.get(f"http://{GATEWAY_IP}:{port}/metrics", timeout=2)
+                metrics = _sim_to_zbx(r.json()) if r.status_code == 200 else None
+            except Exception:
+                metrics = None
+        else:
+            metrics = fetch_zabbix_metrics(atm_id)
+        if metrics:
+            state = determine_live_state(vendor, metrics)
+            if state:
+                return (atm_id, state, datetime.now(timezone.utc))
         return (atm_id, None, None)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
@@ -149,7 +512,7 @@ def batch_fetch_live_states(atms):
     return {r[0]: (r[1], r[2]) for r in results if r[1] is not None}
 
 
-def build_cassettes(vendor, m):
+def build_cassettes(vendor, m, capacity=CASSETTE_MAX):
     """Cash-cassette / module layout inside the ATM 'vault' with SVG geometry + fill level.
     Coordinates are expressed in the 320x540 viewBox used by the detail-page SVG."""
     # Vault interior area (matches the <rect> drawn in the template)
@@ -157,14 +520,14 @@ def build_cassettes(vendor, m):
 
     def slot(key, label, x, y, w, h):
         val = m.get(key)
-        if val is None:
+        if val is None or val == "":
             return {'label': label, 'x': x, 'y': y, 'w': w, 'h': h,
                     'pct': None, 'fill_h': 0, 'fill_y': y + h, 'color': 'grey', 'notes': None}
         try:
             val = int(val)
         except (TypeError, ValueError):
             val = 0
-        pct = max(0, min(100, round(val / CASSETTE_MAX * 100)))
+        pct = max(0, min(100, round(val / capacity * 100)))
         fh = round(h * pct / 100)
         color = 'green' if pct > 40 else ('amber' if pct >= 15 else 'red')
         return {'label': label, 'x': x, 'y': y, 'w': w, 'h': h,
@@ -172,7 +535,7 @@ def build_cassettes(vendor, m):
 
     out = []
     if vendor == 'NCR':  # 2 x 2 cassette grid
-        keys = ['1.2.0', '1.3.0', '1.4.0', '1.5.0']
+        keys = ['atm.cash.cassette1', 'atm.cash.cassette2', 'atm.cash.cassette3', 'atm.cash.cassette4']
         labels = ['Cass 1', 'Cass 2', 'Cass 3', 'Cass 4']
         gap = 12
         cw = (VW - gap) / 2
@@ -182,8 +545,17 @@ def build_cassettes(vendor, m):
             x = VX + c * (cw + gap)
             y = VY + r * (ch + gap)
             out.append(slot(k, lbl, x, y, cw, ch))
-    else:  # GRG — three module bays side by side
-        keys = ['2.1.0', '2.2.0', '2.3.0']
+    elif is_xfs(m):
+        gap = 10
+        cw = (VW - gap) / 2
+        ch = (VH - gap) / 2
+        for i, unit in enumerate(DISPENSE_UNITS):
+            r, c = divmod(i, 2)
+            x = VX + c * (cw + gap)
+            y = VY + r * (ch + gap)
+            out.append(slot(f'atm.cash.cassette{i + 1}', unit, x, y, cw, ch))
+    else:  # GRG SNMP — three module bays side by side
+        keys = ['atm.cash.cassette1', 'atm.cash.cassette2', 'atm.cash.cassette3']
         labels = ['Module 1', 'Module 2', 'Module 3']
         gap = 14
         cw = (VW - 2 * gap) / 3
@@ -195,38 +567,13 @@ def build_cassettes(vendor, m):
     return out
 
 
-def build_hardware(vendor, m):
-    """Hardware component status pills. ok=green, warn=amber, error=red.
+# Hardware chip / parts rendering lives in hardware_view.py (stdlib-only, unit
+# tested) - the same split as onboard_rules.py: load-bearing display logic must
+# be verifiable without booting Flask.
+from hardware_view import (build_hardware, build_part_rows, build_device_rows,
+                           _wmi_chip, _wmi_dev, _wmi_code, _worst, _RANK,
+                           PART_WORDS, DEV_WORDS)
 
-    The components shown here MUST mirror the OIDs that drive the overall
-    ATM state in `state_manager.determine_state` (cash_jam + card_reader),
-    otherwise the detail page disagrees with the HARDWARE_FAULT badge.
-    """
-    if vendor == 'NCR':
-        cash_jam = m.get('1.7.0') or 0
-        card = m.get('2.1.0') or 0
-        comps = [
-            ('Card reader', 'ok' if card == 1 else ('error' if card == 2 else 'error')),
-            ('Printer', 'ok' if m.get('3.1.0') == 1 else 'error'),
-            ('Pin pad', 'ok'),
-            ('Cash jam', 'error' if cash_jam == 1 else 'ok'),
-            ('Retract bin', 'ok' if (m.get('1.6.0') or 0) < 80 else 'warn'),
-            ('Network', 'ok' if m.get('7.1.0') == 1 else 'error'),
-            ('UPS', 'ok' if (m.get('6.3.0') or 0) > 20 else 'error'),
-        ]
-    else:  # GRG
-        cash_jam = m.get('2.5.0') or 0
-        card = m.get('3.1.0') or 0
-        comps = [
-            ('Card reader', 'ok' if card == 1 else ('error' if card == 2 else 'error')),
-            ('Printer', 'ok' if m.get('4.1.0') == 1 else 'error'),
-            ('Pin pad', 'ok'),
-            ('Cash jam', 'error' if cash_jam == 1 else 'ok'),
-            ('Retract bin', 'ok' if (m.get('2.4.0') or 0) < 80 else 'warn'),
-            ('Network', 'ok' if m.get('8.1.0') == 1 else 'error'),
-            ('UPS', 'ok' if (m.get('7.2.0') or 0) > 20 else 'error'),
-        ]
-    return [{'name': n, 'status': s} for n, s in comps]
 
 
 FIELDS = [
@@ -243,16 +590,24 @@ FIELDS = [
     ('model',       'Model',        'text',   50),
     ('install_date','Install Date', 'date',   None),
     ('status',      'Status',       'select', None),
+    ('ip_address',  'IP Address',   'text',   45),
+    ('snmp_community', 'SNMP Community', 'password', 100),
+    ('snmp_version','SNMP Version', 'select', None),
+    ('ej_log_format','EJ Format',   'select', None),
+    ('ej_hostname', 'EJ Hostname',  'text',   64),
 ]
 
 
-@bp.route('/atm')
+@bp.route('/atms')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_list():
     search = request.args.get('search', '').strip()
     vendor = request.args.get('vendor', '').strip()
     status = request.args.get('status', '').strip()
+    state_filter = request.args.get('state', '').strip().upper()
+    if state_filter and state_filter not in FILTER_STATES:
+        state_filter = ''
     region = request.args.get('region', '').strip()
     city = request.args.get('city', '').strip()
     per_page = 50
@@ -265,43 +620,72 @@ def atm_list():
     with get_db() as conn:
         cur = conn.cursor()
 
-        clauses = []
-        params = []
+        base_clauses = []
+        base_params = []
         if search:
             like = f'%{search}%'
-            clauses.append("(l.atm_id ILIKE %s OR l.branch ILIKE %s "
-                           "OR l.district ILIKE %s OR l.city ILIKE %s OR l.region ILIKE %s)")
-            params.extend([like, like, like, like, like])
+            base_clauses.append("(l.atm_id ILIKE %s OR l.branch ILIKE %s "
+                                "OR l.district ILIKE %s OR l.city ILIKE %s OR l.region ILIKE %s)")
+            base_params.extend([like, like, like, like, like])
         if vendor:
-            clauses.append("l.vendor = %s")
-            params.append(vendor)
+            base_clauses.append("l.vendor = %s")
+            base_params.append(vendor)
         if status:
-            clauses.append("l.status = %s")
-            params.append(status)
+            base_clauses.append("l.status = %s")
+            base_params.append(status)
         if region:
-            clauses.append("l.region = %s")
-            params.append(region)
+            base_clauses.append("l.region = %s")
+            base_params.append(region)
         if city:
-            clauses.append("l.city = %s")
-            params.append(city)
+            base_clauses.append("l.city = %s")
+            base_params.append(city)
 
-        where = "WHERE " + " AND ".join(clauses) if clauses else ""
+        # The list is paginated, so filter on the persisted state (the system
+        # of record, refreshed by state_manager every 30s) rather than fetching
+        # live state for the whole fleet on every request. The visible rows
+        # still get the fresh live overlay below.
+        list_clauses = list(base_clauses)
+        list_params = list(base_params)
+        if state_filter:
+            list_clauses.append("COALESCE(s.state, 'UNKNOWN') = %s")
+            list_params.append(state_filter)
 
-        cur.execute(f"SELECT COUNT(*) FROM atm_locations l {where}", params)
+        from_sql = ("FROM atm_locations l "
+                    "LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id")
+        list_where = "WHERE " + " AND ".join(list_clauses) if list_clauses else ""
+        base_where = "WHERE " + " AND ".join(base_clauses) if base_clauses else ""
+
+        cur.execute(f"SELECT COUNT(*) {from_sql} {list_where}", list_params)
         total = cur.fetchone()[0]
         total_pages = max(1, (total + per_page - 1) // per_page)
         page = min(page, total_pages)
 
-        cur.execute(f"""SELECT l.*, s.state, s.last_seen AT TIME ZONE 'Africa/Addis_Ababa' as last_seen,
+        cur.execute(f"""SELECT l.*, s.state, s.last_seen AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa' as last_seen,
                                s.state_changed_at
-                        FROM atm_locations l
-                        LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id
-                        {where}
+                        {from_sql}
+                        {list_where}
                         ORDER BY l.atm_id LIMIT %s OFFSET %s""",
-                    params + [per_page, (page - 1) * per_page])
+                    list_params + [per_page, (page - 1) * per_page])
 
         cols = [d[0] for d in cur.description]
         rows = cur.fetchall()
+
+        # Counts for every state chip. Deliberately excludes the state filter
+        # itself so the chips stay switchable while vendor/region/search are
+        # active. Persisted state, same source as the filter above.
+        cur.execute(f"""SELECT COALESCE(s.state, 'UNKNOWN') AS state, COUNT(*)
+                        {from_sql}
+                        {base_where}
+                        GROUP BY 1""", base_params)
+        raw_counts = {r[0]: int(r[1]) for r in cur.fetchall()}
+        state_all_count = sum(raw_counts.values())
+        state_counts = {key: raw_counts.get(key, 0) for key in STATE_ORDER}
+        state_extra = [
+            {'state': key, 'label': state_label(key),
+             'colour': state_colour(key), 'count': raw_counts[key]}
+            for key in ('NOT_PROVISIONED', 'INACTIVE')
+            if raw_counts.get(key)
+        ]
 
         # Fetch distinct filter options from the DB for the dropdowns
         cur.execute("SELECT DISTINCT region FROM atm_locations WHERE region IS NOT NULL ORDER BY region")
@@ -320,6 +704,7 @@ def atm_list():
     # Override state/last_seen with live sim-engine data (parallel fetch)
     live_states = batch_fetch_live_states(atms)
     for atm in atms:
+        atm['stored_state'] = atm.get('state')
         ls = live_states.get(atm['atm_id'])
         if ls:
             atm['state'] = ls[0]
@@ -346,15 +731,82 @@ def atm_list():
     except Exception:
         summary = {'registered': total, 'in_service': 0, 'ncr': 0, 'grg': 0}
 
+    summary['in_service'] = merge_live_in_service(summary['in_service'], atms)
+
     return render_template('admin_atm.html', atms=atms, atm_count=total,
                            page=page, total_pages=total_pages,
                            search=search, fields=FIELDS, summary=summary,
                            f_vendor=vendor, f_status=status, f_region=region, f_city=city,
+                           f_state=state_filter,
+                           state_counts=state_counts, state_all_count=state_all_count,
+                           state_extra=state_extra,
                            filter_options={'regions': region_options, 'cities': city_options},
                            vendor_options=vendor_options)
 
 
-@bp.route('/atm/<atm_id>')
+def _telemetry_note(metrics):
+    """Why a live panel is empty, in words that are true.
+
+    'ATM not reachable' was a claim the portal cannot support. When the Zabbix
+    read fails, the portal knows one thing: it could not read Zabbix. The ATM
+    may be reporting perfectly - a direct `zabbix_get` to the agent answered
+    while the page said the machine was unreachable. Saying so is the same rule
+    hardware_view.py already enforces for chips: never red without a value.
+    """
+    if metrics is None:
+        return ('No live telemetry: the portal could not read Zabbix. This is a '
+                'portal-side read failure, not evidence that the ATM is down.')
+    return 'Zabbix has no collected reading for this component yet.'
+
+
+def _fmt_epoch(value):
+    """Zabbix epoch → EAT label, matching the rest of the portal."""
+    try:
+        return datetime.fromtimestamp(int(value), tz=timezone.utc).astimezone(
+            timezone(timedelta(hours=3))).strftime('%d %b %H:%M')
+    except (TypeError, ValueError):
+        return '—'
+
+
+def _atm_hostid(atm_id, auth):
+    """Zabbix hostid for an ATM, or None when it was never provisioned."""
+    rows = _zbx_call('host.get', {'output': ['hostid'],
+                                  'filter': {'host': [atm_id]}}, auth)
+    return str(rows[0]['hostid']) if rows else None
+
+
+def _atm_maintenance(atm_id):
+    """(hostid, active_window, error) for the ATM detail page.
+
+    Never raises: the page must render when Zabbix is down. A failed read is
+    returned as an error, never as an empty window - "not in maintenance" is
+    exactly the reading an operator would act on.
+    """
+    try:
+        auth = _zbx_login()
+        if not auth:
+            return None, None, 'Cannot reach the Zabbix API.'
+        hostid = _atm_hostid(atm_id, auth)
+        if not hostid:
+            return None, None, 'No Zabbix host is registered for this ATM.'
+        rows = _zbx_call('maintenance.get', {
+            'hostids': [hostid], 'output': 'extend',
+            'selectHosts': ['hostid']}, auth)
+        if rows is None:
+            return hostid, None, 'Maintenance state is unavailable right now.'
+        from maintenance import active_window
+        active = active_window(rows, hostid, time.time())
+        if active:
+            active = dict(active)
+            active['since_label'] = _fmt_epoch(active.get('active_since'))
+            active['until_label'] = _fmt_epoch(active.get('active_till'))
+        return hostid, active, None
+    except Exception as e:
+        logger.warning('maintenance lookup failed for %s: %s', atm_id, e)
+        return None, None, 'Maintenance state is unavailable right now.'
+
+
+@bp.route('/atms/<atm_id>')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_detail(atm_id):
@@ -365,7 +817,7 @@ def atm_detail(atm_id):
                 SELECT l.*,
                     COALESCE(s.state, 'UNKNOWN') as current_state,
                     s.state_changed_at,
-                    s.last_seen AT TIME ZONE 'Africa/Addis_Ababa' as last_seen
+                    s.last_seen AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa' as last_seen
                 FROM atm_locations l
                 LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id
                 WHERE l.atm_id = %s
@@ -375,12 +827,29 @@ def atm_detail(atm_id):
             cur.close()
         if not row:
             abort(404)
-        atm = dict(zip(cols, row))
+        atm = _strip_secrets(dict(zip(cols, row)))
         vendor = atm.get('vendor')
 
-        metrics = fetch_metrics(atm_id, port=atm.get('sim_port'))
-        cassettes = build_cassettes(vendor, metrics) if metrics else []
-        hardware = build_hardware(vendor, metrics) if metrics else []
+        metrics = fetch_metrics(atm_id, port=atm.get('sim_port')) if ENABLE_SIMULATORS \
+            else fetch_zabbix_metrics(atm_id)
+        if ENABLE_SIMULATORS:
+            agent_status = {
+                'state': 'unknown',
+                'reason': 'Simulator mode: Zabbix agent reachability is not '
+                          'checked for this host.',
+            }
+        else:
+            try:
+                agent_status = fetch_agent_status(atm_id)
+            except Exception as exc:  # noqa: BLE001 - telemetry card is optional
+                logger.warning('agent status read failed for %s: %s', atm_id, exc)
+                agent_status = None
+        cap_map = load_cassette_capacity()
+        cassette_cap = cap_map.get(atm_id, CASSETTE_MAX)
+        cassettes = build_cassettes(vendor, metrics, cassette_cap) if metrics else []
+        hw, hw_source = build_hardware(vendor, metrics) if metrics else ([], None)
+        part_rows = build_part_rows(metrics) if metrics else []
+        device_rows = build_device_rows(metrics) if metrics else []
 
         # Override current_state with live data for consistency
         if metrics:
@@ -399,7 +868,7 @@ def atm_detail(atm_id):
                         / NULLIF(COUNT(*), 0), 1),
                     COALESCE(SUM(CASE WHEN status='APPROVED' AND txn_type='WITHDRAWAL'
                         THEN amount ELSE 0 END), 0)
-                FROM atm_transactions
+                FROM atm_transactions_visible
                 WHERE atm_id = %s AND recorded_at >= NOW() - INTERVAL '24 hours'
             """, (atm_id,))
             q = cur.fetchone()
@@ -407,38 +876,199 @@ def atm_detail(atm_id):
             success_rate = float(q[1] or 0)
             cash_today = float(q[2] or 0)
             cur.execute("""
-                SELECT COUNT(*) FROM atm_transactions
+                SELECT COUNT(*) FROM atm_transactions_visible
                 WHERE atm_id = %s AND status = 'ERROR'
                 AND recorded_at >= NOW() - INTERVAL '24 hours'
             """, (atm_id,))
             active_faults = int(cur.fetchone()[0] or 0)
             cur.execute("""
                 SELECT
-                    TO_CHAR(recorded_at AT TIME ZONE 'Africa/Addis_Ababa', 'HH24:MI:SS'),
-                    txn_type, card_masked, amount, status, auth_code,
+                    TO_CHAR(t.recorded_at AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa', 'HH24:MI:SS'),
+                    t.txn_type, t.card_masked, t.amount, t.status, t.auth_code,
                     COALESCE(f.display_name, t.error_code) AS error_label
-                FROM atm_transactions t
-                LEFT JOIN fault_type_map f ON t.error_code = f.raw_fault_code
-                WHERE atm_id = %s
-                ORDER BY recorded_at DESC
+                FROM atm_transactions_visible t
+                LEFT JOIN atm_locations l ON t.atm_id = l.atm_id
+                LEFT JOIN fault_type_map f ON t.error_code = f.raw_fault_code AND f.vendor = l.vendor
+                WHERE t.atm_id = %s
+                ORDER BY t.recorded_at DESC
                 LIMIT 20
             """, (atm_id,))
             txns = cur.fetchall()
+
+            ej_runs = []
+            ej_evidence_note = ''
+            if session.get('role') == ROLE_ADMIN:
+                try:
+                    cur.execute("""
+                        SELECT id, file_path, journal_date, parsed_at, sessions,
+                               status, error
+                          FROM ej_parse_runs
+                         WHERE atm_id = %s
+                         ORDER BY journal_date DESC NULLS LAST, parsed_at DESC
+                         LIMIT 5
+                    """, (atm_id,))
+                    for r in cur.fetchall():
+                        info = raw_info(r[1])
+                        ej_runs.append({
+                            'id': r[0],
+                            'file_label': os.path.basename(
+                                str(r[1]).replace('\\', '/')),
+                            'journal_date': r[2].isoformat() if r[2] else '—',
+                            'parsed_at': to_eat(r[3], '%Y-%m-%d %H:%M'),
+                            'sessions': r[4] or 0,
+                            'status': r[5] or '—',
+                            'error': r[6] or '',
+                            **info,
+                        })
+                except Exception as exc:  # noqa: BLE001 - EJ staging is optional here
+                    logger.warning('ATM detail EJ evidence unavailable: %s', exc)
+                    ej_evidence_note = (
+                        'EJ evidence is unavailable until the staging schema is applied.'
+                    )
             cur.close()
+
+        # BRD 5.3 depletion forecast. Best-effort: the page must render even
+        # if the forecast cannot be computed - the card then says why.
+        cash_outlook = None
+        try:
+            from cash_service import forecast_atm
+            cash_outlook = forecast_atm(atm_id)
+        except Exception as e:
+            import logging as _logging
+            _logging.getLogger(__name__).warning('cash forecast unavailable: %s', e)
+
+        from maintenance import options as maintenance_options
+        maintenance_hostid, maintenance_active, maintenance_error = _atm_maintenance(atm_id)
+        maintenance_opts = maintenance_options(session.get('role') == ROLE_ADMIN)
+        can_maintain = session.get('role') in (ROLE_OPERATOR, ROLE_ADMIN)
 
         return render_template('admin_atm_detail.html',
                                atm=atm, vendor=vendor, cassettes=cassettes,
-                               hardware=hardware, metrics_online=metrics is not None,
+                               hardware=hw, hw_source=hw_source,
+                               part_rows=part_rows, device_rows=device_rows,
+                               metrics_online=metrics is not None,
+                               telemetry_note=_telemetry_note(metrics),
+                               agent_status=agent_status,
                                total_txns=total_txns, success_rate=success_rate,
                                cash_today=cash_today, active_faults=active_faults,
-                               txns=txns)
+                               txns=txns, cash_outlook=cash_outlook,
+                               maintenance_hostid=maintenance_hostid,
+                               maintenance_active=maintenance_active,
+                               maintenance_error=maintenance_error,
+                               maintenance_options=maintenance_opts,
+                               can_maintain=can_maintain,
+                               ej_runs=ej_runs,
+                               ej_evidence_note=ej_evidence_note,
+                               can_view_ej=session.get('role') == ROLE_ADMIN)
     except Exception as e:
         import logging
         logging.getLogger(__name__).error('ATM detail error: %s', e, exc_info=True)
         return render_template('error_500.html'), 500
 
 
-@bp.route('/atm/get')
+@bp.route('/atms/<atm_id>/maintenance/start', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def atm_maintenance_start(atm_id):
+    """One-host service window: data keeps flowing, alerts are hidden."""
+    from maintenance import active_window, create_params, window
+    back = redirect(url_for('admin.atm_detail', atm_id=atm_id))
+    reason = (request.form.get('reason') or '').strip()
+    duration = request.form.get('duration') or ''
+    if len(reason) < 5:
+        flash('Give a reason of at least 5 characters.', 'error')
+        return back
+    is_admin = session.get('role') == ROLE_ADMIN
+    try:
+        window(duration, time.time(), admin=is_admin)
+    except ValueError as e:
+        flash(str(e), 'error')
+        return back
+
+    auth = _zbx_login()
+    if not auth:
+        flash('Cannot reach the Zabbix API — no service window was started.', 'error')
+        return back
+    hostid = _atm_hostid(atm_id, auth)
+    if not hostid:
+        flash('No Zabbix host is registered for this ATM.', 'error')
+        return back
+
+    # Fail closed: without a readable current state we cannot rule out an
+    # overlapping window, and duplicates are worse than a retry.
+    existing = _zbx_call('maintenance.get', {
+        'hostids': [hostid], 'output': 'extend',
+        'selectHosts': ['hostid']}, auth)
+    if existing is None:
+        flash('Cannot read the current maintenance state — no service window was started.',
+              'error')
+        return back
+    if active_window(existing, hostid, time.time()):
+        flash('This ATM is already in a service window. End it first.', 'error')
+        return back
+
+    try:
+        params = create_params(hostid, atm_id, reason, duration, time.time(),
+                               admin=is_admin, actor=session.get('username'))
+    except ValueError as e:
+        flash(str(e), 'error')
+        return back
+
+    result = _zbx_call('maintenance.create', params, auth)
+    if not result:
+        log_action('MAINTENANCE_START_FAILED',
+                   'atm=%s hostid=%s — %s' % (atm_id, hostid, reason))
+        flash('Zabbix did not accept the service window.', 'error')
+        return back
+    mid = (result.get('maintenanceids') or [None])[0] \
+        if isinstance(result, dict) else None
+    log_action('MAINTENANCE_START',
+               'atm=%s hostid=%s maintenanceid=%s until=%s — %s'
+               % (atm_id, hostid, mid or '?', _fmt_epoch(params['active_till']), reason))
+    flash('Service mode started until %s EAT. Problems for this ATM are hidden; '
+          'data collection continues.' % _fmt_epoch(params['active_till']), 'success')
+    return back
+
+
+@bp.route('/atms/<atm_id>/maintenance/end', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def atm_maintenance_end(atm_id):
+    """End this ATM's active window — never an id supplied by the client."""
+    from maintenance import active_window
+    back = redirect(url_for('admin.atm_detail', atm_id=atm_id))
+    auth = _zbx_login()
+    if not auth:
+        flash('Cannot reach the Zabbix API — the service window was left unchanged.', 'error')
+        return back
+    hostid = _atm_hostid(atm_id, auth)
+    if not hostid:
+        flash('No Zabbix host is registered for this ATM.', 'error')
+        return back
+    rows = _zbx_call('maintenance.get', {
+        'hostids': [hostid], 'output': 'extend',
+        'selectHosts': ['hostid']}, auth)
+    if rows is None:
+        flash('Cannot read the current maintenance state — nothing was changed.', 'error')
+        return back
+    active = active_window(rows, hostid, time.time())
+    if not active:
+        flash('This ATM has no active service window.', 'error')
+        return back
+    mid = str(active.get('maintenanceid'))
+    result = _zbx_call('maintenance.delete', [mid], auth)
+    if not result:
+        log_action('MAINTENANCE_END_FAILED',
+                   'atm=%s hostid=%s maintenanceid=%s' % (atm_id, hostid, mid))
+        flash('Zabbix did not end the service window.', 'error')
+        return back
+    log_action('MAINTENANCE_END',
+               'atm=%s hostid=%s maintenanceid=%s' % (atm_id, hostid, mid))
+    flash('Service mode ended for %s.' % atm_id, 'success')
+    return back
+
+
+@bp.route('/atms/get')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_get():
@@ -453,101 +1083,264 @@ def atm_get():
         cur.close()
     if not row:
         return jsonify({'error': True, 'message': f'ATM {atm_id} not found'}), 404
-    return jsonify(dict(zip(cols, row)))
+    return jsonify(_strip_secrets(dict(zip(cols, row))))
 
 
-@bp.route('/atm/save', methods=['POST'])
+def _audit_val(v):
+    if v is None or v == '':
+        return '(empty)'
+    return str(v)
+
+
+def _norm_branch(v):
+    """Owner-branch convention: single spaces, one trailing ' BRANCH'.
+    Matches the ATM team's own template ('MAKIRA BRANCH', 'WOLDIA BRANCH').
+    Idempotent — already-clean names pass through byte-identical."""
+    if v is None:
+        return None
+    v = re.sub(r'\s+', ' ', str(v)).strip()
+    if not v:
+        return None
+    if v.upper().endswith('BRANCH'):
+        v = v[:-len('BRANCH')].rstrip() + ' BRANCH'
+    else:
+        v = v + ' BRANCH'
+    return v
+
+
+def _row_diff(old, new, skip=()):
+    """Changed fields as ['field: old => new']. Secrets never leak:
+    snmp_community shows only that it changed."""
+    diffs = []
+    for k in new:
+        if k in skip or k not in old:
+            continue
+        o, n = _audit_val(old.get(k)), _audit_val(new.get(k))
+        if o != n:
+            if k == 'snmp_community':
+                diffs.append('snmp_community: **** => **** (rotated)')
+            else:
+                diffs.append(f'{k}: {o} => {n}')
+    for k in new:
+        if k not in old and k not in skip and _audit_val(new.get(k)) != '(empty)':
+            diffs.append(f'{k}: (new) {_audit_val(new.get(k))}')
+    return diffs
+
+
+def normalise_atm_form(raw):
+    """Form dict -> canonical ATM facts. One set of rules for every entry
+    point, so the Registration page and the onboarding wizard cannot disagree
+    about defaults, blank handling, or the branch convention."""
+    data = {}
+    for f in FIELDS:
+        v = (raw.get(f[0]) or '').strip()
+        data[f[0]] = v if v else None
+    # Name is optional in the form; default it so the Name column is never blank.
+    if not data.get('atm_name'):
+        data['atm_name'] = data.get('branch') or data.get('atm_id')
+    # Owner-branch convention (validated + stored in canonical form).
+    data['branch'] = _norm_branch(data.get('branch'))
+    return data
+
+
+def save_atm_record(data, source='registration'):
+    """THE single DB writer for ATM facts.
+
+    Validation, upsert, state seeding, sim-port assignment and the audit line
+    all live here. Both /atms/save and the onboarding wizard call it, so a
+    second writer cannot drift away from the first — which is how ATM records
+    ended up half-saved in the past.
+
+    Returns {'ok', 'errors', 'audit_detail', 'atm_id', 'created'}. Never
+    raises: a database failure comes back as errors.
+    """
+    errors = _validate(data)
+    if errors:
+        return {'ok': False, 'errors': errors, 'audit_detail': '',
+                'atm_id': data.get('atm_id'), 'created': False}
+
+    created = False
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            try:
+                # Before-image for the audit trail (None = create, not update).
+                cur.execute("SELECT * FROM atm_locations WHERE atm_id = %s", (data['atm_id'],))
+                _cols = [d[0] for d in cur.description]
+                _fetched = cur.fetchone()
+                old_row = dict(zip(_cols, _fetched)) if _fetched else None
+                created = old_row is None
+                cur.execute("""
+                    INSERT INTO atm_locations
+                        (atm_id, atm_name, branch, district, city, region, latitude, longitude,
+                         terminal_id, vendor, model, install_date, status,
+                         ip_address, snmp_community, snmp_version, ej_log_format, ej_hostname)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (atm_id) DO UPDATE SET
+                        atm_name     = EXCLUDED.atm_name,
+                        branch       = EXCLUDED.branch,
+                        district     = EXCLUDED.district,
+                        city         = EXCLUDED.city,
+                        region       = EXCLUDED.region,
+                        latitude     = EXCLUDED.latitude,
+                        longitude    = EXCLUDED.longitude,
+                        terminal_id  = EXCLUDED.terminal_id,
+                        vendor       = EXCLUDED.vendor,
+                        model        = EXCLUDED.model,
+                        install_date = EXCLUDED.install_date,
+                        status       = EXCLUDED.status,
+                        -- Network fields: only overwrite when the form supplied a
+                        -- value, so editing branch/city never wipes SNMP/IP data.
+                        ip_address   = COALESCE(EXCLUDED.ip_address, atm_locations.ip_address),
+                        snmp_community = COALESCE(EXCLUDED.snmp_community, atm_locations.snmp_community),
+                        snmp_version = COALESCE(EXCLUDED.snmp_version, atm_locations.snmp_version),
+                        ej_log_format = COALESCE(EXCLUDED.ej_log_format, atm_locations.ej_log_format),
+                        -- Same COALESCE rule as the other network fields: a blank
+                        -- form must not wipe a hostname the pull depends on.
+                        ej_hostname   = COALESCE(EXCLUDED.ej_hostname, atm_locations.ej_hostname)
+                """, (
+                    data['atm_id'], data['atm_name'], data['branch'], data['district'], data['city'],
+                    data['region'], data['latitude'], data['longitude'],
+                    data['terminal_id'], data['vendor'], data['model'],
+                    data['install_date'], data['status'],
+                    data.get('ip_address'), data.get('snmp_community'),
+                    data.get('snmp_version'), data.get('ej_log_format'),
+                    data.get('ej_hostname')
+                ))
+                # Seed initial state; inactive ATMs get a dedicated state
+                if data['status'] == 'inactive':
+                    cur.execute("""
+                        INSERT INTO atm_current_state (atm_id, state, last_seen, updated_at)
+                        VALUES (%s, 'INACTIVE', NOW(), NOW())
+                        ON CONFLICT (atm_id) DO UPDATE SET state = 'INACTIVE', updated_at = NOW()
+                    """, (data['atm_id'],))
+                else:
+                    cur.execute("""
+                        INSERT INTO atm_current_state (atm_id, state, last_seen, updated_at)
+                        VALUES (%s, 'UNKNOWN', NOW(), NOW())
+                        ON CONFLICT (atm_id) DO UPDATE
+                            SET state = CASE WHEN atm_current_state.state = 'INACTIVE' THEN 'UNKNOWN' ELSE atm_current_state.state END,
+                                updated_at = NOW()
+                    """, (data['atm_id'],))
+                conn.commit()
+                # After-image: re-read the effective row (COALESCE logic means
+                # the stored row can differ from what was submitted) and diff.
+                cur.execute("SELECT * FROM atm_locations WHERE atm_id = %s", (data['atm_id'],))
+                _ncols = [d[0] for d in cur.description]
+                _nrow = cur.fetchone()
+                new_row = dict(zip(_ncols, _nrow)) if _nrow else {}
+                if old_row is None:
+                    audit_detail = (f'ATM {data["atm_id"]} created: ' +
+                                    ', '.join(f'{k}={_audit_val(new_row.get(k, v))}'
+                                              for k, v in data.items()
+                                              if k != 'snmp_community' and v) +
+                                    ('; snmp_community set' if data.get('snmp_community') else ''))
+                else:
+                    diffs = _row_diff(old_row, new_row, skip=('sim_port',))
+                    audit_detail = (f'ATM {data["atm_id"]} updated: ' + '; '.join(diffs)
+                                    if diffs else f'ATM {data["atm_id"]} saved (no changes)')
+                # Auto-allocate a simulator port so the new ATM behaves like the others
+                assign_sim_port(data['atm_id'], data['vendor'])
+            except Exception as e:
+                conn.rollback()
+                err_msg = str(e)
+                if 'duplicate key' in err_msg.lower() or 'unique' in err_msg.lower():
+                    db_err = {'atm_id': 'This ATM ID already exists'}
+                else:
+                    db_err = {'_general': f'Database error: {err_msg}'}
+                return {'ok': False, 'errors': db_err, 'audit_detail': '',
+                        'atm_id': data.get('atm_id'), 'created': False}
+            finally:
+                cur.close()
+    except Exception as e:
+        return {'ok': False, 'errors': {'_general': f'Database error: {e}'},
+                'audit_detail': '', 'atm_id': data.get('atm_id'), 'created': False}
+
+    return {'ok': True, 'errors': {}, 'audit_detail': audit_detail,
+            'atm_id': data['atm_id'], 'created': created, 'source': source}
+
+
+@bp.route('/atms/save', methods=['POST'])
 @login_required
 @role_required(ROLE_OPERATOR, ROLE_ADMIN)
 def atm_save():
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-    field_names = [f[0] for f in FIELDS]
-    data = {}
-    for f in field_names:
-        v = request.form.get(f, '').strip()
-        data[f] = v if v else None
-
-    # Name is optional in the form; default it so the Name column is never blank.
-    if not data.get('atm_name'):
-        data['atm_name'] = data.get('branch') or data.get('atm_id')
-
-    errors = _validate(data)
-    if errors:
+    data = normalise_atm_form(request.form)
+    res = save_atm_record(data, source='registration')
+    if not res['ok']:
         if is_ajax:
-            return jsonify({'error': True, 'errors': errors, 'message': 'Please fix the highlighted fields.'})
-        flash('Validation failed. Please correct the highlighted fields.', 'error')
-        return redirect('/admin/atm')
+            return jsonify({'error': True, 'errors': res['errors'],
+                            'message': 'Please fix the highlighted fields.'})
+        if '_general' in res['errors']:
+            flash(res['errors']['_general'], 'error')
+        else:
+            flash('Validation failed. Please correct the highlighted fields.', 'error')
+        return redirect('/atms')
 
-    with get_db() as conn:
-        cur = conn.cursor()
-        try:
-            cur.execute("""
-                INSERT INTO atm_locations
-                    (atm_id, atm_name, branch, district, city, region, latitude, longitude,
-                     terminal_id, vendor, model, install_date, status)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                ON CONFLICT (atm_id) DO UPDATE SET
-                    atm_name     = EXCLUDED.atm_name,
-                    branch       = EXCLUDED.branch,
-                    district     = EXCLUDED.district,
-                    city         = EXCLUDED.city,
-                    region       = EXCLUDED.region,
-                    latitude     = EXCLUDED.latitude,
-                    longitude    = EXCLUDED.longitude,
-                    terminal_id  = EXCLUDED.terminal_id,
-                    vendor       = EXCLUDED.vendor,
-                    model        = EXCLUDED.model,
-                    install_date = EXCLUDED.install_date,
-                    status       = EXCLUDED.status
-            """, (
-                data['atm_id'], data['atm_name'], data['branch'], data['district'], data['city'],
-                data['region'], data['latitude'], data['longitude'],
-                data['terminal_id'], data['vendor'], data['model'],
-                data['install_date'], data['status']
-            ))
-            # Seed initial state; inactive ATMs get a dedicated state
-            if data['status'] == 'inactive':
-                cur.execute("""
-                    INSERT INTO atm_current_state (atm_id, state, last_seen, updated_at)
-                    VALUES (%s, 'INACTIVE', NOW(), NOW())
-                    ON CONFLICT (atm_id) DO UPDATE SET state = 'INACTIVE', updated_at = NOW()
-                """, (data['atm_id'],))
-            else:
-                cur.execute("""
-                    INSERT INTO atm_current_state (atm_id, state, last_seen, updated_at)
-                    VALUES (%s, 'UNKNOWN', NOW(), NOW())
-                    ON CONFLICT (atm_id) DO UPDATE
-                        SET state = CASE WHEN atm_current_state.state = 'INACTIVE' THEN 'UNKNOWN' ELSE atm_current_state.state END,
-                            updated_at = NOW()
-                """, (data['atm_id'],))
-            conn.commit()
-            # Auto-allocate a simulator port so the new ATM behaves like the others
-            assign_sim_port(data['atm_id'], data['vendor'])
-        except Exception as e:
-            conn.rollback()
-            err_msg = str(e)
-            if 'duplicate key' in err_msg.lower() or 'unique' in err_msg.lower():
-                db_err = {'atm_id': 'This ATM ID already exists'}
-            else:
-                db_err = {'_general': f'Database error: {err_msg}'}
-            if is_ajax:
-                return jsonify({'error': True, 'errors': db_err, 'message': 'Database error. Please try again.'})
-            flash(f'Database error: {err_msg}', 'error')
-            return redirect('/admin/atm')
-        finally:
-            cur.close()
-
+    log_action('ATM_SAVE', res['audit_detail'])
+    threading.Thread(target=_bg_zabbix_sync, args=([dict(data)],), daemon=True).start()
     if is_ajax:
-        log_action('ATM_SAVE', f'ATM {data["atm_id"]} saved/updated')
         return jsonify({'success': True, 'atm_id': data['atm_id']})
-
-    log_action('ATM_SAVE', f'ATM {data["atm_id"]} saved/updated')
     return _guide_page(data)
 
 
-@bp.route('/atm/delete', methods=['POST'])
+def _archive_atm(cur, atm_id, deleted_by):
+    """Snapshot one ATM into atm_delete_archive (same transaction — rolls
+    back if the delete fails). Captures the full location row, all cash
+    loads (financial evidence otherwise lost to ON DELETE CASCADE), and
+    volume counts. Never raises: archival must not block a delete, but a
+    failure is logged loudly. Returns (archived_bool, location_dict)."""
+    try:
+        cur.execute("CREATE TABLE IF NOT EXISTS atm_delete_archive ("
+                    "id SERIAL PRIMARY KEY, atm_id VARCHAR(20) NOT NULL,"
+                    " deleted_at TIMESTAMP DEFAULT NOW(), deleted_by VARCHAR(100) DEFAULT '',"
+                    " location JSONB, cash_loads JSONB,"
+                    " txn_count INT DEFAULT 0, anomaly_count INT DEFAULT 0,"
+                    " state_history_count INT DEFAULT 0)")
+        cur.execute("SELECT * FROM atm_locations WHERE atm_id = %s", (atm_id,))
+        cols = [d[0] for d in cur.description]
+        loc = cur.fetchone()
+        if not loc:
+            return False, None
+        location = dict(zip(cols, loc))
+        cur.execute("SELECT * FROM cash_replenishments WHERE atm_id = %s ORDER BY id", (atm_id,))
+        cash_cols = [d[0] for d in cur.description]
+        cash = [dict(zip(cash_cols, r)) for r in cur.fetchall()]
+        counts = {}
+        cur.execute("SAVEPOINT _arch")
+        for key, tbl in (('txn', 'atm_transactions_visible'), ('anom', 'atm_anomalies'),
+                         ('hist', 'atm_state_history')):
+            try:
+                cur.execute(f"SELECT COUNT(*) FROM {tbl} WHERE atm_id = %s", (atm_id,))
+                counts[key] = int(cur.fetchone()[0] or 0)
+            except Exception:
+                counts[key] = -1  # table may not exist on older DBs
+                cur.execute("ROLLBACK TO SAVEPOINT _arch")
+                cur.execute("SAVEPOINT _arch")
+        cur.execute(
+            "INSERT INTO atm_delete_archive (atm_id, deleted_by, location, cash_loads,"
+            " txn_count, anomaly_count, state_history_count)"
+            " VALUES (%s, %s, %s::jsonb, %s::jsonb, %s, %s, %s)",
+            (atm_id, deleted_by, json.dumps(location, default=str),
+             json.dumps(cash, default=str),
+             counts.get('txn', -1), counts.get('anom', -1), counts.get('hist', -1)))
+        # Strip the credential before handing the row to the audit log —
+        # the archive keeps it (recovery), the log must not (backups).
+        location = {k: v for k, v in location.items() if k != 'snmp_community'}
+        return True, location
+    except Exception as e:
+        import logging as _logging
+        _logging.getLogger(__name__).error('Archive of %s failed: %s', atm_id, e)
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT _arch")
+        except Exception:
+            pass
+        return False, None
+
+
+@bp.route('/atms/delete', methods=['POST'])
 @login_required
-@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+@role_required(ROLE_ADMIN)
 def atm_delete():
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     atm_id = request.form.get('atm_id', '').strip()
@@ -555,11 +1348,12 @@ def atm_delete():
         if is_ajax:
             return jsonify({'error': True, 'message': 'ATM ID is required.'})
         flash('ATM ID is required for deletion.', 'error')
-        return redirect('/admin/atm')
+        return redirect('/atms')
 
     with get_db() as conn:
         cur = conn.cursor()
         try:
+            archived, old_loc = _archive_atm(cur, atm_id, session.get('username', ''))
             cur.execute("DELETE FROM atm_current_state WHERE atm_id = %s", (atm_id,))
             cur.execute("DELETE FROM atm_transactions WHERE atm_id = %s", (atm_id,))
             cur.execute("DELETE FROM atm_anomalies WHERE atm_id = %s", (atm_id,))
@@ -571,25 +1365,35 @@ def atm_delete():
                 if is_ajax:
                     return jsonify({'error': True, 'message': f'ATM {atm_id} not found.'})
                 flash(f'ATM {atm_id} not found.', 'error')
-                return redirect('/admin/atm')
+                return redirect('/atms')
             conn.commit()
         except Exception as e:
             conn.rollback()
             if is_ajax:
                 return jsonify({'error': True, 'message': f'Database error: {str(e)}'})
             flash(f'Database error: {str(e)}', 'error')
-            return redirect('/admin/atm')
+            return redirect('/atms')
         finally:
             cur.close()
 
+    if old_loc:
+        del_detail = (f'ATM {atm_id} deleted (was: ' +
+                      ', '.join(f'{k}={_audit_val(v)}' for k, v in old_loc.items()
+                                if k in ('atm_name', 'branch', 'district', 'city',
+                                         'vendor', 'model', 'ip_address', 'status')) +
+                      '; full snapshot in atm_delete_archive)')
+    else:
+        del_detail = f'ATM {atm_id} deleted (no pre-delete row found)'
     if is_ajax:
-        log_action('ATM_DELETE', f'ATM {atm_id} deleted')
+        log_action('ATM_DELETE', del_detail)
+        threading.Thread(target=_bg_zabbix_disable, args=([atm_id],), daemon=True).start()
         return jsonify({'success': True, 'atm_id': atm_id})
-    log_action('ATM_DELETE', f'ATM {atm_id} deleted')
-    return redirect('/admin/atm')
+    log_action('ATM_DELETE', del_detail)
+    threading.Thread(target=_bg_zabbix_disable, args=([atm_id],), daemon=True).start()
+    return redirect('/atms')
 
 
-@bp.route('/atm/bulk-delete', methods=['POST'])
+@bp.route('/atms/bulk-delete', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
 def atm_bulk_delete():
@@ -605,6 +1409,8 @@ def atm_bulk_delete():
         cur = conn.cursor()
         try:
             placeholders = ','.join(['%s'] * len(ids))
+            for _aid in ids:
+                _archive_atm(cur, _aid, session.get('username', ''))
             cur.execute(f"DELETE FROM atm_current_state WHERE atm_id IN ({placeholders})", ids)
             cur.execute(f"DELETE FROM atm_transactions WHERE atm_id IN ({placeholders})", ids)
             cur.execute(f"DELETE FROM atm_anomalies WHERE atm_id IN ({placeholders})", ids)
@@ -621,10 +1427,11 @@ def atm_bulk_delete():
             cur.close()
 
     log_action('ATM_BULK_DELETE', f'{deleted} ATMs deleted: {",".join(ids)}')
+    threading.Thread(target=_bg_zabbix_disable, args=(list(ids),), daemon=True).start()
     return jsonify({'success': True, 'deleted': deleted})
 
 
-@bp.route('/atm/check', methods=['POST'])
+@bp.route('/atms/check', methods=['POST'])
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_check():
@@ -643,7 +1450,115 @@ def atm_check():
     return jsonify({'existing': existing})
 
 
-@bp.route('/atm/csv')
+@bp.route('/cash')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def cash_list():
+    """Cash replenishment log (BRD 6.3): recent loads + log form data."""
+    atm_filter = request.args.get('atm_id', '').strip()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT atm_id, atm_name FROM atm_locations "
+                    "WHERE status = 'active' ORDER BY atm_id")
+        atms = [{'atm_id': r[0], 'atm_name': r[1]} for r in cur.fetchall()]
+        if atm_filter:
+            cur.execute("SELECT id, atm_id, cassette, notes_added, "
+                        "to_char(recorded_at, 'YYYY-MM-DD HH24:MI') AS recorded_at, "
+                        "recorded_by, notes, source FROM cash_replenishments "
+                        "WHERE atm_id = %s ORDER BY recorded_at DESC LIMIT 100",
+                        (atm_filter,))
+        else:
+            cur.execute("SELECT id, atm_id, cassette, notes_added, "
+                        "to_char(recorded_at, 'YYYY-MM-DD HH24:MI') AS recorded_at, "
+                        "recorded_by, notes, source FROM cash_replenishments "
+                        "ORDER BY recorded_at DESC LIMIT 100")
+        cols = [d[0] for d in cur.description]
+        loads = [dict(zip(cols, r)) for r in cur.fetchall()]
+        cur.close()
+    return render_template('admin_cash.html', atms=atms, loads=loads,
+                           atm_filter=atm_filter,
+                           cash_token=_mint_cash_token())
+
+
+def _mint_cash_token():
+    """One-time submit token against double-click/retry duplicate loads."""
+    toks = session.get('cash_tokens') or []
+    toks = [t for t in toks if isinstance(t, str)][-19:]
+    tok = secrets.token_urlsafe(16)
+    session['cash_tokens'] = toks + [tok]
+    session.modified = True
+    return tok
+
+
+def _take_cash_token(tok):
+    """Consume a submit token; False means already used (duplicate POST)."""
+    toks = session.get('cash_tokens') or []
+    if tok and tok in toks:
+        session['cash_tokens'] = [t for t in toks if t != tok]
+        session.modified = True
+        return True
+    return False
+
+
+@bp.route('/cash/log', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def cash_log():
+    """Record one cassette load. Validated; audited."""
+    atm_id = request.form.get('atm_id', '').strip()
+    errors = []
+    try:
+        cassette = int(request.form.get('cassette', '0'))
+    except (ValueError, TypeError):
+        cassette = 0
+    try:
+        notes_added = int(request.form.get('notes_added', '0'))
+    except (ValueError, TypeError):
+        notes_added = 0
+    notes = request.form.get('notes', '').strip()[:500]
+    if not atm_id:
+        errors.append('ATM is required.')
+    if cassette not in (1, 2, 3, 4):
+        errors.append('Cassette must be 1–4.')
+    if notes_added <= 0:
+        errors.append('Notes added must be a positive number.')
+    if notes_added > 100000:
+        errors.append('Notes added cannot exceed 100,000 per load.')
+    if errors:
+        flash('Not saved: ' + ' '.join(errors), 'error')
+        return redirect('/cash')
+    if not _take_cash_token(request.form.get('cash_token', '')):
+        # Double-click, back-button resubmit, or retried POST: the first one
+        # already committed. Never insert twice; say so plainly.
+        flash('Already logged — duplicate submission ignored.', 'success')
+        return redirect(f'/cash?atm_id={atm_id}' if atm_id else '/cash')
+    with get_db() as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT 1 FROM atm_locations WHERE atm_id = %s", (atm_id,))
+            if not cur.fetchone():
+                flash(f'Not saved: unknown ATM {atm_id}.', 'error')
+                return redirect('/cash')
+            cur.execute(
+                "INSERT INTO cash_replenishments "
+                "(atm_id, cassette, notes_added, recorded_by, notes, source) "
+                "VALUES (%s, %s, %s, %s, %s, 'MANUAL')",
+                (atm_id, cassette, notes_added,
+                 session.get('username', 'system'), notes or None))
+            conn.commit()
+            log_action('CASH_LOAD',
+                       f'{notes_added} notes -> {atm_id} cassette {cassette}')
+        except Exception as e:
+            conn.rollback()
+            flash(f'Not saved: database error ({e}).', 'error')
+            return redirect('/cash')
+        finally:
+            cur.close()
+    flash(f'Logged: {notes_added} notes into {atm_id} cassette {cassette}.', 'success')
+    return redirect(f'/cash?atm_id={atm_id}')
+
+
+@bp.route('/atms/csv')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_csv_export():
@@ -661,6 +1576,11 @@ def atm_csv_export():
         rows = cur.fetchall()
         cur.close()
 
+    if session.get('role') == ROLE_VIEWER:
+        keep = [i for i, c in enumerate(cols) if c not in _CRED_FIELDS]
+        cols = [cols[i] for i in keep]
+        rows = [tuple(r[i] for i in keep) for r in rows]
+
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(cols)
@@ -674,7 +1594,36 @@ def atm_csv_export():
     )
 
 
-@bp.route('/atm/import', methods=['POST'])
+@bp.route('/atms/template')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def atm_csv_template():
+    """Blank import template (header + examples) — generated from the live
+    required/optional column set so it can never drift from validation."""
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(['atm_id', 'atm_name', 'branch', 'district', 'city', 'region',
+                'latitude', 'longitude', 'terminal_id', 'vendor', 'model',
+                'install_date', 'status',
+                'ip_address', 'snmp_community', 'snmp_version', 'ej_log_format',
+                'ej_hostname'])
+    w.writerow(['ATM-1001', 'Bole Medhanialem ATM', 'Bole Medhanialem Branch', 'Bole',
+                'Addis Ababa', 'Addis Ababa', '8.9950', '38.7896', 'TID10001',
+                'NCR', 'SelfServ 22', '2023-03-15', 'active',
+                '192.168.1.101', 'CHANGE_ME', '2', 'NCR_APTRA', 'BOLENATM01'])
+    w.writerow(['ATM-1002', 'Piassa ATM', 'Piassa Branch', 'Arada',
+                'Addis Ababa', 'Addis Ababa', '9.0356', '38.7521', 'TID10002',
+                'GRG', 'H68N', '2022-11-02', 'active',
+                '192.168.1.102', 'CHANGE_ME', '2', 'GRG', ''])
+    log_action('EXPORT', 'ATM import template downloaded')
+    return Response(
+        buf.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=atm_import_template.csv'}
+    )
+
+
+@bp.route('/atms/import', methods=['POST'])
 @login_required
 @role_required(ROLE_OPERATOR, ROLE_ADMIN)
 def atm_import():
@@ -699,6 +1648,8 @@ def atm_import():
     line = 1
     for row in reader:
         line += 1
+        if 'branch' in row:
+            row['branch'] = _norm_branch(row.get('branch'))
         errs = _validate(row)
         if errs:
             errors.append({'line': line, 'atm_id': row.get('atm_id', '?'), 'errors': errs})
@@ -711,17 +1662,27 @@ def atm_import():
 
     imported = 0
     db_errors = []
+
+    def _nn(v):
+        # CSV gives '' for empty cells — Postgres DATE/NUMERIC reject ''.
+        if v is None:
+            return None
+        v = str(v).strip()
+        return v or None
+
     if rows:
         with get_db() as conn:
             cur = conn.cursor()
             for row in rows:
+                cur.execute("SAVEPOINT atm_import_row")
                 try:
-                    name = row.get('atm_name') or row.get('branch') or row.get('atm_id')
+                    name = _nn(row.get('atm_name')) or _nn(row.get('branch')) or _nn(row.get('atm_id'))
                     cur.execute("""
                         INSERT INTO atm_locations
                             (atm_id, atm_name, branch, district, city, region, latitude, longitude,
-                             terminal_id, vendor, model, install_date, status)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                             terminal_id, vendor, model, install_date, status,
+                             ip_address, snmp_community, snmp_version, ej_log_format, ej_hostname)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         ON CONFLICT (atm_id) DO UPDATE SET
                             atm_name     = EXCLUDED.atm_name,
                             branch       = EXCLUDED.branch,
@@ -734,17 +1695,46 @@ def atm_import():
                             vendor       = EXCLUDED.vendor,
                             model        = EXCLUDED.model,
                             install_date = EXCLUDED.install_date,
-                            status       = EXCLUDED.status
+                            status       = EXCLUDED.status,
+                            ip_address   = COALESCE(EXCLUDED.ip_address, atm_locations.ip_address),
+                            snmp_community = COALESCE(EXCLUDED.snmp_community, atm_locations.snmp_community),
+                            snmp_version = COALESCE(EXCLUDED.snmp_version, atm_locations.snmp_version),
+                            ej_log_format = COALESCE(EXCLUDED.ej_log_format, atm_locations.ej_log_format),
+                            ej_hostname   = COALESCE(EXCLUDED.ej_hostname, atm_locations.ej_hostname)
                     """, (
-                        row['atm_id'], name, row.get('branch'), row.get('district'),
-                        row.get('city'), row.get('region'), row.get('latitude'),
-                        row.get('longitude'), row.get('terminal_id'),
-                        row.get('vendor'), row.get('model'),
-                        row.get('install_date'), row.get('status')
+                        _nn(row.get('atm_id')), name, _nn(row.get('branch')), _nn(row.get('district')),
+                        _nn(row.get('city')), _nn(row.get('region')), _nn(row.get('latitude')),
+                        _nn(row.get('longitude')), _nn(row.get('terminal_id')),
+                        _nn(row.get('vendor')), _nn(row.get('model')),
+                        _nn(row.get('install_date')), _nn(row.get('status')),
+                        _nn(row.get('ip_address')), _nn(row.get('snmp_community')),
+                        _nn(row.get('snmp_version')), _nn(row.get('ej_log_format')),
+                        _nn(row.get('ej_hostname'))
                     ))
+                    # Seed state like single-save does (parity: imported ATMs
+                    # must appear in the in-service summary, not just UNKNOWN
+                    # via LEFT JOIN). Never clobbers a live state.
+                    _st = (_nn(row.get('status')) or 'active')
+                    if _st == 'inactive':
+                        cur.execute("""
+                            INSERT INTO atm_current_state (atm_id, state, last_seen, updated_at)
+                            VALUES (%s, 'INACTIVE', NOW(), NOW())
+                            ON CONFLICT (atm_id) DO UPDATE SET state = 'INACTIVE', updated_at = NOW()
+                        """, (_nn(row.get('atm_id')),))
+                    else:
+                        cur.execute("""
+                            INSERT INTO atm_current_state (atm_id, state, last_seen, updated_at)
+                            VALUES (%s, 'UNKNOWN', NOW(), NOW())
+                            ON CONFLICT (atm_id) DO UPDATE
+                                SET state = CASE WHEN atm_current_state.state = 'INACTIVE' THEN 'UNKNOWN' ELSE atm_current_state.state END,
+                                    updated_at = NOW()
+                        """, (_nn(row.get('atm_id')),))
+                    cur.execute("RELEASE SAVEPOINT atm_import_row")
                     imported += 1
                 except Exception as e:
-                    db_errors.append({'atm_id': row['atm_id'], 'error': str(e)})
+                    cur.execute("ROLLBACK TO SAVEPOINT atm_import_row")
+                    cur.execute("RELEASE SAVEPOINT atm_import_row")
+                    db_errors.append({'atm_id': row.get('atm_id'), 'error': str(e)})
             conn.commit()
             # Auto-allocate simulator ports so imported ATMs behave like the others
             for row in rows:
@@ -752,6 +1742,11 @@ def atm_import():
             cur.close()
 
     log_action('ATM_IMPORT', f'Imported {imported}, skipped {len(errors)}, db_errors {len(db_errors)}')
+    if imported:
+        failed_ids = {d.get('atm_id') for d in db_errors}
+        ok_rows = [dict(r) for r in rows if r.get('atm_id') not in failed_ids]
+        if ok_rows:
+            threading.Thread(target=_bg_zabbix_sync, args=(ok_rows,), daemon=True).start()
     return jsonify({
         'success': True,
         'imported': imported,
@@ -759,6 +1754,45 @@ def atm_import():
         'db_errors': db_errors,
         'import_errors': errors
     })
+
+
+@bp.route('/atms/zabbix-sync', methods=['POST'])
+@login_required
+@role_required(ROLE_OPERATOR, ROLE_ADMIN)
+def atm_zabbix_sync():
+    """On-demand server-side sync: create missing Zabbix hosts for given (or all) ATMs."""
+    from zabbix_sync import MAX_BATCH, sync_hosts
+    data = request.get_json(silent=True) or {}
+    ids = [str(i).strip() for i in (data.get('ids') or []) if str(i).strip()][:MAX_BATCH]
+    with get_db() as conn:
+        cur = conn.cursor()
+        if ids:
+            placeholders = ','.join(['%s'] * len(ids))
+            cur.execute(f"""SELECT atm_id, atm_name, ip_address, vendor,
+                                   snmp_community, snmp_version, district
+                            FROM atm_locations WHERE atm_id IN ({placeholders})""", ids)
+        else:
+            cur.execute(f"""SELECT atm_id, atm_name, ip_address, vendor,
+                                   snmp_community, snmp_version, district
+                            FROM atm_locations WHERE status = 'active'
+                            ORDER BY atm_id LIMIT {MAX_BATCH}""")
+        cols = [d[0] for d in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        cur.close()
+    summary = sync_hosts(rows)
+    log_action('ZABBIX_SYNC', f'manual: created={summary["created"]} reenabled={summary.get("reenabled", 0)} macros={summary.get("macros_fixed", 0)} updated={summary.get("updated", 0)} '
+                           f'skipped={summary["skipped"]} no_ip={summary["no_ip"]} failed={summary["failed"]} (n={len(rows)})')
+    return jsonify({'success': True, 'checked': len(rows), **summary})
+
+
+@bp.route('/atms/zabbix-status')
+@login_required
+@role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
+def atm_zabbix_status():
+    """Existence map {atm_id: bool} so the UI can badge sync state."""
+    from zabbix_sync import host_exists_map
+    ids = [i.strip() for i in request.args.get('ids', '').split(',') if i.strip()][:200]
+    return jsonify(host_exists_map(ids))
 
 
 def _validate(data):
@@ -770,12 +1804,26 @@ def _validate(data):
             errors[field] = 'This field is required'
     if data.get('atm_id') and len(data['atm_id']) < 3:
         errors['atm_id'] = 'ATM ID must be at least 3 characters'
+    if data.get('atm_id') and not re.match(r'^[A-Za-z0-9][A-Za-z0-9_-]*$', data['atm_id']):
+        errors['atm_id'] = 'Letters, digits, dash and underscore only'
     maxlens = {'atm_id': 20, 'branch': 100, 'district': 100, 'city': 100,
-               'region': 100, 'terminal_id': 20, 'vendor': 50, 'model': 50}
+               'region': 100, 'terminal_id': 20, 'vendor': 50, 'model': 50,
+               'ip_address': 45, 'snmp_community': 100, 'ej_log_format': 20,
+               'ej_hostname': 64}
     for field, maxlen in maxlens.items():
         val = data.get(field)
         if val and len(val) > maxlen:
             errors[field] = f'Max {maxlen} characters'
+    # Network fields are optional (older rows lack them) — validate shape only.
+    if data.get('ip_address'):
+        import re as _re
+        if not _re.match(r'^(\d{1,3}\.){3}\d{1,3}$', data['ip_address']) or \
+                any(int(p) > 255 for p in data['ip_address'].split('.')):
+            errors['ip_address'] = 'Must be a valid IPv4 address'
+    if data.get('snmp_version') and str(data['snmp_version']) not in ('2', '3'):
+        errors['snmp_version'] = 'Must be 2 or 3'
+    if data.get('ej_log_format') and data['ej_log_format'] not in ('NCR_APTRA', 'GRG'):
+        errors['ej_log_format'] = 'Must be NCR_APTRA or GRG'
     if data.get('latitude'):
         try:
             n = float(data['latitude'])
@@ -791,7 +1839,6 @@ def _validate(data):
         except (ValueError, TypeError):
             errors['longitude'] = 'Must be a valid number'
     if data.get('install_date'):
-        import re
         if not re.match(r'^\d{4}-\d{2}-\d{2}$', data['install_date']):
             errors['install_date'] = 'Use YYYY-MM-DD format'
     if data.get('status') and data['status'] not in ('active', 'inactive'):
@@ -804,11 +1851,14 @@ def _validate(data):
 
 # ─── AUDIT LOG ───────────────────────────────────────────────
 
-@bp.route('/audit')
+@bp.route('/admin/audit')
 @login_required
 @role_required(ROLE_ADMIN)
 def audit_log():
-    page = max(1, int(request.args.get('page', 1)))
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (ValueError, TypeError):
+        page = 1
     per_page = 50
     search = request.args.get('search', '').strip()
     action_filter = request.args.get('action', '').strip()
@@ -857,14 +1907,14 @@ def audit_log():
 
 # ─── SCHEDULED REPORTS ─────────────────────────────────────────
 
-@bp.route('/schedules')
+@bp.route('/admin/schedules')
 @login_required
 @role_required(ROLE_ADMIN)
 def schedule_list():
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT id, name, report_type, format, schedule, recipients, enabled, last_run FROM scheduled_reports ORDER BY id")
+            cur.execute("SELECT id, name, report_type, format, schedule, recipients, enabled, last_run, last_status, last_error FROM scheduled_reports ORDER BY id")
             rows = cur.fetchall()
             cur.close()
         rows = [list(r) for r in rows]
@@ -872,10 +1922,43 @@ def schedule_list():
             r[7] = to_eat(r[7], '%Y-%m-%d %H:%M')
     except Exception:
         rows = []
-    return render_template('admin_schedules.html', schedules=rows)
+        failed = []
+    failed = [r for r in rows if len(r) > 8 and r[8] == 'failed']
+    return render_template('admin_schedules.html', schedules=rows, failed=failed,
+                           type_labels=REPORT_TYPE_LABELS)
 
 
-@bp.route('/schedules/save', methods=['POST'])
+def _valid_cron(expr):
+    """Validate a 5-field cron (minute hour dom month dow). Returns an error
+    string or None. Mirrors scheduler._cron_field semantics so anything saved
+    here can actually fire there."""
+    bounds = [(0, 59), (0, 23), (1, 31), (1, 12), (0, 6)]
+    parts = (expr or '').split()
+    if len(parts) != 5:
+        return 'Cron must have 5 fields: minute hour day month weekday.'
+    for part, (lo, hi) in zip(parts, bounds):
+        if part == '*':
+            continue
+        for item in part.split(','):
+            step = None
+            if '/' in item:
+                item, step = item.split('/', 1)
+                if not step.isdigit() or int(step) < 1:
+                    return f'Bad cron step in {part!r}.'
+            if item in ('*', ''):
+                if not step and item == '':
+                    return f'Bad cron field {part!r}.'
+                continue
+            if '-' in item:
+                a, _, b = item.partition('-')
+                if not (a.isdigit() and b.isdigit() and lo <= int(a) <= int(b) <= hi):
+                    return f'Bad cron range {item!r} (allowed {lo}-{hi}).'
+            elif not item.isdigit() or not (lo <= int(item) <= hi):
+                return f'Bad cron value {item!r} (allowed {lo}-{hi}).'
+    return None
+
+
+@bp.route('/admin/schedules/save', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
 def schedule_save():
@@ -889,6 +1972,16 @@ def schedule_save():
 
     if not all([name, report_type, schedule, recipients]):
         flash('Name, report type, schedule, and recipients are required.', 'error')
+        return redirect('/admin/schedules')
+
+    bad = [r.strip() for r in recipients.split(',') if r.strip() and not _valid_email(r.strip())]
+    if bad:
+        flash(f'Invalid email address(es): {", ".join(bad)}', 'error')
+        return redirect('/admin/schedules')
+
+    cron_err = _valid_cron(schedule)
+    if cron_err:
+        flash(f'Invalid schedule: {cron_err}', 'error')
         return redirect('/admin/schedules')
 
     try:
@@ -915,7 +2008,7 @@ def schedule_save():
     return redirect('/admin/schedules')
 
 
-@bp.route('/schedules/toggle', methods=['POST'])
+@bp.route('/admin/schedules/toggle', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
 def schedule_toggle():
@@ -938,7 +2031,7 @@ def schedule_toggle():
         return jsonify({'error': True, 'message': str(e)}), 500
 
 
-@bp.route('/schedules/delete', methods=['POST'])
+@bp.route('/admin/schedules/delete', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
 def schedule_delete():
@@ -967,7 +2060,43 @@ def schedule_delete():
         return jsonify({'error': True, 'message': str(e)}), 500
 
 
-@bp.route('/schedules/get')
+@bp.route('/admin/schedules/send-now', methods=['POST'])
+@login_required
+@role_required(ROLE_ADMIN)
+def schedule_send_now():
+    """Manually fire a schedule immediately (testing + resends). Runs in a
+    background thread like the poller; works whether or not enabled."""
+    data = request.get_json(silent=True) or {}
+    sid = str(data.get('id', ''))
+    if not sid.isdigit():
+        return jsonify({'success': False, 'message': 'Missing schedule id.'})
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, name, report_type, format, schedule, recipients, params"
+                        " FROM scheduled_reports WHERE id = %s", (sid,))
+            row = cur.fetchone()
+            cur.close()
+        if not row:
+            return jsonify({'success': False, 'message': 'Schedule not found.'}), 404
+        rid, name, report_type, fmt, cron_expr, recipients, params = row
+        from scheduler import _dispatch, _running, _running_lock
+        with _running_lock:
+            if rid in _running:
+                return jsonify({'success': False,
+                                'message': 'This schedule is already sending — wait a minute.'})
+            _running.add(rid)
+        threading.Thread(target=_dispatch,
+                         args=(rid, report_type, fmt, cron_expr, recipients, params),
+                         daemon=True).start()
+        log_action('SCHEDULE_SEND_NOW', f'Manually triggered "{name}" ({report_type}/{fmt})')
+        return jsonify({'success': True,
+                        'message': f'Sending "{name}" now — watch Last Run for the outcome.'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@bp.route('/admin/schedules/get')
 @login_required
 @role_required(ROLE_ADMIN)
 def schedule_get():
@@ -991,7 +2120,12 @@ def schedule_get():
         return jsonify({'error': True, 'message': str(e)}), 500
 
 
-@bp.route('/users')
+def _valid_email(v):
+    import re
+    return bool(re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', v or ''))
+
+
+@bp.route('/admin/users')
 @login_required
 @role_required(ROLE_ADMIN)
 def user_list():
@@ -1000,9 +2134,9 @@ def user_list():
         with get_db() as conn:
             cur = conn.cursor()
             if search:
-                cur.execute("SELECT username, role, created_at, last_login FROM app_users WHERE username ILIKE %s ORDER BY created_at DESC", (f'%{search}%',))
+                cur.execute("SELECT username, role, created_at, last_login, email FROM app_users WHERE username ILIKE %s ORDER BY created_at DESC", (f'%{search}%',))
             else:
-                cur.execute("SELECT username, role, created_at, last_login FROM app_users ORDER BY created_at DESC")
+                cur.execute("SELECT username, role, created_at, last_login, email FROM app_users ORDER BY created_at DESC")
             users = cur.fetchall()
             cur.close()
         users = [list(u) for u in users]
@@ -1015,18 +2149,73 @@ def user_list():
         return render_template('admin_users.html', users=[], roles=ROLES, search=search)
 
 
-@bp.route('/users/create', methods=['POST'])
+@bp.route('/admin/users/emails')
+@login_required
+@role_required(ROLE_ADMIN)
+def user_emails():
+    """Directory autocomplete for report recipients (hybrid with free text)."""
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("""SELECT username, email FROM app_users
+                           WHERE email IS NOT NULL AND email <> ''
+                             AND (username ILIKE %s OR email ILIKE %s)
+                           ORDER BY username LIMIT 10""", (f'%{q}%', f'%{q}%'))
+            out = [{'username': r[0], 'email': r[1]} for r in cur.fetchall()]
+            cur.close()
+        return jsonify(out)
+    except Exception:
+        return jsonify([])
+
+
+def _password_error(password, username=None):
+    # Single source of truth lives in blueprints.auth (shared with
+    # self-service change); kept as a thin wrapper for existing callers.
+    return password_error(password, username)
+
+
+def _email_taken(cur, email, exclude_username=None):
+    """Case-insensitive duplicate check (NULL/blank grandfathered)."""
+    if exclude_username:
+        cur.execute("SELECT 1 FROM app_users WHERE email IS NOT NULL AND LOWER(email) = LOWER(%s) AND username <> %s",
+                    (email, exclude_username))
+    else:
+        cur.execute("SELECT 1 FROM app_users WHERE email IS NOT NULL AND LOWER(email) = LOWER(%s)",
+                    (email,))
+    return cur.fetchone() is not None
+
+
+@bp.route('/admin/users/create', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
 def user_create():
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '').strip()
+    password_confirm = request.form.get('password_confirm', '').strip()
     role = request.form.get('role', ROLE_VIEWER).strip()
+    email = request.form.get('email', '').strip()
     if not username or len(username) < 3:
         flash('Username must be at least 3 characters', 'error')
         return redirect('/admin/users')
-    if not password or len(password) < 4:
-        flash('Password must be at least 4 characters', 'error')
+    import re as _re
+    if not _re.match(r'^[A-Za-z0-9_]+$', username):
+        flash('Username: letters, numbers and underscore only', 'error')
+        return redirect('/admin/users')
+    pw_err = _password_error(password, username)
+    if pw_err:
+        flash(pw_err, 'error')
+        return redirect('/admin/users')
+    if password != password_confirm:
+        flash('Passwords do not match.', 'error')
+        return redirect('/admin/users')
+    if email and not _valid_email(email):
+        flash('Email address looks invalid', 'error')
+        return redirect('/admin/users')
+    if not email:
+        flash('Email is required (report delivery and account recovery).', 'error')
         return redirect('/admin/users')
     if role not in ROLES:
         flash('Invalid role selected', 'error')
@@ -1039,9 +2228,13 @@ def user_create():
                 cur.close()
                 flash(f'User "{username}" already exists', 'error')
                 return redirect('/admin/users')
+            if _email_taken(cur, email):
+                cur.close()
+                flash(f'Email "{email}" is already used by another account.', 'error')
+                return redirect('/admin/users')
             cur.execute(
-                "INSERT INTO app_users (username, password_hash, role) VALUES (%s, %s, %s)",
-                (username, generate_password_hash(password), role)
+                "INSERT INTO app_users (username, password_hash, role, email, must_change_pw) VALUES (%s, %s, %s, %s, TRUE)",
+                (username, generate_password_hash(password), role, email or None)
             )
             conn.commit()
             cur.close()
@@ -1053,28 +2246,66 @@ def user_create():
         return redirect('/admin/users')
 
 
-@bp.route('/users/edit', methods=['POST'])
+def _admin_count(cur):
+    cur.execute("SELECT COUNT(*) FROM app_users WHERE role = 'admin'")
+    return int(cur.fetchone()[0] or 0)
+
+
+@bp.route('/admin/users/edit', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
 def user_edit():
     username = request.form.get('username', '').strip()
     role = request.form.get('role', '').strip()
     password = request.form.get('password', '').strip()
+    email = request.form.get('email', '').strip()
     if not username:
         flash('No username provided', 'error')
         return redirect('/admin/users')
     if role not in ROLES:
         flash('Invalid role selected', 'error')
         return redirect('/admin/users')
+    if not email:
+        flash('Email is required (report delivery and account recovery).', 'error')
+        return redirect('/admin/users')
+    if not _valid_email(email):
+        flash('Email address looks invalid', 'error')
+        return redirect('/admin/users')
+    if password:
+        if password != request.form.get('password_confirm', '').strip():
+            flash('Passwords do not match.', 'error')
+            return redirect('/admin/users')
+        pw_err = _password_error(password, username)
+        if pw_err:
+            flash(pw_err, 'error')
+            return redirect('/admin/users')
     try:
         with get_db() as conn:
             cur = conn.cursor()
+            cur.execute("SELECT role FROM app_users WHERE username = %s", (username,))
+            row = cur.fetchone()
+            if not row:
+                cur.close()
+                flash(f'User "{username}" not found', 'error')
+                return redirect('/admin/users')
+            if row[0] == ROLE_ADMIN and role != ROLE_ADMIN and _admin_count(cur) <= 1:
+                cur.close()
+                flash('Cannot demote the last admin user.', 'error')
+                return redirect('/admin/users')
+            if _email_taken(cur, email, exclude_username=username):
+                cur.close()
+                flash(f'Email "{email}" is already used by another account.', 'error')
+                return redirect('/admin/users')
             if password:
-                cur.execute("UPDATE app_users SET role = %s, password_hash = %s WHERE username = %s",
-                            (role, generate_password_hash(password), username))
+                # Forced change is for passwords GIVEN to someone else. Setting
+                # your OWN password this way already proves knowledge of it —
+                # forcing another change next login is a pointless loop.
+                force_change = username != session.get('username', '')
+                cur.execute("UPDATE app_users SET role = %s, password_hash = %s, email = %s, must_change_pw = %s WHERE username = %s",
+                            (role, generate_password_hash(password), email or None, force_change, username))
             else:
-                cur.execute("UPDATE app_users SET role = %s WHERE username = %s",
-                            (role, username))
+                cur.execute("UPDATE app_users SET role = %s, email = %s WHERE username = %s",
+                            (role, email or None, username))
             conn.commit()
             cur.close()
         log_action('USER_EDIT', f'Updated {username} (role={role})')
@@ -1085,7 +2316,7 @@ def user_edit():
         return redirect('/admin/users')
 
 
-@bp.route('/users/delete', methods=['POST'])
+@bp.route('/admin/users/delete', methods=['POST'])
 @login_required
 @role_required(ROLE_ADMIN)
 def user_delete():
@@ -1099,6 +2330,16 @@ def user_delete():
     try:
         with get_db() as conn:
             cur = conn.cursor()
+            cur.execute("SELECT role FROM app_users WHERE username = %s", (username,))
+            row = cur.fetchone()
+            if not row:
+                cur.close()
+                flash(f'User "{username}" not found', 'error')
+                return redirect('/admin/users')
+            if row[0] == ROLE_ADMIN and _admin_count(cur) <= 1:
+                cur.close()
+                flash('Cannot delete the last admin user.', 'error')
+                return redirect('/admin/users')
             cur.execute("DELETE FROM app_users WHERE username = %s", (username,))
             conn.commit()
             cur.close()
@@ -1127,20 +2368,23 @@ def _guide_page(data):
 </style></head><body>
 <div class="card">
   <h1>&#10003; {atm_id_val} Registered Successfully</h1>
-  <p>The ATM has been saved to the database and will appear in the Grafana map, Report Portal dropdowns, and EJ Search filter immediately.</p>
+  <p>The ATM has been saved to the database and will appear in the Grafana map, portal dropdowns, and EJ Search filter immediately.</p>
 
   <h2>What happens automatically <span class="badge-ok">&#10003; No action needed</span></h2>
   <ul>
     <li><strong>Simulation engines</strong> — the multi-tenant engines (<code>atm-sim-engine</code>, <code>atm-txn-engine</code>, <code>atm-ej-engine</code>, <code>state-manager</code>) auto-discover every ATM in <code>atm_locations</code>. No per-ATM compose service is required.</li>
-    <li><strong>Filebeat</strong> — already watches <code>ej-logs/ATM-*.log</code> with a wildcard.<br>
-        The moment a file named <code>ej-logs/{atm_id_val}.log</code> exists, Filebeat ships it to OpenSearch automatically.</li>
-    <li><strong>EJ Search</strong> — will show {atm_id_val} data as soon as logs are indexed.</li>
     <li><strong>ATM dropdown</strong> — already shows {atm_id_val} in all search filters.</li>
   </ul>
 
   <h2>Real ATM (production) <span class="badge-warn">&#9888; Action required</span></h2>
-  <p>Configure the ATM's EJ log delivery (agent, SFTP, or shared folder) to write files into <code>ej-logs/{atm_id_val}.log</code>.
-  Filebeat will detect and ship the file automatically — no further configuration needed.</p>
+  <p>Journals are fetched hourly through the Zabbix agent. The pull list comes
+  from this record, so set <strong>EJ Hostname</strong> to the machine name used
+  in the local evidence filename — no script editing.</p>
+  <p>NCR: <code>scripts/pull_ej_logs.sh</code> reads
+  <code>E:\\EJLogs\\&lt;date&gt;_&lt;HOST&gt;_EJDATA.log</code>. GRG:
+  <code>scripts/pull_grg_ej_logs.py</code> reads
+  <code>D:\\Program Files\\DTATMW\\Bin\\ATMAPP\\Log\\EJ&lt;yymmdd&gt;.log</code>
+  and stores it under the same canonical local name.</p>
 
-  <a href="/admin/atm" class="btn">&#8592; Back to ATM Management</a>
+  <a href="/atms" class="btn">&#8592; Back to ATM Management</a>
 </div></body></html>"""

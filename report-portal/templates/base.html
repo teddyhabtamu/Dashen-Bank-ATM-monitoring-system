@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="csrf-token" content="{{ csrf_token() }}">
-<title>{% block title %}Dashen Bank{% endblock %}</title>
+<title>{% block title %}ATM Monitoring System{% endblock %}</title>
 <link rel="icon" type="image/png" href="/static/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="/static/inter.css" rel="stylesheet">
@@ -23,27 +23,85 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
 .sidebar-brand{display:flex;align-items:center;gap:10px;padding:15px 10px 15px 15px;border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0;overflow:hidden;min-height:60px}
 .sidebar.collapsed .sidebar-brand{justify-content:center;padding:16px 8px;gap:0}
 .sidebar-logo{width:28px;height:28px;object-fit:contain;flex-shrink:0}
-.sidebar.collapsed .sidebar-logo{display:none}
 .sidebar.collapsed .sidebar-actions{margin-left:0}
+/* Collapsed rail: drop the toggle, and let the logo expand the sidebar.
+   The brand row could never fit both - 28px logo + 28px button = 56px inside a
+   44px box (60px rail less 8px padding each side) - so justify-content:center
+   split the 12px overflow and shaved 6px off each control, which read as a
+   rendering fault rather than a rail. With the toggle gone the logo is the only
+   way back out of the collapsed state. */
+.sidebar.collapsed .sidebar-collapse-btn{display:none}
+.sidebar.collapsed .sidebar-logo{cursor:pointer;transition:opacity .2s ease,background .2s ease}
+.sidebar.collapsed .sidebar-logo:hover{opacity:.85;background:rgba(255,255,255,.08)}
+.sidebar.collapsed .sidebar-logo:focus-visible{outline:2px solid rgba(255,255,255,.6);outline-offset:2px}
 .sidebar-brand-text{display:flex;flex-direction:column;white-space:nowrap;opacity:1;transition:opacity .2s ease .15s}
 .sidebar.collapsed .sidebar-brand-text{opacity:0;width:0;overflow:hidden;padding:0;margin:0;pointer-events:none;flex-shrink:0}
 .sidebar-brand-text .name{font-size:13px;font-weight:700;color:#fff;letter-spacing:-.1px;line-height:1.3}
 .sidebar-brand-text .sub{font-size:9px;color:rgba(255,255,255,.4);font-weight:500;letter-spacing:.4px;margin-top:-1px}
 
-.sidebar-nav{flex:1;padding:12px 8px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.sidebar-nav{flex:1;padding:10px 8px;display:flex;flex-direction:column;gap:1px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}
+.sidebar-nav::-webkit-scrollbar{width:6px}
+.sidebar-nav::-webkit-scrollbar-track{background:transparent}
+.sidebar-nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:3px}
+.sidebar-nav::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.3)}
+.sidebar-nav{margin-right:-2px;padding-right:10px}
 .sidebar.collapsed .sidebar-nav{padding:12px 4px}
-.nav-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:8px;color:rgba(255,255,255,.55);text-decoration:none;font-size:13px;font-weight:500;transition:all .2s ease;position:relative;white-space:nowrap;overflow:hidden;min-height:38px}
-.sidebar.collapsed .nav-item{justify-content:center;padding:10px 0;gap:0;color:rgba(255,255,255,.8)}
+.nav-item{display:flex;align-items:center;gap:11px;padding:8px 12px;border-radius:9px;color:rgba(255,255,255,.55);text-decoration:none;font-size:13px;font-weight:500;transition:all .2s ease;position:relative;white-space:nowrap;overflow:hidden;min-height:34px}
+.sidebar.collapsed .nav-item{justify-content:center;padding:8px 0;gap:0;color:rgba(255,255,255,.8)}
 .nav-item:hover{background:rgba(255,255,255,.08);color:rgba(255,255,255,.85)}
 .nav-item svg{width:16px;height:16px;flex-shrink:0;color:rgba(255,255,255,.7);transition:opacity .2s}
 .nav-item:hover svg{color:#fff}
 .sidebar.collapsed .nav-item svg{color:rgba(255,255,255,.7)}
-.nav-item.active{background:rgba(255,255,255,.12);color:#fff;font-weight:600}
-.nav-item.active::before{content:'';position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:0 3px 3px 0;background:#FDD79A}
+.nav-item.active{background:rgba(255,255,255,.15);color:#fff;font-weight:600;box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
 .nav-item.active svg{color:#fff}
 .nav-item span{opacity:1;transition:opacity .2s ease .15s}
+.nav-item .ext{width:12px;height:12px;margin-left:auto;color:rgba(255,255,255,.28)}
+.nav-badge{display:inline-block;margin-left:auto;flex-shrink:0;min-width:18px;height:18px;padding:0 5px;
+  border-radius:999px;background:#DC2626;color:#fff;font-size:10px;font-weight:800;
+  line-height:18px;text-align:center;font-style:normal}
+.nav-badge[hidden]{display:none}
+.sidebar.collapsed .nav-badge{position:absolute;top:3px;right:3px;margin:0;
+  min-width:9px;width:9px;height:9px;padding:0;font-size:0;line-height:0;
+  border:2px solid #012169;box-sizing:content-box}
+.sidebar.collapsed .nav-item .ext{display:none}
+.nav-external{margin-top:4px;padding-top:5px;border-top:1px solid rgba(255,255,255,.07)}
 .sidebar.collapsed .nav-item span{opacity:0;width:0;margin:0;padding:0;pointer-events:none}
-.nav-section-label{padding:16px 12px 6px;font-size:9px;font-weight:600;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.8px;overflow:hidden;white-space:nowrap;transition:opacity .2s ease}
+.nav-section-label{font-size:10.5px;font-weight:700;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.9px;overflow:hidden;white-space:nowrap;transition:opacity .2s ease}
+.nav-section-head{display:flex;align-items:center;padding:11px 12px 5px;margin-top:0;cursor:default}
+# Collapsed: the label cannot fit, so the header becomes a hairline divider.
+# Grouping survives without words, which is the point of grouping.
+.sidebar.collapsed .nav-section-head{padding:0;margin:9px 14px;height:1px;background:rgba(255,255,255,.12);border-radius:1px;display:block;pointer-events:none}
+.sidebar.collapsed .nav-section-head .nav-section-label{display:none}
+:root {
+  --dashen-navy: #012169;
+  --dashen-blue: #273274;
+  --dashen-gold: #FDD79A;
+  --surface: #F0F2F6;
+  --card: #FFFFFF;
+  --border: #E4E9F1;
+  --border-light: #EEF1F6;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-tertiary: #94A3B8;
+  --success: #059669;
+  --success-bg: rgba(5, 150, 105, 0.08);
+  --danger: #DC2626;
+  --warning: #D97706;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+  --shadow-sm: 0 1px 3px rgba(1,33,105,0.04), 0 1px 2px rgba(1,33,105,0.02);
+  --shadow-md: 0 4px 16px rgba(1,33,105,0.06), 0 1px 4px rgba(1,33,105,0.03);
+  --shadow-lg: 0 12px 40px rgba(1,33,105,0.08), 0 4px 12px rgba(1,33,105,0.03);
+  --shadow-xl: 0 20px 60px rgba(1,33,105,0.1), 0 8px 20px rgba(1,33,105,0.04);
+  --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.nav-group-items{display:flex;flex-direction:column;gap:1px;padding:0 0 1px}
+/* The collapsed rail shows EVERY item as an icon, grouped by the hairline
+   dividers above. This rule used to hide group items, which was correct when
+   the Dashboard group was the only one and clicking its icon expanded the
+   sidebar to reveal them. Once every destination moved into a group, it hid the
+   entire menu: the rail rendered with a toggle button and nothing else. */
 .sidebar.collapsed .nav-section-label{opacity:0;height:0;padding:0 12px;margin:0;overflow:hidden;pointer-events:none}
 
 /* ── PROFILE DROPDOWN ── */
@@ -143,6 +201,11 @@ body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;-webkit-font-
   .sidebar.collapsed .sidebar-brand-text,
   .sidebar.collapsed .nav-item span,
   .sidebar.collapsed .nav-section-label{opacity:1 !important;pointer-events:auto !important}
+  /* On mobile the sidebar is a full-width drawer, so the collapsed rail's
+     hairline divider is wrong here - it would leave the label rendered inside a
+     1px-tall box. Restore the full section header. */
+  .sidebar.collapsed .nav-section-head{display:flex;padding:15px 12px 7px;margin-top:1px;height:auto;background:none;border-radius:0}
+  .sidebar.collapsed .nav-section-head .nav-section-label{display:inline}
   .sidebar.collapsed .sidebar-collapse-btn{display:none}
   .sidebar-nav{padding:8px 10px}
   .nav-item{padding:12px 14px;font-size:14px;min-height:44px;border-radius:10px}
@@ -302,6 +365,29 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
   .toast{padding:10px 14px}
 }
 .card-mask{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;font-variant-numeric:lining-nums tabular-nums;letter-spacing:.5px;white-space:nowrap}
+/* Shared action button: used by the incident list and the incident detail.
+   It lived only in incidents.html, so the detail page's buttons fell back to
+   native browser styling - visible the moment a dialog used them without
+   inline padding. */
+.act-btn{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #E4E9F1;background:#fff;color:#012169;transition:.15s;white-space:nowrap}
+.act-btn:hover{border-color:#012169;background:#EEF2FF}
+.act-btn:disabled{opacity:.5;cursor:default}
+.act-btn.solve{color:#065F46;border-color:#A7F3D0}
+.act-btn.solve:hover{background:#ECFDF5;border-color:#065F46}
+.act-btn.danger{border-color:#FCA5A5;color:#B91C1C}
+.act-btn.danger:hover{background:#FEF2F2;border-color:#B91C1C}
+/* Shared row-action menu. The incidents list and the Monitoring Center
+   both use it; a page-local copy is how .act-btn drifted before. */
+.kebab-wrap{position:relative;text-align:center}
+.kebab-btn{background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:6px;color:#64748B;font-size:16px;line-height:1;letter-spacing:1px}
+.kebab-btn:hover{background:#EEF2FF;color:#012169}
+.kebab-menu{display:none;position:absolute;right:0;top:100%;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:4px;z-index:100;min-width:150px;border:1px solid #EEF1F6}
+.kebab-menu.show{display:block}
+.kebab-menu.floating{position:fixed;top:auto;left:auto;z-index:3000}
+.kebab-item{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:none;width:100%;text-align:left;color:#334155}
+.kebab-item:hover{background:#F8FAFC}
+.kebab-item.solve{color:#065F46}
+.kebab-item.solve:hover{background:#ECFDF5}
 {% block extra_style %}{% endblock %}
 </style>
 </head>
@@ -320,9 +406,9 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
     </div>
 </header>
 
-<div class="sidebar" id="sidebar">
+<div class="sidebar{% if request and request.cookies.get('sidebar') == 'collapsed' %} collapsed{% endif %}" id="sidebar">
   <div class="sidebar-brand">
-    <img src="/static/brand-logo.png" alt="Dashen Bank" class="sidebar-logo">
+    <img src="/static/brand-logo.png" alt="Dashen Bank" title="Dashen Bank" class="sidebar-logo" tabindex="-1">
     <div class="sidebar-brand-text">
       <span class="name">Dashen Bank</span>
       <span class="sub">ATM Monitoring</span>
@@ -337,53 +423,143 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
     </div>
   </div>
   <nav class="sidebar-nav">
-    <div class="nav-section-label">Navigation</div>
-    <a href="/" class="nav-item {% if request.path == '/' %}active{% endif %}">
-      <i data-lucide="layout-dashboard"></i>
-      <span>Dashboard</span>
-    </a>
-    <a href="/admin/atm" class="nav-item {% if request.path.startswith('/admin/atm') %}active{% endif %}">
-      <i data-lucide="settings"></i>
-      <span>ATM Registration</span>
-    </a>
-    <a href="/ej-search" class="nav-item {% if request.path.startswith('/ej-search') %}active{% endif %}">
-      <i data-lucide="file-search"></i>
-      <span>EJ Search</span>
-    </a>
-    <a href="/admin/anomalies" class="nav-item {% if request.path.startswith('/admin/anomalies') %}active{% endif %}">
-      <i data-lucide="bell"></i>
-      <span>Alert Management</span>
-    </a>
-    {% if session.get('role') == 'admin' %}
-    <a href="/admin/schedules" class="nav-item {% if request.path.startswith('/admin/schedules') %}active{% endif %}">
-      <i data-lucide="calendar"></i>
-      <span>Schedule Reports</span>
-    </a>
-    <a href="/admin/audit" class="nav-item {% if request.path.startswith('/admin/audit') %}active{% endif %}">
-      <i data-lucide="history"></i>
-      <span>Audit Log</span>
-    </a>
-    <a href="/admin/users" class="nav-item {% if request.path.startswith('/admin/users') %}active{% endif %}">
-      <i data-lucide="users"></i>
-      <span>User Management</span>
-    </a>
-    {% endif %}
-    <div class="nav-section-label" style="margin-top:8px">Quick Links</div>
-    <a href="{{ grafana_url }}" target="_blank" rel="noopener" class="nav-item"
-       title="Grafana — live dashboards">
-      <i data-lucide="bar-chart-3"></i>
-      <span>Live Dashboards</span>
-    </a>
-    <a href="{{ zabbix_ui_url }}" target="_blank" rel="noopener" class="nav-item"
-       title="Zabbix — hosts, metrics and problems">
-      <i data-lucide="activity"></i>
-      <span>Monitoring Center</span>
-    </a>
-    <a href="{{ glpi_ui_url }}" target="_blank" rel="noopener" class="nav-item"
-       title="GLPI — tickets, SLA and RCA">
-      <i data-lucide="ticket"></i>
-      <span>Incident Management</span>
-    </a>
+    {#- Grouped by what an operator is actually doing, not by where the page
+        happens to live in the codebase. The previous split was "Navigation" vs
+        "Quick Links", which distinguished nothing - Incident Management was a
+        quick link while Reports was navigation, and both are destinations an
+        operator opens several times a day.
+
+        Sections are OPEN by default. A monitoring sidebar that hides pages
+        behind a disclosure is one extra click to find out what exists, and an
+        operator who cannot see the menu cannot tell what the system can do. The
+        chevron is there to collapse, not to conceal.
+
+        Every href and every admin gate is carried over unchanged; only the
+        grouping and the visual rhythm differ. -#}
+
+    <div class="nav-group">
+      <div class="nav-section-head">
+        <span class="nav-section-label">Monitor</span>
+      </div>
+      <div class="nav-group-items">
+        <a href="/" class="nav-item {% if request.path == '/' %}active{% endif %}"
+           title="Overview — network at a glance">
+          <i data-lucide="layout-dashboard"></i>
+          <span>Overview</span>
+        </a>
+        <a href="/operations" class="nav-item {% if request.path.startswith('/operations') %}active{% endif %}"
+           title="Operations — live transactions and fleet health">
+          <i data-lucide="activity"></i>
+          <span>Operations</span>
+        </a>
+        {% if session.get('role') == 'admin' %}
+        <a href="/admin/onboard/fleet" class="nav-item {% if request.path.startswith('/admin/onboard/fleet') %}active{% endif %}"
+           title="Fleet health — Zabbix-side provisioning state per ATM">
+          <i data-lucide="heart-pulse"></i>
+          <span>Fleet health</span>
+        </a>
+        {% endif %}
+        <a href="/monitoring" class="nav-item {% if request.path.startswith('/monitoring') %}active{% endif %}"
+           title="Monitoring Center — hosts, items and problems">
+          <i data-lucide="server"></i>
+          <span>Monitoring Center</span>
+        </a>
+        <a href="/anomalies" class="nav-item {% if request.path.startswith('/anomalies') %}active{% endif %}"
+           title="Alert Management — open anomalies and their state">
+          <i data-lucide="bell"></i>
+          <span>Alert Management</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-section-head">
+        <span class="nav-section-label">Investigate</span>
+      </div>
+      <div class="nav-group-items">
+        <a href="/kpi" class="nav-item {% if request.path.startswith('/kpi') %}active{% endif %}"
+           title="Management KPIs — performance across the network">
+          <i data-lucide="trending-up"></i>
+          <span>KPIs</span>
+        </a>
+        <a href="/reports" class="nav-item {% if request.path.startswith('/reports') %}active{% endif %}"
+           title="Reports — downloadable management and operational reports">
+          <i data-lucide="file-text"></i>
+          <span>Reports</span>
+        </a>
+        <a href="/ej-search" class="nav-item {% if request.path.startswith('/ej-search') %}active{% endif %}"
+           title="EJ Search — electronic journal records for disputes">
+          <i data-lucide="file-search"></i>
+          <span>EJ Search</span>
+        </a>
+        {% if session.get('role') == 'admin' %}
+        <a href="/ej-journal" class="nav-item {% if request.path.startswith('/ej-journal') %}active{% endif %}"
+           title="EJ Journal — quarantined parser output and reconciliation readiness">
+          <i data-lucide="book-open"></i>
+          <span>EJ Journal</span>
+        </a>
+        {% endif %}
+        <a href="/incidents" class="nav-item {% if request.path.startswith('/incidents') %}active{% endif %}"
+           title="Incident Management — GLPI tickets">
+          <i data-lucide="ticket"></i>
+          <span>Incident Management</span>
+          <b class="nav-badge" id="incidentNavBadge" {% if not unread_count %}hidden{% endif %}>{{ unread_count if unread_count else '' }}</b>
+        </a>
+        <a href="/cash" class="nav-item {% if request.path.startswith('/cash') %}active{% endif %}"
+           title="Cash Loads — cassette levels and replenishment evidence">
+          <i data-lucide="banknote"></i>
+          <span>Cash Loads</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-section-head">
+        <span class="nav-section-label">Manage</span>
+      </div>
+      <div class="nav-group-items">
+        <a href="/atms" class="nav-item {% if request.path.startswith('/atms') %}active{% endif %}"
+           title="ATM Registration — the inventory everything else reads from">
+          <i data-lucide="map-pin"></i>
+          <span>ATM Registration</span>
+        </a>
+        {% if session.get('role') == 'admin' %}
+        <a href="/admin/onboard" class="nav-item {% if request.path.startswith('/admin/onboard') and not request.path.startswith('/admin/onboard/fleet') %}active{% endif %}"
+           title="Onboard ATM — guided provisioning of a new device">
+          <i data-lucide="plus-circle"></i>
+          <span>Onboard ATM</span>
+        </a>
+        <a href="/admin/schedules" class="nav-item {% if request.path.startswith('/admin/schedules') %}active{% endif %}"
+           title="Schedule Reports — recurring report delivery">
+          <i data-lucide="calendar"></i>
+          <span>Schedule Reports</span>
+        </a>
+        <a href="/admin/users" class="nav-item {% if request.path.startswith('/admin/users') %}active{% endif %}"
+           title="User Management — accounts and roles">
+          <i data-lucide="users"></i>
+          <span>User Management</span>
+        </a>
+        <a href="/admin/audit" class="nav-item {% if request.path.startswith('/admin/audit') %}active{% endif %}"
+           title="Audit Log — who changed what, and when">
+          <i data-lucide="history"></i>
+          <span>Audit Log</span>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+    {#- External, and deliberately outside the groups: it leaves the portal for
+        Grafana, so it is a different kind of destination from an internal page. -#}
+    <div class="nav-external">
+      {% if session.get('role') == 'admin' %}
+      <a href="{{ grafana_url }}" target="_blank" rel="noopener" class="nav-item"
+         title="Live Dashboards — opens Grafana in a new tab">
+        <i data-lucide="bar-chart-3"></i>
+        <span>Live Dashboards</span>
+        <i data-lucide="external-link" class="ext"></i>
+      </a>
+      {% endif %}
+    </div>
   </nav>
   <div class="sidebar-support">
     {% if session.get('logged_in') %}
@@ -400,6 +576,10 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
           <div style="font-size:12px;font-weight:600;color:rgba(255,255,255,.7)">{{ session.get('username', 'User') }}</div>
           <div style="font-size:10px;color:rgba(255,255,255,.35);text-transform:capitalize">{{ session.get('role', 'user') }}</div>
         </div>
+        <a href="/profile" class="profile-item">
+          <i data-lucide="key-round"></i>
+          <span>Change Password</span>
+        </a>
         <a href="https://dashenbanksc.com/frequently-asked-questions/#:~:text=Our%20Customer%20Service%20Team%20is,via%206333%20for%20any%20support." target="_blank" class="profile-item">
           <i data-lucide="help-circle"></i>
           <span>Support</span>
@@ -434,6 +614,16 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
 </div>
 
 <div class="main-content">
+{% if txn_note %}
+{% if txn_level == 'demo' %}
+<div style="display:flex;align-items:center;gap:10px;background:#F7F9FC;border-bottom:1px solid #E2E8F0;padding:9px 36px">
+  <span style="flex-shrink:0;background:#B45309;color:#fff;font-size:10px;font-weight:700;letter-spacing:.6px;padding:3px 8px;border-radius:4px">DEMO DATA</span>
+  <span style="font-size:12.5px;color:#475569;line-height:1.5">{{ txn_note }}</span>
+</div>
+{% else %}
+<div style="background:#F7F9FC;border-bottom:1px solid #E2E8F0;color:#64748B;font-size:12px;padding:7px 36px">{{ txn_note }}</div>
+{% endif %}
+{% endif %}
 {% if error %}
 <div class="page-content">
   <div class="alert-card error">
@@ -455,23 +645,73 @@ document.querySelectorAll('[href*="localhost"]').forEach(function(el){
 });
 
 // ── SIDEBAR COLLAPSE ──
-(function(){
-  var saved = localStorage.getItem('sidebarCollapsed');
-  if(saved === 'true') {
-    document.getElementById('sidebar').classList.add('collapsed');
-    var icon = document.querySelector('.collapse-icon polyline');
-    if(icon) icon.setAttribute('points', '10 9 15 12 10 15');
+// One function owns the state. The class, the chevron, the logo's label and
+// localStorage were four separate things to update from two different call
+// sites, and the logo's affordance is the kind of detail that silently rots.
+function setCollapsed(collapsed){
+  var s = document.getElementById('sidebar');
+  if(!s) return;
+  s.classList.toggle('collapsed', collapsed);
+
+  var icon = s.querySelector('.collapse-icon polyline');
+  if(icon) icon.setAttribute('points', collapsed ? '10 9 15 12 10 15' : '16 15 11 12 16 9');
+
+  // In the rail the toggle is gone, so the logo is the only way out. It is
+  // inert - and removed from the tab order - while the sidebar is open, so it
+  // is never a focusable control that does nothing.
+  var logo = s.querySelector('.sidebar-logo');
+  if(logo){
+    var label = collapsed ? 'Expand sidebar' : 'Dashen Bank';
+    logo.setAttribute('title', label);
+    logo.setAttribute('aria-label', label);
+    logo.setAttribute('tabindex', collapsed ? '0' : '-1');
   }
+
+  localStorage.setItem('sidebarCollapsed', collapsed);
+  // The class is applied by JavaScript, which runs after the browser has
+  // already parsed (and may have painted) the sidebar - so every navigation
+  // from one page to another showed the sidebar open for a moment and then
+  // snapping shut. The server cannot know a localStorage value; a cookie it
+  // CAN read, so the next page ships `class="sidebar collapsed"` in the HTML
+  // and there is nothing left to flicker. One flash remains, on the first load
+  // after this change, until the cookie exists.
+  try {
+    document.cookie = 'sidebar=' + (collapsed ? 'collapsed' : 'expanded') +
+      ';path=/;max-age=31536000;SameSite=Lax';
+  } catch(e) {}
+}
+
+(function(){
+  try { sessionStorage.removeItem('navTempExpand'); } catch(e) {}
+  var s = document.getElementById('sidebar');
+  // The server renders the collapsed state from a cookie; localStorage is the
+  // pre-cookie source. If the two disagree - a browser carrying an old
+  // localStorage value and no cookie yet - honouring the rendered class avoids
+  // snapping the sidebar the OTHER way on load, and setCollapsed() re-syncs
+  // both. Collapsing is never undone by a stale source.
+  var rendered = !!(s && s.classList.contains('collapsed'));
+  setCollapsed(rendered || localStorage.getItem('sidebarCollapsed') === 'true');
   lucide.createIcons();
 })();
 
 function toggleCollapse(){
   var s = document.getElementById('sidebar');
-  s.classList.toggle('collapsed');
-  var icon = s.querySelector('.collapse-icon polyline');
-  if(icon) icon.setAttribute('points', s.classList.contains('collapsed') ? '10 9 15 12 10 15' : '16 15 11 12 16 9');
-  localStorage.setItem('sidebarCollapsed', s.classList.contains('collapsed'));
+  setCollapsed(!s.classList.contains('collapsed'));
 }
+
+(function(){
+  var logo = document.querySelector('.sidebar-logo');
+  if(!logo) return;
+  var expand = function(e){
+    var s = document.getElementById('sidebar');
+    if(!s.classList.contains('collapsed')) return;
+    if(e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    setCollapsed(false);
+  };
+  logo.addEventListener('click', expand);
+  logo.addEventListener('keydown', expand);
+})();
 
 // ── MOBILE ──
 function toggleMobile(){
@@ -570,78 +810,115 @@ function showToast(msg, type, duration) {
 })();
 
 // ── CUSTOM SELECTS ──
+// The <select> is hidden (.cust-select select{display:none}) and a trigger +
+// option list are painted from it. Everything the enhancer builds lives in
+// sel._cust so a page can REBUILD it after the options change — without that,
+// dependent (cascading) selects froze on whatever they held at page load.
+function custApplyFilter(sel){
+  var c = sel && sel._cust;
+  if(!c || !c.search) return;
+  var q = (c.search.value || '').trim().toLowerCase();
+  var visible = 0;
+  c.drop.querySelectorAll('.cust-opt').forEach(function(o){
+    var match = o.textContent.toLowerCase().indexOf(q) > -1;
+    o.style.display = match ? '' : 'none';
+    if(match) visible++;
+  });
+  c.empty.style.display = visible ? 'none' : 'block';
+}
+function refreshCustomSelect(sel){
+  var c = sel && sel._cust;
+  if(!c) return false;                       // not enhanced (or data-native)
+  c.drop.querySelectorAll('.cust-opt').forEach(function(n){ n.remove(); });
+  // Empty select (options filled later by the page) must not throw — that used
+  // to abort the whole loop and leave later selects half-wrapped and blank.
+  c.trig.textContent = sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : '—';
+  for(var i = 0; i < sel.length; i++){
+    (function(idx){
+      var o = document.createElement('div');
+      o.className = 'cust-opt' + (idx === sel.selectedIndex ? ' sel' : '');
+      o.textContent = sel.options[idx].text;
+      o.addEventListener('click', function(){
+        sel.selectedIndex = idx;
+        c.trig.textContent = sel.options[idx].text;
+        c.drop.querySelectorAll('.cust-opt').forEach(function(x){ x.classList.remove('sel'); });
+        o.classList.add('sel');
+        c.trig.classList.remove('open');
+        c.drop.classList.remove('show');
+        sel.dispatchEvent(new Event('change'));
+      });
+      c.drop.appendChild(o);
+    })(i);
+  }
+  custApplyFilter(sel);
+  return true;
+}
+window.refreshCustomSelect = refreshCustomSelect;
+
 function initCustomSelects(){
   document.querySelectorAll('select').forEach(function(sel){
     if(sel.closest('.cust-select'))return;
-    var wrap=document.createElement('div');
-    wrap.className='cust-select';
-    sel.parentNode.insertBefore(wrap,sel);
-    wrap.appendChild(sel);
-    var trig=document.createElement('div');
-    trig.className='cust-trigger';
-    trig.textContent=sel.options[sel.selectedIndex].text;
-    wrap.appendChild(trig);
-    var drop=document.createElement('div');
-    drop.className='cust-drop';
-    wrap.appendChild(drop);
-    if(sel.length>6){
-      drop.classList.add('has-search');
-      var searchWrap=document.createElement('div');
-      searchWrap.className='cust-search';
-      var searchInput=document.createElement('input');
-      searchInput.type='text';
-      searchInput.placeholder='Search…';
-      searchInput.setAttribute('autocomplete','off');
-      searchWrap.appendChild(searchInput);
-      drop.appendChild(searchWrap);
-      var emptyMsg=document.createElement('div');
-      emptyMsg.className='cust-empty';
-      emptyMsg.textContent='No matches';
-      drop.appendChild(emptyMsg);
-      searchInput.addEventListener('click',function(e){e.stopPropagation();});
-      searchInput.addEventListener('input',function(){
-        var q=this.value.trim().toLowerCase();
-        var visible=0;
-        drop.querySelectorAll('.cust-opt').forEach(function(o){
-          var match=o.textContent.toLowerCase().indexOf(q)>-1;
-          o.style.display=match?'':'none';
-          if(match)visible++;
+    if(sel.hasAttribute('data-native'))return; // OS popup: explicit opt-out
+    try{
+      var wrap=document.createElement('div');
+      wrap.className='cust-select';
+      sel.parentNode.insertBefore(wrap,sel);
+      wrap.appendChild(sel);
+      var trig=document.createElement('div');
+      trig.className='cust-trigger';
+      trig.tabIndex=0;
+      trig.setAttribute('role','combobox');
+      wrap.appendChild(trig);
+      var drop=document.createElement('div');
+      drop.className='cust-drop';
+      wrap.appendChild(drop);
+      var c = {wrap:wrap, trig:trig, drop:drop, search:null, empty:null};
+      sel._cust = c;
+      if(sel.length>6){
+        drop.classList.add('has-search');
+        var searchWrap=document.createElement('div');
+        searchWrap.className='cust-search';
+        var searchInput=document.createElement('input');
+        searchInput.type='text';
+        searchInput.placeholder='Search…';
+        searchInput.setAttribute('autocomplete','off');
+        searchWrap.appendChild(searchInput);
+        drop.appendChild(searchWrap);
+        var emptyMsg=document.createElement('div');
+        emptyMsg.className='cust-empty';
+        emptyMsg.textContent='No matches';
+        drop.appendChild(emptyMsg);
+        c.search = searchInput;
+        c.empty = emptyMsg;
+        searchInput.addEventListener('click',function(e){e.stopPropagation();});
+        searchInput.addEventListener('input',function(){custApplyFilter(sel)});
+        trig.addEventListener('click',function(){
+          setTimeout(function(){ searchInput.value=''; custApplyFilter(sel); searchInput.focus(); }, 0);
         });
-        emptyMsg.style.display=visible?'none':'block';
-      });
-      trig.addEventListener('click',function(){
-        setTimeout(function(){ searchInput.value=''; searchInput.dispatchEvent(new Event('input')); searchInput.focus(); }, 0);
-      });
-    }
-    for(var i=0;i<sel.length;i++){
-      (function(idx){
-        var o=document.createElement('div');
-        o.className='cust-opt'+(idx===sel.selectedIndex?' sel':'');
-        o.textContent=sel.options[idx].text;
-        o.addEventListener('click',function(){
-          sel.selectedIndex=idx;
-          trig.textContent=sel.options[idx].text;
-          drop.querySelectorAll('.cust-opt').forEach(function(c){c.classList.remove('sel')});
-          o.classList.add('sel');
-          trig.classList.remove('open');
-          drop.classList.remove('show');
-          sel.dispatchEvent(new Event('change'));
-        });
-        drop.appendChild(o);
-      })(i);
-    }
-    trig.addEventListener('click',function(e){
-      e.stopPropagation();
-      var already=drop.classList.contains('show');
-      document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});
-      document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')});
-      if(!already){
-        var rect=trig.getBoundingClientRect();
-        if(window.innerHeight-rect.bottom<180){drop.classList.add('up');trig.classList.add('up')}
-        else{drop.classList.remove('up');trig.classList.remove('up')}
-        drop.classList.add('show');trig.classList.add('open');
       }
-    });
+      refreshCustomSelect(sel);
+      trig.addEventListener('click',function(e){
+        e.stopPropagation();
+        var already=drop.classList.contains('show');
+        document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});
+        document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')});
+        if(!already){
+          var rect=trig.getBoundingClientRect();
+          if(window.innerHeight-rect.bottom<180){drop.classList.add('up');trig.classList.add('up')}
+          else{drop.classList.remove('up');trig.classList.remove('up')}
+          drop.classList.add('show'); trig.classList.add('open');
+        }
+      });
+      trig.addEventListener('keydown',function(e){
+        if(e.key==='Enter'||e.key===' '){e.preventDefault();trig.click();}
+        else if(e.key==='Escape'){drop.classList.remove('show');trig.classList.remove('open');trig.focus();}
+      });
+    }catch(err){
+      // Never let one bad select break the rest of the page: drop the
+      // half-built wrapper and let the native <select> render as-is.
+      if(sel._cust && sel._cust.wrap) sel._cust.wrap.replaceWith(sel);
+      if(window.console) console.error('custom select skipped:', sel, err);
+    }
   });
   document.addEventListener('click',function(){
     document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});
@@ -656,7 +933,7 @@ initCustomSelects();
       <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
     </div>
     <h3>Confirm Logout</h3>
-    <p>Are you sure you want to log out of Report Portal?</p>
+    <p>Are you sure you want to log out of ATM Monitoring System?</p>
     <div class="modal-confirm-actions">
       <button class="btn btn-outline" onclick="document.getElementById('logoutModal').classList.remove('show')">Cancel</button>
       <a href="/logout" class="btn btn-danger" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">
@@ -668,5 +945,39 @@ initCustomSelects();
 </div>
 
 {% block extra_scripts %}{% endblock %}
+{% if session.get('username') %}
+<script>
+/* Sidebar notification badge: same unseen-change definition as the New
+   tags on the ticket list. Polling (not page-render) keeps every other
+   page fast even when GLPI is slow or unreachable. */
+(function(){
+  var badge = document.getElementById('incidentNavBadge');
+  if(!badge) return;
+  var baseTitle = document.title.replace(/^\(\d+\+?\)\s*/, '');
+  function paint(n){
+    if(typeof n !== 'number' || !isFinite(n)) return;
+    n = Math.max(0, Math.round(n));
+    badge.textContent = n > 99 ? '99+' : String(n);
+    badge.hidden = (n === 0);
+    badge.title = n
+      ? n + ' ticket' + (n === 1 ? '' : 's') + ' changed since you last opened them'
+      : '';
+    document.title = n ? '(' + (n > 99 ? '99+' : n) + ') ' + baseTitle : baseTitle;
+  }
+  function refresh(){
+    fetch('/incidents/unread-count', {
+      credentials: 'same-origin',
+      headers: {'Accept': 'application/json'}
+    }).then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if(d && typeof d.count === 'number') paint(d.count); })
+      .catch(function(){});
+  }
+  refresh();
+  setInterval(function(){ if(!document.hidden) refresh(); }, 60000);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) refresh(); });
+  window.addEventListener('focus', refresh);
+})();
+</script>
+{% endif %}
 </body>
 </html>

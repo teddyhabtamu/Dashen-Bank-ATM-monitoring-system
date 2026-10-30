@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Cash Replenishment — ATM Monitoring{% endblock %}
+{% block extra_style %}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;padding:24px}
+.form-grid .full{grid-column:1/-1}
+.form-actions{padding:0 24px 24px;display:flex;gap:10px;justify-content:flex-end}
+.form-actions .btn{padding:10px 20px}
+/* The ATM filter's custom dropdown is clipped by the header otherwise
+   (same class of bug the audit page already fixed). */
+.card-header{overflow:visible}
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="banknote"></i></div>
+  <div>
+    <h1 class="page-title">Cash Load History</h1>
+    <p class="page-subtitle">Unified record: automatic detections (from cassette levels) plus manual entries for loads the system missed. Feeds cash reports. Cash-depletion forecast is required by BRD 5.3 — see <code>docs/BRD-traceability.md</code>.</p>
+  </div>
+</div>
+
+<div class="page-content">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Log a missed load</span>
+  </div>
+  <p style="padding:0 24px;color:#64748B;font-size:12px">Levels detected automatically once SNMP flows — use this form only for loads the system missed (e.g. during monitoring outages).</p>
+  <form method="post" action="/cash/log" onsubmit="var b=this.querySelector('button[type=submit]');if(b){b.disabled=true;b.textContent='Logging…';}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="cash_token" value="{{ cash_token }}">
+    <div class="form-grid">
+      <div class="form-group">
+        <label>ATM</label>
+        <select name="atm_id" required>
+          <option value="">-- Select ATM --</option>
+          {% for a in atms %}
+          <option value="{{ a.atm_id }}" {% if a.atm_id == atm_filter %}selected{% endif %}>{{ a.atm_id }} — {{ a.atm_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Cassette</label>
+        <select name="cassette" required>
+          <option value="1">Cassette 1</option>
+          <option value="2">Cassette 2</option>
+          <option value="3">Cassette 3</option>
+          <option value="4">Cassette 4</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Notes added</label>
+        <input type="number" name="notes_added" min="1" max="100000" required placeholder="e.g. 2000">
+      </div>
+      <div class="form-group full">
+        <label>Note (optional)</label>
+        <input type="text" name="notes" maxlength="500" placeholder="e.g. scheduled CIT visit">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Log load</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Recent loads{% if atm_filter %} — {{ atm_filter }}{% endif %}</span>
+    <div>
+      <form method="get" action="/cash" style="display:flex;gap:8px;align-items:center">
+        <select name="atm_id" onchange="this.form.submit()">
+          <option value="">All ATMs</option>
+          {% for a in atms %}
+          <option value="{{ a.atm_id }}" {% if a.atm_id == atm_filter %}selected{% endif %}>{{ a.atm_id }}</option>
+          {% endfor %}
+        </select>
+        {% if atm_filter %}<a href="/cash" class="btn">Clear</a>{% endif %}
+      </form>
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr><th>When (EAT)</th><th>ATM</th><th>Cassette</th><th>Notes added</th><th>By</th><th>Source</th><th>Note</th></tr></tr>
+    </thead>
+    <tbody>
+      {% for r in loads %}
+      <tr>
+        <td>{{ r.recorded_at }}</td>
+        <td>{{ r.atm_id }}</td>
+        <td>{{ r.cassette }}</td>
+        <td>{{ r.notes_added }}</td>
+        <td>{{ r.recorded_by }}</td>
+        <td>{{ r.source }}</td>
+        <td>{{ r.notes or '' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" style="text-align:center;color:#94A3B8">No loads recorded yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+</div>
+{% endblock %}

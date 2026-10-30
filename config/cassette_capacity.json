@@ -1,0 +1,5 @@
+{
+  "_comment": "Per-ATM notes-per-cassette capacity used for the fill-% bars in the Report Portal detail view. Edit/add atm_id -> int. Unknown ATMs fall back to CASSETTE_MAX (2500).",
+  "ATM-TEST-NCR": 2500,
+  "ATM-TEST-GRG": 2500
+}

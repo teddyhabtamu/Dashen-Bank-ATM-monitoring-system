@@ -1,0 +1,456 @@
+{% extends "base.html" %}
+{% block title %}Operations — ATM Monitoring{% endblock %}
+{% block extra_style %}
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.stat-card{background:#fff;border-radius:12px;border:1px solid #EEF1F6;box-shadow:0 1px 3px rgba(1,33,105,.04);padding:16px 18px;animation:fadeSlideUp .3s ease}
+.stat-card .num{font-size:26px;font-weight:800;color:#0F172A}
+.stat-card .num small{font-size:14px;font-weight:600;color:#64748B}
+.stat-card .lbl{font-size:11px;color:#64748B;font-weight:600;margin-top:2px}
+.stat-card.ok .num{color:#2563EB}
+.stat-card.rate-low .num{color:#DC2626}
+.stat-card.warn .num{color:#D97706}
+.op-table{width:100%;border-collapse:collapse;font-size:12px}
+.op-table th{text-align:left;padding:10px 12px;background:#FAFBFC;color:#64748B;font-weight:700;font-size:11px;border-bottom:1px solid #EEF1F6;white-space:nowrap}
+.op-table td{padding:10px 12px;border-bottom:1px solid #F1F5F9}
+.op-table tr:last-child td{border-bottom:none}
+.pill{display:inline-block;padding:2px 10px;border-radius:100px;font-size:10px;font-weight:700;white-space:nowrap}
+.pill-healthy{background:#DCFCE7;color:#166534}
+.pill-degraded{background:#FEF9C3;color:#854D0E}
+.pill-critical{background:#FEE2E2;color:#991B1B}
+.pill-nodata{background:#F1F5F9;color:#64748B}
+#fleetLiveMap{width:100%;height:420px;border-radius:8px;z-index:0}
+.fleet-cluster div{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2.5px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.3)}
+.fleet-cluster span{color:#fff;font-size:12px;font-weight:700}
+.fleet-healthy div{background:rgba(16,185,129,.9)}
+.fleet-degraded div{background:rgba(245,158,11,.92)}
+.fleet-critical div{background:rgba(220,38,38,.92)}
+.fleet-nodata div{background:rgba(148,163,184,.92)}
+.st-approved{color:#16A34A;font-weight:700}
+.st-declined{color:#D97706;font-weight:700}
+.st-error{color:#DC2626;font-weight:700}
+.st-timeout{color:#7C3AED;font-weight:700}
+.chart-wrap{position:relative;width:100%;height:240px}
+.empty-row td{text-align:center;color:#94A3B8;padding:22px !important}
+@media(max-width:768px){.op-table-wrap{overflow-x:auto}.chart-wrap{height:200px}}
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="gauge"></i></div>
+  <div>
+    <h1 class="page-title">Operations</h1>
+    <p class="page-subtitle">Live transaction flow and fleet health — same numbers as Grafana, no second login.</p>
+    <span id="liveStamp" style="font-size:11px;color:#64748B;font-weight:600"></span>
+  </div>
+  <a href="{{ grafana_url }}" target="_blank" rel="noopener" class="btn-live btn-outline"><i data-lucide="external-link"></i> Open in Grafana</a>
+</div>
+<div class="page-content">
+
+  <div class="stat-row">
+    <div class="stat-card ok"><div class="num"><span id="opsCash">{{ '{:,.0f}'.format(cash_today) }}</span> <small>ETB</small></div><div class="lbl">Cash Dispensed Today</div></div>
+    <div class="stat-card {% if success_rate is not none and success_rate < 80 %}rate-low{% endif %}" id="opsRateCard">
+      <div class="num"><span id="opsRate">{% if success_rate is none %}—{% else %}{{ success_rate }}{% endif %}</span>{% if success_rate is not none %}<small>%</small>{% endif %}</div>
+      <div class="lbl">Success Rate — Last 1 Hour</div>
+    </div>
+    <div class="stat-card {% if unacked %}warn{% endif %}" id="opsUnackedCard"><div class="num" id="opsUnacked">{{ unacked }}</div><div class="lbl">Unacknowledged Anomalies (1h)</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h2>Transactions Per Hour — Last 12 Hours</h2></div>
+    <div style="padding:16px 18px"><div class="chart-wrap"><canvas id="hourlyChart"></canvas></div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h2>Fleet Map — Live Health by Location</h2></div>
+    <div style="padding:16px 18px">
+      {% if map_svg and map_dots %}
+      <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+      <link rel="stylesheet" href="/static/vendor/markercluster/MarkerCluster.css">
+      <link rel="stylesheet" href="/static/vendor/markercluster/MarkerCluster.Default.css">
+      <div id="fleetLiveMap" style="display:none"></div>
+      <div id="fleetSvgWrap">
+      <svg id="fleetMapSvg" viewBox="0 0 640 460" role="img" aria-label="ATM fleet map of Ethiopia"
+           style="width:100%;height:auto;display:block;background:#F8FAFC;border-radius:8px">
+        <path d="{{ map_svg }}" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.5" stroke-linejoin="round"/>
+        {% for d in map_dots %}
+        <a href="/atms/{{ d.atm_id }}" data-map-dot data-atm="{{ d.atm_id }}">
+          <circle cx="{{ d.x }}" cy="{{ d.y }}" r="9" data-health="{{ d.health }}"
+                  fill="{% if d.health == 'Healthy' %}#10B981{% elif d.health == 'Degraded' %}#F59E0B{% elif d.health == 'Critical' %}#DC2626{% else %}#94A3B8{% endif %}"
+                  stroke="#fff" stroke-width="2.5" style="cursor:pointer">
+            <title>{{ d.atm_id }} · {{ d.branch }}{% if d.city %} ({{ d.city }}){% endif %} — {{ d.state_label or d.state }} · {{ d.health }} ({{ d.txns }} txns/1h). Click for details.</title>
+          </circle>
+        </a>
+        {% endfor %}
+      </svg>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:#475569">
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#10B981;margin-right:4px"></span>Healthy</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#F59E0B;margin-right:4px"></span>Degraded</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#DC2626;margin-right:4px"></span>Critical</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#94A3B8;margin-right:4px"></span>No Data</span>
+        <span style="margin-left:auto" id="mapHint">Numbered badges are overlapping ATMs — click to expand, click a dot for its detail page.</span>
+      </div>
+      {% if map_missing %}<p style="font-size:12px;color:#94A3B8;margin:8px 0 0">{{ map_missing }} ATM(s) without GPS coordinates — set them in ATM Registration to appear here.</p>{% endif %}
+      {% elif map_missing %}
+      <p style="font-size:13px;color:#475569;margin:0">No ATM has GPS coordinates yet — set latitude/longitude in ATM Registration to light up this map.</p>
+      {% else %}
+      <p style="font-size:13px;color:#475569;margin:0">No ATMs registered.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h2>Fleet Overview — Last 1 Hour</h2></div>
+    <div style="font-size:11px;color:#64748B;padding:8px 16px 0">Health reflects the last hour's transaction success rate (≥95 Healthy, ≥80 Degraded, else Critical) — it can differ from the ATM's reported state (e.g. IN_SERVICE but Critical during a failure burst).</div>
+    <div class="op-table-wrap">
+      <table class="op-table">
+        <thead><tr><th>ATM ID</th><th>Branch</th><th>City</th><th>Vendor</th><th>Txns</th><th>Approved</th><th>Success %</th><th>Cash (ETB)</th><th>Health</th></tr></thead>
+        <tbody id="fleetBody">
+          {% for r in fleet %}
+          <tr>
+            <td style="font-family:monospace">{{ r.atm_id }}</td>
+            <td>{{ r.branch or '—' }}</td><td>{{ r.city or '—' }}</td><td>{{ r.vendor or '—' }}</td>
+            <td>{{ r.txns }}</td><td>{{ r.approved }}</td><td>{{ r.success_rate }}</td>
+            <td>{{ '{:,.0f}'.format(r.cash|float) }}</td>
+            <td><span class="pill pill-{{ r.health|lower|replace(' ', '') }}">{{ r.health }}</span></td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="9">No ATMs registered.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if fleet_pages > 1 %}
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:12px;font-size:12px;color:#64748B">
+      {% if fleet_pg > 1 %}<a class="btn btn-outline" style="padding:6px 12px" href="/operations?page={{ fleet_pg - 1 }}&spage={{ sum_pg }}">← Prev</a>{% endif %}
+      <span>Page {{ fleet_pg }} of {{ fleet_pages }} ({{ fleet_total }} ATMs)</span>
+      {% if fleet_pg < fleet_pages %}<a class="btn btn-outline" style="padding:6px 12px" href="/operations?page={{ fleet_pg + 1 }}&spage={{ sum_pg }}">Next →</a>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h2>Live Transaction Feed</h2></div>
+    <div class="op-table-wrap">
+      <table class="op-table">
+        <thead><tr><th>Time</th><th>ATM</th><th>Branch</th><th>Type</th><th>Card</th><th>Amount (ETB)</th><th>Status</th></tr></thead>
+        <tbody id="feedBody">
+          {% for r in feed %}
+          <tr>
+            <td style="white-space:nowrap">{{ r.recorded_at_eat or r.recorded_at }}</td>
+            <td style="font-family:monospace">{{ r.atm_id }}</td>
+            <td>{{ r.branch or '—' }}</td><td>{{ r.txn_type or '—' }}</td>
+            <td style="font-family:monospace">{{ r.card_masked or '—' }}</td>
+            <td>{{ r.amount if r.amount is not none else '—' }}</td>
+            <td class="st-{{ (r.status or '')|lower }}">{{ r.status or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="7">No transactions yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Transaction Summary — Last 24 Hours</h2></div>
+    <div class="op-table-wrap">
+      <table class="op-table">
+        <thead><tr><th>ATM ID</th><th>Total</th><th>Approved</th><th>Declined</th><th>Errors</th></tr></thead>
+        <tbody id="sumBody">
+          {% for r in summary %}
+          <tr>
+            <td style="font-family:monospace">{{ r.atm_id }}</td>
+            <td>{{ r.total }}</td><td>{{ r.approved }}</td><td>{{ r.declined }}</td><td>{{ r.errors }}</td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="5">No transactions in the last 24 hours.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if sum_pages > 1 %}
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:12px;font-size:12px;color:#64748B">
+      {% if sum_pg > 1 %}<a class="btn btn-outline" style="padding:6px 12px" href="/operations?page={{ fleet_pg }}&spage={{ sum_pg - 1 }}">← Prev</a>{% endif %}
+      <span>Page {{ sum_pg }} of {{ sum_pages }}</span>
+      {% if sum_pg < sum_pages %}<a class="btn btn-outline" style="padding:6px 12px" href="/operations?page={{ fleet_pg }}&spage={{ sum_pg + 1 }}">Next →</a>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+<script src="/static/chart.umd.min.js"></script>
+<script>
+(function(){
+  var el = document.getElementById('hourlyChart');
+  if(!el || typeof Chart === 'undefined') return;
+  window.hourlyChart = new Chart(el, {type:'bar',
+    data:{labels:{{ chart.labels|tojson }},
+      datasets:[
+        {label:'Approved', data:{{ chart.approved|tojson }}, backgroundColor:'#16A34A'},
+        {label:'Failed', data:{{ chart.failed|tojson }}, backgroundColor:'#DC2626'}]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom', labels:{boxWidth:12, font:{size:11}}}},
+      scales:{x:{stacked:true, ticks:{font:{size:10}}}, y:{stacked:true, beginAtZero:true, ticks:{precision:0}}}}});
+})();
+</script>
+<script>
+/* Fleet-map clustering (offline, dependency-free): dots closer than one
+   diameter merge into a numbered badge colored by worst member health.
+   Click expands (spiderfy) so every ATM stays identifiable + clickable. */
+(function(){
+  var svg = document.getElementById('fleetMapSvg');
+  if(!svg) return;
+  var NS = 'http://www.w3.org/2000/svg';
+  var TH = 24;
+  var nodes = [];
+  svg.querySelectorAll('a[data-map-dot]').forEach(function(a){
+    var c = a.querySelector('circle');
+    if(!c) return;
+    nodes.push({a: a, c: c,
+      x: parseFloat(c.getAttribute('cx')), y: parseFloat(c.getAttribute('cy')),
+      atm: a.getAttribute('data-atm'), health: c.getAttribute('data-health')});
+  });
+  if(nodes.length < 2) return;
+  var parent = nodes.map(function(_, i){ return i; });
+  function find(i){ while(parent[i] !== i){ parent[i] = parent[parent[i]]; i = parent[i]; } return i; }
+  var i, j;
+  for(i = 0; i < nodes.length; i++) for(j = i + 1; j < nodes.length; j++){
+    var dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y;
+    if(Math.sqrt(dx * dx + dy * dy) < TH) parent[find(i)] = find(j);
+  }
+  var groups = {};
+  nodes.forEach(function(n, k){ var r = find(k); (groups[r] = groups[r] || []).push(n); });  var rank = {Critical: 0, Degraded: 1, 'No Data': 2, Healthy: 3};
+  var color = {Critical: '#DC2626', Degraded: '#F59E0B', 'No Data': '#94A3B8', Healthy: '#10B981'};
+  Object.keys(groups).forEach(function(k){
+    var g = groups[k];
+    if(g.length < 2) return;    var cx = 0, cy = 0, worst = 'Healthy';
+    g.forEach(function(n){
+      cx += n.x; cy += n.y;
+      if((rank[n.health] ?? 3) < (rank[worst] ?? 3)) worst = n.health;
+    });
+    cx /= g.length; cy /= g.length;
+    g.forEach(function(n){ n.a.style.display = 'none'; });
+    var b = document.createElementNS(NS, 'g');
+    b.style.cursor = 'pointer';
+    var bc = document.createElementNS(NS, 'circle');
+    bc.setAttribute('cx', cx); bc.setAttribute('cy', cy); bc.setAttribute('r', 13);
+    bc.setAttribute('fill', color[worst] || '#94A3B8');
+    bc.setAttribute('stroke', '#fff'); bc.setAttribute('stroke-width', '2.5');
+    var bt = document.createElementNS(NS, 'text');
+    bt.setAttribute('x', cx); bt.setAttribute('y', cy + 4.5);
+    bt.setAttribute('text-anchor', 'middle');
+    bt.setAttribute('fill', '#fff'); bt.setAttribute('font-size', '12'); bt.setAttribute('font-weight', '700');
+    bt.textContent = String(g.length);
+    var tip = document.createElementNS(NS, 'title');
+    function tipText(open){
+      return g.length + ' ATMs here: ' +
+        g.map(function(n){ return n.atm + ' (' + n.health + ')'; }).join(', ') +
+        (open ? '. Click to collapse.' : '. Click to expand.');
+    }
+    tip.textContent = tipText(false);
+    b.appendChild(bc); b.appendChild(bt); b.appendChild(tip);
+    svg.appendChild(b);
+    var sg = document.createElementNS(NS, 'g');
+    sg.style.display = 'none';
+    var rad = 30 + g.length * 4;
+    g.forEach(function(n, idx){
+      var ang = -Math.PI / 2 + idx * 2 * Math.PI / g.length;
+      var px = Math.max(14, Math.min(626, cx + rad * Math.cos(ang)));
+      var py = Math.max(14, Math.min(446, cy + rad * Math.sin(ang)));
+      var ln = document.createElementNS(NS, 'line');
+      ln.setAttribute('x1', cx); ln.setAttribute('y1', cy);
+      ln.setAttribute('x2', px); ln.setAttribute('y2', py);
+      ln.setAttribute('stroke', '#64748B'); ln.setAttribute('stroke-width', '1.5');
+      sg.appendChild(ln);
+      var cc = n.c.cloneNode(true);
+      cc.setAttribute('cx', px); cc.setAttribute('cy', py);
+      cc.style.cursor = 'pointer';
+      var na = document.createElementNS(NS, 'a');
+      na.setAttribute('href', n.a.getAttribute('href'));
+      na.appendChild(cc);
+      sg.appendChild(na);
+    });
+    svg.appendChild(sg);
+    var open = false;
+    b.addEventListener('click', function(){
+      open = !open;
+      sg.style.display = open ? '' : 'none';
+      bt.textContent = open ? '–' : String(g.length);
+      tip.textContent = tipText(open);
+    });
+  });
+})();
+</script>
+<script>
+/* 60s autosync: stat cards, fleet/feed/summary tables, hourly chart and map
+   dots re-render from /operations/api/live (same page params). Skips while
+   the tab is hidden; failures back off silently (stamp shows it). Map
+   viewports are never touched — only dot colors/titles refresh, so no
+   flicker or lost zoom. (Cluster badges recompute on full reload.) */
+(function(){
+  var fails = 0, busy = false, t0 = 0;
+  var INTERVAL = 30000, BACKOFF_MAX = 180000;
+  var HEALTH_COLORS = {Healthy:'#10B981', Degraded:'#F59E0B', Critical:'#DC2626', 'No Data':'#94A3B8'};
+  function esc(s){ return String(s == null ? '—' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function fmtCash(n){ return Number(n || 0).toLocaleString('en-US', {maximumFractionDigits: 0}); }
+  function stamp(ok){
+    var el = document.getElementById('liveStamp');
+    if(!el) return;
+    if(ok){ el.textContent = 'Live · updated ' + new Date().toLocaleTimeString('en-ET',{hour12:false}); el.style.color = ''; }
+    else { el.textContent = 'Update failed — retrying…'; el.style.color = '#DC2626'; }
+  }
+  function pill(h){ return '<span class="pill pill-' + String(h || 'No Data').toLowerCase().replace(' ','') + '">' + esc(h || 'No Data') + '</span>'; }
+  async function tick(){
+    t0 = Date.now();
+    if(busy || document.hidden){ schedule(); return; }
+    busy = true;
+    try{
+      var q = new URLSearchParams(window.location.search);
+      if(!q.get('page')) q.set('page', '1');
+      if(!q.get('spage')) q.set('spage', '1');
+      var r = await fetch('/operations/api/live?' + q.toString());
+      if(!r.ok) throw new Error('Server returned ' + r.status);
+      var d = await r.json();
+      var c = document.getElementById('opsCash');
+      if(c) c.textContent = fmtCash(d.cash_today);
+      var rate = document.getElementById('opsRate');
+      if(rate) rate.textContent = (d.success_rate == null ? '—' : d.success_rate);
+      var rc = document.getElementById('opsRateCard');
+      if(rc) rc.classList.toggle('rate-low', d.success_rate != null && d.success_rate < 80);
+      var u = document.getElementById('opsUnacked');
+      if(u) u.textContent = d.unacked == null ? '0' : d.unacked;
+      var uc = document.getElementById('opsUnackedCard');
+      if(uc) uc.classList.toggle('warn', !!(d.unacked && d.unacked > 0));
+      var fb = document.getElementById('fleetBody');
+      if(fb){
+        fb.innerHTML = (d.fleet || []).map(function(x){
+          return '<tr><td style="font-family:monospace">' + esc(x.atm_id) + '</td><td>' + esc(x.branch) +
+            '</td><td>' + esc(x.city) + '</td><td>' + esc(x.vendor) + '</td><td>' + (x.txns == null ? 0 : x.txns) +
+            '</td><td>' + (x.approved == null ? 0 : x.approved) + '</td><td>' + (x.success_rate == null ? 0 : x.success_rate) +
+            '</td><td>' + fmtCash(x.cash) + '</td><td>' + pill(x.health) + '</td></tr>';
+        }).join('') || '<tr class="empty-row"><td colspan="9">No ATMs registered.</td></tr>';
+      }
+      var eb = document.getElementById('feedBody');
+      if(eb){
+        eb.innerHTML = (d.feed || []).map(function(x){
+          return '<tr><td style="white-space:nowrap">' + esc(x.recorded_at_eat || x.recorded_at) + '</td>' +
+            '<td style="font-family:monospace">' + esc(x.atm_id) + '</td><td>' + esc(x.branch) +
+            '</td><td>' + esc(x.txn_type) + '</td><td style="font-family:monospace">' + esc(x.card_masked) +
+            '</td><td>' + (x.amount == null ? '—' : esc(x.amount)) + '</td>' +
+            '<td class="st-' + String(x.status || '').toLowerCase() + '">' + esc(x.status) + '</td></tr>';
+        }).join('') || '<tr class="empty-row"><td colspan="7">No transactions yet.</td></tr>';
+      }
+      var sb = document.getElementById('sumBody');
+      if(sb){
+        sb.innerHTML = (d.summary || []).map(function(x){
+          return '<tr><td style="font-family:monospace">' + esc(x.atm_id) + '</td><td>' + (x.total || 0) +
+            '</td><td>' + (x.approved || 0) + '</td><td>' + (x.declined || 0) + '</td><td>' + (x.errors || 0) + '</td></tr>';
+        }).join('') || '<tr class="empty-row"><td colspan="5">No transactions in the last 24 hours.</td></tr>';
+      }
+      if(window.hourlyChart && d.chart){
+        window.hourlyChart.data.labels = d.chart.labels || [];
+        if(window.hourlyChart.data.datasets[0]) window.hourlyChart.data.datasets[0].data = d.chart.approved || [];
+        if(window.hourlyChart.data.datasets[1]) window.hourlyChart.data.datasets[1].data = d.chart.failed || [];
+        window.hourlyChart.update();
+      }
+      // Map dots: recolor in place (both render paths), viewport untouched.
+      var byId = {};
+      (d.map_dots || []).forEach(function(x){ byId[x.atm_id] = x; });
+      document.querySelectorAll('#fleetMapSvg a[data-map-dot]').forEach(function(a){
+        var x = byId[a.getAttribute('data-atm')];
+        if(!x) return;
+        var c = a.querySelector('circle');
+        if(c){
+          c.setAttribute('fill', HEALTH_COLORS[x.health] || '#94A3B8');
+          c.setAttribute('data-health', x.health || 'No Data');
+          var t = c.querySelector('title');
+          if(t) t.textContent = x.atm_id + ' · ' + (x.branch || '') + ' — ' + (x.state_label || x.state || '') + ' · ' + (x.health || '') + ' (' + (x.txns || 0) + ' txns/1h)';
+        }
+      });
+      if(window._fleetMarkers){
+        Object.keys(window._fleetMarkers).forEach(function(id){
+          var x = byId[id], m = window._fleetMarkers[id];
+          if(!x || !m) return;
+          m.setStyle({fillColor: HEALTH_COLORS[x.health] || '#94A3B8'});
+          m.setTooltipContent(id + ' · ' + (x.branch || '') + ' — ' + (x.state_label || x.state || '') + ' · ' + (x.health || '') + ' (' + (x.txns || 0) + ' txns/1h)');
+        });
+      }
+      fails = 0; stamp(true);
+    }catch(e){ fails++; stamp(false); }
+    busy = false;
+    schedule();
+  }
+  // Wall-clock anchored: next tick lands exactly INTERVAL after this one
+  // started — fetch duration no longer stretches the cadence.
+  function schedule(){
+    var wait = Math.min(INTERVAL * Math.pow(2, fails), BACKOFF_MAX) - (Date.now() - t0);
+    setTimeout(tick, Math.max(0, wait));
+  }
+  tick();
+})();
+</script>
+{% endblock %}
+{% block extra_scripts %}
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+<script src="/static/vendor/markercluster/leaflet.markercluster.js"></script>
+<script>
+/* Hybrid live map: OSM tiles when reachable, silent fallback to the offline
+   SVG above when not (locked-down networks). All libraries vendored locally. */
+(function(){
+  var live = document.getElementById('fleetLiveMap');
+  var wrap = document.getElementById('fleetSvgWrap');
+  var dots = {{ map_dots|tojson }};
+  function fallback(){ if(live) live.style.display = 'none'; if(wrap) wrap.style.display = ''; }
+  if(!live || !wrap || typeof L === 'undefined' || !dots || !dots.length){ fallback(); return; }
+  var geo = dots.filter(function(d){ return d.lat != null && d.lng != null; });
+  if(!geo.length){ fallback(); return; }
+  var COLORS = {Healthy: '#10B981', Degraded: '#F59E0B', Critical: '#DC2626', 'No Data': '#94A3B8'};
+  var map = L.map('fleetLiveMap', {scrollWheelZoom: false});
+  var tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {maxZoom: 18, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'});
+  var loaded = false, errs = 0;
+  tiles.on('tileload', function(){
+    if(loaded) return;
+    loaded = true;
+    wrap.style.display = 'none';
+    live.style.display = '';
+    var hint = document.getElementById('mapHint');
+    if(hint) hint.textContent = 'Drag to pan, double-click to zoom. Clusters split as you zoom; click a dot for its detail page.';
+    setTimeout(function(){ map.invalidateSize(); }, 60);
+  });
+  tiles.on('tileerror', function(){
+    errs++;
+    if(!loaded && errs >= 4){ try{ map.remove(); }catch(e){} fallback(); }
+  });
+  tiles.addTo(map);
+  var group = L.markerClusterGroup({maxClusterRadius: 48, showCoverageOnHover: false,
+    spiderfyOnMaxZoom: true,
+    iconCreateFunction: function(cluster){
+      var rank = {Critical: 0, Degraded: 1, 'No Data': 2, Healthy: 3};
+      var worst = 'Healthy';
+      cluster.getAllChildMarkers().forEach(function(m){
+        var h = m.options.health;
+        if((rank[h] ?? 3) < (rank[worst] ?? 3)) worst = h;
+      });
+      return L.divIcon({html: '<div><span>' + cluster.getChildCount() + '</span></div>',
+        className: 'fleet-cluster fleet-' + worst.replace(' ', '').toLowerCase(),
+        iconSize: L.point(36, 36)});
+    }});
+  var bounds = [];
+  geo.forEach(function(d){
+    var m = L.circleMarker([d.lat, d.lng],
+      {radius: 9, color: '#fff', weight: 2.5,
+       fillColor: COLORS[d.health] || '#94A3B8', fillOpacity: 1, health: d.health});
+    m.bindTooltip(d.atm_id + ' · ' + d.branch + (d.city ? ' (' + d.city + ')' : '') +
+      ' — ' + (d.state_label || d.state) + ' · ' + d.health + ' (' + d.txns + ' txns/1h)', {sticky: true});
+    m.on('click', function(){ window.location = '/atms/' + encodeURIComponent(d.atm_id); });
+    m.options.atmId = d.atm_id;
+    (window._fleetMarkers = window._fleetMarkers || {})[d.atm_id] = m;
+    group.addLayer(m);
+    bounds.push([d.lat, d.lng]);
+  });
+  map.addLayer(group);
+  map.fitBounds(bounds, {padding: [30, 30], maxZoom: 12});
+})();
+</script>
+{% endblock %}

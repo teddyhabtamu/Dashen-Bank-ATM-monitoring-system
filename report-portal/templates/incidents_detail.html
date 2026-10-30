@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+{% block title %}Ticket {% if ticket %}#{{ ticket.id }}{% endif %} — ATM Monitoring{% endblock %}
+{% block extra_style %}
+.back-link{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#012169;text-decoration:none;margin-bottom:12px}
+.back-link:hover{text-decoration:underline}
+.unread-tag{display:inline-block;background:#012169;color:#fff;font-size:10px;font-weight:700;border-radius:100px;padding:2px 9px;margin-left:8px;white-space:nowrap;vertical-align:middle}
+/* ── Contact popover (technician card on avatar/name click) ── */
+.who-card{cursor:pointer}
+.who-card:hover{filter:brightness(.94)}
+#whoPop{position:fixed;z-index:3000;min-width:230px;max-width:300px;background:#fff;border:1px solid #E4E9F1;border-radius:12px;box-shadow:0 12px 40px rgba(1,33,105,.16);padding:14px 16px;display:none}
+#whoPop.show{display:block}
+#whoPop .who-name{font-size:14px;font-weight:800;color:#012169;margin-bottom:8px}
+#whoPop .who-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;display:block;margin-bottom:9px;background:#64748B}
+#whoPop .who-row{display:flex;gap:8px;align-items:center;font-size:12px;color:#0F172A;padding:4px 0;overflow-wrap:anywhere}
+#whoPop .who-row a{color:#012169;font-weight:600;text-decoration:none}
+#whoPop .who-row a:hover{text-decoration:underline}
+#whoPop .who-empty{font-size:12px;color:#94A3B8}
+#whoPop .who-note{font-size:10px;color:#94A3B8;margin-top:8px;border-top:1px solid #EEF1F6;padding-top:8px}
+.t-head{background:#fff;border-radius:12px;border:1px solid #EEF1F6;padding:18px 20px;margin-bottom:14px}
+.t-head h2{font-size:16px;font-weight:700;color:#0F172A;margin:0 0 8px}
+.t-meta{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#64748B}
+.t-meta b{color:#0F172A}
+.t-desc{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:12px 16px;font-size:13px;color:#14532D;margin-top:12px;line-height:1.6}
+.t-desc:empty{display:none}
+.chat{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+.msg-row{display:flex;gap:8px;align-items:flex-end;max-width:78%}
+.msg-row.mine{align-self:flex-end;flex-direction:row-reverse}
+.msg-theirs{width:100%;display:flex}
+.avatar{width:30px;height:30px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;background:#64748B;position:relative;overflow:hidden}
+.avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%}
+.msg-row.mine .avatar{background:#012169}
+.bubble{background:#fff;border:1px solid #EEF1F6;border-radius:4px 14px 14px 14px;padding:10px 14px;box-shadow:0 1px 2px rgba(1,33,105,.05);min-width:0}
+.msg-row.mine .bubble{background:#012169;border-color:#012169;color:#fff;border-radius:14px 4px 14px 14px}
+.bubble-head{display:flex;gap:8px;align-items:baseline;margin-bottom:4px;flex-wrap:wrap}
+.bubble-who{font-weight:700;font-size:12px;color:#0F172A}
+.msg-row.mine .bubble-who{color:#fff}
+.bubble-time{font-size:10px;color:#94A3B8}
+.msg-row.mine .bubble-time{color:rgba(255,255,255,.65)}
+.bubble-kind{display:inline-block;font-size:9px;font-weight:700;padding:1px 7px;border-radius:100px;background:#F1F5F9;color:#475569}
+.msg-row.mine .bubble-kind{background:rgba(255,255,255,.18);color:#fff}
+.bubble-kind.private{background:#FEE2E2;color:#991B1B}
+.bubble-text{font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.bubble-text p{margin:0 0 6px}
+.file-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#012169;background:#EEF2FF;border:1px solid #CBD5E1;border-radius:8px;padding:5px 10px;margin:6px 6px 0 0;text-decoration:none}
+.file-chip:hover{background:#DBEAFE}
+.img-preview{display:block;max-width:420px;width:100%;border-radius:10px;border:1px solid #E4E9F1;margin-top:8px;cursor:zoom-in}
+.msg-row.mine .file-chip{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);color:#fff}
+.files-row{margin-top:2px}
+.sys-note{align-self:center;font-size:11px;color:#64748B;background:#F1F5F9;border-radius:100px;padding:4px 14px;max-width:90%;text-align:center}
+.sys-note b{color:#0F172A}
+.reply-box{background:#fff;border-radius:12px;border:1px solid #EEF1F6;padding:16px 18px;margin-top:4px}
+.ticket-modal{position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center}
+.ticket-modal[hidden]{display:none}
+.ticket-modal-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.45)}
+.ticket-modal-card{position:relative;width:min(420px,calc(100vw - 32px));background:#fff;border-radius:12px;box-shadow:0 20px 50px rgba(1,33,105,.25);padding:20px 22px}
+.ticket-modal-card h3{margin:0 0 6px;font-size:15px;color:#0F172A}
+.ticket-modal-text{margin:0;font-size:12px;color:#475569;line-height:1.5}
+.ticket-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.ticket-modal-actions .act-btn{padding:8px 18px;font-size:12px}
+.reply-box textarea{width:100%;box-sizing:border-box;min-height:80px;padding:10px 12px;border:1px solid #E4E9F1;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical}
+.reply-box textarea:focus{border-color:#012169}
+.err-banner{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;padding:12px 16px;border-radius:10px;font-size:12px;margin-bottom:16px}
+.empty-row{text-align:center;color:#94A3B8;padding:22px;font-size:13px;background:#fff;border-radius:12px;border:1px solid #EEF1F6}
+{% endblock %}
+{% block body %}
+{% macro ticket_avatar(m, contacts) -%}
+{% set card = contacts.get((m.author_id or '')|string, {}) %}
+<div class="avatar who-card" data-uid="{{ m.author_id or '' }}" title="View contact">{{ m.author[:2]|upper }}{% if card.get('picture') %}<img src="/incidents/avatar/{{ m.author_id }}?v={{ card.picture|urlencode }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}</div>
+{%- endmacro %}
+<div class="page-content">
+  <a class="back-link" href="/incidents">← Back to tickets</a>
+
+  {% if error %}
+  <div class="err-banner">{{ error }}</div>
+  {% elif ticket %}
+  <div class="t-head">
+    <h2>#{{ ticket.id }} — {{ ticket.title }}{% if '{' in ticket.title %} <span class="unread-tag" style="background:#F1F5F9;color:#64748B" title="Created from the media-type Test button — macros are only resolved on real alerts">test</span>{% endif %}</h2>
+    <div class="t-meta">
+      <span>Status: <b>{{ ticket.status }}</b></span>
+      <span>Priority: <b>{{ ticket.priority }}</b></span>
+      <span>Category: <b>{{ ticket.category }}</b></span>
+      <span>Opened: <b>{{ ticket.created }}</b></span>
+      <span>Updated: <b>{{ ticket.updated }}</b></span>
+    </div>
+    {% if ticket.content %}<div class="t-desc">{{ ticket.content|safe }}</div>{% endif %}
+  </div>
+
+  <div class="chat">
+  {% for m in timeline %}
+  {% if m.kind in ('solution', 'task') %}
+  <div class="sys-note">{{ 'Solution' if m.kind == 'solution' else 'Task' }} by <b>{{ m.author }}</b> · {{ m.date }}</div>
+  <div class="tl-item" style="background:#F0FDF9;border:1px solid #A7F3D0;border-radius:12px;padding:12px 16px;font-size:13px;line-height:1.65">{{ m.html|safe }}
+    {% if m.files %}
+    <div class="files-row">
+      {% for f in m.files %}
+      {% if f.mime.startswith("image/") %}<a href="/incidents/{{ ticket.id }}/attachment/{{ f.id }}" target="_blank" rel="noopener"><img class="img-preview" src="/incidents/{{ ticket.id }}/attachment/{{ f.id }}" alt="{{ f.name }}" loading="lazy"></a>{% else %}<a class="file-chip" href="/incidents/{{ ticket.id }}/attachment/{{ f.id }}" target="_blank" rel="noopener"> <i data-lucide="paperclip" style="width:12px;height:12px"></i> {{ f.name }}</a>{% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="msg-row {% if m.mine %}mine{% endif %}">
+    {% if not m.mine %}{{ ticket_avatar(m, contacts) }}{% endif %}
+    <div style="min-width:0;max-width:100%">
+      <div class="bubble">
+        <div class="bubble-head">
+          <span class="bubble-who who-card" data-uid="{{ m.author_id or '' }}" title="View contact">{{ m.author }}</span>
+          <span class="bubble-time">{{ m.date }}</span>
+          {% if m.private %}<span class="bubble-kind private">private</span>{% endif %}
+        </div>
+        <div class="bubble-text">{{ m.html|safe }}</div>
+        {% if m.files %}
+        <div class="files-row">
+          {% for f in m.files %}
+          {% if f.mime.startswith("image/") %}<a href="/incidents/{{ ticket.id }}/attachment/{{ f.id }}" target="_blank" rel="noopener"><img class="img-preview" src="/incidents/{{ ticket.id }}/attachment/{{ f.id }}" alt="{{ f.name }}" loading="lazy"></a>{% else %}<a class="file-chip" href="/incidents/{{ ticket.id }}/attachment/{{ f.id }}" target="_blank" rel="noopener"> <i data-lucide="paperclip" style="width:12px;height:12px"></i> {{ f.name }}</a>{% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% if m.mine %}{{ ticket_avatar(m, contacts) }}{% endif %}
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="empty-row">No conversation yet — be the first to reply below.</div>
+  {% endfor %}
+  </div>
+
+  {% if ticket_files %}
+  <div class="tl-item" style="background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:12px;padding:12px 16px;font-size:13px">
+    <div style="font-weight:700;color:#012169;margin-bottom:4px">Ticket attachments</div>
+    {% for f in ticket_files %}
+    {% if f.mime.startswith("image/") %}<a href="/incidents/{{ ticket.id }}/attachment/{{ f.id }}" target="_blank" rel="noopener"><img class="img-preview" src="/incidents/{{ ticket.id }}/attachment/{{ f.id }}" alt="{{ f.name }}" loading="lazy"></a>{% else %}<a class="file-chip" href="/incidents/{{ ticket.id }}/attachment/{{ f.id }}" target="_blank" rel="noopener"> <i data-lucide="paperclip" style="width:12px;height:12px"></i> {{ f.name }}</a>{% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if session.get('role') in ('admin', 'operator') %}
+  <div class="reply-box">    <div style="font-size:13px;font-weight:700;color:#012169;margin-bottom:8px">Reply as {{ session.get('username') }}</div>
+    <textarea id="replyText" placeholder="Type an update for the technician…"></textarea>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+      <label for="replyFiles" class="act-btn" style="padding:8px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i data-lucide="paperclip" style="width:13px;height:13px"></i> Attach (max 3, 10MB each)</label>
+      <input type="file" id="replyFiles" multiple style="display:none" onchange="showPickedFiles(this)">
+      <span id="pickedFiles" style="font-size:12px;color:#64748B"></span>
+      <span style="flex:1"></span>
+      {% if ticket.status_n == 1 %}
+      <button class="act-btn" id="ackBtn" onclick="replyAction('acknowledge', null)" style="padding:8px 18px">Acknowledge</button>
+      {% endif %}
+      {% if ticket.status_n in (1, 2, 3) %}
+      <button class="act-btn" id="pendingBtn" onclick="replyAction('pending', null)" style="padding:8px 18px">Pending</button>
+      {% endif %}
+      {% if ticket.status_n in (1, 2, 3, 4) %}
+      <button class="act-btn solve" id="solveBtn" onclick="replyAction('solve', null)" style="padding:8px 18px">Solve</button>
+      {% endif %}
+      {% if ticket.status_n == 4 %}
+      <button class="act-btn" id="reopenBtn" onclick="replyAction('reopen', null)" style="padding:8px 18px">Resume</button>
+      {% endif %}
+      {% if ticket.status_n in (5, 6) %}
+      <button class="act-btn" id="reopenBtn" onclick="replyAction('reopen', null)" style="padding:8px 18px">Reopen</button>
+      {% endif %}
+      {% if ticket.status_n == 5 %}
+      <button class="act-btn" id="closeBtn" onclick="replyAction('close', null)" style="padding:8px 18px;border-color:#FCA5A5;color:#B91C1C">Close</button>
+      {% endif %}
+      <button class="act-btn" id="replyBtn" onclick="sendReply()" style="padding:8px 18px;background:#012169;color:#fff;border-color:#012169">Send reply</button>
+    </div>
+  </div>
+
+  <div class="ticket-modal" id="closeModal" hidden>
+    <div class="ticket-modal-backdrop" data-close></div>
+    <div class="ticket-modal-card" role="dialog" aria-modal="true" aria-labelledby="closeModalTitle">
+      <h3 id="closeModalTitle">Close ticket #{{ ticket.id }}?</h3>
+      <p class="ticket-modal-text">This marks the ticket closed. Only a solved ticket can be closed, and the action is recorded in the GLPI timeline.</p>
+      <div class="ticket-modal-actions">
+        <button type="button" class="act-btn" data-close>Cancel</button>
+        <button type="button" class="act-btn danger" id="closeConfirm" onclick="confirmClose()">Close ticket</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  <script>
+  // Contact popover — deliberately OUTSIDE the operator gate above: viewers
+  // get name+email cards (phones are stripped server-side for their role).
+  window.TICKET_CONTACTS = {{ contacts|tojson }};
+  function whoPopEl(){
+    var el = document.getElementById('whoPop');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'whoPop';
+      el.setAttribute('role', 'dialog');
+      el.setAttribute('aria-label', 'Contact details');
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+  function escHtml(s){
+    return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function closeWhoPop(){ var el = document.getElementById('whoPop'); if(el) el.classList.remove('show'); }
+  function openWhoPop(anchor){
+    var uid = anchor.getAttribute('data-uid') || '';
+    var card = (window.TICKET_CONTACTS || {})[uid] || (window.TICKET_CONTACTS || {})[String(uid)];
+    var pop = whoPopEl();
+    var name = anchor.textContent.trim() || 'Unknown';
+    var pic = (card && card.picture)
+      ? '/incidents/avatar/' + encodeURIComponent(uid) + '?v=' + encodeURIComponent(card.picture)
+      : '';
+    var html = '';
+    if(pic) html += '<img class="who-avatar" src="' + escHtml(pic) + '" alt="" onerror="this.remove()">';
+    html += '<div class="who-name">' + escHtml(card && card.name ? card.name : name) + '</div>';
+    var hasEmail = !!(card && card.email);
+    var hasPhone = !!(card && (card.phone || card.mobile));
+    if(hasEmail) html += '<div class="who-row"><span style="color:#94A3B8">Email:</span> <a href="mailto:' + escHtml(card.email) + '">' + escHtml(card.email) + '</a></div>';
+    if(card && card.phone) html += '<div class="who-row"><span style="color:#94A3B8">Office:</span> <a href="tel:' + escHtml(card.phone.replace(/[\s-]/g,'')) + '">' + escHtml(card.phone) + '</a></div>';
+    if(card && card.mobile) html += '<div class="who-row"><span style="color:#94A3B8">Mobile:</span> <a href="tel:' + escHtml(card.mobile.replace(/[\s-]/g,'')) + '">' + escHtml(card.mobile) + '</a></div>';
+    if(!hasEmail && !hasPhone) html += '<div class="who-empty">No contact details on file in GLPI.</div>';
+    html += '<div class="who-note">From the GLPI directory — ask an admin to update it there.</div>';
+    pop.innerHTML = html;
+    var rect = anchor.getBoundingClientRect();
+    pop.classList.add('show');
+    var pw = pop.offsetWidth, ph = pop.offsetHeight;
+    var x = Math.max(8, Math.min(rect.left, window.innerWidth - pw - 8));
+    var y = rect.bottom + 8;
+    if(y + ph > window.innerHeight - 8) y = Math.max(8, rect.top - ph - 8);
+    pop.style.left = x + 'px';
+    pop.style.top = y + 'px';
+  }
+  document.addEventListener('click', function(e){
+    var anchor = e.target.closest ? e.target.closest('.who-card') : null;
+    var pop = document.getElementById('whoPop');
+    if(anchor && anchor.getAttribute('data-uid')){
+      e.stopPropagation();
+      var uid = anchor.getAttribute('data-uid');
+      if(pop && pop.classList.contains('show') && pop.dataset.uid === uid){ closeWhoPop(); return; }
+      openWhoPop(anchor);
+      pop = document.getElementById('whoPop');
+      if(pop) pop.dataset.uid = uid;
+      return;
+    }
+    if(!e.target.closest || !e.target.closest('#whoPop')) closeWhoPop();
+  });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeWhoPop(); });
+  </script>
+  {% if session.get('role') in ('admin', 'operator') %}
+  <script>
+  function replyAction(kind, btn){
+    var urls = {
+      acknowledge: '/incidents/{{ ticket.id }}/acknowledge',
+      solve: '/incidents/{{ ticket.id }}/solve',
+      reopen: '/incidents/{{ ticket.id }}/reopen',
+      pending: '/incidents/{{ ticket.id }}/pending',
+      close: '/incidents/{{ ticket.id }}/close'
+    };
+    var url = urls[kind];
+    if(!url){ showToast('Unknown action.', 'error'); return; }
+    var body = {};
+    var text = document.getElementById('replyText').value.trim();
+    if(kind === 'solve'){
+      if(!text){ showToast('Describe the resolution first — it becomes the GLPI solution.', 'error'); return; }
+      body = {solution: text};
+    } else if(kind === 'reopen' || kind === 'pending'){
+      if(text.length < 5){
+        showToast(kind === 'pending'
+          ? 'Write what the ticket is waiting for in the reply box first.'
+          : 'Write why the ticket is being reopened in the reply box first.', 'error');
+        return;
+      }
+      body = {reason: text};
+    } else if(kind === 'close'){
+      openCloseModal();
+      return;
+    }
+    ticketPost(url, body, btn);
+  }
+  var closeModal = document.getElementById('closeModal');
+  function openCloseModal(){
+    if(!closeModal) return;
+    closeModal.hidden = false;
+    document.getElementById('closeConfirm').focus();
+  }
+  function hideCloseModal(){
+    if(closeModal) closeModal.hidden = true;
+  }
+  function confirmClose(){
+    hideCloseModal();
+    ticketPost('/incidents/{{ ticket.id }}/close', {}, null);
+  }
+  document.addEventListener('click', function(e){
+    if(e.target && e.target.closest && e.target.closest('[data-close]')) hideCloseModal();
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && closeModal && !closeModal.hidden) hideCloseModal();
+  });
+
+  function showPickedFiles(input){
+    // Accumulate into a managed list so files can be removed before send.
+    if(!window._pickedDT) window._pickedDT = new DataTransfer();
+    var dt = window._pickedDT;
+    for(var i = 0; i < input.files.length; i++){
+      var f = input.files[i];
+      if(dt.files.length >= 3){ showToast('Only the first 3 files are kept.', 'warning'); break; }
+      if(f.size > 10 * 1024 * 1024){ showToast(f.name + ' exceeds 10MB — skipped.', 'error'); continue; }
+      var dup = false;
+      for(var j = 0; j < dt.files.length; j++){
+        if(dt.files[j].name === f.name && dt.files[j].size === f.size){ dup = true; break; }
+      }
+      if(!dup) dt.items.add(f);
+    }
+    input.files = dt.files;
+    renderPicked();
+  }
+  function removePicked(idx){
+    var dt = window._pickedDT;
+    if(!dt) return;
+    dt.items.remove(idx);
+    document.getElementById('replyFiles').files = dt.files;
+    renderPicked();
+  }
+  function renderPicked(){
+    var dt = window._pickedDT;
+    var box = document.getElementById('pickedFiles');
+    box.innerHTML = '';
+    if(!dt) return;
+    for(var i = 0; i < dt.files.length; i++){
+      (function(f, idx){
+        var chip = document.createElement('span');
+        chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF;border-radius:16px;padding:3px 6px 3px 10px;margin:2px 4px 2px 0;font-size:12px;max-width:260px';
+        var sz = f.size > 1048576 ? (f.size / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(f.size / 1024)) + 'KB';
+        var label = document.createElement('span');
+        label.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+        label.textContent = f.name + ' (' + sz + ')';
+        var x = document.createElement('button');
+        x.type = 'button';
+        x.textContent = '×';
+        x.title = 'Remove this file';
+        x.style.cssText = 'border:none;background:#DBEAFE;color:#1E40AF;border-radius:50%;width:18px;height:18px;line-height:1;cursor:pointer;font-size:13px;font-weight:700;padding:0';
+        x.onclick = function(){ removePicked(idx); };
+        chip.appendChild(label);
+        chip.appendChild(x);
+        box.appendChild(chip);
+      })(dt.files[i], i);
+    }
+  }
+  function sendReply(){
+    var c = document.getElementById('replyText').value.trim();
+    var files = document.getElementById('replyFiles').files;
+    if(!c && !files.length){ showToast('Type a reply or attach a file.', 'error'); return; }
+    var btn = document.getElementById('replyBtn');
+    btn.disabled = true; btn.dataset.label = btn.textContent; btn.textContent = 'Sending…';
+    var fd = new FormData();
+    fd.append('content', c);
+    for(var i = 0; i < files.length && i < 3; i++) fd.append('files', files[i]);
+    fetch('/incidents/{{ ticket.id }}/followup', {method: 'POST', body: fd,
+      headers: {'X-Requested-With': 'XMLHttpRequest'}})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.success){ showToast(data.message, 'success'); setTimeout(function(){ location.replace(window.location.pathname + '?fresh=1'); }, 900); }
+      else { showToast(data.message || 'Action failed.', 'error'); btn.disabled = false; btn.textContent = btn.dataset.label; }
+    })
+    .catch(function(){ showToast('Network error.', 'error'); btn.disabled = false; });
+  }
+  function ticketPost(url, body, btn){
+    if(btn){ btn.disabled = true; btn.dataset.label = btn.textContent; btn.textContent = 'Working…'; }
+    fetch(url, {method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+      body: body ? JSON.stringify(body) : '{}'})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.success){ showToast(data.message, 'success'); setTimeout(function(){ location.replace(window.location.pathname + '?fresh=1'); }, 900); }
+      else { showToast(data.message || 'Action failed.', 'error'); if(btn){ btn.disabled = false; btn.textContent = btn.dataset.label; } }
+    })
+    .catch(function(){ showToast('Network error.', 'error'); if(btn){ btn.disabled = false; } });
+  }
+  </script>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

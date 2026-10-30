@@ -1,0 +1,19 @@
+# ATM image evidence — read-only allow-list for atm-image-chunk.ps1
+#
+# Deploy to: C:\monitor\atm-image-roots.txt
+# One absolute Windows directory per line. # starts a comment.
+#
+# The file is REQUIRED. If it is missing, empty, contains a drive root (C:\),
+# a UNC path, a wildcard, or a colon after the drive letter, the script fails
+# closed with ERR:E_CONFIG for every image request.
+#
+# Keep this list as narrow as the bank's image layout allows. This file is a
+# reference template; deploy only the roots that exist on that ATM.
+#   GRG pilot:  E:\pic
+#   NCR:        the two C:\ISUITE\ICAM\Permit paths, plus D:\Image\icamimages
+#               only if that path actually exists on the box.
+# Do not deploy all four blindly.
+E:\pic
+C:\ISUITE\ICAM\Permit\icamimages
+C:\ISUITE\ICAM\Permit\iCamImageZip
+D:\Image\icamimages

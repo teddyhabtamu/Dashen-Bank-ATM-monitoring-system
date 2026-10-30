@@ -1,6 +1,22 @@
 {
-  "description": "Parse ATM Electronic Journal log lines (NCR + GRG, legacy and current shapes) into a structured nested schema: atm.id, terminal.id, transaction.*, card.masked, fault.*, event.category. Referenced by filebeat.yml (output.elasticsearch.pipeline). v2 replaces flat field output; raw message is always retained by filebeat.",
+  "description": "Parse ATM Electronic Journal log lines (NCR + GRG, legacy and current shapes) into a structured nested schema: atm.id, terminal.id, transaction.*, card.masked, fault.*, event.category. Referenced by filebeat.yml (output.elasticsearch.pipeline). NDC records (ESC-led [020t*SEQ*MM/DD/YYYY*HH:MM*TEXT, proven live 2026-10-13) are split by filebeat multiline, then grokked here. Control bytes are stripped and PANs scrubbed (first6******last4) BEFORE storage, so raw PANs never rest at rest — portal display-scrub is defense in depth. Real (non-simulator) EJ lines that do not match the grok patterns are retained verbatim in `ej_raw` and tagged `ej_parsed:false` so they can be tuned later without data loss.",
   "processors": [
+    {
+      "gsub": {
+        "field": "message",
+        "pattern": "[\\x00-\\x1F]",
+        "replacement": "",
+        "ignore_missing": true
+      }
+    },
+    {
+      "gsub": {
+        "field": "message",
+        "pattern": "\\b(\\d{6})\\d{6,9}(\\d{4})\\b",
+        "replacement": "$1******$2",
+        "ignore_missing": true
+      }
+    },
     {
       "grok": {
         "field": "message",
@@ -15,6 +31,116 @@
           "^%{TIMESTAMP_ISO8601:event_time} \\| %{DATA:atm.id} \\| %{DATA:event.category} \\| %{DATA:event.action} \\| OPERATOR=%{DATA:operator_id}$"
         ],
         "ignore_failure": true
+      }
+    },
+    {
+      "grok": {
+        "field": "message",
+        "patterns": [
+          "^\\[020t\\*(?<transaction.sequence>[^*]*)\\*(?<event_time>\\d{2}/\\d{2}/\\d{4}\\*\\d{2}:\\d{2})\\*(?<ndc.text>[\\s\\S]*)$"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "grok": {
+        "if": "ctx.event_time == null",
+        "field": "message",
+        "patterns": [
+          "^%{TIMESTAMP_ISO8601:event_time}"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "grok": {
+        "field": "ndc.text",
+        "patterns": [
+          "[\\s\\S]*?(?<transaction.status>APPROVED|DECLINED|TIMEOUT|ERROR)[\\s\\S]*"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "grok": {
+        "field": "ndc.text",
+        "patterns": [
+          "[\\s\\S]*?(?<transaction.type>WITHDRAWAL|BALANCE_INQ|MINI_STATEMENT|TRANSFER|CARDLESS_TXN)[\\s\\S]*"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "grok": {
+        "field": "ndc.text",
+        "patterns": [
+          "[\\s\\S]*?(?<card.masked>\\d{6}\\*{6}\\d{4})[\\s\\S]*"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "grok": {
+        "field": "ndc.text",
+        "patterns": [
+          "[\\s\\S]*?(?<transaction.amount>\\d+\\.\\d{2})[\\s\\S]*"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "remove": {
+        "field": "transaction.amount",
+        "if": "ctx.transaction?.type != 'WITHDRAWAL' && ctx.transaction?.type != 'TRANSFER'",
+        "ignore_missing": true
+      }
+    },
+    {
+      "grok": {
+        "field": "ndc.text",
+        "patterns": [
+          "TRANSACTION\\s+(?:DECLINED|TIMEOUT|ERROR)\\s+(?<fault.code>\\d{2})"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "grok": {
+        "field": "ndc.text",
+        "patterns": [
+          "\\*PRIMARY (?<component.name>[A-Z ]+) ACTIVATED\\*"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.component?.name != null && ctx.event?.category == null",
+        "field": "event.category",
+        "value": "COMPONENT"
+      }
+    },
+    {
+      "grok": {
+        "field": "log.file.path",
+        "patterns": [
+          ".*/(?<atm.host>[^/]+)$"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.atm?.host != null && ctx.atm.host.contains('TESTMACHINE')",
+        "field": "atm.id",
+        "value": "ATM-TEST-NCR"
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.atm?.host != null && ctx.atm.host.contains('TESTGRG')",
+        "field": "atm.id",
+        "value": "ATM-TEST-GRG"
       }
     },
     {
@@ -72,15 +198,23 @@
       }
     },
     {
-      "set": {
-        "if": "ctx.vendor == null",
-        "field": "vendor",
-        "value": "NCR"
+      "convert": {
+        "field": "transaction.amount",
+        "type": "float",
+        "ignore_missing": true,
+        "ignore_failure": true
       }
     },
     {
       "set": {
-        "if": "ctx.event?.category == null && ctx.transaction != null",
+        "if": "ctx.ndc?.text != null && (ctx.ndc.text.contains('SST ') || ctx.ndc.text.contains('POWER-UP') || ctx.ndc.text.contains('SUPERVISOR') || ctx.ndc.text.contains('COMPONENT VERSIONS') || ctx.ndc.text.contains('EMV CHECKSUM'))",
+        "field": "event.category",
+        "value": "STATE"
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.event?.category == null && (ctx.transaction?.type != null || ctx.transaction?.status != null)",
         "field": "event.category",
         "value": "TXN"
       }
@@ -96,8 +230,13 @@
       "date": {
         "field": "event_time",
         "target_field": "@timestamp",
+        "timezone": "Africa/Addis_Ababa",
         "formats": [
-          "yyyy-MM-dd HH:mm:ss"
+          "yyyy-MM-dd HH:mm:ss,SSS",
+          "yyyy-MM-dd HH:mm:ss.SSS",
+          "yyyy-MM-dd'T'HH:mm:ss",
+          "yyyy-MM-dd HH:mm:ss",
+          "MM/dd/yyyy'*'HH:mm"
         ],
         "ignore_failure": true
       }
@@ -106,6 +245,27 @@
       "remove": {
         "field": "event_time",
         "ignore_failure": true
+      }
+    },
+    {
+      "set": {
+        "field": "ej_raw",
+        "value": "{{message}}",
+        "ignore_failure": true
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.atm?.id != null",
+        "field": "ej_parsed",
+        "value": true
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.atm?.id == null",
+        "field": "ej_parsed",
+        "value": false
       }
     }
   ]

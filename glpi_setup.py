@@ -14,24 +14,33 @@ import requests, json, os, sys, base64, time
 GLPI_URL = os.environ.get('GLPI_URL', "http://glpi:80/apirest.php")
 # No secrets in source — provide via environment (see .env / setup_new_machine.sh):
 #   GLPI_APP_TOKEN       GLPI API client app token
-#   GLPI_USER            GLPI API user (default: glpi)
-#   GLPI_API_PASSWORD    GLPI API user password
+#   GLPI_USER_TOKEN      GLPI *user* token (Setup → Users → glpi → API).
+#                        Preferred: works even when "login with credentials"
+#                        is disabled in Setup → General → API.
+#   GLPI_USER            GLPI API user (default: glpi) — legacy fallback only
+#   GLPI_API_PASSWORD    GLPI API user password — legacy fallback only
 APP_TOKEN = os.environ.get('GLPI_APP_TOKEN', '')
+USER_TOKEN = os.environ.get('GLPI_USER_TOKEN', '')
 USER = os.environ.get('GLPI_USER', "glpi")
 PASS = os.environ.get('GLPI_API_PASSWORD', '')
 
-if not APP_TOKEN or not PASS:
-    sys.exit("ERROR: set GLPI_APP_TOKEN and GLPI_API_PASSWORD environment "
-             "variables before running glpi_setup.py (they are machine-specific "
-             "and must not be committed to git).")
+if not APP_TOKEN or (not USER_TOKEN and not PASS):
+    sys.exit("ERROR: set GLPI_APP_TOKEN plus GLPI_USER_TOKEN (preferred) or "
+             "GLPI_API_PASSWORD environment variables before running "
+             "glpi_setup.py (they are machine-specific and must not be "
+             "committed to git).")
 
 headers = {"Content-Type": "application/json", "App-Token": APP_TOKEN}
 
 def get_session():
-    auth = base64.b64encode(f"{USER}:{PASS}".encode()).decode()
+    if USER_TOKEN:
+        auth_header = {"Authorization": f"user_token {USER_TOKEN}"}
+    else:
+        auth = base64.b64encode(f"{USER}:{PASS}".encode()).decode()
+        auth_header = {"Authorization": f"Basic {auth}"}
     try:
         r = requests.get(f"{GLPI_URL}/initSession",
-            headers={**headers, "Authorization": f"Basic {auth}"},
+            headers={**headers, **auth_header},
             params={"expand_dropdowns": True}, timeout=20)
     except requests.RequestException as e:
         print(f"  FAIL: cannot reach GLPI API at {GLPI_URL} — {e}")
@@ -81,7 +90,11 @@ def ensure(entity, data, h, name_field="name"):
         print(f"  Updated {entity}: {name} (ID {existing})")
         return existing, False
     res = api("POST", entity, h, data)
-    new_id = res.get("id") or (res[0].get("id") if isinstance(res, list) else None)
+    # GLPI returns a list[{"id":...}] on create, a dict on some endpoints.
+    if isinstance(res, list):
+        new_id = res[0].get("id") if res and isinstance(res[0], dict) else None
+    else:
+        new_id = res.get("id")
     if new_id:
         print(f"  Created {entity}: {name} (ID {new_id})")
     else:
@@ -95,6 +108,8 @@ def setup_glpi():
     print("\n[1] Creating/updating support groups...")
     groups_def = [
         {"name": "ATM Field Engineers",   "comment": "On-site ATM technicians"},
+        {"name": "NCR Field Engineers",   "comment": "NCR vendor technicians — NCR tickets only"},
+        {"name": "GRG Field Engineers",   "comment": "GRG vendor technicians — GRG tickets only"},
         {"name": "ATM Operations Center", "comment": "Central monitoring and operations"},
         {"name": "Cash Operations Team",  "comment": "Cash replenishment team"},
         {"name": "IT Network Team",       "comment": "Network infrastructure support"},
@@ -144,8 +159,8 @@ def setup_glpi():
     # Leaf categories (actual ticket routing) with parent, group & SLA
     # Mapping: category → (parent_name, group_name, sla_name)
     leaves_map = [
-        ("NCR ATM Hardware",      "ATM Hardware Fault", "ATM Field Engineers",   "ATM High SLA"),
-        ("GRG ATM Hardware",      "ATM Hardware Fault", "ATM Field Engineers",   "ATM High SLA"),
+        ("NCR ATM Hardware",      "ATM Hardware Fault", "NCR Field Engineers",   "ATM High SLA"),
+        ("GRG ATM Hardware",      "ATM Hardware Fault", "GRG Field Engineers",   "ATM High SLA"),
         ("Hardware Error",        "ATM Hardware Fault", "ATM Field Engineers",   "ATM High SLA"),
         ("Camera Failure",        "ATM Hardware Fault", "ATM Field Engineers",   "ATM Medium SLA"),
         ("Power / UPS Alert",     "ATM Hardware Fault", "ATM Field Engineers",   "ATM High SLA"),

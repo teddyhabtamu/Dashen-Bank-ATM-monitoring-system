@@ -1,0 +1,37 @@
+{# Clickable ATM state filter. The legend and the filter are the same
+   control: each chip shows its state colour and the persisted count. #}
+<div class="state-filter" role="group" aria-label="Filter ATMs by state"
+     title="Counts and filtering use the persisted state (updated every 30s). The LIVE badge on a row is a fresh check.">
+  <button type="button"
+          class="state-filter-chip state-filter-all {{ 'active' if not f_state }}"
+          aria-pressed="{{ 'true' if not f_state else 'false' }}"
+          onclick="filterByState('')"
+          title="Show all ATMs">
+    All <span class="state-filter-count">{{ state_all_count|default(0) }}</span>
+  </button>
+  {% for item in state_legend() %}
+  <button type="button"
+          class="state-filter-chip {{ 'active' if f_state == item.state }}"
+          style="--chip:{{ item.colour }}"
+          aria-pressed="{{ 'true' if f_state == item.state else 'false' }}"
+          onclick="filterByState('{{ item.state }}')"
+          title="Show {{ item.label }} ATMs">
+    <span class="state-filter-dot" style="background:{{ item.colour }}" aria-hidden="true"></span>
+    <span>{{ item.label }}</span>
+    <span class="state-filter-count">{{ (state_counts|default({})).get(item.state, 0) }}</span>
+  </button>
+  {% endfor %}
+  {% for item in state_extra|default([]) %}
+  <button type="button"
+          class="state-filter-chip state-filter-extra {{ 'active' if f_state == item.state }}"
+          style="--chip:{{ item.colour }}"
+          aria-pressed="{{ 'true' if f_state == item.state else 'false' }}"
+          onclick="filterByState('{{ item.state }}')"
+          title="Show {{ item.label }} ATMs">
+    <span class="state-filter-dot" style="background:{{ item.colour }}" aria-hidden="true"></span>
+    <span>{{ item.label }}</span>
+    <span class="state-filter-count">{{ item.count }}</span>
+  </button>
+  {% endfor %}
+</div>
+<div class="state-filter-hint">Click to filter · click again to clear</div>

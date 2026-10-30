@@ -1,0 +1,55 @@
+# Portal-owned PostgreSQL tables — the single list of record.
+#
+# ONE list, read by two scripts:
+#   * scripts/backup_db.sh      builds the table-scoped dump
+#   * scripts/split_portal_db.sh  copies them into a separate database
+#
+# They used to carry their own lists and drifted. The gap went unnoticed
+# because the FULL dump covered everything, until it did not: txn_source_policy
+# decides whether simulated transactions are visible, so restoring from the
+# scoped dump without it would quietly re-show invented money.
+#
+# ── WHEN YOU ADD A PORTAL TABLE, ADD IT HERE ────────────────────────────────
+# tests/test_portal_tables.py fails if a CREATE TABLE or CREATE VIEW appears
+# anywhere in the repo and is missing from this file. That test is the point of
+# having one list - but only once it actually reads every file, which it did not
+# until 2026-10-18: its glob list skipped the Python files in the repo root, so
+# it never saw cash_watcher.py and missed atm_cassette_levels entirely.
+#
+# VIEWS COUNT. atm_transactions_visible is the view routes.py and nearly every
+# page queries. Without it the portal starts and then fails on its first
+# transaction query, against a database that verified clean.
+#
+# ── WHAT DOES NOT BELONG HERE ───────────────────────────────────────────────
+# Zabbix's own tables (hosts, items, users, interfaces, triggers, history,
+# trends, config...). Those are created and owned by Zabbix and must never be
+# copied into the portal database. If you add something here, it is yours.
+#
+# Do NOT add a name you have not seen created. atm_incidents sat in this list
+# for one commit and exists nowhere in the codebase; atm_devices the same. A
+# dump flag for a table that does not exist is silently ignored, so the backup
+# quietly covers less than it appears to and nothing says so.
+
+app_users
+atm_cassette_levels
+atm_anomalies
+atm_current_state
+atm_delete_archive
+atm_locations
+atm_network_correlation
+atm_network_events
+atm_network_metrics
+atm_state_history
+atm_transactions
+atm_transactions_visible
+ej_parse_latest
+ej_parse_runs
+ej_transactions
+audit_log
+cash_replenishments
+fault_type_map
+fleet_report_cache
+portal_schema_version
+scheduled_reports
+ticket_seen
+txn_source_policy

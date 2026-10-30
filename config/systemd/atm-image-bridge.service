@@ -1,0 +1,40 @@
+[Unit]
+Description=ATM image evidence bridge (on-demand, read-only)
+Documentation=file:/data/atm-monitoring/docs/atm-image-on-demand.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Change this to the account that owns the repository and can run zabbix_get.
+User=tewodros
+Group=tewodros
+EnvironmentFile=-/etc/atm-monitoring/image-bridge.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+RuntimeDirectory=atm-image-bridge
+RuntimeDirectoryMode=0750
+# The portal bind-mounts this directory. Without Preserve=yes, a bridge
+# restart removes and recreates the host directory, leaving the running
+# portal container mounted to the old, empty inode.
+RuntimeDirectoryPreserve=yes
+UMask=0027
+ExecStart=/usr/bin/python3 /data/atm-monitoring/scripts/atm_image_bridge.py \
+  --config /etc/atm-monitoring/atm-image-bridge.json \
+  --hmac-key-file /etc/atm-monitoring/image-hmac.key \
+  --socket /run/atm-image-bridge/bridge.sock
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/run/atm-image-bridge
+
+[Install]
+WantedBy=multi-user.target

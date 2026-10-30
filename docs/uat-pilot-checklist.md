@@ -74,19 +74,32 @@
 - [ ] Clone the repo
 - [ ] Configure sysctl: `vm.max_map_count=262144`
 - [ ] Create `ej-logs/` directory
+- [ ] After cloning, make this VM use the default compose name (delete VM1's file, rename yours):
+  ```bash
+  rm -f docker-compose.yml
+  mv docker-compose.gateway.yml docker-compose.yml
+  ```
 - [ ] Start OpenStack + OpenSearch Dashboards:
   ```bash
-  docker compose -f deploy/uat/docker-compose-uat-vm2.yml up -d
+  docker compose up -d
   ```
 - [ ] Verify: `curl http://localhost:9200` returns JSON
+- [ ] **Load EJ ingest pipeline + index template** (REQUIRED — without it EJ Search returns flat/unparsed data):
+  ```bash
+  curl -s -X PUT "http://localhost:9200/_ingest/pipeline/atm_ej_parser" -H 'Content-Type: application/json' -d @config/opensearch/atm_ej_parser.json
+  curl -s -X PUT "http://localhost:9200/_index_template/atm-ej-live" -H 'Content-Type: application/json' -d @config/opensearch/ej_live_index_template.json
+  ```
+- [ ] OpenSearch Dashboards shows Dashen branding (applied via `config/osd` mount)
 
 ### Step 1.3 — Deploy UAT-01 (everything else, `dbtcatmmonappuat`)
 - [ ] SSH into UAT-01
 - [ ] Install Docker, clone repo
+- [ ] After cloning, delete the VM2 compose file (keep `docker-compose.yml`): `rm -f docker-compose.gateway.yml`
 - [ ] Set up `.env` with passwords
+- [ ] Confirm `.env.uat` sets `GRAFANA_URL`, `ZABBIX_UI_URL`, `GLPI_UI_URL` (these drive the Report Portal top-bar links)
 - [ ] Start PostgreSQL first:
   ```bash
-  docker compose -f deploy/uat/docker-compose-uat-vm1.yml up -d postgres
+  docker compose -f docker-compose.yml up -d postgres
   ```
 - [ ] Restore database:
   ```bash
@@ -98,7 +111,7 @@
   ```
 - [ ] Start remaining services:
   ```bash
-  docker compose -f deploy/uat/docker-compose-uat-vm1.yml up -d
+  docker compose -f docker-compose.yml up -d
   ```
 
 ### Step 1.4 — Verify UAT
@@ -107,6 +120,9 @@
 - [ ] Report Portal at `http://<uat-vm1-ip>:8888`
 - [ ] GLPI at `http://<uat-vm1-ip>:8082`
 - [ ] Simulators running and data flowing to Grafana
+- [ ] EJ structured schema present (`_ingest/pipeline/atm_ej_parser` + `_index_template/atm-ej-live`); Report Portal EJ Search shows nested `transaction.*` / `atm.id` / `fault.*` fields
+- [ ] Report Portal links (Live Dashboards / Monitoring Center / Incident Management) resolve to the UAT Grafana / Zabbix / GLPI URLs
+- [ ] Card masking consistent — every `card_masked` is `************XXXX` (16 chars, last-4 only)
 
 ---
 

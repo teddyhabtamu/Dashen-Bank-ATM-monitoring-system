@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sign In — Report Portal</title>
+<title>Sign In — ATM Monitoring System</title>
 <link rel="icon" type="image/png" href="/static/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -79,12 +79,6 @@
     margin-bottom: 6px;
   }
 
-  .brand-org {
-    font-size: 15px;
-    font-weight: 400;
-    color: #94A3B8;
-  }
-
   /* ── RIGHT: Login Panel ── */
   .login-panel {
     flex: 1;
@@ -105,6 +99,15 @@
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(18px); }
     to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .spin {
+    display: inline-flex;
+    animation: spin 1s linear infinite;
   }
 
   .login-heading {
@@ -301,7 +304,6 @@
     .brand-logo { width: 88px; height: 88px; }
     .brand-title { font-size: 24px; }
     .brand-subtitle { font-size: 16px; }
-    .brand-org { font-size: 14px; }
   }
 
   @media (max-width: 480px) {
@@ -310,7 +312,6 @@
     .brand-logo { width: 72px; height: 72px; margin-bottom: 24px; }
     .brand-title { font-size: 20px; }
     .brand-subtitle { font-size: 14px; }
-    .brand-org { font-size: 13px; }
     .login-heading { margin-bottom: 32px; }
     .login-heading h2 { font-size: 22px; }
     .login-heading p { font-size: 14px; }
@@ -325,9 +326,8 @@
   <div class="brand-panel">
     <div class="brand-inner">
       <img src="/static/logo.png" alt="Dashen Bank" class="brand-logo">
-      <h1 class="brand-title">Report Portal</h1>
-      <p class="brand-subtitle">ATM Monitoring &amp; Reporting System</p>
-      <p class="brand-org">Dashen Bank S.C.</p>
+      <h1 class="brand-title">ATM Monitoring System</h1>
+      <p class="brand-subtitle">Dashen Bank S.C.</p>
     </div>
   </div>
 
@@ -392,11 +392,10 @@ function togglePW(id, btn) {
 
 document.getElementById('loginForm').addEventListener('submit', function(e) {
   var btn = document.getElementById('loginBtn');
+  if (btn.disabled) { e.preventDefault(); return; }
   btn.disabled = true;
-  btn.innerHTML = '<i data-lucide="loader-2" style="width:18px;height:18px"></i> Signing In...';
+  btn.innerHTML = '<span class="spin"><i data-lucide="loader-2" style="width:18px;height:18px"></i></span> Signing In...';
   lucide.createIcons();
-  var spn = btn.querySelector('svg');
-  if (spn) spn.style.animation = 'spin 1s linear infinite';
 });
 </script>
 </body>

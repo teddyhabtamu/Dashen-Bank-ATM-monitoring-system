@@ -1,84 +1,116 @@
-# Dashen Bank ATM Monitoring System
+# Dashen Bank ATM Monitoring System — UAT Deployment
 
-Monitors **1,209 ATMs** (797 GRG, 412 NCR) across **14 districts** in Ethiopia.
-SNMPv2c polling via Dashen private OID root `1.3.6.1.4.1.99999`.
+> **Branch:** `uat-prep` · **Repository is now PRIVATE** (clone requires a GitHub SSH key or token).
+> This branch deploys the UAT environment across **2 VMs** using real SNMP polling against the bank's **2 real test ATMs**.
+> For the full step-by-step cookbook, see [`docs/UAT_Migration_Guide.md`](docs/UAT_Migration_Guide.md);
+> for the 45-day readiness plan see [`docs/uat-pilot-checklist.md`](docs/uat-pilot-checklist.md).
 
-## Quick Start
+Built to monitor **1,209 ATMs** (797 GRG, 412 NCR) across **14 districts** in Ethiopia.
+UAT proves the multi-server architecture end-to-end against **2 real test ATMs** polled over real SNMP
+(vendor OIDs from `config/snmp/oid_mapping.csv`). ATM Electronic Journal is collected from the real ATMs
+via syslog (UDP/TCP 514) into OpenSearch. No simulators run in UAT.
 
-**Prerequisites:** Ubuntu 22.04+, Git, Docker, internet connection.
+---
+
+## UAT topology (2 VMs)
+
+| Server | Name | IP | Runs |
+|---|---|---|---|
+| **UAT-01** (VM1) | dbtcatmmonappuat | 172.22.10.45 | PostgreSQL, Zabbix (server/web/agent), GLPI, Grafana, Report Portal, anomaly-detector, network-correlator, state-manager, Filebeat (EJ collected from real ATMs via syslog 514) |
+| **UAT-02** (VM2) | dbtcatmmondbuat | 172.22.10.60 | OpenSearch, OpenSearch Dashboards, ISO 8583 gateway |
+
+Cross-VM wiring (set in `.env.uat`): VM1 → VM2 `9200` (OpenSearch); VM2 → VM1 `5432` (PostgreSQL).
+
+---
+
+## Quick Start (per VM)
 
 ```bash
-# 1. Clone & enter
-git clone <your-repo-url>
-cd Dashen-Bank-ATM-monitoring-system
+# 1. Clone (private repo — needs SSH key / token)
+git clone <your-github-url> atm-monitoring && cd atm-monitoring
 
-# 2. Create .env from example, then edit passwords
-cp .env.example .env
-nano .env    # at minimum set ADMIN_PASS and FLASK_SECRET_KEY
+# 2. Create the real env from the UAT template, then set strong passwords
+cp .env.uat .env
+chmod 600 .env
+nano .env        # fill every <...> placeholder; DB_PASS must equal POSTGRES_PASSWORD
 
-# 3. Run setup (10-15 min)
-bash scripts/setup_new_machine.sh
+# 3. Prepare the compose file for THIS server (each VM runs only its own stack)
+#    On UAT-01 (VM1):
+rm -f docker-compose.gateway.yml
+#    On UAT-02 (VM2):
+rm -f docker-compose.yml
+mv docker-compose.gateway.yml docker-compose.yml
+
+# 4. Bring up (both servers then use the identical command)
+docker compose up -d
 ```
 
-The script automates everything:
+> Why the `rm`/`mv` in step 3? The repo ships two root files — `docker-compose.yml` (VM1)
+> and `docker-compose.gateway.yml` (VM2). After pruning the other VM's file and renaming yours
+> to the default name, **both servers run plain `docker compose up -d`**. If you `git pull` later,
+> the removed file returns — just re-run the matching `rm`/`mv`. (Alternative: on VM2 set
+> `export COMPOSE_FILE=docker-compose.gateway.yml` in `~/.bashrc` and skip the rename.)
 
-| Step | What it does |
-|------|-------------|
-| 1-3 | Validates environment and project files |
-| 4-6 | Builds Docker images and starts all services |
-| 7 | Restores PostgreSQL database (1,209 ATMs) |
-| 8 | Imports SNMP templates + registers hosts in Zabbix |
-| 9-10 | Imports GLPI webhook mediatype + creates trigger action |
-| 11-12 | Installs GLPI (if needed), enables REST API, creates API client, runs `glpi_setup.py` (12b: API smoke test) |
-| 13 | Configures OpenSearch: loads `atm_ej_parser` ingest pipeline + creates index pattern |
-| 14 | Reloads Zabbix config cache |
-| 16 | Fixes filesystem permissions (ej-logs, filebeat) |
+### Post-bring-up (run on UAT-01)
+```bash
+# Load DB schema, Zabbix templates/hosts, GLPI structure, OpenSearch EJ pipeline
+bash scripts/setup_new_machine.sh
 
-That's it — all services, Zabbix templates, GLPI categories/groups/SLAs, and Grafana dashboards are ready.
+# Verify the whole chain (SNMP → Zabbix → GLPI → Grafana → Report Portal)
+bash scripts/uat_preflight.sh
+```
+
+---
 
 ## Access
 
 | Service | URL | Login |
-|---------|-----|-------|
-| Zabbix | http://localhost:8080 | see `ZBX_USER` / `ZBX_PASS` in `.env` |
-| Grafana | http://localhost:3002 | admin / `GRAFANA_ADMIN_PASSWORD` from `.env` |
-| GLPI | http://localhost:8082 | glpi / `GLPI_API_PASSWORD` from `.env` |
-| Report Portal | http://localhost:8888 | admin / from `.env` |
-| OpenSearch Dashboards | http://localhost:5601 | admin / admin |
-| pgAdmin | http://localhost:5050 | admin@dashenbank.com / `PGADMIN_PASSWORD` from `.env` |
+|---|---|---|
+| Zabbix | http://172.22.10.45:8080 | `ZBX_USER` / `ZBX_PASS` (change factory default) |
+| Grafana | http://172.22.10.45:3000 | admin / `GRAFANA_ADMIN_PASSWORD` |
+| GLPI | http://172.22.10.45:8082 | glpi / `GLPI_API_PASSWORD` |
+| Report Portal | http://172.22.10.45:8888 | admin / `ADMIN_PASS` |
+| OpenSearch Dashboards | http://172.22.10.60:5601 | admin / admin (security plugin disabled — restrict network) |
+| OpenSearch (API) | http://172.22.10.60:9200 | — |
 
-## Post-Setup (machine-specific, once per machine)
+---
 
-```bash
-# Install Zabbix Agent for ATM-001 (see "Zabbix Agent" below)
-```
+## Key scripts
 
-EJ generation needs no manual steps: the single multi-tenant **`atm-ej-engine`** container (replaces the old per-vendor `atm-ej-001..005` simulators) starts automatically with Step 6 and writes one log per ATM to `ej-logs/`, which filebeat ships to OpenSearch.
+| Script | Purpose |
+|---|---|
+| `scripts/setup_new_machine.sh` | Full provisioning: DB restore, Zabbix sync, GLPI setup, OSD pipeline + index pattern |
+| `scripts/uat_preflight.sh` | Health check of the end-to-end chain before UAT sign-off |
+| `scripts/sync_atms_to_zabbix.py --apply --import-templates` | Re-sync Zabbix hosts/templates |
+| `scripts/import_atms_from_excel.py` | Seed the 1,209 ATMs from `docs/ATM INFORMATION.xlsx` |
+| `scripts/load_osd_dashboards.sh` | Load the EJ dashboards into OpenSearch Dashboards |
+| `tests/test_ej_parser.py` | Validates the OpenSearch EJ ingest pipeline definition |
 
-## Ticket Lifecycle
+---
 
-Zabbix triggers (severity ≥ High) auto-create GLPI tickets. The webhook routes each ticket to the correct category, team, and SLA based on the trigger name:
+## Ticket lifecycle (Zabbix → GLPI)
+
+Zabbix triggers (severity ≥ High) auto-create GLPI tickets, routed by trigger name:
 
 | Trigger Pattern → | Category | Assigned To | SLA |
 |---|---|---|---|
-| Cash Empty / Cash Out | Cash Out | Cash Operations Team | Critical SLA (2hr) |
-| Cash Low | Cash Low | Cash Operations Team | Medium SLA (8hr) |
-| Cash Jam / Card Reader / Printer / High Temp | Hardware Error | ATM Field Engineers | High SLA (4hr) |
-| Camera Fault / Camera Storage | Camera Failure | ATM Field Engineers | Medium SLA (8hr) |
-| Network Link Down / Packet Loss / Latency | Network Issue | IT Network Team | High SLA (4hr) |
-| Main Power / UPS Critical | Power / UPS Alert | ATM Field Engineers | High SLA (4hr) |
-| UPS Battery Low / UPS on Battery | Power / UPS Alert | ATM Field Engineers | Medium SLA (8hr) |
-| Cabinet Door / Safe Door / Intrusion / Vibration / Card Capture | Security Alert | ATM Ops Center | Critical SLA (2hr) |
-| Out of Service / Offline | ATM Offline | ATM Field Engineers | Critical SLA (2hr) |
-| Supervisor / Maintenance / Partial Service | ATM Offline | ATM Field Engineers | Medium SLA (8hr) |
-| Transaction Failure / Anomaly | Transaction Anomaly | ATM Ops Center | High SLA (4hr) |
-| Software Error | Software Error | ATM Field Engineers | High SLA (4hr) |
-| *(no match)* | Transaction Anomaly | ATM Ops Center | Medium SLA (8hr) |
+| Cash Empty / Cash Out | Cash Out | Cash Operations Team | Critical (2hr) |
+| Cash Low | Cash Low | Cash Operations Team | Medium (8hr) |
+| Cash Jam / Card Reader / Printer / High Temp | Hardware Error | ATM Field Engineers | High (4hr) |
+| Camera Fault / Camera Storage | Camera Failure | ATM Field Engineers | Medium (8hr) |
+| Network Link Down / Packet Loss / Latency | Network Issue | IT Network Team | High (4hr) |
+| Main Power / UPS Critical | Power / UPS Alert | ATM Field Engineers | High (4hr) |
+| UPS Battery Low / UPS on Battery | Power / UPS Alert | ATM Field Engineers | Medium (8hr) |
+| Cabinet Door / Safe Door / Intrusion / Vibration / Card Capture | Security Alert | ATM Ops Center | Critical (2hr) |
+| Out of Service / Offline | ATM Offline | ATM Field Engineers | Critical (2hr) |
+| Supervisor / Maintenance / Partial Service | ATM Offline | ATM Field Engineers | Medium (8hr) |
+| Transaction Failure / Anomaly | Transaction Anomaly | ATM Ops Center | High (4hr) |
+| Software Error | Software Error | ATM Field Engineers | High (4hr) |
+| *(no match)* | Transaction Anomaly | ATM Ops Center | Medium (8hr) |
 
-On recovery, the ticket is moved to **Pending** with an automated note — it is **not** auto-closed. An engineer must document a Root Cause Analysis (RCA) before closing.
+On recovery the ticket moves to **Pending** with an automated note — it is **not** auto-closed; an engineer documents RCA before closing.
 
-## GLPI Category Tree
-
+### GLPI category tree
 ```
 ATM Hardware Fault
   ├── NCR ATM Hardware         → Field Engineers, High SLA
@@ -87,102 +119,32 @@ ATM Hardware Fault
   ├── Camera Failure           → Field Engineers, Medium SLA
   ├── Power / UPS Alert        → Field Engineers, High SLA
   └── ATM Offline              → Field Engineers, Critical SLA
-ATM Network Issue
-  └── Network Issue            → IT Network Team, High SLA
-ATM Cash Issue
-  ├── Cash Low                 → Cash Operations, Medium SLA
-  └── Cash Out                 → Cash Operations, Critical SLA
-ATM Software Error
-  └── Software Error           → Field Engineers, High SLA
-Transaction Anomaly            → Ops Center, High SLA
-Security Alert                 → Ops Center, Critical SLA
+ATM Network Issue  → Network Issue            → IT Network Team, High SLA
+ATM Cash Issue     → Cash Low / Cash Out      → Cash Operations, Medium/Critical SLA
+ATM Software Error → Software Error           → Field Engineers, High SLA
+Transaction Anomaly                              → Ops Center, High SLA
+Security Alert                                   → Ops Center, Critical SLA
 ```
 
-## Developer Onboarding
-
-A new developer can be fully operational with:
-
-```bash
-git clone <repo>
-cd Dashen-Bank-ATM-monitoring-system
-cp .env.example .env
-# edit .env with their passwords
-bash scripts/setup_new_machine.sh
-```
-
-The script is idempotent — safe to re-run any time.
-
-## Re-running parts
-
-```bash
-# Re-sync Zabbix hosts/templates
-python3 scripts/sync_atms_to_zabbix.py --apply --import-templates
-
-# Re-seed GLPI structure (idempotent)
-docker cp glpi_setup.py report-portal:/tmp/
-docker exec report-portal python3 /tmp/glpi_setup.py
-
-# Backup/restore database
-bash scripts/backup_db.sh
-bash scripts/restore_db.sh
-```
-
-## Manual Steps (machine-specific)
-
-### Zabbix Agent (for ATM-001 local checks)
-
-```bash
-# Install
-wget https://repo.zabbix.com/zabbix/6.4/ubuntu/pool/main/z/zabbix-release/zabbix-release_6.4-1+ubuntu22.04_all.deb
-sudo dpkg -i zabbix-release_6.4-1+ubuntu22.04_all.deb
-sudo apt update && sudo apt install -y zabbix-agent2
-
-# Configure
-sudo nano /etc/zabbix/zabbix_agent2.conf
-# Set: Server=127.0.0.1,172.16.0.0/12
-# Set: ServerActive=<docker-gateway-ip>:10051
-# Set: Hostname=ATM-001-Addis-Branch
-
-sudo systemctl restart zabbix-agent2
-docker exec zabbix-server zabbix_server -R config_cache_reload
-```
-
-### EJ engine
-
-Runs automatically via `docker compose up -d` (Step 6) — no manual build needed.
-Check it's writing:
-
-```bash
-docker compose logs atm-ej-engine --tail 20
-ls ej-logs/ | head
-```
-
-### OpenSearch index pattern (once)
-
-Created automatically by Step 6b. To recreate manually:
-
-1. Open http://localhost:5601
-2. **Stack Management → Index Patterns → Create**
-3. Pattern: `atm-ej-live-*`, Timestamp: `@timestamp`
+---
 
 ## Credentials
 
 | Role | Username | Password |
-|------|----------|----------|
-| Report Portal Admin | `admin` | from `.env` `ADMIN_PASS` |
-| Zabbix Admin | from `.env` `ZBX_USER` (default `Admin`) | **change the factory default immediately after setup** |
-| Grafana Admin | `admin` | from `.env` `GRAFANA_ADMIN_PASSWORD` |
-| GLPI Admin | `glpi` | from `.env` `GLPI_API_PASSWORD` |
-| OpenSearch | `admin` | `admin` (security plugin disabled in dev — restrict network access) |
-| PostgreSQL | `zabbix` | from `.env` `POSTGRES_PASSWORD` |
+|---|---|---|
+| Report Portal Admin | `admin` | `ADMIN_PASS` (from `.env`) |
+| Zabbix Admin | `ZBX_USER` (default `Admin`) | **change the factory default after setup** |
+| Grafana Admin | `admin` | `GRAFANA_ADMIN_PASSWORD` |
+| GLPI Admin | `glpi` | `GLPI_API_PASSWORD` |
+| OpenSearch | `admin` | `admin` (security plugin disabled — restrict network) |
+| PostgreSQL | `zabbix` | `POSTGRES_PASSWORD` |
 
-> Never commit real passwords. Every credential is set per-machine via `.env`
-> (gitignored); placeholders live only in `.env.example`.
+> Never commit real passwords. All credentials are set per-machine via `.env` (gitignored);
+> the tracked `*.uat` / `*.example` files contain only placeholders.
 
-## Architecture
+## More documentation
 
-See `docs/architecture.md` for the full system design, data flow, and component diagram.
-
-## Troubleshooting
-
-See `docs/troubleshooting.md` for common issues and fixes.
+- [`docs/UAT_Migration_Guide.md`](docs/UAT_Migration_Guide.md) — authoritative UAT runbook
+- [`docs/uat-pilot-checklist.md`](docs/uat-pilot-checklist.md) — 45-day readiness checklist
+- [`docs/Production_Migration_Guide_v2.md`](docs/Production_Migration_Guide_v2.md) — production cutover (references `deploy/production/*`, which live on the production branch, not here)
+- `docs/architecture.md`, `docs/troubleshooting.md`, `config/snmp/` (real-ATM SNMP onboarding)

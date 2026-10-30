@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}Incident Management — ATM Monitoring{% endblock %}
+{% block extra_style %}
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.stat-card{background:#fff;border-radius:12px;border:1px solid #EEF1F6;box-shadow:0 1px 3px rgba(1,33,105,.04);padding:16px 18px;animation:fadeSlideUp .3s ease}
+.stat-card .num{font-size:26px;font-weight:800;color:#0F172A}
+.stat-card .lbl{font-size:11px;color:#64748B;font-weight:600;margin-top:2px}
+.stat-card.open .num{color:#D97706}
+.stat-card.solved .num{color:#16A34A}
+.tab-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.tab{padding:7px 16px;border-radius:8px;font-size:12px;font-weight:600;color:#64748B;text-decoration:none;background:#fff;border:1px solid #EEF1F6}
+.tab.active{background:#012169;color:#fff;border-color:#012169}
+.inc-table{width:100%;border-collapse:collapse;font-size:12px}
+.inc-table th{text-align:left;padding:10px 12px;background:#FAFBFC;color:#64748B;font-weight:700;font-size:11px;border-bottom:1px solid #EEF1F6;white-space:nowrap}
+.inc-table td{padding:10px 12px;border-bottom:1px solid #F1F5F9;vertical-align:top}
+.inc-table tr:last-child td{border-bottom:none}
+.st{font-weight:700;font-size:11px}
+.st-open{color:#D97706}.st-pending{color:#2563EB}.st-solved{color:#16A34A}
+.pr-high{color:#DC2626;font-weight:700}
+.err-banner{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;padding:12px 16px;border-radius:10px;font-size:12px;margin-bottom:16px}
+.unread-tag{display:inline-block;background:#012169;color:#fff;font-size:10px;font-weight:700;border-radius:100px;padding:2px 9px;margin-left:8px;white-space:nowrap;vertical-align:middle}
+.inc-table tbody tr[data-href]{cursor:pointer}
+.inc-table tbody tr[data-href]:hover{background:#F8FAFC}
+.act-row{display:flex;gap:6px;flex-wrap:wrap}
+.mini-avatar{width:18px;height:18px;border-radius:50%;object-fit:cover;vertical-align:-4px;
+  margin-right:6px;background:#64748B;border:1px solid #E4E9F1}
+.t-modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:2000;display:none;align-items:center;justify-content:center}
+.t-modal-overlay.show{display:flex}
+.t-modal{background:#fff;border-radius:14px;width:440px;max-width:92vw;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.2)}
+.t-modal h3{font-size:16px;font-weight:700;color:#012169;margin:0 0 4px}
+.t-modal p{font-size:12px;color:#64748B;margin:0 0 12px}
+.t-modal textarea,.t-modal input[type=text]{width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #E4E9F1;border-radius:8px;font-size:13px;font-family:inherit;outline:none}
+.t-modal textarea:focus,.t-modal input[type=text]:focus{border-color:#012169}
+.t-modal textarea{min-height:90px;resize:vertical}
+.t-match{padding:7px 10px;border-radius:6px;font-size:12px;cursor:pointer}
+.t-match:hover{background:#EEF2FF}
+.empty-row td{text-align:center;color:#94A3B8;padding:22px !important}
+@media(max-width:768px){.inc-table-wrap{overflow-x:auto}}
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="ticket"></i></div>
+  <div>
+    <h1 class="page-title">Incident Management</h1>
+    <p class="page-subtitle">GLPI tickets without leaving the ATM Monitoring System — no second login.</p>
+  </div>
+  <a href="{{ glpi_ui_url }}" target="_blank" rel="noopener" class="btn-live btn-outline"><i data-lucide="external-link"></i> Open in GLPI</a>
+</div>
+<div class="page-content">
+
+  {% if error %}
+  <div class="err-banner">{{ error }}</div>
+  {% endif %}
+
+  <div class="stat-row">
+    <div class="stat-card open"><div class="num">{{ counts.open }}</div><div class="lbl">Open{% if at_cap %} · latest 100{% endif %}</div></div>
+    <div class="stat-card"><div class="num">{{ counts.pending }}</div><div class="lbl">Pending{% if at_cap %} · latest 100{% endif %}</div></div>
+    <div class="stat-card solved"><div class="num">{{ counts.solved }}</div><div class="lbl">Solved / Closed{% if at_cap %} · latest 100{% endif %}</div></div>
+  </div>
+
+  <div class="tab-bar">
+    <a href="/incidents" class="tab {% if not f_status %}active{% endif %}">All</a>
+    <a href="/incidents?status=open" class="tab {% if f_status == 'open' %}active{% endif %}">Open</a>
+    <a href="/incidents?status=pending" class="tab {% if f_status == 'pending' %}active{% endif %}">Pending</a>
+    <a href="/incidents?status=solved" class="tab {% if f_status == 'solved' %}active{% endif %}">Solved</a>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Tickets ({{ tickets|length }})</h2></div>
+    <div class="inc-table-wrap">
+      <table class="inc-table">
+        <thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Priority</th><th>Category</th><th>Requester</th><th>Assignee</th><th>Created</th><th>Updated</th>{% if session.get('role') in ('admin', 'operator') %}<th>Actions</th>{% endif %}</tr></thead>
+        <tbody>
+          {% for t in tickets %}
+          <tr data-href="/incidents/{{ t.id }}" onclick="if(event.target.closest('.kebab-wrap'))return;window.location=this.dataset.href">
+            <td style="font-family:monospace">{{ t.id }}</td>
+            <td>{{ t.title }}{% if '{' in t.title %}<span class="unread-tag" style="background:#F1F5F9;color:#64748B" title="Created from the media-type Test button — macros are only resolved on real alerts"> ● test</span>{% endif %}{% if t.unread %}<span class="unread-tag">● New{% if t.last_by %} · {{ t.last_by }}{% endif %}</span>{% endif %}</td>
+            <td class="st {% if t.status in ('New','Processing (assigned)','Processing (planned)') %}st-open{% elif t.status == 'Pending' %}st-pending{% else %}st-solved{% endif %}">{{ t.status }}</td>
+            <td class="{% if t.priority_n >= 4 %}pr-high{% endif %}">{{ t.priority }}</td>
+            <td>{{ t.category }}</td>
+            <td>{{ t.requester }}</td>
+            <td>{% if t.assignee_pic %}<img class="mini-avatar" src="/incidents/avatar/{{ t.assignee_id }}?v={{ t.assignee_pic|urlencode }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}{{ t.assignee or '—' }}</td>
+            <td style="white-space:nowrap">{{ t.created }}</td>
+            <td style="white-space:nowrap">{{ t.updated }}</td>
+            {% if session.get('role') in ('admin', 'operator') %}
+            <td><div class="kebab-wrap">
+              <button class="kebab-btn" onclick="toggleTicketMenu({{ t.id }}, {{ t.status_n }}, {{ 'true' if t.assignee and t.assignee != '—' else 'false' }}, this, event)" title="Actions">⋮</button>
+            </div></td>
+            {% endif %}
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="{% if session.get('role') in ('admin', 'operator') %}10{% else %}9{% endif %}">No tickets found.{% if error %} GLPI may be unreachable.{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% if session.get('role') in ('admin', 'operator') %}
+<div class="kebab-menu" id="ticketKebab" style="position:fixed"></div>
+<div class="t-modal-overlay" id="ticketModal" onclick="if(event.target===this)closeTicketModal()">
+  <div class="t-modal">
+    <h3 id="ticketModalTitle">Ticket</h3>
+    <p id="ticketModalSub"></p>
+    <div id="ticketModalFields"></div>
+    <div id="ticketMatches" style="max-height:150px;overflow-y:auto;margin-top:6px"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+      <button class="act-btn" onclick="closeTicketModal()" style="padding:8px 18px">Cancel</button>
+      <button class="act-btn" id="ticketConfirmBtn" onclick="confirmTicketModal()" style="padding:8px 18px;background:#012169;color:#fff;border-color:#012169">Confirm</button>
+    </div>
+  </div>
+</div>
+<script>
+var _ticketMode = null, _ticketId = null, _assignUserId = null, _searchTimer = null;
+function toggleTicketMenu(id, statusN, hasTech, btn, ev){
+  ev.stopPropagation();
+  var menu = document.getElementById('ticketKebab');
+  if(menu.dataset.openFor === String(id) && menu.classList.contains('show')){
+    closeTicketMenu(); return;
+  }
+  var html = '';
+  if(statusN === 1) html += '<button class="kebab-item" data-act="ack">Acknowledge</button>';
+  if([1, 2, 3, 4].indexOf(statusN) !== -1){
+    html += '<button class="kebab-item" data-act="assign">' + (hasTech ? 'Reassign' : 'Assign') + '</button>';
+    html += '<button class="kebab-item solve" data-act="solve">Solve</button>';
+  }
+  html += '<button class="kebab-item" data-act="note">Note</button>';
+  menu.innerHTML = html;
+  menu.querySelectorAll('.kebab-item').forEach(function(it){
+    it.onclick = function(e){
+      e.stopPropagation();
+      var act = it.dataset.act;
+      closeTicketMenu();
+      if(act === 'ack') ticketAck(id, it);
+      else if(act === 'assign') openAssignModal(id);
+      else if(act === 'solve') openSolveModal(id);
+      else openNoteModal(id);
+    };
+  });
+  var r = btn.getBoundingClientRect();
+  menu.style.top = Math.min(r.bottom + 4, window.innerHeight - 170) + 'px';
+  menu.style.left = Math.max(8, Math.min(r.right - 158, window.innerWidth - 166)) + 'px';
+  menu.classList.add('show');
+  menu.dataset.openFor = String(id);
+}
+function closeTicketMenu(){
+  var menu = document.getElementById('ticketKebab');
+  if(menu){ menu.classList.remove('show'); menu.dataset.openFor = ''; }
+}
+document.addEventListener('click', closeTicketMenu);
+document.addEventListener('scroll', closeTicketMenu, true);
+function ticketPost(url, body, btn){
+  if(btn){ btn.disabled = true; btn.textContent = 'Working…'; }
+  fetch(url, {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+    body: body ? JSON.stringify(body) : '{}'})
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if(data.success){
+      showToast(data.message, 'success');
+      setTimeout(function(){ location.reload(); }, 900);
+    } else {
+      showToast(data.message || 'Action failed.', 'error');
+      if(btn){ btn.disabled = false; btn.textContent = btn.dataset.label || 'Retry'; }
+    }
+  })
+  .catch(function(){
+    showToast('Network error. Please try again.', 'error');
+    if(btn){ btn.disabled = false; }
+  });
+}
+function ticketAck(id, btn){
+  btn.dataset.label = btn.textContent;
+  ticketPost('/incidents/' + id + '/acknowledge', null, btn);
+}
+function openTicketModal(mode, id, title, sub, fieldsHtml, confirmLabel){
+  _ticketMode = mode; _ticketId = id; _assignUserId = null;
+  document.getElementById('ticketModalTitle').textContent = title;
+  document.getElementById('ticketModalSub').textContent = sub;
+  document.getElementById('ticketModalFields').innerHTML = fieldsHtml;
+  document.getElementById('ticketMatches').innerHTML = '';
+  document.getElementById('ticketConfirmBtn').textContent = confirmLabel;
+  document.getElementById('ticketModal').classList.add('show');
+  var first = document.querySelector('#ticketModalFields textarea, #ticketModalFields input');
+  if(first) first.focus();
+}
+function closeTicketModal(){
+  document.getElementById('ticketModal').classList.remove('show');
+}
+function openNoteModal(id){
+  openTicketModal('note', id, 'Add note — ticket ' + id,
+    'Visible in GLPI as a followup from the service account, signed with your username.',
+    '<textarea id=\"ticketText\" placeholder=\"Type the update…\"></textarea>', 'Add note');
+}
+function openSolveModal(id){
+  openTicketModal('solve', id, 'Solve ticket ' + id,
+    'Stored as the GLPI solution; the ticket flips to Solved automatically.',
+    '<textarea id=\"ticketText\" placeholder=\"Describe the resolution…\"></textarea>', 'Mark solved');
+}
+function openAssignModal(id){
+  openTicketModal('assign', id, 'Assign ticket ' + id,
+    'Search a GLPI technician by name (min 2 letters), pick, confirm.',
+    '<input type=\"text\" id=\"ticketSearch\" placeholder=\"Technician name…\" autocomplete=\"off\" oninput=\"searchTechnicians(this.value)\">', 'Assign');
+}
+function searchTechnicians(q){
+  clearTimeout(_searchTimer);
+  var box = document.getElementById('ticketMatches');
+  if(!q || q.length < 2){ box.innerHTML = ''; return; }
+  _searchTimer = setTimeout(function(){
+    fetch('/incidents/users?q=' + encodeURIComponent(q))
+    .then(function(r){ return r.json(); })
+    .then(function(users){
+      box.innerHTML = users.length ? '' : '<div style=\"font-size:12px;color:#94A3B8;padding:6px 2px\">No matches.</div>';
+      users.forEach(function(u){
+        var d = document.createElement('div');
+        d.className = 't-match';
+        d.textContent = u.label;
+        d.onclick = function(){
+          _assignUserId = u.id;
+          document.getElementById('ticketSearch').value = u.label;
+          box.innerHTML = '<div style=\"font-size:12px;color:#065F46;padding:6px 2px\">Selected: ' + u.label.replace(/</g, '&lt;') + '</div>';
+        };
+        box.appendChild(d);
+      });
+    });
+  }, 300);
+}
+function confirmTicketModal(){
+  var btn = document.getElementById('ticketConfirmBtn');
+  if(_ticketMode === 'note'){
+    var c = document.getElementById('ticketText').value.trim();
+    if(!c){ showToast('Note text is required.', 'error'); return; }
+    ticketPost('/incidents/' + _ticketId + '/followup', {content: c}, btn);
+  } else if(_ticketMode === 'solve'){
+    var s = document.getElementById('ticketText').value.trim();
+    if(!s){ showToast('A solution description is required.', 'error'); return; }
+    ticketPost('/incidents/' + _ticketId + '/solve', {solution: s}, btn);
+  } else if(_ticketMode === 'assign'){
+    if(!_assignUserId){ showToast('Search and pick a technician first.', 'error'); return; }
+    ticketPost('/incidents/' + _ticketId + '/assign', {users_id: _assignUserId}, btn);
+  }
+  btn.dataset.label = btn.textContent;
+}
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape') closeTicketModal();
+});
+</script>
+{% endif %}
+{% endblock %}

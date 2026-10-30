@@ -10,8 +10,11 @@ FLASK_DEBUG = os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
 
 csrf = CSRFProtect()
 
-# Generate ephemeral key for scheduler → app internal requests
-INTERNAL_API_KEY = secrets.token_urlsafe(32)
+# Ephemeral key for scheduler → app internal requests. A fixed value may be
+# supplied via .env (REQUIRED under gunicorn: every worker must share the
+# key, since a scheduler fetch landing on a sibling worker is authenticated
+# against that worker's key). Falls back to per-process random for dev.
+INTERNAL_API_KEY = os.environ.get('INTERNAL_API_KEY') or secrets.token_urlsafe(32)
 
 
 def create_app():
@@ -22,6 +25,9 @@ def create_app():
     app.config.update(
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
+        # Off on UAT (plain HTTP); set SESSION_COOKIE_SECURE=true wherever
+        # the portal is served over HTTPS, else browsers drop the session.
+        SESSION_COOKIE_SECURE=os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() in ('1', 'true', 'yes', 'on'),
         PERMANENT_SESSION_LIFETIME=timedelta(hours=4),
         TEMPLATES_AUTO_RELOAD=True,
         # Flask-WTF CSRF config (4 lines)
@@ -53,7 +59,14 @@ def create_app():
     from blueprints.portal     import bp as portal_bp
     from blueprints.admin      import bp as admin_bp
     from blueprints.ej_search  import bp as ej_bp
+    from blueprints.ej_journal import bp as ej_journal_bp
+    from blueprints.atm_images import bp as atm_images_bp
     from blueprints.anomalies  import bp as anomalies_bp
+    from blueprints.monitoring import bp as monitoring_bp
+    from blueprints.operations import bp as operations_bp
+    from blueprints.kpi import bp as kpi_bp
+    from blueprints.onboarding import bp as onboarding_bp
+    from blueprints.incidents import bp as incidents_bp
     from routes                import bp as report_bp
     from audit                 import init_audit_schema
     from scheduler             import init_scheduler_table, create_scheduler
@@ -62,7 +75,14 @@ def create_app():
     app.register_blueprint(portal_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(ej_bp)
+    app.register_blueprint(ej_journal_bp)
+    app.register_blueprint(atm_images_bp)
     app.register_blueprint(anomalies_bp)
+    app.register_blueprint(monitoring_bp)
+    app.register_blueprint(operations_bp)
+    app.register_blueprint(kpi_bp)
+    app.register_blueprint(onboarding_bp)
+    app.register_blueprint(incidents_bp)
     app.register_blueprint(report_bp)
 
     csrf.exempt(app.view_functions['auth.login'])
@@ -76,14 +96,29 @@ def create_app():
     def start_timer():
         g.start = time.time()
 
+    from helpers import (state_tone, state_colour, state_ink, state_label,
+                         state_legend)
+    app.jinja_env.filters['state_tone'] = state_tone
+    app.jinja_env.filters['state_colour'] = state_colour
+    app.jinja_env.filters['state_ink'] = state_ink
+    app.jinja_env.filters['state_label'] = state_label
+    app.jinja_env.globals['state_legend'] = state_legend
+
     @app.context_processor
     def external_links():
         """UI links for the sidebar/header — configurable per environment
         (localhost defaults keep laptop dev working unchanged)."""
+        try:
+            from txn_sources import status_cached
+            txn_note, txn_level = status_cached()
+        except Exception:
+            txn_note, txn_level = ('Transaction source status unavailable.', 'info')
         return {
-            'grafana_url': os.environ.get('GRAFANA_URL', 'http://localhost:3002'),
+            'grafana_url': os.environ.get('GRAFANA_URL', 'http://localhost:3000'),
             'zabbix_ui_url': os.environ.get('ZABBIX_UI_URL', 'http://localhost:8080'),
             'glpi_ui_url': os.environ.get('GLPI_UI_URL', 'http://localhost:8082'),
+            'txn_note': txn_note,
+            'txn_level': txn_level,
         }
 
     @app.after_request
@@ -103,6 +138,10 @@ def create_app():
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
         if not FLASK_DEBUG:
             response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        # Static assets are versioned by deploy (container recreate), so a
+        # short client cache kills ~850KB of re-downloads per page load.
+        if request.path.startswith('/static/'):
+            response.headers['Cache-Control'] = 'public, max-age=3600'
         return response
 
     @app.errorhandler(403)
@@ -120,9 +159,83 @@ def create_app():
         logging.getLogger(__name__).error('500 error: %s', e, exc_info=True)
         return render_template('error_500.html'), 500
 
+    # The portal queries atm_transactions_visible on nearly every page, so a
+    # code deploy that lands before its schema takes the whole portal down - it
+    # did, once. Applied here (no-op once the view exists) so the ordering can
+    # never bite again. Never fatal: the app must still boot and say so.
+    try:
+        from txn_sources import ensure_schema_best_effort
+        if not ensure_schema_best_effort():
+            app.logger.error(
+                'Transaction source policy schema missing - apply '
+                'scripts/migrate_txn_sources.sql')
+    except Exception:
+        app.logger.exception('Transaction source policy check failed at startup')
+
     @app.route('/health')
     def health():
+        # Liveness only, and it stays unconditional on purpose: this answers
+        # "is the process up", not "can it do its job". A readiness probe that
+        # failed on a dependency restart would take the whole portal out of
+        # rotation and turn a dependency blip into an outage.
         return {'status': 'ok'}, 200
+
+    @app.route('/ready')
+    def ready():
+        """Readiness: can this process actually serve a request right now?
+
+        Checks each dependency with a short timeout and reports each one
+        separately, because "not ready" is useless on its own - the question is
+        always WHICH dependency. Never raises: a dependency being down is a
+        reportable state, not a crash.
+        """
+        import time as _time
+        checks, healthy = {}, True
+
+        started = _time.time()
+        try:
+            from db import get_db
+            with get_db() as conn:
+                cur = conn.cursor()
+                cur.execute('SELECT 1')
+                cur.fetchone()
+                cur.close()
+            checks['database'] = {'ok': True, 'ms': int((_time.time() - started) * 1000)}
+        except Exception as e:
+            healthy = False
+            checks['database'] = {'ok': False, 'error': str(e)[:200]}
+
+        started = _time.time()
+        try:
+            import requests as _rq
+            url = os.environ.get('ZBX_URL') or os.environ.get('ZABBIX_URL') \
+                or 'http://zabbix-web:8080/api_jsonrpc.php'
+            _rq.post(url, json={'jsonrpc': '2.0', 'method': 'apiinfo.version',
+                                'params': {}, 'id': 1},
+                     auth=(os.environ.get('ZBX_USER', ''), os.environ.get('ZBX_PASS', '')),
+                     timeout=3).raise_for_status()
+            checks['zabbix'] = {'ok': True, 'ms': int((_time.time() - started) * 1000)}
+        except Exception as e:
+            healthy = False
+            checks['zabbix'] = {'ok': False, 'error': str(e)[:200]}
+
+        started = _time.time()
+        try:
+            import requests as _rq
+            host = os.environ.get('ES_HOST') or os.environ.get('OPENSEARCH_HOST')
+            if not host:
+                checks['opensearch'] = {'ok': True, 'skipped': 'ES_HOST not configured'}
+            else:
+                url = host if host.startswith('http') else 'http://%s' % host
+                _rq.get(url, timeout=3).raise_for_status()
+                checks['opensearch'] = {'ok': True,
+                                        'ms': int((_time.time() - started) * 1000)}
+        except Exception as e:
+            # EJ search degrades on its own; the portal is not "down" without it.
+            checks['opensearch'] = {'ok': False, 'error': str(e)[:200]}
+
+        return ({'status': 'ready' if healthy else 'degraded', 'checks': checks},
+                200 if healthy else 503)
 
     return app
 

@@ -1,178 +1,173 @@
 services:
-
   postgres:
     image: postgres:15
     container_name: zabbix-db
     environment:
-      POSTGRES_DB: zabbix
-      POSTGRES_USER: zabbix
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: "zabbix"
+      POSTGRES_USER: "zabbix"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
     volumes:
       - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U zabbix"]
-      interval: 2s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
+      - ./config/postgres-uat/postgresql-custom.conf:/etc/postgresql/postgresql.conf.d/custom.conf:ro
+    ports:
+      - "5432:5432"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   zabbix-server:
     image: zabbix/zabbix-server-pgsql:ubuntu-6.4-latest
     container_name: zabbix-server
     environment:
-      DB_SERVER_HOST: postgres
-      POSTGRES_DB: zabbix
-      POSTGRES_USER: zabbix
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      ZBX_CACHESIZE: 256M
-      ZBX_TIMEOUT: 10
-    entrypoint: ["/usr/bin/tini", "--", "/usr/bin/docker-entrypoint.sh"]
-    command: ["/usr/sbin/zabbix_server", "--foreground", "-c", "/etc/zabbix/zabbix_server.conf"]
+      DB_SERVER_HOST: "postgres"
+      POSTGRES_DB: "zabbix"
+      POSTGRES_USER: "zabbix"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
     ports:
       - "10051:10051"
     depends_on:
       - postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   zabbix-web:
     image: zabbix/zabbix-web-nginx-pgsql:ubuntu-6.4-latest
     container_name: zabbix-web
     environment:
-      DB_SERVER_HOST: postgres
-      POSTGRES_DB: zabbix
-      POSTGRES_USER: zabbix
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      ZBX_SERVER_HOST: zabbix-server
-      PHP_TZ: Africa/Addis_Ababa
-      ZBX_MEMORYLIMIT: 512M
+      DB_SERVER_HOST: "postgres"
+      POSTGRES_DB: "zabbix"
+      POSTGRES_USER: "zabbix"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      ZBX_SERVER_HOST: "zabbix-server"
+      PHP_TZ: "Africa/Addis_Ababa"
     ports:
       - "8080:8080"
     depends_on:
-      - postgres
       - zabbix-server
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
-  # --- ADDED SERVICE START ---
   zabbix-agent:
     image: zabbix/zabbix-agent2:ubuntu-6.4-latest
     container_name: zabbix-agent
-    network_mode: "host" # Allows direct scanning of active host interfaces like eth0
-    privileged: true     # Ensures the agent has permissions to read local hardware state
+    network_mode: "host"
+    privileged: true
     environment:
-      ZBX_HOSTNAME: "ATM-001-Addis-Branch" # Must exactly match the Host name field in Zabbix
-      ZBX_SERVER_HOST: "127.0.0.1"        # Since it runs on host network mode alongside forwarded ports
+      ZBX_HOSTNAME: "Zabbix-Server-UAT01"
+      # Passive checks arrive from the Zabbix server container via the compose
+      # bridge network — allow it alongside localhost (else "connection rejected").
+      ZBX_SERVER_HOST: "127.0.0.1,172.18.0.0/16"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     depends_on:
       - zabbix-server
-  # --- ADDED SERVICE END ---
-
-  grafana:
-    image: grafana/grafana:10.2.6
-    container_name: grafana
-    user: "root"
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
-      GF_INSTALL_PLUGINS: alexanderzobnin-zabbix-app 4.4.5
-      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: alexanderzobnin-zabbix-datasource,alexanderzobnin-zabbix-app
-      GF_PANELS_DISABLE_SANITIZE_HTML: "true"
-      GF_RENDERING_SERVER_URL: http://grafana-renderer:8081/render
-      GF_RENDERING_CALLBACK_URL: http://grafana:3000/
-      GF_LOG_FILTERS: rendering:debug
-      ZABBIX_WEB_PASSWORD: zabbix
-      DB_PASS: ${DB_PASS}
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/provisioning/dashboards/ATM Operations Centre — Dashen Bank-1785397982257.json
-    ports:
-      - "3002:3000"
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./index.html:/usr/share/grafana/public/views/index.html:ro
-      - ./logo.png:/usr/share/grafana/public/img/dashen-logo.png:ro
-      - ./entrypoint.sh:/entrypoint.sh:ro
-      - ./config/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
-      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-    entrypoint: ["sh", "/entrypoint.sh"]
-    depends_on:
-      - zabbix-web
-    restart: unless-stopped
-
-  opensearch:
-    image: opensearchproject/opensearch:2.14.0
-    container_name: opensearch
-    environment:
-      - discovery.type=single-node
-      - DISABLE_SECURITY_PLUGIN=true
-      - OPENSEARCH_JAVA_OPTS=-Xms256m -Xmx256m
-      - compatibility.override_main_response_version=true
-    ports:
-      - "9200:9200"
-    volumes:
-      - opensearch-data:/usr/share/opensearch/data
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-    restart: unless-stopped
-
-  opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:2.14.0
-    container_name: opensearch-dashboards
-    environment:
-      - OPENSEARCH_HOSTS=http://opensearch:9200
-      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
-    volumes:
-      - ./config/osd/opensearch_dashboards.yml:/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml:ro
-      - ./config/osd/ui_brand/dashen-logo.png:/usr/share/opensearch-dashboards/src/core/server/core_app/assets/dashen-logo.png:ro
-      - ./config/osd/ui_brand/dashen-mark.png:/usr/share/opensearch-dashboards/src/core/server/core_app/assets/dashen-mark.png:ro
-      - ./config/osd/ui_brand/dashen-favicon.png:/usr/share/opensearch-dashboards/src/core/server/core_app/assets/dashen-favicon.png:ro
-    ports:
-      - "5601:5601"
-    depends_on:
-      - opensearch
-    restart: unless-stopped
-
-  filebeat:
-    image: docker.elastic.co/beats/filebeat-oss:7.12.1
-    container_name: filebeat
-    user: root
-    volumes:
-      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-      - ./ej-logs:/var/log/atm-ej:ro
-    depends_on:
-      - opensearch
-    restart: unless-stopped
 
   mariadb:
     image: mariadb:10.11
     container_name: glpi-db
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: glpi
-      MYSQL_USER: glpi
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+      MYSQL_DATABASE: "glpi"
+      MYSQL_USER: "glpi"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
     volumes:
       - mariadb-data:/var/lib/mysql
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   glpi:
     image: diouxx/glpi:latest
     container_name: glpi
     environment:
-      TZ: Africa/Addis_Ababa
-      MARIADB_HOST: mariadb
-      MARIADB_DATABASE: glpi
-      MARIADB_USER: glpi
-      MARIADB_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: "Africa/Addis_Ababa"
+      MARIADB_HOST: "mariadb"
+      MARIADB_DATABASE: "glpi"
+      MARIADB_USER: "glpi"
+      MARIADB_PASSWORD: "${MYSQL_PASSWORD}"
     ports:
       - "8082:80"
     volumes:
       - glpi-root:/var/www/html/glpi
+      # Dashen Bank theme plugin (repo-tracked). The public/ mount is what the
+      # web server actually serves (/plugins/dashentheme/...) — see README.
+      - ./glpi-plugins/dashentheme:/var/www/html/glpi/marketplace/dashentheme:ro
+      - ./glpi-plugins/dashentheme:/var/www/html/glpi/public/plugins/dashentheme:ro
     depends_on:
       - mariadb
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.2.6
+    container_name: grafana
+    user: "root"
+    environment:
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD}"
+      # LDAP directory auth (bank AD down the road, mock LDAP in lab).
+      # Disabled by default; local accounts always keep working.
+      GF_AUTH_LDAP_ENABLED: "${GF_AUTH_LDAP_ENABLED:-false}"
+      GF_AUTH_LDAP_CONFIG_FILE: "/etc/grafana/ldap.toml"
+      # Consumed by ldap.toml ($__env) for the directory bind. Empty by
+      # default; set on hosts where LDAP is enabled.
+      LDAP_ADMIN_PASSWORD: "${LDAP_ADMIN_PASSWORD:-}"
+      # Postgres datasource password (== DB_PASS); expanded inside datasources-uat.yml
+      GF_PG_PASSWORD: "${DB_PASS}"
+      # Zabbix datasource credentials; expanded inside datasources-uat.yml.
+      # Dedicated svc-grafana account post-cutover (docs/zabbix-api-users.md);
+      # GF_ZBX_USER defaults to Admin (pre-cutover behavior), GF_ZBX_PASSWORD
+      # falls back to ZBX_PASS only if its own slot is unset. Prefer explicit
+      # per-account values — never ${}-reference another slot (compose expands
+      # them, bash-sourced scripts do NOT).
+      GF_ZBX_USER: "${GF_ZBX_USER:-Admin}"
+      GF_ZBX_PASSWORD: "${GF_ZBX_PASSWORD:-${ZBX_PASS}}"
+      GF_INSTALL_PLUGINS: "alexanderzobnin-zabbix-app 4.4.5"
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: "alexanderzobnin-zabbix-datasource,alexanderzobnin-zabbix-app"
+      GF_PANELS_DISABLE_SANITIZE_HTML: "true"
+      GF_RENDERING_SERVER_URL: "http://grafana-renderer:8081/render"
+      GF_RENDERING_CALLBACK_URL: "http://grafana:3000/"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./index.html:/usr/share/grafana/public/views/index.html:ro
+      - ./logo.png:/usr/share/grafana/public/img/dashen-logo.png:ro
+      - ./entrypoint.sh:/entrypoint.sh:ro
+      - ./config/grafana/datasources-uat.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./config/grafana/ldap.toml:/etc/grafana/ldap.toml:ro
+      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    entrypoint: ["sh", "/entrypoint.sh"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   grafana-renderer:
@@ -182,6 +177,11 @@ services:
       ENABLE_METRICS: "true"
     ports:
       - "8081:8081"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   report-portal:
@@ -190,87 +190,125 @@ services:
       dockerfile: Dockerfile
     container_name: report-portal
     environment:
-      DB_HOST: postgres
-      DB_NAME: zabbix
-      DB_USER: zabbix
-      DB_PASS: ${DB_PASS}
-      GRAFANA_URL: ${GRAFANA_URL}
-      ZABBIX_UI_URL: ${ZABBIX_UI_URL:-http://localhost:8080}
-      GLPI_UI_URL: ${GLPI_UI_URL:-http://localhost:8082}
-      REPORT_PORTAL_PORT: ${REPORT_PORTAL_PORT}
-      ES_HOST: opensearch:9200
-      ES_INDEX: atm-ej-live-*,atm-electronic-journal
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASS: ${SMTP_PASS:-}
-      SMTP_FROM: ${SMTP_FROM:-atm-monitor@dashenbank.com}
-      ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASS: ${ADMIN_PASS:-admin123}
-      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-}
-      FLASK_DEBUG: 0
-    deploy:
-      resources:
-        limits:
-          memory: 256M
+      DB_HOST: "postgres"
+      # Portal database. Defaults to "zabbix", the pre-split layout where
+      # portal tables shared a database with Zabbix's own configuration. Set
+      # PORTAL_DB_NAME=portal in .env to use the split database. Never point
+      # Zabbix itself here.
+      DB_NAME: "${PORTAL_DB_NAME:-zabbix}"
+      DB_USER: "zabbix"
+      DB_PASS: "${DB_PASS}"
+      GRAFANA_URL: "${GRAFANA_URL}"
+      ZABBIX_UI_URL: "${ZABBIX_UI_URL}"
+      GLPI_UI_URL: "${GLPI_UI_URL}"
+      REPORT_PORTAL_PORT: "8888"
+      EVIDENCE_RAW_DIR: "/app/evidence/raw"
+      # Host-side, read-only image bridge. The socket directory is mounted
+      # read-only below; the portal has no route to ATM TCP/10050. The token
+      # must match /etc/atm-monitoring/image-bridge.env on the host.
+      ATM_IMAGE_BRIDGE_SOCKET: "/run/atm-image-bridge/bridge.sock"
+      ATM_IMAGE_BRIDGE_TOKEN: "${ATM_IMAGE_BRIDGE_TOKEN:-}"
+      BASE_URL: "${BASE_URL:-http://localhost:8888}"
+      ES_HOST: "${DATA_VM_IP}:9200"
+      ES_INDEX: "atm-ej-live-*,atm-electronic-journal"
+      ADMIN_USER: "${ADMIN_USER}"
+      ADMIN_PASS: "${ADMIN_PASS}"
+      FLASK_SECRET_KEY: "${FLASK_SECRET_KEY}"
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASS: "${SMTP_PASS:-}"
+      SMTP_FROM: "${SMTP_FROM:-atm-monitor@dashenbank.com}"
+      SMTP_INSECURE: "${SMTP_INSECURE:-false}"
+      SMTP_CA_FILE: "${SMTP_CA_FILE:-}"
+      ENABLE_SIMULATORS: "${ENABLE_SIMULATORS:-false}"
+      AUTH_MODE: "${AUTH_MODE:-local}"
+      LDAP_HOST: "${LDAP_HOST:-}"
+      LDAP_PORT: "${LDAP_PORT:-389}"
+      LDAP_BASE_DN: "${LDAP_BASE_DN:-}"
+      LDAP_BIND_DN: "${LDAP_BIND_DN:-}"
+      LDAP_BIND_PASSWORD: "${LDAP_BIND_PASSWORD:-}"
+      LDAP_LOGIN_ATTR: "${LDAP_LOGIN_ATTR:-uid}"
+      LDAP_ADMINS_GROUP: "${LDAP_ADMINS_GROUP:-ATM-Admins}"
+      LDAP_OPERATORS_GROUP: "${LDAP_OPERATORS_GROUP:-ATM-Operators}"
+      # Shared scheduler→app auth key: every gunicorn worker must see the
+      # SAME value or internal report fetches bounce to the login page
+      # (and get emailed as fake PDFs). Set once in .env.
+      INTERNAL_API_KEY: "${INTERNAL_API_KEY:-}"
+      ZABBIX_URL: "http://zabbix-web:8080/api_jsonrpc.php"
+      ZABBIX_USER: "${ZABBIX_USER:-Admin}"
+      ZABBIX_PASS: "${ZABBIX_PASS}"
+      GLPI_APP_TOKEN: "${GLPI_APP_TOKEN:-}"
+      GLPI_USER: "${GLPI_USER:-glpi}"
+      GLPI_API_PASSWORD: "${GLPI_API_PASSWORD:-}"
     volumes:
       - ./report-portal:/app:rw
+      - ./ej-logs/raw:/app/evidence/raw:ro
+      # Unix socket created by the host atm-image-bridge service. Mount the
+      # directory, not one socket inode: a service restart must keep working.
+      - /run/atm-image-bridge:/run/atm-image-bridge:ro
+      - ./zabbix_modules:/app/zabbix_modules:ro
+      - ./config/status_map.json:/app/config/status_map.json:ro
+      - ./config/cassette_capacity.json:/app/config/cassette_capacity.json:ro
     ports:
       - "8888:8888"
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8888/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
     depends_on:
       - postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
-  iso8583-gateway:
+  cash-watcher:
     build:
-      context: ./camel
-      dockerfile: Dockerfile.gateway
-    container_name: iso8583-gateway
+      context: .
+      dockerfile: simulators/Dockerfile.atm-simulator
+    container_name: cash-watcher
+    command: python3 /app/cash_watcher.py
     environment:
-      MODE: simulation
-      DB_HOST: postgres
-      DB_NAME: zabbix
-      DB_USER: zabbix
-      DB_PASS: ${DB_PASS}
-      INTERVAL: "10"
-      # Production settings (uncomment when real switch available):
-      # MODE: tcp
-      # SWITCH_HOST: 0.0.0.0
-      # SWITCH_PORT: "9876"
-    ports:
-      - "9876:9876"
+      PYTHONUNBUFFERED: "1"
+      DB_HOST: "postgres"
+      # Portal database. Defaults to "zabbix", the pre-split layout where
+      # portal tables shared a database with Zabbix's own configuration. Set
+      # PORTAL_DB_NAME=portal in .env to use the split database. Never point
+      # Zabbix itself here.
+      DB_NAME: "${PORTAL_DB_NAME:-zabbix}"
+      DB_USER: "zabbix"
+      DB_PASS: "${DB_PASS}"
+      ZBX_URL: "http://zabbix-web:8080/api_jsonrpc.php"
+      ZBX_USER: "${ZBX_USER:-Admin}"
+      ZBX_PASS: "${ZBX_PASS}"
+      CASH_WATCH_INTERVAL: "300"
+      MIN_AUTO_LOAD: "200"
+    volumes:
+      - ./cash_watcher.py:/app/cash_watcher.py:ro
     depends_on:
       - postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@dashenbank.com}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-dashen2024}
-    ports:
-      - "5050:80"
-    restart: unless-stopped
-
-  # ───  Anomaly Detector ────────────────────────────────
   anomaly-detector:
     build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
+      context: .
+      dockerfile: simulators/Dockerfile.atm-simulator
     container_name: anomaly-detector
     command: python3 /app/anomaly_detector.py
     environment:
-      DB_HOST: postgres
-      DB_NAME: zabbix
-      DB_USER: zabbix
-      DB_PASS: ${DB_PASS}
+      PYTHONUNBUFFERED: "1"
+      DB_HOST: "postgres"
+      # Portal database. Defaults to "zabbix", the pre-split layout where
+      # portal tables shared a database with Zabbix's own configuration. Set
+      # PORTAL_DB_NAME=portal in .env to use the split database. Never point
+      # Zabbix itself here.
+      DB_NAME: "${PORTAL_DB_NAME:-zabbix}"
+      DB_USER: "zabbix"
+      DB_PASS: "${DB_PASS}"
       CHECK_INTERVAL: "60"
       VELOCITY_WINDOW: "10"
       VELOCITY_LIMIT: "3"
@@ -279,28 +317,39 @@ services:
       RAPID_LIMIT: "5"
       FAILURE_WINDOW: "15"
       FAILURE_THRESHOLD: "0.4"
+      ENABLE_SIMULATORS: "${ENABLE_SIMULATORS:-false}"
     volumes:
       - ./anomaly_detector.py:/app/anomaly_detector.py:ro
-      - /tmp:/tmp
     depends_on:
       - postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
-  # ─── Network Correlator ──────────────────────────────
   network-correlator:
     build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
+      context: .
+      dockerfile: simulators/Dockerfile.atm-simulator
     container_name: network-correlator
     command: python3 /app/network_correlator.py
     environment:
-      DB_HOST: postgres
-      DB_NAME: zabbix
-      DB_USER: zabbix
-      DB_PASS: ${DB_PASS}
-      ZABBIX_URL: http://zabbix-web:8080/api_jsonrpc.php
-      ZABBIX_USER: ${ZBX_USER:-Admin}
-      ZABBIX_PASS: ${ZBX_PASS:-zabbix}
+      PYTHONUNBUFFERED: "1"
+      DB_HOST: "postgres"
+      # Portal database. Defaults to "zabbix", the pre-split layout where
+      # portal tables shared a database with Zabbix's own configuration. Set
+      # PORTAL_DB_NAME=portal in .env to use the split database. Never point
+      # Zabbix itself here.
+      DB_NAME: "${PORTAL_DB_NAME:-zabbix}"
+      DB_USER: "zabbix"
+      DB_PASS: "${DB_PASS}"
+      ZABBIX_URL: "http://zabbix-web:8080/api_jsonrpc.php"
+      # Service identity comes from ZBX_USER (svc-scripts) — this service
+      # reads the legacy ZABBIX_* names, so they are mapped, not hardcoded.
+      ZABBIX_USER: "${ZBX_USER:-Admin}"
+      ZABBIX_PASS: "${ZBX_PASS}"
       CHECK_INTERVAL: "120"
       LATENCY_THRESHOLD: "200"
       LOSS_THRESHOLD: "10"
@@ -308,94 +357,97 @@ services:
       - ./network_correlator.py:/app/network_correlator.py:ro
     depends_on:
       - postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
-  # ─── MULTI-TENANT SIMULATION ENGINES ───────────────────────
-  # A single engine simulates EVERY ATM in atm_locations (auto-discovered).
-  # ATMs registered in the Report Portal start being simulated automatically.
-  atm-sim-engine:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-sim-engine
-    command: python3 -u sim_engine.py
-    environment:
-      DB_HOST: postgres
-      DB_NAME: zabbix
-      DB_USER: zabbix
-      DB_PASS: ${DB_PASS}
-      GATEWAY_IP: "172.17.0.1"
-      SIM_PORT_MIN: "1161"
-      SIM_PORT_MAX: "1260"
-      MAX_SIMULATED_ATMS: "10"
-    ports:
-      - "1161-1260:1161-1260"
-      - "1161-1260:1161-1260/udp"
-    depends_on:
-      postgres:
-        condition: service_started
-    restart: unless-stopped
-
-  atm-txn-engine:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-txn-engine
-    command: python3 txn_engine.py
-    environment:
-      DB_HOST: postgres
-      DB_NAME: zabbix
-      DB_USER: zabbix
-      DB_PASS: ${DB_PASS}
-      MAX_SIMULATED_ATMS: "10"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-
-  atm-ej-engine:
-    build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
-    container_name: atm-ej-engine
-    command: python3 ej_engine.py
-    environment:
-      DB_HOST: postgres
-      DB_NAME: zabbix
-      DB_USER: zabbix
-      DB_PASS: ${DB_PASS}
-      EJ_LOG_DIR: /var/log/atm-ej
-      MAX_SIMULATED_ATMS: "10"
-    volumes:
-      - ./ej-logs:/var/log/atm-ej
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-
-  # ─── ATM STATE MANAGER (keeps atm_current_state fresh for Grafana) ──
   state-manager:
     build:
-      context: ./simulators
-      dockerfile: Dockerfile.atm-simulator
+      context: .
+      dockerfile: simulators/Dockerfile.atm-simulator
     container_name: state-manager
-    command: python3 state_manager.py
+    command: python3 /app/state_manager.py
     environment:
-      DB_HOST: postgres
-      DB_NAME: zabbix
-      DB_USER: zabbix
-      DB_PASS: ${DB_PASS}
-      GATEWAY_IP: "172.17.0.1"
-      MAX_SIMULATED_ATMS: "10"
+      PYTHONUNBUFFERED: "1"
+      DB_HOST: "postgres"
+      # Portal database. Defaults to "zabbix", the pre-split layout where
+      # portal tables shared a database with Zabbix's own configuration. Set
+      # PORTAL_DB_NAME=portal in .env to use the split database. Never point
+      # Zabbix itself here.
+      DB_NAME: "${PORTAL_DB_NAME:-zabbix}"
+      DB_USER: "zabbix"
+      DB_PASS: "${DB_PASS}"
+      ZBX_URL: "http://zabbix-web:8080/api_jsonrpc.php"
+      ZBX_USER: "${ZBX_USER:-Admin}"
+      ZBX_PASS: "${ZBX_PASS}"
+      STATE_POLL_INTERVAL: "30"
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat-oss:7.12.1
+    container_name: filebeat
+    user: root
+    environment:
+      ES_HOST: "${DATA_VM_IP:-172.22.10.60}:9200"
+    ports:
+      - "514:514/udp"
+      - "514:514/tcp"
+    volumes:
+      # NB: filebeat refuses to start unless filebeat.yml is owned by
+      # root:root (mode 644). git pull resets ownership -> after any pull
+      # touching filebeat.yml run:
+      #   sudo chown root:root filebeat.yml && sudo chmod 644 filebeat.yml
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./ej-logs:/var/log/atm-ej:ro
+    depends_on:
+      - postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  # ── Mock LDAP lab (NOT part of UAT) ──────────────────────────────────────
+  # Stand-in for bank Active Directory while IAM access is pending. Starts
+  # ONLY with `--profile ldap`, so normal `up` is unaffected. See
+  # config/ldap/README.md for the switchover checklist.
+  mock-ldap:
+    image: osixia/openldap:1.5.0
+    container_name: mock-ldap
+    profiles:
+      - ldap
+    command: --copy-service --loglevel info
+    environment:
+      LDAP_ORGANISATION: "ATM Monitoring Lab"
+      LDAP_DOMAIN: "atmmon.local"
+      LDAP_BASE_DN: "dc=atmmon,dc=local"
+      LDAP_ADMIN_PASSWORD: "${LDAP_ADMIN_PASSWORD:-LabAdminPass123!}"
+      LDAP_CONFIG_PASSWORD: "${LDAP_ADMIN_PASSWORD:-LabAdminPass123!}"
+      LDAP_READONLY_USER: "false"
+      LDAP_TLS: "false"
+    volumes:
+      - ./config/ldap/seed.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/seed.ldif:ro
+      - ldap-data:/var/lib/ldap
+      - ldap-config:/etc/ldap/slapd.d
+    ports:
+      - "3890:389"
+    restart: "no"
 
 volumes:
   pgdata:
-  grafana-data:
-  opensearch-data:
   mariadb-data:
   glpi-root:
-
+  grafana-data:
+  ldap-data:
+  ldap-config:

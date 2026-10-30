@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}EJ Search — Dashen Bank{% endblock %}
+{% block title %}EJ Search — ATM Monitoring{% endblock %}
 
 {% block extra_style %}
 body { background: #F0F2F6; color: #0F172A; }
@@ -266,11 +266,13 @@ td { font-variant-numeric: tabular-nums; }
     <div class="card">
       <div class="card-header">
         <h2>{{ '{:,}'.format(total) }} Results</h2>
+        {% if session.get('role') in ('operator', 'admin') %}
         <a id="ejExportBtn"
            href="/ej-search/csv?card={{ card }}&date_from={{ date_from }}&date_to={{ date_to }}&atm_id={{ atm_id }}&keyword={{ keyword }}&event_type={{ event_type }}&status={{ status }}&min_amount={{ min_amount }}&max_amount={{ max_amount }}&auth_code={{ auth_code }}"
            class="btn btn-primary">
           <i data-lucide="download" style="width:14px;height:14px"></i> Export CSV
         </a>
+        {% endif %}
       </div>
       <div class="ej-table-wrap" style="overflow-x:auto;overflow-y:clip">
         <table>
@@ -303,7 +305,7 @@ td { font-variant-numeric: tabular-nums; }
                   <div class="detail-inner">
                     <div class="detail-header"><i data-lucide="terminal"></i> LOG DETAILS</div>
                     <div class="detail-body">
-                      <div class="detail-message">{{ r.message }}</div>
+                      <div class="detail-message">{{ r.human or r.message }}</div>
                       <div class="detail-grid">
                         <div class="detail-field"><div class="detail-field-label">Terminal ID</div><div class="detail-field-value">{{ r.terminal_id or '—' }}</div></div>
                         <div class="detail-field"><div class="detail-field-label">Event Type</div><div class="detail-field-value">{{ r.event_type or '—' }}</div></div>
@@ -346,7 +348,7 @@ td { font-variant-numeric: tabular-nums; }
               <i data-lucide="chevron-right" class="ej-card-chevron" style="width:16px;height:16px;color:#CBD5E1;flex-shrink:0;transition:transform .2s"></i>
             </div>
             <div class="ej-card-detail-wrap">
-              <div class="ej-card-detail-message">{{ r.message }}</div>
+              <div class="ej-card-detail-message">{{ r.human or r.message }}</div>
               <div class="ej-card-detail-grid">
                 <div class="ej-card-detail-field">
                   <div class="ej-card-detail-label">Terminal ID</div>

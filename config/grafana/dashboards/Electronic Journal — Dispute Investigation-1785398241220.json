@@ -62,7 +62,7 @@
     {
       "datasource": {
         "type": "elasticsearch",
-        "uid": "${DS_EJ-ELASTICSEARCH}"
+        "uid": "EJ-Elasticsearch"
       },
       "gridPos": {
         "h": 4,
@@ -96,7 +96,7 @@
           ],
           "datasource": {
             "type": "elasticsearch",
-            "uid": "${DS_EJ-ELASTICSEARCH}"
+            "uid": "EJ-Elasticsearch"
           },
           "metrics": [
             {
@@ -115,7 +115,7 @@
     {
       "datasource": {
         "type": "elasticsearch",
-        "uid": "${DS_EJ-ELASTICSEARCH}"
+        "uid": "EJ-Elasticsearch"
       },
       "fieldConfig": {
         "defaults": {
@@ -174,7 +174,7 @@
           "bucketAggs": [],
           "datasource": {
             "type": "elasticsearch",
-            "uid": "${DS_EJ-ELASTICSEARCH}"
+            "uid": "EJ-Elasticsearch"
           },
           "metrics": [
             {
@@ -195,7 +195,7 @@
       "type": "table"
     }
   ],
-  "refresh": "10s",
+  "refresh": "30s",
   "schemaVersion": 39,
   "tags": [],
   "templating": {
@@ -218,7 +218,7 @@
     "to": "now"
   },
   "timepicker": {},
-  "timezone": "",
+  "timezone": "Africa/Addis_Ababa",
   "title": "Electronic Journal — Dispute Investigation",
   "uid": "cab45a52-d787-412a-b7a1-51e6f73cede2",
   "version": 4,

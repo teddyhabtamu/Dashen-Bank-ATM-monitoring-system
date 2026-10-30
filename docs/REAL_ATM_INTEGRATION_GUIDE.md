@@ -76,7 +76,7 @@ Now you have **one real ATM** that you want to connect to the system. This guide
 | **Docker running** | `docker ps` should show containers |
 | **PostgreSQL accessible** | `docker exec zabbix-db psql -U zabbix -c "SELECT 1"` should return `1` |
 | **Zabbix Server accessible** | `curl http://localhost:8080/api_jsonrpc.php` should return JSON |
-| **Grafana accessible** | `curl http://localhost:3002` should return HTML |
+| **Grafana accessible** | `curl http://localhost:3000` should return HTML |
 | **Report Portal accessible** | `curl http://localhost:8888/health` should return `{"status":"ok"}` |
 
 ### 2.3 — Network Requirements
@@ -587,7 +587,7 @@ INSERT INTO atm_locations (
     '2026-07-29',                 -- install_date: when the ATM was installed
     'active',                     -- status: 'active' (or 'inactive' to disable)
     'dashen_atm',                 -- snmp_community: SNMP community string
-    'v2c',                        -- snmp_version: SNMP version (v2c)
+    2,                            -- snmp_version: SNMP version as INT (2=v2c, 3=v3)
     'NCR_APTRA',                  -- ej_log_format: EJ log format (NCR_APTRA or GRG)
     'Bole International Branch ATM', -- atm_name: display name
     '192.168.1.100'               -- ip_address: real ATM IP
@@ -971,8 +971,8 @@ Expected: Some anomalies (if the simulation generates them).
 
 ### 12.8 — Test 8: Grafana Dashboard
 
-1. Open `http://localhost:3002`
-2. Log in as `admin` / `dashen2024`
+1. Open `http://localhost:3000`
+2. Log in as `admin` with your `GRAFANA_ADMIN_PASSWORD` from `.env` (never commit the real value)
 3. Open the **ATM Operations Centre** dashboard
 4. Check that your ATM appears in the dashboard
 

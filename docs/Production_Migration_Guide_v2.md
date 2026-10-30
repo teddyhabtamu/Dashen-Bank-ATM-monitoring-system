@@ -7,6 +7,14 @@
 **Target:** Production — RHEL 9, **3 VMs (APPS-01, DATA-01, GWY-01)**, real Dashen ATM fleet (NCR + GRG only), 3-Year Data Retention
 **Supersedes:** v2 (which assumed the old 5-VM layout — all VM references below follow the revised 3-VM specification)
 
+> **Branch layout — which files live where**
+> This guide is the **production** runbook. Its `deploy/production/*` compose files and `.env.production`
+> are maintained on the `main` / production branch and are **intentionally excluded from the `uat-prep` branch**
+> (UAT needs only UAT files). On `uat-prep` the UAT environment is driven by the repo-root
+> `docker-compose.yml` (UAT-01) and `docker-compose.gateway.yml` (UAT-02), with `.env.uat` — see
+> `docs/UAT_Migration_Guide.md`. The `deploy/production/*` commands below are correct on the production
+> branch; on `uat-prep` use the UAT root files instead.
+
 ---
 
 # 0. Read This First — Corrections & Re-prioritization
@@ -148,7 +156,7 @@ UAT replicates the **shape** of the system, not its 1,202-ATM scale — 10–20 
 - [ ] **Docker** installed (instructions in Phase 1 — same for all VMs)
 - [ ] **Git** installed on all VMs
 - [ ] **GitHub SSH key** or personal access token to clone the repo
-- [ ] **Test ATMs** for validation — two are available at the 4 Kilo Building: **NCR 172.22.248.4** and **GRG 172.23.248.6**. Obtain the **SNMP community string** from the ATM/Channel Support team (the IPs are known; the community is not yet).
+- [ ] **Test ATMs** for validation — two are available at the 4 Kilo Building: **NCR 172.23.248.4** and **GRG 172.23.248.6**. Obtain the **SNMP community string** from the ATM/Channel Support team (the IPs are known; the community is not yet).
 - [ ] **Contact person** on the ATM Switch team (for ISO 8583)
 - [ ] **Contact person** on the ATM Hardware/Vendor team (for SNMP OIDs and EJ paths)
 - [ ] **Branch network spreadsheet** with ATM IDs, branch names, GPS coordinates, terminal IDs, vendor, model, install dates
@@ -165,7 +173,7 @@ UAT replicates the **shape** of the system, not its 1,202-ATM scale — 10–20 
 | APPS-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 9200 | Report Portal EJ search queries |
 | GWY-01 (VLAN 4055) | DATA-01 (VLAN 4056) | TCP 5432 | ISO 8583 writes transactions |
 | GWY-01 (Gateway) | ATM Switch | TCP 9876 | ISO 8583 messages |
-| APPS-01 (VLAN 4055) | ATM subnets: 172.22.248.0/24 (NCR), 172.23.248.0/24 (GRG) | UDP 161 | SNMP polling (test ATMs at 4 Kilo Building: 172.22.248.4, 172.23.248.6) |
+| APPS-01 (VLAN 4055) | ATM subnets: 172.22.248.0/24 (NCR), 172.23.248.0/24 (GRG) | UDP 161 | SNMP polling (test ATMs at 4 Kilo Building: 172.23.248.4, 172.23.248.6) |
 | Staff workstations | APPS-01 | TCP 8080, 3000, 8082, 8888 | Zabbix web, Grafana, GLPI, Report Portal |
 | Staff workstations | DATA-01 | TCP 5601 | OpenSearch Dashboards (optional) |
 | Repo server 172.25.37.4 | All 5 RHEL servers | TCP 443, 80 | Update activity (requested by Cloud & Core, Aug 12) |
@@ -201,8 +209,8 @@ The original phase ordering (deploy VMs → import templates → connect ATMs) a
 
 Before deploying any VMs or splitting compose files, validate that a real ATM can be monitored:
 
-1. Get **the two test ATM IPs** and their SNMP community string from the ATM/Channel Support team — the IPs are known (NCR 172.22.248.4, GRG 172.23.248.6 at 4 Kilo Building); the community string is still required
-2. From the sandbox (or any Linux machine): `snmpwalk -v2c -c <community> 172.22.248.4 .1.3.6.1.4.1.37513` (NCR) or similar vendor OID
+1. Get **the two test ATM IPs** and their SNMP community string from the ATM/Channel Support team — the IPs are known (NCR 172.23.248.4, GRG 172.23.248.6 at 4 Kilo Building); the community string is still required
+2. From the sandbox (or any Linux machine): `snmpwalk -v2c -c <community> 172.23.248.4 .1.3.6.1.4.1.37513` (NCR) or similar vendor OID
 3. Map real OIDs to our sim OIDs — build the translation table
 4. Confirm the real ATM responds to SNMP at all (some vendors disable SNMP by default)
 
@@ -253,7 +261,7 @@ This guide is a **linear, step-by-step cookbook** — install the tools, deploy 
 - **UAT first.** Do the full install → configure → customize loop on the 2 UAT servers first (`docs/UAT_Migration_Guide.md`), because UAT is isolated and lets you make mistakes safely.
 - **Production second.** Repeat the *same* steps on the 3 production servers, with the production IPs and the three production differences (real ATMs over SNMP, real EJ logs, real ISO 8583 switch). Those differences are called out in Phases 4, 5, 6 below.
 
-Everything you do on a server is: **install Docker → clone repo → `cp .env` → `docker compose up` → verify**. The per-VM compose files are **already in the repo** (`deploy/production/`, `deploy/uat/`) with the confirmed IPs baked in — you do not hand-write them.
+Everything you do on a server is: **install Docker → clone repo → `cp .env` → `docker compose up` → verify**. The per-VM compose files are **already in the repo** (`docker-compose.yml` for VM1, `docker-compose.gateway.yml` for VM2, at the repo root) with the confirmed IPs baked in — you do not hand-write them.
 
 > Networking (VMs, VLANs, security groups, firewall) is handled by the Cloud & Core / Network / Security teams. You **verify** connectivity after each step (the checks are inline).
 
@@ -323,7 +331,7 @@ On your laptop (where the GitHub repo lives):
 
 ```bash
 mkdir -p deploy/production
-mkdir -p deploy/uat
+# UAT compose files already live at the repo root (docker-compose.yml, docker-compose.gateway.yml) — no directory needed
 ```
 
 ### Step 4.3.2 — APPS-01 compose file (Zabbix + dashboards + reports)
@@ -333,7 +341,7 @@ Create `deploy/production/docker-compose-apps.yml`:
 ```yaml
 services:
   zabbix-server:
-    image: zabbix/zabbix-server-pgsql:rhel-6.4-latest
+    image: zabbix/zabbix-server-pgsql:ubuntu-6.4-latest
     container_name: zabbix-server
     environment:
       DB_SERVER_HOST: "172.26.18.102"
@@ -345,7 +353,7 @@ services:
     restart: unless-stopped
 
   zabbix-web:
-    image: zabbix/zabbix-web-nginx-pgsql:rhel-6.4-latest
+    image: zabbix/zabbix-web-nginx-pgsql:ubuntu-6.4-latest
     container_name: zabbix-web
     environment:
       DB_SERVER_HOST: "172.26.18.102"
@@ -361,13 +369,17 @@ services:
     restart: unless-stopped
 
   zabbix-agent:
-    image: zabbix/zabbix-agent2:rhel-6.4-latest
+    image: zabbix/zabbix-agent2:ubuntu-6.4-latest
     container_name: zabbix-agent
     network_mode: "host"
     privileged: true
     environment:
       ZBX_HOSTNAME: "Zabbix-Server-APPS01"
-      ZBX_SERVER_HOST: "127.0.0.1"
+      # Passive checks arrive from the server container via the compose bridge —
+      # allow it or the agent rejects them ("connection rejected" in agent log
+      # and red availability in Zabbix). Find the subnet with
+      # `docker network inspect <project>_default | grep Subnet`.
+      ZBX_SERVER_HOST: "127.0.0.1,172.18.0.0/16"
     restart: unless-stopped
     depends_on:
       - zabbix-server
@@ -719,8 +731,8 @@ datasources:
 
 The UAT deployment is covered in full by **`docs/UAT_Migration_Guide.md`**. In short:
 
-- `deploy/uat/docker-compose-uat-vm1.yml` — all services except OpenSearch/Dashboards (same as the current PoC, with `rhel-6.4-latest` Zabbix images and Report Portal's `OS_HOST` pointing to UAT-02's IP)
-- `deploy/uat/docker-compose-uat-vm2.yml` — OpenSearch + OpenSearch Dashboards + Filebeat + ISO 8583 Gateway
+- `docker-compose.yml` — all services except OpenSearch/Dashboards (same as the current PoC, with `ubuntu-6.4-latest` Zabbix images and Report Portal's `OS_HOST` pointing to UAT-02's IP)
+- `docker-compose.gateway.yml` — OpenSearch + OpenSearch Dashboards + Filebeat + ISO 8583 Gateway
 
 ### Step 4.3.8 — Production .env file
 
@@ -750,7 +762,7 @@ REPORT_PORTAL_PORT=8888
 openssl rand -base64 16   # Run this 4 times for 4 different passwords
 ```
 
-Create `deploy/uat/.env.uat` with similar but different passwords.
+Create `.env.uat` with similar but different passwords.
 
 ---
 
@@ -826,7 +838,7 @@ sudo swapoff -a
 ### Step 5.1.5 — Create required directories and set up .env
 
 ```bash
-cp deploy/uat/.env.uat .env
+cp .env.uat .env
 chmod 600 .env
 nano .env
 mkdir -p ej-logs
@@ -835,7 +847,7 @@ mkdir -p ej-logs
 ### Step 5.1.6 — Start OpenSearch + OpenSearch Dashboards + Filebeat
 
 ```bash
-docker compose -f deploy/uat/docker-compose-uat-vm2.yml up -d
+docker compose up -d
 
 echo "Waiting 60 seconds for OpenSearch to initialize..."
 sleep 60
@@ -859,7 +871,7 @@ ssh <your-username>@172.22.10.45
 ### Step 5.2.3 — Set up environment
 
 ```bash
-cp deploy/uat/.env.uat .env
+cp .env.uat .env
 chmod 600 .env
 nano .env
 
@@ -879,14 +891,19 @@ sudo chmod 644 filebeat.yml
 
 ### Step 5.2.5 — Start all services
 
+> **Scope note (2026-09-30):** the sim engines (`atm-sim-engine`,
+> `atm-txn-engine`, `atm-ej-engine`) and `pgadmin` below are PoC-era —
+> they do not exist in `docker-compose.yml` on `uat-prep`, and no
+> simulators run on UAT (`ENABLE_SIMULATORS=false`). The gateway lives
+> in `docker-compose.gateway.yml`, not here.
+
 ```bash
 # Build custom images
-docker compose -f deploy/uat/docker-compose-uat-vm1.yml build --no-cache \
-  atm-sim-engine atm-txn-engine atm-ej-engine state-manager \
-  report-portal iso8583-gateway
+docker compose -f docker-compose.yml build --no-cache \
+  state-manager report-portal
 
 # Start PostgreSQL first (everything depends on it)
-docker compose -f deploy/uat/docker-compose-uat-vm1.yml up -d postgres
+docker compose -f docker-compose.yml up -d postgres
 
 echo "Waiting for PostgreSQL..."
 for i in {1..30}; do
@@ -902,7 +919,7 @@ done
 docker exec -i zabbix-db psql -U zabbix -d zabbix < config/postgres/atm_custom_tables.sql
 
 # Start everything else
-docker compose -f deploy/uat/docker-compose-uat-vm1.yml up -d
+docker compose -f docker-compose.yml up -d
 sleep 60
 ```
 
@@ -912,7 +929,7 @@ sleep 60
 docker ps --format "table {{.Names}}\t{{.Status}}" | grep -v "Exited"
 ```
 
-You should see containers all showing "Up": postgres, zabbix-server, zabbix-web, zabbix-agent, mariadb, glpi, grafana, grafana-renderer, report-portal, iso8583-gateway, anomaly-detector, network-correlator, atm-sim-engine, atm-txn-engine, atm-ej-engine, state-manager, pgadmin.
+You should see containers all showing "Up": postgres, zabbix-server, zabbix-web, zabbix-agent, mariadb, glpi, grafana, grafana-renderer, report-portal, anomaly-detector, network-correlator, state-manager, cash-watcher, filebeat. (On the data VM, `docker-compose.gateway.yml` adds opensearch, opensearch-dashboards and iso8583-gateway.)
 
 ### Step 5.2.7 — Verify PostgreSQL has data
 
@@ -1128,7 +1145,7 @@ Browse to **http://172.26.18.74:8080** (`Admin` / `zabbix`).
 1. **Configuration → Templates → Import** → `config/zabbix/template_ncr_snmp.xml` and `template_grg_snmp.xml` (the SNMP-agent templates).
 2. **Configuration → Hosts → Import** → `config/zabbix/zbx_export_hosts.xml`.
 3. **Administration → Media types → Import** → `config/zabbix/zbx_export_mediatypes.xml`.
-4. Create ATM hosts with an **SNMP interface** (port 161, community = real bank community) and link the NCR/GRG SNMP template. The first two to create are the **4 Kilo Building test ATMs**: `ATM-TEST-NCR` → IP `172.22.248.4`, `ATM-TEST-GRG` → IP `172.23.248.6` (see **Phase 4** for the full walkthrough: SNMP walk, OID mapping, SNMPv3, and the firewall opening UDP 161 from APPS-01 to `172.22.248.0/24` + `172.23.248.0/24`).
+4. Create ATM hosts with an **SNMP interface** (port 161, community = real bank community) and link the NCR/GRG SNMP template. The first two to create are the **4 Kilo Building test ATMs**: `ATM-TEST-NCR` → IP `172.23.248.4`, `ATM-TEST-GRG` → IP `172.23.248.6` (see **Phase 4** for the full walkthrough: SNMP walk, OID mapping, SNMPv3, and the firewall opening UDP 161 from APPS-01 to `172.22.248.0/24` + `172.23.248.0/24`).
 
 ---
 
@@ -1186,7 +1203,7 @@ http://172.17.0.1:1161/oid/1.1.0
 
 For real ATMs, items must use **SNMP agent** type, polling UDP port 161 against the real vendor MIB:
 ```
-SNMP GET 172.22.248.4:161 .1.3.6.1.4.1.37513.1.1.0   (real NCR OID — NOT the sim's 1.1.0)
+SNMP GET 172.23.248.4:161 .1.3.6.1.4.1.37513.1.1.0   (real NCR OID — NOT the sim's 1.1.0)
 ```
 
 Two things change, not one:
@@ -1209,14 +1226,14 @@ The two real test ATMs are at the 4 Kilo Building (provided by the ATM/Channel S
 
 | ATM | Vendor | IP | Subnet |
 |---|---|---|---|
-| Test ATM 1 | NCR | 172.22.248.4 | 172.22.248.0/24 |
+| Test ATM 1 | NCR | 172.23.248.4 | 172.23.248.0/24 |
 | Test ATM 2 | GRG | 172.23.248.6 | 172.23.248.0/24 |
 
 Obtain the **SNMP community string** from the ATM team (replace `<ATM_COMMUNITY>` below). UDP 161 from APPS-01 (172.26.18.74, VLAN 4055) to both ATM subnets must be open first — see the firewall request in §3.4.
 
 ```bash
 # NCR test ATM — basic connectivity
-snmpwalk -v2c -c <ATM_COMMUNITY> 172.22.248.4 .1.3.6.1.2.1.1
+snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.4 .1.3.6.1.2.1.1
 
 # GRG test ATM — basic connectivity
 snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.6 .1.3.6.1.2.1.1
@@ -1226,7 +1243,7 @@ Then walk the vendor-specific enterprise OID (the example below is NCR; the GRG 
 
 ```bash
 # NCR enterprise OID:
-snmpwalk -v2c -c <ATM_COMMUNITY> 172.22.248.4 .1.3.6.1.4.1.37513
+snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.4 .1.3.6.1.4.1.37513
 # GRG enterprise OID (replace with the real GRG enterprise number):
 snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.6 .1.3.6.1.4.1.<GRG_ENTERPRISE>
 ```
@@ -1234,7 +1251,7 @@ snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.6 .1.3.6.1.4.1.<GRG_ENTERPRISE>
 **Save the output — it is your map:**
 
 ```bash
-snmpwalk -v2c -c <ATM_COMMUNITY> 172.22.248.4 .1.3.6.1.4.1.37513 > /tmp/ncr_atm_snmpwalk_output.txt
+snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.4 .1.3.6.1.4.1.37513 > /tmp/ncr_atm_snmpwalk_output.txt
 snmpwalk -v2c -c <ATM_COMMUNITY> 172.23.248.6 .1.3.6.1.4.1.<GRG_ENTERPRISE> > /tmp/grg_atm_snmpwalk_output.txt
 ```
 
@@ -1301,13 +1318,13 @@ Click **Update**.
 
 Create one host per test ATM, both linked to the real SNMP template:
 
-### Step 8.4.1 — NCR test ATM (172.22.248.4)
+### Step 8.4.1 — NCR test ATM (172.23.248.4)
 
 1. **Configuration → Hosts → Create host**
 2. **Host name:** `ATM-TEST-NCR | NCR | 4 Kilo Building` (convention: `<ID> | <VENDOR> | <LOCATION>`)
 3. **Host groups:** Select "Dashen Bank ATMs"
 4. **Interfaces → Add → SNMP:**
-   - IP: `172.22.248.4`
+   - IP: `172.23.248.4`
    - Port: `161`
    - SNMP version: `SNMPv2`
    - Community: `{$SNMP_COMMUNITY}`
@@ -1673,7 +1690,7 @@ INSERT INTO atm_locations VALUES
 ON CONFLICT (atm_id) DO NOTHING;
 ```
 
-Or use the web form: `http://172.26.18.74:8888/admin/atm`
+Or use the web form: `http://172.26.18.74:8888/atms`
 
 ## 11.3 Bulk Import (Full Fleet)
 
@@ -1737,7 +1754,7 @@ Manually creating hosts for 1,202 ATMs is not feasible. Two mechanisms:
 ## 12.3 What Auto-Discovery Does Not Do
 
 Auto-discovery handles Zabbix host creation only. For each newly discovered ATM, you still need:
-- **Location data** → Enter via admin form at `http://172.26.18.74:8888/admin/atm` (or bulk import, Phase 7)
+- **Location data** → Enter via admin form at `http://172.26.18.74:8888/atms` (or bulk import, Phase 7)
 - **EJ log shipping** → Configure per ATM (or use the centralized method from Phase 5)
 - **ISO 8583 transactions** → Automatic (the gateway is switch-wide, not per-ATM)
 
@@ -1934,17 +1951,17 @@ A backup that has never been restored is not verified. At least once before goin
 
 # 17. Summary of Files
 
-| Purpose | File |
-|---|---|
-| Original PoC compose | `docker-compose.yml` |
-| Production APPS-01 (Zabbix + dashboards + reports) | `deploy/production/docker-compose-apps.yml` |
-| Production DATA-01 (PostgreSQL + OpenSearch) | `deploy/production/docker-compose-data.yml` |
-| Production GWY-01 (ISO 8583 Gateway) | `deploy/production/docker-compose-gateway.yml` |
-| UAT-01 (All-in-one) | `deploy/uat/docker-compose-uat-vm1.yml` |
-| UAT-02 (OpenSearch) | `deploy/uat/docker-compose-uat-vm2.yml` |
-| Production env vars | `deploy/production/.env.production` |
-| UAT env vars | `deploy/uat/.env.uat` |
-| Production Grafana datasources | `config/grafana/datasources-production.yml` |
+| Purpose | File | Branch |
+|---|---|---|
+| Original PoC compose | `docker-compose.yml` | main / uat-prep |
+| Production APPS-01 (Zabbix + dashboards + reports) | `deploy/production/docker-compose-apps.yml` | production |
+| Production DATA-01 (PostgreSQL + OpenSearch) | `deploy/production/docker-compose-data.yml` | production |
+| Production GWY-01 (ISO 8583 Gateway) | `deploy/production/docker-compose-gateway.yml` | production |
+| UAT-01 (All-in-one) | `docker-compose.yml` | uat-prep |
+| UAT-02 (OpenSearch) | `docker-compose.gateway.yml` | uat-prep |
+| Production env vars | `deploy/production/.env.production` | production |
+| UAT env vars | `.env.uat` | uat-prep |
+| Production Grafana datasources | `config/grafana/datasources-production.yml` | production |
 | PostgreSQL tuning config | `config/postgres-production/postgresql-custom.conf` |
 | Filebeat config | `filebeat.yml` |
 | Database schema + seed data | `config/postgres/atm_custom_tables.sql` |

@@ -1,0 +1,40 @@
+# Mock-lab directory seed (TEST CREDENTIALS ONLY — never use outside this lab).
+# Shape mirrors what the bank AD integration will use: two role groups with
+# member DNs. Real AD differences to revisit on switchover (see ldap README):
+#   - login attribute is `uid` here, `sAMAccountName` on AD (one-line flip/app)
+#   - membership here is groupOfNames/member; AD also offers memberOf
+# Applied automatically by osixia/openldap at first start from the mounted file.
+
+dn: ou=users,dc=atmmon,dc=local
+objectClass: organizationalUnit
+ou: users
+
+dn: ou=groups,dc=atmmon,dc=local
+objectClass: organizationalUnit
+ou: groups
+
+dn: cn=ATM-Operators,ou=groups,dc=atmmon,dc=local
+objectClass: groupOfNames
+cn: ATM-Operators
+description: Read/monitor ATMs, acknowledge alerts
+member: uid=ops1,ou=users,dc=atmmon,dc=local
+
+dn: cn=ATM-Admins,ou=groups,dc=atmmon,dc=local
+objectClass: groupOfNames
+cn: ATM-Admins
+description: Full administration
+member: uid=admin1,ou=users,dc=atmmon,dc=local
+
+dn: uid=ops1,ou=users,dc=atmmon,dc=local
+objectClass: inetOrgPerson
+uid: ops1
+cn: Operator One
+sn: One
+userPassword: OpsPass123!
+
+dn: uid=admin1,ou=users,dc=atmmon,dc=local
+objectClass: inetOrgPerson
+uid: admin1
+cn: Admin One
+sn: One
+userPassword: AdminPass123!

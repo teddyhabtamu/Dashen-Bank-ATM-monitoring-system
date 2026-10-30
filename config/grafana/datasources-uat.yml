@@ -2,26 +2,37 @@ apiVersion: 1
 
 datasources:
   - name: Zabbix-ATM
+    uid: Zabbix-ATM
     type: alexanderzobnin-zabbix-datasource
     access: proxy
     url: http://172.22.10.45:8080/api_jsonrpc.php
     jsonData:
-      username: Admin
+      username: $GF_ZBX_USER
     secureJsonData:
-      password: zabbix
+      # Injected from GF_ZBX_PASSWORD (== ZBX_PASS); never commit the real one.
+      password: $GF_ZBX_PASSWORD
 
   - name: ATM-Transactions
+    uid: ATM-Transactions
     type: postgres
     url: 172.22.10.45:5432
-    database: zabbix
+    # The portal's tables live here since the split. Leaving this on "zabbix"
+    # does not error and does not look wrong - the dashboards simply render
+    # frozen data, which is worse, because a dashboard is how you notice that
+    # something has stopped. This is a reader, and readers were not covered by
+    # the service inventory: the six writers were checked, this was not.
+    database: portal
     user: zabbix
     secureJsonData:
-      password: <uat-postgres-password>
+      # Injected from the GF_PG_PASSWORD container env (== DB_PASS) at startup
+      # so no real password is ever committed. See docker-compose.yml.
+      password: $GF_PG_PASSWORD
     jsonData:
       sslmode: disable
       postgresVersion: 1500
 
   - name: EJ-OpenSearch
+    uid: EJ-Elasticsearch
     type: elasticsearch
     url: http://172.22.10.60:9200
     jsonData:

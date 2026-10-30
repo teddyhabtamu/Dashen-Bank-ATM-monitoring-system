@@ -1,7 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Schedule Reports — Admin{% endblock %}
+{% block title %}Schedule Reports — ATM Monitoring{% endblock %}
 {% block extra_style %}
 .modal{background:#fff;border-radius:14px;width:540px;max-width:94vw;max-height:88vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.2);animation:modalIn .25s ease}
+/* Compact schedule modal: every field reachable without scrolling the modal
+   on normal desktop heights (dropdowns still flip up when space is short). */
+#scheduleModal .form-grid{gap:10px;padding:18px 24px 12px}
+#scheduleModal .form-group{margin-bottom:2px}
+#scheduleModal .form-group label{margin-bottom:4px}
+#scheduleModal .cron-help{margin-top:2px}
+#scheduleModal #recipientHints{margin-top:2px}
+#scheduleModal #recipientMatches{margin-top:4px}
+#scheduleModal .form-actions{padding:6px 24px 18px;margin-top:2px}
 @keyframes modalIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
 .modal-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid #EEF1F6}
 .modal-header h2{font-size:16px;font-weight:700;color:#012169}
@@ -20,6 +29,14 @@
 .toggle-switch input:checked+.toggle-slider:before{transform:translateX(16px)}
 .cron-help{font-size:10px;color:#94A3B8;margin-top:4px;line-height:1.5}
 .cron-help code{background:#F1F5F9;padding:1px 5px;border-radius:3px;font-size:10px}
+/* ── Outlook-style recipient tags ── */
+.recip-editor{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid #E4E9F1;border-radius:8px;padding:6px 8px;cursor:text;background:#fff}
+.recip-editor:focus-within{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
+.recip-tags{display:flex;flex-wrap:wrap;gap:6px}
+.recip-tag{display:inline-flex;align-items:center;gap:6px;background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF;border-radius:16px;padding:3px 6px 3px 10px;font-size:12px;max-width:280px}
+.recip-tag span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recip-tag button{border:none;background:#DBEAFE;color:#1E40AF;border-radius:50%;width:18px;height:18px;line-height:1;cursor:pointer;font-size:13px;font-weight:700;padding:0}
+#recipInput{border:none;outline:none;flex:1;min-width:140px;font-size:13px;font-family:inherit;padding:4px 2px}
 
 /* ── Kebab menu ── */
 .kebab-wrap{position:relative;text-align:center}
@@ -79,6 +96,17 @@
 </div>
 <div class="page-content">
 
+{% if failed %}
+<div style="background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px">
+  <strong>{{ failed|length }} schedule{{ 's' if failed|length != 1 }} failing:</strong>
+  {% for f in failed %}
+  <div style="margin-top:6px">{{ f[1] }} — last run did not deliver.
+    {% if f[6] %}It is enabled: use ⋮ → <strong>Send now</strong> to retry immediately, or wait for the next run. The banner clears on success.
+    {% else %}It is currently <strong>disabled</strong>: re-enable it to resume.{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
 <div class="card">
   <div class="card-header">
     <h2>All Schedules</h2>
@@ -105,9 +133,9 @@
           {% for s in schedules %}
           <tr style="--i: {{ loop.index0 }}">
             <td style="font-weight:600;color:#0F172A">{{ s[1] }}</td>
-            <td>{{ s[2] }}</td>
+            <td>{{ type_labels.get(s[2], s[2]) }}</td>
             <td><span class="badge">{{ s[3]|upper }}</span></td>
-            <td style="font-family:monospace;font-size:11px">{{ s[4] }}</td>
+            <td style="font-family:monospace;font-size:11px"><span data-cron="{{ s[4] }}">{{ s[4] }}</span><div class="cron-human" style="font-family:inherit;font-size:10px;color:#64748B;margin-top:2px"></div></td>
             <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ s[5] }}">{{ s[5] }}</td>
             <td style="text-align:center">
               <label class="toggle-switch">
@@ -115,10 +143,11 @@
                 <span class="toggle-slider"></span>
               </label>
             </td>
-            <td style="font-size:11px;color:#64748B">{{ s[7]|string if s[7] else '—' }}</td>
+            <td style="font-size:11px;color:#64748B">{{ s[7]|string if s[7] else '—' }}{% if s|length > 8 and s[8] == 'failed' %} <span class="badge" style="background:#FECACA;color:#991B1B" title="{{ s[9] or 'delivery failed' }}">FAILED</span>{% endif %}</td>
             <td style="text-align:center" class="kebab-wrap">
               <button class="kebab-btn" onclick="toggleKebab(event,this)" title="Actions">&#8942;</button>
               <div class="kebab-menu">
+                <button class="kebab-item" data-id="{{ s[0] }}" onclick="sendNowSchedule(this.dataset.id)"><i data-lucide="send" style="width:14px;height:14px"></i> Send now</button>
                 <button class="kebab-item edit" data-id="{{ s[0] }}" onclick="editSchedule(this.dataset.id)"><i data-lucide="pencil" style="width:14px;height:14px"></i> Edit</button>
                 <button class="kebab-item delete" data-id="{{ s[0] }}" onclick="deleteSchedule(this.dataset.id)"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button>
               </div>
@@ -150,11 +179,11 @@
       <div class="sched-card-info">
         <div>
           <div class="sched-card-label">Report</div>
-          <div class="sched-card-value">{{ s[2] }}</div>
+          <div class="sched-card-value">{{ type_labels.get(s[2], s[2]) }}</div>
         </div>
         <div>
           <div class="sched-card-label">Last Run</div>
-          <div class="sched-card-value">{{ s[7]|string if s[7] else '—' }}</div>
+          <div class="sched-card-value">{{ s[7]|string if s[7] else '—' }}{% if s|length > 8 and s[8] == 'failed' %} <span class="badge" style="background:#FECACA;color:#991B1B">FAILED</span>{% endif %}</div>
         </div>
       </div>
       <div class="sched-card-cron">{{ s[4] }}</div>
@@ -192,13 +221,14 @@
         </div>
         <div class="form-group">
           <label>Report Type</label>
-          <select name="report_type" id="schedType">
+          <select name="report_type" id="schedType" onchange="togglePeriodVisibility()">
             <option value="transaction">Transaction Summary</option>
             <option value="cash">Cash Level & Dispensing</option>
             <option value="error">Error & Incident</option>
             <option value="performance">ATM Performance</option>
             <option value="vendor">Vendor Performance</option>
             <option value="availability">ATM Availability</option>
+            <option value="outage">Daily ATM Outage</option>
             <option value="full">Complete Management Report</option>
           </select>
         </div>
@@ -206,6 +236,7 @@
           <label>Format</label>
           <select name="format" id="schedFormat">
             <option value="pdf">PDF</option>
+            <option value="excel">Excel</option>
             <option value="csv">CSV</option>
           </select>
         </div>
@@ -236,12 +267,37 @@
         </div>
         <div class="form-group full">
           <label>Recipients</label>
-          <input type="text" name="recipients" id="schedRecipients" required placeholder="manager@bank.com, ops@bank.com">
+          <div class="recip-editor" id="recipEditor" onclick="document.getElementById('recipInput').focus()">
+            <div class="recip-tags" id="recipTags"></div>
+            <input type="text" id="recipInput" placeholder="Type an address, then comma or Enter…" autocomplete="off" oninput="suggestRecipients(this.value)">
+          </div>
+          <input type="hidden" name="recipients" id="schedRecipients">
+          <div id="recipientHints" style="font-size:11px;color:#64748B;margin-top:4px">Type any address, or pick a system user below.</div>
+          <div id="recipientMatches" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
         </div>
-        <div class="form-group full">
-          <label>Extra Parameters (optional)</label>
-          <input type="text" name="params" id="schedParams" placeholder="days=7, atm=all" style="font-family:monospace">
+        <div class="form-group" id="schedPeriodWrap">
+          <label>Reporting Period</label>
+          <select id="schedDays">
+            <option value="today">Today (so far)</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="this_week">This week (so far)</option>
+            <option value="last_week">Last week</option>
+            <option value="this_month">This month (so far)</option>
+            <option value="last_month">Last month</option>
+            <option value="1">Last 24 hours</option>
+            <option value="7" selected>Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+          </select>
+          <div style="font-size:11px;color:#64748B;margin-top:4px">Calendar presets are calculated in EAT each run; &ldquo;so far&rdquo; ends at the current time.</div>
         </div>
+        <div class="form-group">
+          <label>ATM</label>
+          <select id="schedAtm">
+            <option value="all" selected>All ATMs</option>
+          </select>
+        </div>
+        <input type="hidden" name="params" id="schedParams">
       </div>
       <div class="form-actions">
         <button type="button" class="btn btn-outline" onclick="closeScheduleModal()">Cancel</button>
@@ -253,7 +309,7 @@
 
 <div class="modal-overlay" id="deleteModal" onclick="if(event.target===this)closeDeleteModal()">
   <div class="modal-confirm">
-    <div class="modal-confirm-icon">
+    <div class="modal-confirm-icon" id="deleteModalIcon">
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
     </div>
     <h3 id="deleteModalTitle">Delete Schedule</h3>
@@ -334,8 +390,119 @@ function syncCustomSelects(){
   });
 }
 
-function openScheduleModal(data){
-  data = data || {};
+var _recipTimer = null;
+var _recipTags = [];
+function _recipSync(){
+  document.getElementById('schedRecipients').value = _recipTags.join(', ');
+}
+function _recipValid(email){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
+function renderRecipTags(){
+  var box = document.getElementById('recipTags');
+  box.innerHTML = '';
+  _recipTags.forEach(function(email, idx){
+    var chip = document.createElement('span');
+    chip.className = 'recip-tag';
+    var label = document.createElement('span');
+    label.textContent = email;
+    var x = document.createElement('button');
+    x.type = 'button';
+    x.textContent = '×';
+    x.title = 'Remove';
+    x.onclick = function(){ _recipTags.splice(idx, 1); _recipSync(); renderRecipTags(); };
+    chip.appendChild(label);
+    chip.appendChild(x);
+    box.appendChild(chip);
+  });
+}
+function addRecipTag(raw){
+  var email = String(raw || '').trim().replace(/[;,]+$/, '').trim();
+  if(!email) return false;
+  if(!_recipValid(email)){ showToast('"' + email + '" is not a valid email address.', 'error', 5000); return false; }
+  if(_recipTags.indexOf(email) === -1) _recipTags.push(email);
+  _recipSync(); renderRecipTags();
+  return true;
+}
+function commitRecipInput(opts){
+  opts = opts || {};
+  var input = document.getElementById('recipInput');
+  var parts = input.value.split(/[,;\n]+/);
+  var leftover = [];
+  parts.forEach(function(p){
+    var email = String(p || '').trim().replace(/[;,]+$/, '').trim();
+    if(!email) return;
+    if(!_recipValid(email)){
+      if(!opts.quiet) showToast('"' + email + '" is not a valid email address.', 'error', 5000);
+      leftover.push(email);
+    } else if(_recipTags.indexOf(email) === -1){
+      _recipTags.push(email);
+    }
+  });
+  _recipSync(); renderRecipTags();
+  // Keep uncommitted text for fixing; never eat the user's typing.
+  // (The suggestion box is left alone here — clearing it on blur is what
+  // used to destroy suggestion clicks between mousedown and mouseup.)
+  input.value = leftover.join(', ');
+  if(!opts.keepMatches) document.getElementById('recipientMatches').innerHTML = '';
+  return leftover.length === 0;
+}
+document.addEventListener('DOMContentLoaded', function(){
+  loadSchedAtms();
+  var input = document.getElementById('recipInput');
+  if(!input) return;
+  input.addEventListener('keydown', function(e){
+    if(e.key === 'Enter' || e.key === ',' || e.key === ';' || e.key === 'Tab'){
+      if(input.value.trim()){ e.preventDefault(); commitRecipInput(); }
+    } else if(e.key === 'Backspace' && !input.value && _recipTags.length){
+      _recipTags.pop(); _recipSync(); renderRecipTags();
+    }
+  });
+  input.addEventListener('paste', function(){
+    setTimeout(commitRecipInput, 0);
+  });
+  input.addEventListener('blur', function(){ if(input.value.trim()) commitRecipInput({quiet: true, keepMatches: true}); });
+  var form = document.getElementById('scheduleForm');
+  if(form) form.addEventListener('submit', function(e){
+    buildSchedParams();
+    commitRecipInput();
+    if(!_recipTags.length){
+      e.preventDefault();
+      showToast('Add at least one recipient.', 'error', 5000);
+      input.focus();
+    }
+  });
+});
+function suggestRecipients(q){
+  clearTimeout(_recipTimer);
+  var box = document.getElementById('recipientMatches');
+  var tail = (q || '').split(',').pop().trim();
+  if(tail.length < 2){ box.innerHTML = ''; return; }
+  _recipTimer = setTimeout(function(){
+    fetch('/admin/users/emails?q=' + encodeURIComponent(tail))
+    .then(function(r){ return r.json(); })
+    .then(function(users){
+      box.innerHTML = '';
+      users.forEach(function(u){
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn btn-outline';
+        b.style.cssText = 'padding:4px 10px;font-size:11px';
+        b.textContent = u.username + ' <' + u.email + '>';
+        // mousedown (not click): preventDefault keeps focus in the typing
+        // box, so no blur fires and this button survives to receive the click.
+        b.onmousedown = function(e){ e.preventDefault(); };
+        b.onclick = function(){
+          addRecipTag(u.email);
+          document.getElementById('recipInput').value = '';
+          document.getElementById('recipInput').focus();
+          box.innerHTML = '';
+        };
+        box.appendChild(b);
+      });
+    });
+  }, 250);
+}
+
+function openScheduleModal(data) {  data = data || {};
   currentScheduleData = data;
   document.getElementById('scheduleModalTitle').textContent = data.id ? 'Edit Schedule' : 'New Schedule';
   document.getElementById('scheduleId').value = data.id || '';
@@ -346,7 +513,11 @@ function openScheduleModal(data){
   document.getElementById('schedPreset').value = '';
   document.getElementById('cronDescription').textContent = describeCron(data.schedule || '');
   document.getElementById('schedRecipients').value = data.recipients || '';
-  document.getElementById('schedParams').value = data.params || '';
+  _recipTags = String(data.recipients || '').split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+  renderRecipTags();
+  document.getElementById('recipInput').value = '';
+  setSchedParams(String(data.params || ''));
+  togglePeriodVisibility();
   document.getElementById('scheduleModal').classList.add('show');
   setTimeout(syncCustomSelects, 10);
 }
@@ -387,13 +558,169 @@ function describeCron(cron){
   }
   if(hour !== '*' && min === '0') parts.push('on the hour');
   if(dom === '*' && dow === '*' && mon === '*') parts.push('every day');
-  return parts.length ? 'Runs ' + parts.join(', ') + '.' : '';
+  return parts.length ? 'Runs ' + parts.join(', ') + ' (EAT).' : '';
 }
 
+function parseSchedParams(str){
+  var out = {period: null, days: '7', atm: 'all'};
+  var p = String(str || '').match(/period\s*=\s*([a-z_]+)/);
+  if(p) out.period = p[1];
+  var m = String(str || '').match(/days\s*=\s*(\d+)/);
+  if(!out.period && m && ['1', '7', '30', '90'].indexOf(m[1]) !== -1) out.days = m[1];
+  var a = String(str || '').match(/atm\s*=\s*([^,\s]+)/);
+  if(a && a[1]) out.atm = a[1];
+  return out;
+}
+function setSchedParams(str){
+  var p = parseSchedParams(str);
+  var days = document.getElementById('schedDays');
+  var atm = document.getElementById('schedAtm');
+  if(days) days.value = (p.period && Array.prototype.some.call(days.options, function(o){ return o.value === p.period; })) ? p.period : p.days;
+  if(atm){
+    var has = Array.prototype.some.call(atm.options, function(o){ return o.value === p.atm; });
+    atm.value = has ? p.atm : 'all';
+  }
+  if(typeof syncCustomSelects === 'function') syncCustomSelects();
+}
+function buildSchedParams(){
+  var typeEl = document.getElementById('schedType');
+  var type = typeEl ? typeEl.value : '';
+  var daysEl = document.getElementById('schedDays');
+  var atmEl = document.getElementById('schedAtm');
+  var value = (daysEl && daysEl.value) || '7';
+  var atm = (atmEl && atmEl.value) || 'all';
+  var calendar = ['today', 'yesterday', 'this_week', 'last_week', 'this_month', 'last_month'];
+  var periodParam = calendar.indexOf(value) !== -1 ? 'period=' + value : 'days=' + value;
+  if(type === 'outage') periodParam = 'days=1';
+  document.getElementById('schedParams').value = periodParam + ', atm=' + atm;
+}
+function togglePeriodVisibility(){
+  var typeEl = document.getElementById('schedType');
+  var type = typeEl ? typeEl.value : '';
+  var wrap = document.getElementById('schedPeriodWrap');
+  // Daily Outage is a right-now snapshot — a period picker would be a lie.
+  if(wrap) wrap.style.display = type === 'outage' ? 'none' : '';
+}
+var _schedAtmsLoaded = false;
+function loadSchedAtms(){
+  if(_schedAtmsLoaded) return;
+  _schedAtmsLoaded = true;
+  fetch('/api/atms')
+    .then(function(r){ return r.json(); })
+    .then(function(atms){
+      if(!atms || atms.error || !atms.length) return;
+      var sel = document.getElementById('schedAtm');
+      if(!sel) return;
+      atms.forEach(function(a){
+        sel.add(new Option(a.id + ' — ' + a.branch, a.id));
+      });
+      rebuildCustomSelect(sel);
+    })
+    .catch(function(){});
+}
+// Rebuild the custom dropdown items after options change (base.js only
+// builds them once at page load).
+function rebuildCustomSelect(sel){
+  var wrap = sel.closest('.cust-select');
+  if(!wrap) return;
+  var trig = wrap.querySelector('.cust-trigger');
+  var drop = wrap.querySelector('.cust-drop');
+  if(!trig || !drop) return;
+  trig.textContent = sel.options[sel.selectedIndex].text;
+  drop.innerHTML = '';
+  // Search from a handful of options upward: at 1300 ATMs this list is long,
+  // and even today it saves scrolling past All + 4.
+  if(sel.length > 3){
+    drop.classList.add('has-search');
+    var sw = document.createElement('div');
+    sw.className = 'cust-search';
+    var searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search…';
+    searchInput.setAttribute('autocomplete', 'off');
+    searchInput.addEventListener('click', function(e){ e.stopPropagation(); });
+    (function(si, dr){
+      si.addEventListener('input', function(){
+        var q = this.value.trim().toLowerCase(), visible = 0;
+        dr.querySelectorAll('.cust-opt').forEach(function(o){
+          var match = o.textContent.toLowerCase().indexOf(q) > -1;
+          o.style.display = match ? '' : 'none';
+          if(match) visible++;
+        });
+        var em = dr.querySelector('.cust-empty');
+        if(em) em.style.display = visible ? 'none' : 'block';
+      });
+    })(searchInput, drop);
+    sw.appendChild(searchInput);
+    drop.appendChild(sw);
+    var em = document.createElement('div');
+    em.className = 'cust-empty';
+    em.textContent = 'No matches';
+    em.style.display = 'none';
+    drop.appendChild(em);
+  }
+  for(var i = 0; i < sel.length; i++){
+    (function(idx){
+      var o = document.createElement('div');
+      o.className = 'cust-opt' + (idx === sel.selectedIndex ? ' sel' : '');
+      o.textContent = sel.options[idx].text;
+      o.addEventListener('click', function(){
+        sel.selectedIndex = idx;
+        trig.textContent = sel.options[idx].text;
+        drop.querySelectorAll('.cust-opt').forEach(function(c){ c.classList.remove('sel'); });
+        o.classList.add('sel');
+        trig.classList.remove('open');
+        drop.classList.remove('show');
+        sel.dispatchEvent(new Event('change'));
+      });
+      drop.appendChild(o);
+    })(i);
+  }
+}
+// Modal-aware flip for EVERY select in this modal (not just rebuilt ones):
+// after base.js positions the drop against the viewport, flip it upward
+// when it would spill past the modal's own bounds (the modal scrolls, so a
+// downward drop forces scrolling to reach options). Capture listener runs
+// before base's handler despite its stopPropagation.
+document.addEventListener('DOMContentLoaded', function(){
+  var modal = document.getElementById('scheduleModal');
+  if(!modal) return;
+  modal.addEventListener('click', function(e){
+    var trig = e.target.closest ? e.target.closest('.cust-trigger') : null;
+    if(!trig) return;
+    var wrap = trig.closest('.cust-select');
+    var drop = wrap ? wrap.querySelector('.cust-drop') : null;
+    if(!drop) return;
+    setTimeout(function(){
+      if(!drop.classList.contains('show')) return;
+      var box = modal.querySelector('.modal').getBoundingClientRect();
+      var dr = drop.getBoundingClientRect();
+      var flip = dr.bottom > box.bottom - 8 || dr.top < box.top + 8;
+      drop.classList.toggle('up', flip);
+      trig.classList.toggle('up', flip);
+    }, 0);
+  }, true);
+});
 function closeScheduleModal(){
   document.getElementById('scheduleModal').classList.remove('show');
 }
+// Humanize each row's cron on load (same describeCron as the modal).
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('[data-cron]').forEach(function(el){
+    var human = el.parentElement ? el.parentElement.querySelector('.cron-human') : null;
+    if(human && typeof describeCron === 'function') human.textContent = describeCron(el.dataset.cron);
+  });
+});
 
+function sendNowSchedule(id){
+  if(!confirm('Send this report now to its recipients?')) return;
+  fetch('/admin/schedules/send-now', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+    body: JSON.stringify({id: id})})
+  .then(function(r){ return r.json(); })
+  .then(function(d){ showToast(d.message || (d.success ? 'Sending.' : 'Failed.'), d.success ? 'success' : 'error', 8000); })
+  .catch(function(){ showToast('Network error. Please try again.', 'error', 8000); });
+}
 function toggleSchedule(id){
   fetch('/admin/schedules/toggle', {
     method: 'POST',
@@ -410,6 +737,7 @@ function toggleSchedule(id){
 
 function deleteSchedule(id){
   deleteTargetId = id;
+  setConfirmMode('delete');
   document.getElementById('deleteModalTitle').textContent = 'Delete Schedule';
   document.getElementById('deleteModalText').textContent = 'Are you sure you want to delete this schedule? This action cannot be undone.';
   document.getElementById('deleteConfirmBtn').onclick = function(){
@@ -438,6 +766,62 @@ function editSchedule(id){
     .then(function(r){ return r.json(); })
     .then(function(d){ openScheduleModal(d); })
     .catch(function(){ showToast('Error loading schedule', 'error'); });
+}
+// The confirm modal serves two masters: Delete (red trash) and Send now
+// (navy paper plane). Mode is set explicitly every time it opens, so the
+// red never leaks onto a harmless action.
+var _TRASH_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>';
+var _SEND_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#012169" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
+function setConfirmMode(mode){
+  var icon = document.getElementById('deleteModalIcon');
+  var btn = document.getElementById('deleteConfirmBtn');
+  if(!icon || !btn) return;
+  if(mode === 'send'){
+    icon.innerHTML = _SEND_SVG;
+    icon.style.background = '#EEF2FF';
+    icon.style.color = '#012169';
+    btn.style.background = '#012169';
+  } else {
+    icon.innerHTML = _TRASH_SVG;
+    icon.style.background = '';
+    icon.style.color = '';
+    btn.style.background = '#DC2626';
+  }
+}
+function sendNowSchedule(id){
+  fetch('/admin/schedules/get?id=' + id)
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.error){ showToast('Schedule not found.', 'error'); return; }
+      document.getElementById('deleteModalTitle').textContent = 'Send Report Now';
+      document.getElementById('deleteModalText').textContent =
+        'Send "' + (d.name || 'this report') + '" (' + (d.format || '').toUpperCase() +
+        ') now to ' + (d.recipients || 'its recipients') + '?';
+      setConfirmMode('send');
+      var btn = document.getElementById('deleteConfirmBtn');
+      btn.textContent = 'Send Now';
+      btn.onclick = function(){ doSendNow(id); };
+      document.getElementById('deleteModal').classList.add('show');
+    })
+    .catch(function(){ showToast('Error loading schedule', 'error'); });
+}
+function doSendNow(id){
+  var btn = document.getElementById('deleteConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  fetch('/admin/schedules/send-now', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+    body: JSON.stringify({id: id})})
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    closeDeleteModal();
+    btn.disabled = false; btn.textContent = 'Send Now';
+    showToast(d.message || (d.success ? 'Sending.' : 'Failed.'), d.success ? 'success' : 'error', 8000);
+  })
+  .catch(function(){
+    closeDeleteModal();
+    btn.disabled = false; btn.textContent = 'Send Now';
+    showToast('Network error. Please try again.', 'error', 8000);
+  });
 }
 </script>
 {% endblock %}

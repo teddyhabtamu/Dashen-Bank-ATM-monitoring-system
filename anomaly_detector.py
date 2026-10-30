@@ -39,6 +39,14 @@ FAILURE_WINDOW   = int(os.environ.get('FAILURE_WINDOW',   '15'))   # minutes
 FAILURE_THRESHOLD= float(os.environ.get('FAILURE_THRESHOLD','0.4'))# 40%
 OFFHOURS_MULT    = float(os.environ.get('OFFHOURS_MULT',   '3.0')) # 3x normal volume
 
+# Simulator guard (SYSTEM_REVIEW C4): when simulators are off (UAT/prod),
+# stray simulator rows must never feed anomaly rules — this covers both the
+# txn-engine feed (source='SIMULATOR') and the gateway simulation loop
+# (source='ISO8583_SIM'). When enabled (lab), sim data IS the demo feed,
+# so include everything.
+ENABLE_SIMULATORS = os.environ.get('ENABLE_SIMULATORS', 'false').lower() in ('1', 'true', 'yes', 'on')
+SIM_FILTER = "" if ENABLE_SIMULATORS else "AND (source IS NULL OR source NOT IN ('SIMULATOR', 'ISO8583_SIM'))"
+
 def get_db():
     return psycopg2.connect(
         host=DB_HOST, dbname=DB_NAME,
@@ -110,7 +118,7 @@ def insert_anomaly(conn, cur, atm_id, branch, anomaly_type, severity,
 
 def check_velocity(conn, cur):
     """Rule 1: Same card, 3+ withdrawals within VELOCITY_WINDOW minutes."""
-    cur.execute("""
+    cur.execute(f"""
         SELECT
             atm_id, branch, card_masked,
             COUNT(*) AS cnt,
@@ -120,6 +128,7 @@ def check_velocity(conn, cur):
         AND status = 'APPROVED'
         AND recorded_at >= NOW() - INTERVAL %s
         AND card_masked IS NOT NULL
+        {SIM_FILTER}
         GROUP BY atm_id, branch, card_masked
         HAVING COUNT(*) >= %s
     """, (f"{VELOCITY_WINDOW} minutes", VELOCITY_LIMIT))
@@ -134,7 +143,7 @@ def check_velocity(conn, cur):
 
 def check_failure_spike(conn, cur):
     """Rule 2: ATM failure rate > FAILURE_THRESHOLD in last FAILURE_WINDOW minutes."""
-    cur.execute("""
+    cur.execute(f"""
         SELECT
             atm_id, branch,
             COUNT(*) AS total,
@@ -143,6 +152,7 @@ def check_failure_spike(conn, cur):
                 THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) AS fail_rate
         FROM atm_transactions
         WHERE recorded_at >= NOW() - INTERVAL %s
+        {SIM_FILTER}
         GROUP BY atm_id, branch
         HAVING COUNT(*) >= 5
         AND (SUM(CASE WHEN status IN ('DECLINED','ERROR','TIMEOUT') THEN 1 ELSE 0 END)
@@ -159,7 +169,7 @@ def check_failure_spike(conn, cur):
 
 def check_large_withdrawal(conn, cur):
     """Rule 3: Single withdrawal above LARGE_TXN_ETB threshold."""
-    cur.execute("""
+    cur.execute(f"""
         SELECT
             atm_id, branch, card_masked, amount, recorded_at
         FROM atm_transactions
@@ -167,6 +177,7 @@ def check_large_withdrawal(conn, cur):
         AND status = 'APPROVED'
         AND amount >= %s
         AND recorded_at >= NOW() - INTERVAL '2 minutes'
+        {SIM_FILTER}
     """, (LARGE_TXN_ETB,))
     hits = cur.fetchall()
     for atm_id, branch, card, amount, ts in hits:
@@ -179,12 +190,13 @@ def check_large_withdrawal(conn, cur):
 
 def check_rapid_sequential(conn, cur):
     """Rule 4: Same card 5+ transactions in 5 min (possible skimming/cloning)."""
-    cur.execute("""
+    cur.execute(f"""
         SELECT
             atm_id, branch, card_masked, COUNT(*) AS cnt
         FROM atm_transactions
         WHERE recorded_at >= NOW() - INTERVAL %s
         AND card_masked IS NOT NULL
+        {SIM_FILTER}
         GROUP BY atm_id, branch, card_masked
         HAVING COUNT(*) >= %s
     """, (f"{RAPID_WINDOW} minutes", RAPID_LIMIT))
@@ -203,11 +215,12 @@ def check_offhours_spike(conn, cur):
     if not (0 <= now.hour <= 5):
         return  # Only run during off-hours
 
-    cur.execute("""
+    cur.execute(f"""
         WITH current_hour AS (
             SELECT atm_id, branch, COUNT(*) AS current_cnt
             FROM atm_transactions
             WHERE recorded_at >= DATE_TRUNC('hour', NOW())
+            {SIM_FILTER}
             GROUP BY atm_id, branch
         ),
         historical_avg AS (
@@ -220,6 +233,7 @@ def check_offhours_spike(conn, cur):
                 FROM atm_transactions
                 WHERE EXTRACT(HOUR FROM recorded_at) = EXTRACT(HOUR FROM NOW())
                 AND recorded_at BETWEEN NOW() - INTERVAL '30 days' AND NOW() - INTERVAL '1 day'
+                {SIM_FILTER}
                 GROUP BY atm_id, branch, DATE_TRUNC('hour', recorded_at)
             ) sub
             GROUP BY atm_id, branch
@@ -352,6 +366,12 @@ def run():
                 pass
         except Exception as e:
             log.error(f"Scan error: {e}", exc_info=True)
+            try:
+                # A failed statement poisons the whole transaction; roll back
+                # so the next cycle starts clean instead of failing forever.
+                conn.rollback()
+            except Exception:
+                pass
 
         time.sleep(CHECK_INTERVAL)
 

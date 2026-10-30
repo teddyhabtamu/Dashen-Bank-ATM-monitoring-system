@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}My Account — ATM Monitoring{% endblock %}
+{% block extra_style %}
+.pw-wrap{position:relative;display:flex;align-items:center}
+.pw-wrap input{padding-right:36px}
+.pw-toggle{position:absolute;right:8px;background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:#94A3B8;display:flex;align-items:center;line-height:1}
+.field-err{display:none;font-size:11px;color:#DC2626;margin-top:4px}
+.field-err.show{display:block}
+input.field-bad{border-color:#FCA5A5 !important}
+.pw-meter{height:5px;background:#F1F5F9;border-radius:3px;margin-top:8px;overflow:hidden}
+.pw-meter-fill{height:100%;width:0;border-radius:3px;transition:width .2s,background .2s}
+.pw-meter-label{font-size:11px;margin-top:4px;min-height:14px;color:#64748B}
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="user"></i></div>
+  <div>
+    <h1 class="page-title">My Account</h1>
+    {% if must_change %}
+    <p class="page-subtitle" style="color:#B45309">You must change the password you were given before continuing.</p>
+    {% else %}
+    <p class="page-subtitle">Signed in as <strong>{{ username }}</strong>{% if role %} ({{ role|capitalize }}){% endif %}{% if email %} · {{ email }}{% endif %} — update your password anytime.</p>
+    {% endif %}
+  </div>
+</div>
+<div class="page-content">
+<div class="card" style="max-width:560px">
+  <div class="card-header"><h2>Change Password</h2></div>
+  <form method="post" action="/profile/password" onsubmit="return validateProfile(this)" style="padding:24px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Current Password</label>
+        <div class="pw-wrap">
+          <input type="password" name="current_password" required autocomplete="current-password" oninput="clearFieldErr(this)">
+          <button type="button" class="pw-toggle" onclick="togglePW(this)" tabindex="-1" aria-label="Toggle password visibility"><i data-lucide="eye" style="width:15px;height:15px"></i></button>
+        </div>
+        <div class="field-err" data-err-for="current_password"></div>
+      </div>
+      <div class="form-group full">
+        <label>New Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="newPassword" name="new_password" required placeholder="Min 10 chars: UPPER + lower + digit + symbol" minlength="10" autocomplete="new-password" oninput="pwMeter(this);clearFieldErr(this)">
+          <button type="button" class="pw-toggle" onclick="togglePW(this)" tabindex="-1" aria-label="Toggle password visibility"><i data-lucide="eye" style="width:15px;height:15px"></i></button>
+        </div>
+        <div class="pw-meter"><div class="pw-meter-fill" id="profilePwFill"></div></div>
+        <div class="pw-meter-label" id="profilePwLabel"></div>
+        <div class="field-err" data-err-for="new_password"></div>
+      </div>
+      <div class="form-group full">
+        <label>Confirm New Password</label>
+        <div class="pw-wrap">
+          <input type="password" name="confirm_password" required placeholder="Repeat the new password" minlength="10" autocomplete="new-password" oninput="clearFieldErr(this)">
+          <button type="button" class="pw-toggle" onclick="togglePW(this)" tabindex="-1" aria-label="Toggle password visibility"><i data-lucide="eye" style="width:15px;height:15px"></i></button>
+        </div>
+        <div class="field-err" data-err-for="confirm_password"></div>
+      </div>
+    </div>
+    <div class="form-actions" style="padding:0;margin-top:20px">
+      <button type="submit" class="btn btn-primary">Change Password</button>
+    </div>
+  </form>
+</div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+function togglePW(btn){
+  var inp = btn.closest('.pw-wrap').querySelector('input');
+  var icon = btn.querySelector('[data-lucide]');
+  if(inp.type === 'password'){ inp.type = 'text'; icon.setAttribute('data-lucide', 'eye-off'); }
+  else { inp.type = 'password'; icon.setAttribute('data-lucide', 'eye'); }
+  lucide.createIcons();
+}
+function clearFieldErr(input){
+  input.classList.remove('field-bad');
+  var box = input.closest('form').querySelector('[data-err-for="' + input.name + '"]');
+  if(box){ box.textContent = ''; box.classList.remove('show'); }
+}
+function setFieldErr(form, name, msg){
+  var input = form.querySelector('[name="' + name + '"]');
+  var box = form.querySelector('[data-err-for="' + name + '"]');
+  if(input) input.classList.add('field-bad');
+  if(box){ box.textContent = msg; box.classList.add('show'); }
+}
+/* Same rule as the server (min 10 + all 4 classes). */
+function passwordIssues(pw){
+  pw = pw || '';
+  if(pw.length < 10) return ['at least 10 characters'];
+  var missing = [];
+  if(!/[A-Z]/.test(pw)) missing.push('UPPERCASE');
+  if(!/[a-z]/.test(pw)) missing.push('lowercase');
+  if(!/[0-9]/.test(pw)) missing.push('digits');
+  if(!/[^A-Za-z0-9]/.test(pw)) missing.push('symbols');
+  if(missing.length) return ['must include: ' + missing.join(', ')];
+  return [];
+}
+function pwMeter(input){
+  var fill = document.getElementById('profilePwFill');
+  var label = document.getElementById('profilePwLabel');
+  var pw = input.value || '';
+  var issues = passwordIssues(pw);
+  var lvl;
+  if(!issues.length) lvl = {w:'100%', c:'#16A34A', t:'Strong'};
+  else if(pw.length >= 10) lvl = {w:'55%', c:'#F59E0B', t:'Fair'};
+  else lvl = {w:'20%', c:'#DC2626', t:'Weak'};
+  fill.style.width = lvl.w; fill.style.background = lvl.c;
+  label.textContent = issues.length ? lvl.t + ' — ' + issues[0] : lvl.t;
+  label.style.color = lvl.c;
+}
+function validateProfile(form){
+  form.querySelectorAll('.field-err.show').forEach(function(b){ b.textContent = ''; b.classList.remove('show'); });
+  form.querySelectorAll('.field-bad').forEach(function(i){ i.classList.remove('field-bad'); });
+  var ok = true;
+  var cur = form.querySelector('[name="current_password"]');
+  var pw = form.querySelector('[name="new_password"]');
+  var pw2 = form.querySelector('[name="confirm_password"]');
+  if(!cur.value){ setFieldErr(form, 'current_password', 'Enter your current password.'); ok = false; }
+  var issues = passwordIssues(pw.value);
+  if(issues.length){ setFieldErr(form, 'new_password', 'Password ' + issues[0] + '.'); ok = false; }
+  if(pw.value !== pw2.value){ setFieldErr(form, 'confirm_password', 'Passwords do not match.'); ok = false; }
+  return ok;
+}
+</script>
+{% endblock %}

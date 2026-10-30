@@ -1,0 +1,605 @@
+{% extends "base.html" %}
+{% block title %}Monitoring Center — ATM Monitoring{% endblock %}
+{% block extra_style %}
+.card-header{overflow:visible !important}
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.stat-card{background:#fff;border-radius:12px;border:1px solid #EEF1F6;box-shadow:0 1px 3px rgba(1,33,105,.04);padding:16px 18px;animation:fadeSlideUp .3s ease}
+.stat-card .num{font-size:26px;font-weight:800;color:#0F172A}
+.stat-card .lbl{font-size:11px;color:#64748B;font-weight:600;margin-top:2px}
+.stat-card.up .num{color:#16A34A}
+.stat-card.down .num{color:#DC2626}
+.stat-card.prob .num{color:#D97706}
+.mc-table{width:100%;border-collapse:collapse;font-size:12px}
+.mc-table th{text-align:left;padding:10px 12px;background:#FAFBFC;color:#64748B;font-weight:700;font-size:11px;border-bottom:1px solid #EEF1F6;white-space:nowrap}
+.mc-table td{padding:10px 12px;border-bottom:1px solid #F1F5F9;vertical-align:top}
+.mc-table tr:last-child td{border-bottom:none}
+.sev{display:inline-block;padding:2px 10px;border-radius:100px;font-size:10px;font-weight:700;color:#fff;white-space:nowrap}
+.ack-y{display:inline-block;padding:2px 8px;border-radius:100px;font-size:10px;font-weight:600;background:#DCFCE7;color:#166534}
+.ack-n{display:inline-block;padding:2px 8px;border-radius:100px;font-size:10px;font-weight:600;background:#FEF9C3;color:#854D0E}
+.host-up{color:#16A34A;font-weight:700;font-size:11px}
+.host-down{color:#DC2626;font-weight:700;font-size:11px}
+.host-unk{color:#94A3B8;font-weight:700;font-size:11px}
+.filter-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.filter-row select{padding:7px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;outline:none;font-family:inherit}
+.mc-table th:last-child,.mc-table td:last-child{width:1%;white-space:nowrap;text-align:right}
+.mc-act{height:26px;padding:0 12px;border-radius:100px;border:1px solid #CBD5E1;background:#fff;color:#334155;font-size:11px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.mc-act:hover{background:#F1F5F9;border-color:#94A3B8;color:#0F172A}
+.mc-act:focus-visible{outline:2px solid #93C5FD;outline-offset:1px}
+.mc-act.primary{background:#EEF2FF;border-color:#C7D2FE;color:#012169}
+.mc-act.primary:hover{background:#E0E7FF;border-color:#A5B4FC}
+.mc-muted{color:#94A3B8}
+.mc-note{margin-top:3px;font-size:11px;color:#64748B;font-style:italic;max-width:560px;white-space:normal;line-height:1.35}
+.sup-y{display:inline-block;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:100px;padding:1px 8px;font-size:10px;font-weight:700;white-space:nowrap}
+.sup-m{display:inline-block;background:#E0E7FF;color:#3730A3;border:1px solid #C7D2FE;border-radius:100px;padding:1px 8px;font-size:10px;font-weight:700;white-space:nowrap}
+.mc-actions{display:flex;gap:4px;flex-wrap:nowrap;justify-content:flex-end;align-items:center}
+.mc-kebab{height:26px;width:26px;padding:0;border-radius:50%;border:1px solid #CBD5E1;background:#fff;color:#64748B;font-size:15px;line-height:1;cursor:pointer;flex:0 0 auto}
+.mc-kebab:hover{background:#F1F5F9;color:#0F172A}
+.mc-kebab:focus-visible{outline:2px solid #93C5FD;outline-offset:1px}
+.mc-kebab-empty{padding:7px 12px;font-size:11px;color:#64748B;white-space:nowrap}
+.mc-bulkbar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#EEF2FF;border:1px solid #C7D2FE;border-radius:8px;margin:0 14px 10px;font-size:12px;font-weight:600;color:#012169}
+.mc-bulkbar[hidden]{display:none}
+.mc-check-cell{width:1%;text-align:center;white-space:nowrap}
+.mc-check{width:14px;height:14px;cursor:pointer;accent-color:#012169;vertical-align:middle}
+.mc-modal{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center}
+.mc-modal[hidden]{display:none}
+.mc-modal-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.45)}
+.mc-modal-card{position:relative;width:min(440px,calc(100vw - 32px));background:#fff;border-radius:12px;box-shadow:0 20px 50px rgba(1,33,105,.25);padding:20px 22px}
+.mc-modal-card h3{margin:0 0 4px;font-size:15px;color:#0F172A}
+.mc-modal-problem{margin:0 0 14px;font-size:12px;color:#475569;line-height:1.45}
+.mc-modal-card label{display:block;font-size:11px;font-weight:600;color:#64748B;margin-bottom:5px}
+.mc-modal-card label span{font-weight:400}
+.mc-modal-card textarea{width:100%;box-sizing:border-box;border:1px solid #CBD5E1;border-radius:8px;padding:8px 10px;font:inherit;font-size:12px;resize:vertical;min-height:64px}
+.mc-modal-card textarea:focus{outline:2px solid #BFDBFE;border-color:#93C5FD}
+.mc-modal-card select{width:100%;box-sizing:border-box;border:1px solid #CBD5E1;border-radius:8px;padding:8px 10px;font:inherit;font-size:12px;background:#fff}
+.mc-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.err-banner{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;padding:12px 16px;border-radius:10px;font-size:12px;margin-bottom:16px}
+.empty-row td{text-align:center;color:#94A3B8;padding:22px !important}
+@media(max-width:768px){.mc-table-wrap{overflow-x:auto}}
+{% endblock %}
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="activity"></i></div>
+  <div>
+    <h1 class="page-title">Monitoring Center</h1>
+    <p class="page-subtitle">Live host states and active problems from Zabbix — no second login.</p>
+    <span id="liveStamp" style="font-size:11px;color:#64748B;font-weight:600"></span>
+  </div>
+  <a href="{{ zabbix_ui_url }}" target="_blank" rel="noopener" class="btn-live btn-outline"><i data-lucide="external-link"></i> Open in Zabbix</a>
+</div>
+<div class="page-content">
+
+  {% if error %}
+  <div class="err-banner" id="mcErr">{{ error }}</div>
+  {% else %}
+  <div class="err-banner" id="mcErr" style="display:none"></div>
+  {% endif %}
+
+  <div class="stat-row">
+    <div class="stat-card"><div class="num" id="mcHosts">{{ summary.hosts }}</div><div class="lbl">Monitored Hosts</div></div>
+    <div class="stat-card up"><div class="num" id="mcUp">{{ summary.up }}</div><div class="lbl">Up</div></div>
+    <div class="stat-card down"><div class="num" id="mcDown">{{ summary.down }}</div><div class="lbl">Down</div></div>
+    <div class="stat-card prob"><div class="num" id="mcProbs">{{ summary.problems }}</div><div class="lbl">Active Problems</div></div>
+    <div class="stat-card"><div class="num" id="mcUnacked">{{ summary.unacked }}</div><div class="lbl">Unacknowledged</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header">
+      <h2>Active Problems (<span id="mcProbCount">{{ problems|length }}</span>){% if at_cap %} — latest 100{% endif %}</h2>
+      <form method="get" action="/monitoring" class="filter-row">
+        <select name="severity" onchange="this.form.submit()">
+          <option value="">All Severities</option>
+          {% for sid, sname in severities.items() %}
+          <option value="{{ sid }}" {% if f_severity == sid %}selected{% endif %}>{{ sname }}</option>
+          {% endfor %}
+        </select>
+        <select name="ack" onchange="this.form.submit()">
+          <option value="">All</option>
+          <option value="no" {% if f_ack == 'no' %}selected{% endif %}>Unacknowledged</option>
+          <option value="yes" {% if f_ack == 'yes' %}selected{% endif %}>Acknowledged</option>
+        </select>
+        {% if f_severity or f_ack %}
+        <a href="/monitoring" class="btn btn-outline" style="font-size:11px">Clear</a>
+        {% endif %}
+      </form>
+    </div>
+    {% if can_act %}
+    <div class="mc-bulkbar" id="mcBulkBar" hidden>
+      <span id="mcBulkCount">0 selected</span>
+      <span style="flex:1"></span>
+      <button type="button" class="mc-act primary" id="mcBulkAck">Acknowledge</button>
+      <button type="button" class="mc-act" id="mcBulkSuppress">Suppress&hellip;</button>
+      <button type="button" class="mc-act" id="mcBulkClear">Clear</button>
+    </div>
+    {% endif %}
+    <div class="mc-table-wrap">
+      <table class="mc-table">
+        <thead><tr><th class="mc-check-cell">{% if can_act %}<input type="checkbox" class="mc-check" id="mcCheckAll" title="Select all visible" aria-label="Select all visible problems">{% endif %}</th><th>Time</th><th>Severity</th><th>Host</th><th>Problem</th><th>Ack</th><th>Suppression</th><th>Action</th></tr></thead>
+        <tbody id="probBody">
+          {% for p in problems %}
+          <tr>
+            <td class="mc-check-cell">{% if can_act %}<input type="checkbox" class="mc-check" data-eventid="{{ p.eventid }}" data-acked="{{ '1' if p.acknowledged else '0' }}" data-suppressed="{{ '1' if p.suppressed else '0' }}" aria-label="Select this problem">{% endif %}</td>
+            <td style="white-space:nowrap">{{ p.clock }}</td>
+            <td><span class="sev" style="background:{{ sev_colors.get(p.severity, '#97AAB3') }}">{{ p.severity_name }}</span></td>
+            <td>{{ p.host }}</td>
+            <td>{{ p.name }}{% if p.ack_note %}<div class="mc-note" title="{{ p.ack_tip }}">&rarr; {{ p.ack_note|truncate(110) }}</div>{% endif %}</td>
+            <td>{% if p.acknowledged %}<span class="ack-y">Yes</span>{% else %}<span class="ack-n">No</span>{% endif %}</td>
+            <td>
+              {% if p.suppressed %}
+                {% if p.maintenance %}
+                <span class="sup-m" title="Suppressed by maintenance #{{ p.maintenance }}">Maintenance</span>
+                {% elif p.suppress_until_label %}
+                <span class="sup-y" title="Suppressed until {{ p.suppress_until_label }}">Until {{ p.suppress_until_label }}</span>
+                {% else %}
+                <span class="sup-y">Until removed</span>
+                {% endif %}
+              {% else %}<span class="mc-muted">&mdash;</span>{% endif %}
+            </td>
+            <td>
+              {% if can_act %}
+              <div class="mc-actions">
+                {% if p.acknowledged %}
+                <button type="button" class="mc-act" data-eventid="{{ p.eventid }}" data-action="unacknowledge" data-problem="{{ p.name }}">Un-acknowledge</button>
+                {% else %}
+                <button type="button" class="mc-act primary" data-eventid="{{ p.eventid }}" data-action="acknowledge" data-problem="{{ p.name }}">Acknowledge</button>
+                {% endif %}
+                <button type="button" class="mc-kebab" data-eventid="{{ p.eventid }}" data-problem="{{ p.name }}"
+                        data-suppressed="{{ '1' if p.suppressed else '0' }}"
+                        data-maintenance="{{ '1' if p.maintenance else '0' }}"
+                        data-ticket-id="{{ p.glpi_id }}" data-ticket-url="{{ p.ticket_url }}"
+                        aria-haspopup="menu" aria-expanded="false" title="More actions">&#8942;</button>
+              </div>
+              {% else %}<span class="mc-muted">&mdash;</span>{% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="8">No active problems.{% if error %} Zabbix may be unreachable.{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Hosts ({{ hosts|length }})</h2></div>
+    <div class="mc-table-wrap">
+      <table class="mc-table">
+        <thead><tr><th>Host</th><th>Name</th><th>IP</th><th>Groups</th><th>Maintenance</th><th>State</th></tr></thead>
+        <tbody id="hostBody">
+          {% for h in hosts %}
+          <tr>
+            <td style="font-family:monospace">{{ h.host }}</td>
+            <td>{{ h.name }}</td>
+            <td style="font-family:monospace">{{ h.ip }}</td>
+            <td style="font-size:11px;color:#64748B">{{ h.groups }}</td>
+            <td>{% if h.maintenance_until %}<span class="sup-y" title="{{ h.maintenance_name }}">Until {{ h.maintenance_until }}</span>{% else %}<span class="mc-muted">—</span>{% endif %}</td>
+            <td>
+              {% if h.state == 'UP' %}<span class="host-up">● UP</span>
+              {% elif h.state == 'DOWN' %}<span class="host-down">● DOWN</span>
+              {% else %}<span class="host-unk">● UNKNOWN</span>{% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="6">No monitored hosts found.{% if error %} Zabbix may be unreachable.{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div class="kebab-menu floating" id="mcKebab" role="menu"></div>
+
+<div class="mc-modal" id="mcModal" hidden>
+  <div class="mc-modal-backdrop" data-close></div>
+  <div class="mc-modal-card" role="dialog" aria-modal="true" aria-labelledby="mcModalTitle">
+    <h3 id="mcModalTitle">Acknowledge this problem?</h3>
+    <p class="mc-modal-problem" id="mcModalProblem"></p>
+    <div id="mcDurationWrap" hidden>
+      <label for="mcDuration">Suppress for</label>
+      <select id="mcDuration">
+        {% for key, label in suppress_options %}
+        <option value="{{ key }}" {% if key == '1440' %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div id="mcNoteWrap">
+      <label for="mcComment">Comment <span id="mcNoteHint">(optional, stored in Zabbix history)</span></label>
+      <textarea id="mcComment" rows="3" maxlength="2048"></textarea>
+    </div>
+    <div class="mc-modal-actions">
+      <button type="button" class="mc-act" data-close>Cancel</button>
+      <button type="button" class="mc-act primary" id="mcConfirm">Acknowledge</button>
+    </div>
+  </div>
+</div>
+
+<form id="mcActionForm" method="post" style="display:none">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="back" value="{{ request.full_path if request else '/monitoring' }}">
+</form>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+/* The 20s re-render rebuilds every row, so the action cell has to be built
+   there too - and only for roles allowed to use it. */
+var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
+
+/* One delegated listener for the whole table: rows are replaced every 20s,
+   and a per-row onclick would have to be re-bound on every tick. The dialog
+   is not cosmetic - it captures the comment, which Zabbix stores in the
+   problem's own event history beside the acknowledgement. */
+(function(){
+  var modal = document.getElementById('mcModal');
+  var form = document.getElementById('mcActionForm');
+  var kebab = document.getElementById('mcKebab');
+  if(!modal || !form) return;
+  var pending = null;
+  var title = document.getElementById('mcModalTitle');
+  var prob = document.getElementById('mcModalProblem');
+  var note = document.getElementById('mcComment');
+  var noteWrap = document.getElementById('mcNoteWrap');
+  var durationWrap = document.getElementById('mcDurationWrap');
+  var noteHint = document.getElementById('mcNoteHint');
+  var confirmBtn = document.getElementById('mcConfirm');
+  var kebabBtn = null;
+
+  function close(){ modal.hidden = true; pending = null; }
+
+  function showModal(p){
+    pending = p;
+    var action = p.action;
+    var isAck = action === 'acknowledge';
+    var isSuppress = action === 'suppress';
+    var isUnsuppress = action === 'unsuppress';
+    var count = p.eventids.length;
+    var what = count + ' problem' + (count === 1 ? '' : 's');
+    title.textContent = isSuppress
+      ? (p.bulk ? 'Suppress ' + what + '?' : 'Suppress this problem?')
+      : isUnsuppress ? 'Remove the suppression?'
+      : isAck ? (p.bulk ? 'Acknowledge ' + what + '?' : 'Acknowledge this problem?')
+      : 'Remove the acknowledgement?';
+    var skippedText = '';
+    if(p.bulk && p.skipped){
+      skippedText = p.skipped + (p.skipped === 1 ? ' problem is' : ' problems are') +
+        ' already ' + (isSuppress ? 'suppressed' : 'acknowledged') +
+        ' and will be skipped.';
+    }
+    prob.textContent = p.bulk ? skippedText : (p.problem || '');
+    confirmBtn.textContent = isSuppress ? 'Suppress'
+      : isUnsuppress ? 'Unsuppress'
+      : isAck ? 'Acknowledge' : 'Un-acknowledge';
+    noteWrap.hidden = action === 'unacknowledge';
+    durationWrap.hidden = !isSuppress;
+    noteHint.textContent = isSuppress
+      ? '(required — stored in Zabbix history)'
+      : '(optional, stored in Zabbix history)';
+    note.placeholder = isSuppress
+      ? 'Why are these problems being suppressed? This is the audit trail.'
+      : 'Optional comment…';
+    note.value = '';
+    modal.hidden = false;
+    (isSuppress ? note : confirmBtn).focus();
+  }
+
+  function openAction(eventid, action, problem){
+    showModal({eventids: [String(eventid)], action: action, problem: problem || ''});
+  }
+
+  function openBulk(action){
+    var items = window.mcSelectionItems ? window.mcSelectionItems() : [];
+    if(!items.length) return;
+    var ids = [];
+    var skipped = 0;
+    items.forEach(function(it){
+      var already = action === 'acknowledge' ? it.acked
+                  : action === 'suppress' ? it.suppressed : false;
+      if(already) skipped++; else ids.push(it.id);
+    });
+    if(!ids.length){
+      showToast(action === 'acknowledge'
+        ? 'All selected problems are already acknowledged.'
+        : 'All selected problems are already suppressed.', 'warning');
+      return;
+    }
+    showModal({eventids: ids, action: action, bulk: true, skipped: skipped, problem: ''});
+  }
+
+  function closeKebab(){
+    if(!kebab) return;
+    kebab.classList.remove('show');
+    if(kebabBtn){ kebabBtn.setAttribute('aria-expanded', 'false'); kebabBtn = null; }
+  }
+  window.mcCloseKebab = closeKebab;
+
+  function addKebab(label, action){
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'kebab-item';
+    b.textContent = label;
+    b.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      if(!kebabBtn) return;
+      var eid = kebabBtn.getAttribute('data-eventid');
+      var pname = kebabBtn.getAttribute('data-problem') || '';
+      closeKebab();
+      openAction(eid, action, pname);
+    });
+    kebab.appendChild(b);
+  }
+
+  function openKebab(btn){
+    if(!kebab) return;
+    if(kebabBtn === btn && kebab.classList.contains('show')){ closeKebab(); return; }
+    closeKebab();
+    kebabBtn = btn;
+    btn.setAttribute('aria-expanded', 'true');
+    kebab.innerHTML = '';
+    var suppressed = btn.getAttribute('data-suppressed') === '1';
+    var maintenance = btn.getAttribute('data-maintenance') === '1';
+    if(suppressed){
+      if(!maintenance) addKebab('Unsuppress', 'unsuppress');
+    } else {
+      addKebab('Suppress…', 'suppress');
+    }
+    var url = btn.getAttribute('data-ticket-url') || '';
+    var tid = btn.getAttribute('data-ticket-id') || '';
+    if(url && tid){
+      var a = document.createElement('a');
+      a.className = 'kebab-item';
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = 'Open incident #' + tid;
+      a.addEventListener('click', closeKebab);
+      kebab.appendChild(a);
+    }
+    if(!kebab.children.length){
+      var empty = document.createElement('div');
+      empty.className = 'mc-kebab-empty';
+      empty.textContent = 'Suppressed by maintenance';
+      kebab.appendChild(empty);
+    }
+    var r = btn.getBoundingClientRect();
+    kebab.style.top = Math.min(r.bottom + 4, window.innerHeight - 150) + 'px';
+    kebab.style.left = Math.max(8, Math.min(r.right - 178, window.innerWidth - 186)) + 'px';
+    kebab.classList.add('show');
+    var first = kebab.querySelector('.kebab-item');
+    if(first) first.focus();
+  }
+
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    var b = t && t.closest ? t.closest('.mc-act') : null;
+    if(b && !modal.contains(b) && !(b.closest && b.closest('#mcBulkBar'))){
+      openAction(b.getAttribute('data-eventid'),
+                 b.getAttribute('data-action'),
+                 b.getAttribute('data-problem'));
+      return;
+    }
+    var k = t && t.closest ? t.closest('.mc-kebab') : null;
+    if(k){ e.stopPropagation(); openKebab(k); return; }
+    if(kebab && kebab.contains(t)) return;
+    closeKebab();
+    if(t && t.closest && t.closest('[data-close]')) close();
+  });
+
+  var bulkAck = document.getElementById('mcBulkAck');
+  var bulkSuppress = document.getElementById('mcBulkSuppress');
+  if(bulkAck) bulkAck.addEventListener('click', function(ev){ ev.stopPropagation(); openBulk('acknowledge'); });
+  if(bulkSuppress) bulkSuppress.addEventListener('click', function(ev){ ev.stopPropagation(); openBulk('suppress'); });
+
+  confirmBtn.addEventListener('click', function(){
+    if(!pending) return;
+    var text = note.value.trim();
+    if(pending.action === 'suppress' && text.length < 5){
+      showToast('Write why the problems are being suppressed (at least 5 characters).', 'error');
+      note.focus();
+      return;
+    }
+    var oldMsg = form.querySelector('input[name="message"]');
+    if(oldMsg) oldMsg.remove();
+    var oldDur = form.querySelector('input[name="duration"]');
+    if(oldDur) oldDur.remove();
+    var oldIds = form.querySelector('input[name="eventids"]');
+    if(oldIds) oldIds.remove();
+    if(pending.bulk){
+      form.action = '/monitoring/bulk/' + encodeURIComponent(pending.action);
+      var idsInput = document.createElement('input');
+      idsInput.type = 'hidden'; idsInput.name = 'eventids';
+      idsInput.value = pending.eventids.join(',');
+      form.appendChild(idsInput);
+    } else {
+      form.action = '/monitoring/problems/' +
+        encodeURIComponent(pending.eventids[0]) + '/' +
+        encodeURIComponent(pending.action);
+    }
+    if(text && pending.action !== 'unacknowledge'){
+      var i = document.createElement('input');
+      i.type = 'hidden'; i.name = 'message'; i.value = text;
+      form.appendChild(i);
+    }
+    if(pending.action === 'suppress'){
+      var d = document.createElement('input');
+      d.type = 'hidden'; d.name = 'duration';
+      d.value = document.getElementById('mcDuration').value;
+      form.appendChild(d);
+    }
+    form.submit();
+  });
+
+  document.addEventListener('keydown', function(e){
+    if(e.key !== 'Escape') return;
+    if(kebab && kebab.classList.contains('show')){ closeKebab(); return; }
+    if(!modal.hidden) close();
+  });
+  document.addEventListener('scroll', closeKebab, true);
+})();
+
+/* Selection survives the 20s re-render. The Set is the source of truth; the
+   boxes are a view of it, re-applied after every innerHTML replacement. */
+(function(){
+  var pb = document.getElementById('probBody');
+  var bar = document.getElementById('mcBulkBar');
+  var count = document.getElementById('mcBulkCount');
+  var all = document.getElementById('mcCheckAll');
+  if(!pb || !bar) return;
+  var selected = new Set();
+
+  function boxes(){ return Array.prototype.slice.call(pb.querySelectorAll('.mc-check')); }
+
+  function update(){
+    var list = boxes();
+    var live = new Set();
+    list.forEach(function(c){
+      var id = c.dataset.eventid;
+      live.add(id);
+      c.checked = selected.has(id);
+    });
+    selected.forEach(function(id){ if(!live.has(id)) selected.delete(id); });
+    if(count) count.textContent = selected.size + ' selected';
+    bar.hidden = selected.size === 0;
+    if(all){
+      all.checked = list.length > 0 && selected.size === list.length;
+      all.indeterminate = selected.size > 0 && selected.size < list.length;
+    }
+  }
+
+  window.mcSelectionIds = function(){ return Array.from(selected); };
+  window.mcSelectionItems = function(){
+    return boxes().filter(function(c){ return selected.has(c.dataset.eventid); })
+      .map(function(c){
+        return {id: c.dataset.eventid,
+                acked: c.dataset.acked === '1',
+                suppressed: c.dataset.suppressed === '1'};
+      });
+  };
+  window.mcSelectionClear = function(){ selected.clear(); update(); };
+  window.mcSelectionRender = update;
+
+  pb.addEventListener('change', function(e){
+    var c = e.target && e.target.closest ? e.target.closest('.mc-check') : null;
+    if(!c) return;
+    if(c.checked) selected.add(c.dataset.eventid); else selected.delete(c.dataset.eventid);
+    update();
+  });
+  if(all){
+    all.addEventListener('change', function(){
+      boxes().forEach(function(c){
+        c.checked = all.checked;
+        if(all.checked) selected.add(c.dataset.eventid); else selected.delete(c.dataset.eventid);
+      });
+      update();
+    });
+  }
+  var clear = document.getElementById('mcBulkClear');
+  if(clear) clear.addEventListener('click', function(ev){ ev.stopPropagation(); window.mcSelectionClear(); });
+  update();
+})();
+
+/* 30s autosync: stat cards + both tables re-render from /monitoring/api/live.
+   Skips while the tab is hidden; failures back off silently (stamp shows it). */
+(function(){
+  var fails = 0, busy = false, t0 = 0;
+  var INTERVAL = 20000, BACKOFF_MAX = 120000;
+  function esc(s){ return String(s == null ? '—' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  /* esc() is not safe inside an attribute: a comment or a problem name with a
+     double quote would close the title="" / data-problem="" early. */
+  function attr(s){ return esc(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function stamp(ok){
+    var el = document.getElementById('liveStamp');
+    if(!el) return;
+    if(ok){ el.textContent = 'Live · updated ' + new Date().toLocaleTimeString('en-ET',{hour12:false}); el.style.color = ''; }
+    else { el.textContent = 'Update failed — retrying…'; el.style.color = '#DC2626'; }
+  }
+  async function tick(){
+    t0 = Date.now();
+    if(busy || document.hidden){ schedule(); return; }
+    busy = true;
+    try{
+      var q = new URLSearchParams(window.location.search);
+      var url = '/monitoring/api/live?' + q.toString();
+      var r = await fetch(url);
+      if(!r.ok) throw new Error('Server returned ' + r.status);
+      var d = await r.json();
+      if(d.error) throw new Error(d.error);
+      var s = d.summary || {};
+      setNum('mcHosts', s.hosts); setNum('mcUp', s.up); setNum('mcDown', s.down);
+      setNum('mcProbs', s.problems); setNum('mcUnacked', s.unacked);
+      setNum('mcProbCount', (d.problems || []).length);
+      var pb = document.getElementById('probBody');
+      if(pb){
+        if(window.mcCloseKebab) window.mcCloseKebab();
+        pb.innerHTML = (d.problems || []).map(function(p){
+          var act = '<span class="mc-muted">&mdash;</span>';
+          if(MC_CAN_ACT){
+            var ackBtn = p.acknowledged
+              ? '<button type="button" class="mc-act" data-eventid="' + esc(p.eventid) + '" data-action="unacknowledge" data-problem="' + attr(p.name) + '">Un-acknowledge</button>'
+              : '<button type="button" class="mc-act primary" data-eventid="' + esc(p.eventid) + '" data-action="acknowledge" data-problem="' + attr(p.name) + '">Acknowledge</button>';
+            var keb = '<button type="button" class="mc-kebab" data-eventid="' + esc(p.eventid) +
+              '" data-problem="' + attr(p.name) +
+              '" data-suppressed="' + (p.suppressed ? '1' : '0') +
+              '" data-maintenance="' + (p.maintenance ? '1' : '0') +
+              '" data-ticket-id="' + attr(p.glpi_id || '') +
+              '" data-ticket-url="' + attr(p.ticket_url || '') +
+              '" aria-haspopup="menu" aria-expanded="false" title="More actions">&#8942;</button>';
+            act = '<div class="mc-actions">' + ackBtn + keb + '</div>';
+          }
+          var sup = '<span class="mc-muted">&mdash;</span>';
+          if(p.suppressed){
+            if(p.maintenance){
+              sup = '<span class="sup-m" title="Suppressed by maintenance #' + attr(p.maintenance) + '">Maintenance</span>';
+            } else if(p.suppress_until_label){
+              sup = '<span class="sup-y" title="Suppressed until ' + attr(p.suppress_until_label) + '">Until ' + esc(p.suppress_until_label) + '</span>';
+            } else {
+              sup = '<span class="sup-y">Until removed</span>';
+            }
+          }
+          var chk = MC_CAN_ACT
+            ? '<td class="mc-check-cell"><input type="checkbox" class="mc-check" data-eventid="' + esc(p.eventid) +
+              '" data-acked="' + (p.acknowledged ? '1' : '0') +
+              '" data-suppressed="' + (p.suppressed ? '1' : '0') +
+              '" aria-label="Select this problem"></td>'
+            : '<td class="mc-check-cell"></td>';
+          return '<tr>' + chk + '<td style="white-space:nowrap">' + esc(p.clock) + '</td>' +
+            '<td><span class="sev" style="background:' + esc(p.sev_color || '#97AAB3') + '">' + esc(p.severity_name) + '</span></td>' +
+            '<td>' + esc(p.host) + '</td><td>' + esc(p.name) +
+              (p.ack_note ? '<div class="mc-note" title="' + attr(p.ack_tip) + '">&rarr; ' +
+                esc(p.ack_note.length > 110 ? p.ack_note.slice(0,110) + '…' : p.ack_note) + '</div>' : '') +
+            '</td>' +
+            '<td>' + (p.acknowledged ? '<span class="ack-y">Yes</span>' : '<span class="ack-n">No</span>') + '</td>' +
+            '<td>' + sup + '</td>' +
+            '<td>' + act + '</td></tr>';
+        }).join('') || '<tr class="empty-row"><td colspan="8">No active problems.</td></tr>';
+        if(window.mcSelectionRender) window.mcSelectionRender();
+      }
+      var hb = document.getElementById('hostBody');
+      if(hb){
+        hb.innerHTML = (d.hosts || []).map(function(h){
+          var st = h.state === 'UP' ? '<span class="host-up">● UP</span>'
+                 : h.state === 'DOWN' ? '<span class="host-down">● DOWN</span>' : '<span class="host-unk">● UNKNOWN</span>';
+          var mt = h.maintenance_until
+            ? '<span class="sup-y" title="' + attr(h.maintenance_name) + '">Until ' + esc(h.maintenance_until) + '</span>'
+            : '<span class="mc-muted">—</span>';
+          return '<tr><td style="font-family:monospace">' + esc(h.host) + '</td><td>' + esc(h.name) +
+            '</td><td style="font-family:monospace">' + esc(h.ip) + '</td><td style="font-size:11px;color:#64748B">' + esc(h.groups) + '</td><td>' + mt + '</td><td>' + st + '</td></tr>';
+        }).join('') || '<tr class="empty-row"><td colspan="6">No monitored hosts found.</td></tr>';
+      }
+      var eb = document.getElementById('mcErr');
+      if(eb) eb.style.display = 'none';
+      fails = 0; stamp(true);
+    }catch(e){ fails++; stamp(false); }
+    busy = false;
+    schedule();
+  }
+  function setNum(id, v){ var el = document.getElementById(id); if(el && v != null) el.textContent = v; }
+  // Wall-clock anchored: next tick lands exactly INTERVAL after this one
+  // started — fetch duration no longer stretches the cadence.
+  function schedule(){
+    var wait = Math.min(INTERVAL * Math.pow(2, fails), BACKOFF_MAX) - (Date.now() - t0);
+    setTimeout(tick, Math.max(0, wait));
+  }
+  tick();
+})();
+</script>
+{% endblock %}
