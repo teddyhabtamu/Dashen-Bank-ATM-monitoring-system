@@ -97,7 +97,8 @@ table.txn tbody tr:hover{background:#EEF2FF}
       <span class="vendor-badge" style="background:#EEF2FF;color:#64748B">Last state: {{ st | state_label }}</span>
       {% else %}
       <span class="state-badge" style="background:{{ st | state_colour }};color:{{ st | state_ink }}">{{ st | state_label }}</span>
-      {% if atm.get('live') %}<span class="vendor-badge" style="background:#DCFCE7;color:#166534;font-size:10px" title="State verified just now via live check (it can still be UNREACHABLE — this badge means fresh, not healthy)">LIVE</span>{% endif %}
+      {% if atm.get('live') %}<span class="vendor-badge" style="background:#DCFCE7;color:#166534;font-size:10px" title="State verified just now via live check (it can still be UNREACHABLE — this badge means fresh, not healthy)">LIVE</span>
+      {% elif atm.get('data_stale') %}<span class="vendor-badge" style="background:#FEF3C7;color:#92400E;font-size:10px" title="Agent-sourced readings are the last values Zabbix received, not live data.">LAST KNOWN</span>{% endif %}
       {% endif %}
       <span class="vendor-badge vendor-{{ atm.vendor }}">{{ atm.vendor or '—' }}</span>
       {% if atm.model %}<span class="vendor-badge" style="background:#EEF2FF;color:#012169">{{ atm.model }}</span>{% endif %}
@@ -184,7 +185,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
             <text x="{{ c.x + c.w / 2 }}" y="{{ c.y + c.h - 11 }}" fill="#E5E7EB" font-size="11" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">{% if c.notes is not none and c.notes == 0 %}Empty{% elif c.notes is not none and c.pct == 0 %}{{ c.notes }} notes{% elif c.pct is not none %}{{ c.pct }}%{% else %}No data{% endif %}</text>
             {% endfor %}
           </svg>
-          <div class="atm-cap">{% if (atm.status or 'active') != 'active' %}Last known telemetry (retired ATM){% elif hardware %}Live telemetry from {{ hw_source or 'SNMP' }}{% else %}No live telemetry — showing last known state{% endif %}</div>
+          <div class="atm-cap">{% if (atm.status or 'active') != 'active' %}Last known telemetry (retired ATM){% elif atm.get('data_stale') %}Last known telemetry from {{ hw_source or 'SNMP' }} — agent silent since {{ agent_status.last_seen }} EAT{% elif hardware %}Live telemetry from {{ hw_source or 'SNMP' }}{% else %}No live telemetry — showing last known state{% endif %}</div>
           {% else %}
           <div class="no-data" style="padding:60px 12px">Live cassette data unavailable. {{ telemetry_note }}</div>
           {% endif %}
@@ -314,7 +315,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
               <div class="agent-note">
                 {% if a_state in ('reachable', 'unreachable') and agent_status.last_seen %}
                   Last agent data {{ agent_status.last_seen }} EAT ({{ agent_status.age_label }}).
-                  {% if a_state == 'unreachable' %}The ATM may be off or off the network.{% else %}This is separate from the device-reported Network chip.{% endif %}
+                  {% if a_state == 'unreachable' %}This checks the Zabbix agent (TCP 10050) only; SNMP telemetry can still be arriving.{% else %}This is separate from the device-reported Network chip.{% endif %}
                 {% elif agent_status and agent_status.reason %}
                   {{ agent_status.reason }}
                 {% else %}
@@ -344,7 +345,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
         <div class="card-header"><h2>Parts &amp; Devices</h2></div>
         <div class="card-body">
           {% if metrics_online and (part_rows or device_rows) %}
-          <div class="atm-cap" style="margin-bottom:10px">Every live reading, faults first — the detail behind the chips above.</div>
+          <div class="atm-cap" style="margin-bottom:10px">Every reading, faults first — the detail behind the chips above.</div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px">
             {% if part_rows %}
             <div>

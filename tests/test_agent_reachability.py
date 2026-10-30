@@ -131,3 +131,18 @@ def test_detail_route_fetches_agent_status():
     source = (REPO / 'report-portal' / 'blueprints' / 'admin.py').read_text()
     assert 'fetch_agent_status(atm_id)' in source
     assert 'agent_status=agent_status' in source
+
+
+def test_stale_agent_data_is_labelled_last_known_not_live():
+    """The screenshot from UAT: 25-minute-old XFS values were captioned "Live"
+    while the strip above them said the agent was unreachable."""
+    assert 'LAST KNOWN' in DETAIL
+    assert 'Last known telemetry from' in DETAIL
+    assert 'SNMP telemetry can still be arriving' in DETAIL
+    assert 'The ATM may be off or off the network' not in DETAIL
+
+
+def test_detail_route_uses_the_agent_to_mark_hardware_stale():
+    source = (REPO / 'report-portal' / 'blueprints' / 'admin.py').read_text()
+    assert 'snapshot_is_stale(hw_source, agent_status)' in source
+    assert "atm['data_stale'] = data_stale" in source

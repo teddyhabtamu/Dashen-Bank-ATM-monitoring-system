@@ -367,20 +367,38 @@ def verify_atm(atm_id, window_minutes=15, client=None, db_facts=None,
     total, reporting, unsup = z['items_total'], z['items_reporting'], z['items_unsupported']
     age = z['newest_data_age_seconds']
     age_txt = f'{age // 60} min' if age is not None else 'never'
+    now = int(time.time())
+    window_seconds = window_minutes * 60
 
-    # The decisive check: the vendor's own keys must be arriving.
+    # The decisive check: the vendor's own keys must be arriving.  Collected
+    # once is not the same as arriving: a group whose newest key is older than
+    # the window is stale, even when a different source keeps the host's
+    # newest-data clock fresh.  That gap is how UAT showed "Reporting" in the
+    # fleet while the ATM page said the Zabbix agent was unreachable.
     groups = AUTHORITATIVE_KEYS.get(vendor) or AUTHORITATIVE_KEYS['NCR']
     wanted = max(groups, key=lambda group: sum(1 for k in group if z['key_clocks'].get(k)))
     seen = [k for k in wanted if z['key_clocks'].get(k)]
     auth_ok = len(seen) == len(wanted)
+    age_auth = max((now - z['key_clocks'][k] for k in seen), default=None)
+    auth_fresh = auth_ok and age_auth is not None and age_auth <= window_seconds
     if z['items_internal'] and not z['items_reporting']:
         checks.append(_check('internal items', 'fail',
                              f"Only Zabbix-internal items are reporting ({z['items_internal']}). "
                              'They track Zabbix itself, not the ATM, so they prove nothing here.'))
-    if auth_ok:
-        age_auth = max(int(time.time()) - z['key_clocks'][k] for k in seen)
+    if auth_ok and auth_fresh:
         checks.append(_check('telemetry', 'pass',
                              f"Vendor telemetry arriving ({', '.join(seen)}), newest {age_auth // 60} min ago."))
+    elif auth_ok:
+        stale_cause = (
+            'Check the Zabbix agent on the box (TCP 10050) and its collector script.'
+            if vendor == 'NCR' or any(k.startswith('atm.xfs.') for k in seen) else
+            'Check the SNMP path (UDP/161) and the community.')
+        checks.append(_check('telemetry', 'fail',
+                             f"Vendor telemetry is stale: {', '.join(seen)} last collected "
+                             f"{age_auth // 60} min ago (allowed {window_minutes} min). "
+                             + stale_cause))
+        blockers.append(f"{vendor} telemetry is stale ({age_auth // 60} min): "
+                        'the collector has stopped sending. ' + stale_cause)
     else:
         missing = [k for k in wanted if k not in z['key_clocks']]
         if vendor == 'NCR':
@@ -393,6 +411,34 @@ def verify_atm(atm_id, window_minutes=15, client=None, db_facts=None,
         checks.append(_check('telemetry', 'fail',
                              f"Vendor telemetry never arrived: {', '.join(missing)}. " + cause))
         blockers.append(f"No {vendor} telemetry ({', '.join(missing)} never collected).")
+
+    # Any other authoritative source that used to report and has now gone
+    # quiet is a partial telemetry outage, even while the decisive group is
+    # still fresh.  Groups that were never collected are not stale: a legacy
+    # GRG that only speaks SNMP must stay "reporting" (and there is a test).
+    stale_sources = []
+    for group in groups:
+        if group is wanted:
+            continue
+        clocks = [z['key_clocks'][k] for k in group if z['key_clocks'].get(k)]
+        if not clocks:
+            continue
+        age_group = now - max(clocks)
+        if age_group > window_seconds:
+            label = ('XFS/agent' if any(k.startswith('atm.xfs.') for k in group)
+                     else 'SNMP')
+            stale_sources.append((label, age_group))
+    if stale_sources:
+        detail = '; '.join('%s telemetry last collected %d min ago'
+                           % (label, age_group // 60)
+                           for label, age_group in stale_sources)
+        hint = ('Check the Zabbix agent on the box (TCP 10050) and its collector script.'
+                if any(label == 'XFS/agent' for label, _ in stale_sources) else
+                'Check the SNMP path (UDP/161) and the community.')
+        checks.append(_check('secondary telemetry', 'fail',
+                             'A previously working source has gone quiet: '
+                             + detail + '. ' + hint))
+        blockers.append('Partial telemetry: ' + detail + '. ' + hint)
 
     if total == 0:
         checks.append(_check('items', 'fail', 'Host has no enabled items — is a template linked?'))
@@ -425,8 +471,8 @@ def verify_atm(atm_id, window_minutes=15, client=None, db_facts=None,
         checks.append(_check('problems', 'info',
                              f"{len(z['problems'])} firing trigger(s): " + '; '.join(z['problems'][:3])))
 
-    fresh = (auth_ok and reporting > 0
-             and age is not None and age <= window_minutes * 60)
+    fresh = (auth_fresh and reporting > 0
+             and age is not None and age <= window_seconds)
     # Fresh data alone is not "live": a disabled host or an NCR host with no
     # agent interface cannot report hardware no matter what its items say.
     if fresh and not blockers:

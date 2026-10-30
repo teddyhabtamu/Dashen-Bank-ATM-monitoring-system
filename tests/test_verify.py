@@ -180,6 +180,21 @@ def test_grg_xfs_is_reporting():
     assert any('atm.xfs.cdm' in c['detail'] for c in r['checks'] if c['name'] == 'telemetry')
 
 
+def test_grg_stale_xfs_is_not_hidden_by_fresh_snmp():
+    """The UAT contradiction: Fleet health said Reporting because the SNMP core
+    was fresh, while the ATM page correctly said the Zabbix agent was
+    unreachable. A source that was collected before and has gone quiet is a
+    partial telemetry outage, not a healthy row."""
+    snmp_only = [{'type': '2', 'port': '161', 'ip': '10.0.0.1'}]
+    z = FakeZabbix([host(interfaces=snmp_only)],
+                   items=grg_core(30) + grg_xfs(25 * 60))
+    r = verify.verify_atm('ATM-0001', client=z, db_facts=db(vendor='GRG'))
+    assert r['verdict'] == 'provisioned_not_reporting'
+    assert any('XFS' in b and 'agent' in b for b in r['blockers'])
+    assert any(c['name'] == 'secondary telemetry' and 'XFS' in c['detail']
+               for c in r['checks'])
+
+
 def test_a_userparameter_master_item_is_not_mistaken_for_internal():
     """Regression #2, found on UAT: atm.parts is a UserParameter and Zabbix
     reports it as type '0' - the same type as internal items. Classifying by

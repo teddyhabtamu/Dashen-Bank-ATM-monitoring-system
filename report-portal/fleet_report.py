@@ -171,6 +171,15 @@ def recommend_next_action(row):
         return 'No action needed.'
 
     if status == 'provisioned_not_reporting':
+        # The vendor default is not always the failing transport: a GRG with
+        # fresh SNMP but a dead XFS feed needs the agent checked, not the
+        # community. Read the blocker rather than guessing from the vendor.
+        blockers = ' '.join(row.get('blockers') or [row.get('blocker') or '']).lower()
+        agent_side = ('xfs/agent' in blockers or 'zabbix agent' in blockers
+                      or '10050' in blockers or 'agent interface' in blockers)
+        if agent_side:
+            return (f'Check the Zabbix agent on {ip} (TCP/10050) and that the '
+                    f'vendor collector script is installed, then recompute.')
         if vendor == 'GRG':
             return (f'Open UDP/161 from the collector to {ip}, or confirm the SNMP '
                     f'community, then recompute.')

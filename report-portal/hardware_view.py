@@ -84,6 +84,22 @@ def _worst(*statuses):
 PART_WORDS = {0: ('OK', 'ok'), 1: ('Warning', 'warn'), 2: ('Error', 'error')}
 DEV_WORDS = {0: ('OK', 'ok'), 1: ('Warning', 'warn'), 2: ('Unavailable', 'error')}
 
+AGENT_SOURCED = ('XFS', 'WMI')
+
+
+def snapshot_is_stale(hw_source, agent_status):
+    """True when the hardware snapshot rides the Zabbix agent and the agent
+    has stopped answering.
+
+    XFS (GRG) and WMI (NCR) readings are delivered through the Zabbix agent,
+    so when the agent is unreachable the values on screen are the last ones
+    Zabbix received — not live data.  SNMP core items can keep other panels
+    fresh at the same time, which is exactly the contradiction this separates.
+    """
+    return (hw_source in AGENT_SOURCED
+            and bool(agent_status)
+            and agent_status.get('state') == 'unreachable')
+
 
 def _wmi_code(m, key):
     try:

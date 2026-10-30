@@ -578,6 +578,7 @@ def build_cassettes(vendor, m, capacity=CASSETTE_MAX):
 # tested) - the same split as onboard_rules.py: load-bearing display logic must
 # be verifiable without booting Flask.
 from hardware_view import (build_hardware, build_part_rows, build_device_rows,
+                           snapshot_is_stale,
                            _wmi_chip, _wmi_dev, _wmi_code, _worst, _RANK,
                            PART_WORDS, DEV_WORDS)
 
@@ -858,15 +859,22 @@ def atm_detail(atm_id):
         hw, hw_source = build_hardware(vendor, metrics) if metrics else ([], None)
         part_rows = build_part_rows(metrics) if metrics else []
         device_rows = build_device_rows(metrics) if metrics else []
+        # Agent-sourced hardware (XFS/WMI) is only "live" while the agent is
+        # answering; otherwise these are the last values Zabbix received.  Do
+        # not override the recorded state or paint a LIVE badge with them --
+        # SNMP core items can still be fresh, which is why the two panels used
+        # to disagree.
+        data_stale = snapshot_is_stale(hw_source, agent_status)
 
         # Override current_state with live data for consistency
-        if metrics:
+        if metrics and not data_stale:
             live_state = determine_live_state(vendor, metrics)
             if live_state:
                 atm['current_state'] = live_state
                 atm['live'] = True
         elif 'live' not in atm:
             atm['live'] = False
+        atm['data_stale'] = data_stale
 
         with get_db() as conn:
             cur = conn.cursor()

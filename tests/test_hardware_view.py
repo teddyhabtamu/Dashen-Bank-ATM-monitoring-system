@@ -11,7 +11,8 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'report-portal'))
 
-from hardware_view import build_device_rows, build_hardware  # noqa: E402
+from hardware_view import (build_device_rows, build_hardware,  # noqa: E402
+                           snapshot_is_stale)
 
 # An NCR host linked only to the SNMP template: WMI item absent, every SNMP
 # item present but never collected -> fetch_zabbix_maps those to None.
@@ -32,6 +33,17 @@ def chips(m, vendor='NCR'):
 
 
 # ── the regression: silence is not a fault ────────────────────────────────
+def test_agent_sourced_hardware_is_stale_when_the_agent_is_unreachable():
+    """XFS/WMI ride the Zabbix agent; SNMP does not.  A dead agent must flip
+    the first two to "last known" without touching the SNMP branch."""
+    down = {'state': 'unreachable'}
+    assert snapshot_is_stale('XFS', down) is True
+    assert snapshot_is_stale('WMI', down) is True
+    assert snapshot_is_stale('SNMP', down) is False
+    assert snapshot_is_stale('XFS', {'state': 'reachable'}) is False
+    assert snapshot_is_stale('XFS', None) is False
+
+
 def test_no_data_at_all_makes_no_hardware_claims():
     got, source = chips({})
     assert source == 'SNMP'

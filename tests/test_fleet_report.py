@@ -225,6 +225,18 @@ def test_a_silent_atm_is_told_the_fix_not_repeated_the_diagnosis():
     assert '10050' in fr.recommend_next_action(ncr)
 
 
+def test_a_stale_agent_feed_is_told_to_check_the_agent_not_snmp():
+    """GRG defaults to UDP/161 advice, but the UAT contradiction was a dead
+    XFS/agent feed behind fresh SNMP. The next action must name the failing
+    transport."""
+    row = fr.summarise([v('ATM-G', 'provisioned_not_reporting',
+                          ['Partial telemetry: XFS/agent telemetry last collected '
+                           '25 min ago. Check the Zabbix agent on the box.'],
+                          vendor='GRG', ip='10.41.30.115')])[0]
+    action = fr.recommend_next_action(row)
+    assert '10050' in action and 'UDP/161' not in action
+
+
 def test_timestamps_are_labelled_in_the_timezone_they_are_shown_in():
     assert fr.format_eat('2026-10-15T18:38:48+00:00') == '2026-10-15 21:38 EAT'
     assert fr.format_eat(None) == ''
