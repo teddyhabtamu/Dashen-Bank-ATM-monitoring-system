@@ -493,6 +493,12 @@ services:
       - /tmp:/tmp
     restart: unless-stopped
 
+    # First start after the non-root change: the detector runs as appuser.
+    # Remove root-owned hand-off files once before starting, or the sticky
+    # /tmp directory will block os.replace and Zabbix will read stale data:
+    #   sudo rm -f /tmp/zabbix_anomaly_count /tmp/zabbix_*_anomalies \
+    #                /tmp/anomaly_feed.json
+
   network-correlator:
     build:
       context: ./simulators

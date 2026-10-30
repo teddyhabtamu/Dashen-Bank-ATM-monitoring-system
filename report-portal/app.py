@@ -4,6 +4,7 @@ import secrets
 from datetime import timedelta
 from flask import Flask, g, request, session, jsonify, render_template, redirect, flash
 from flask_wtf.csrf import CSRFProtect
+from net_url import service_url
 
 REPORT_PORTAL_PORT = os.environ.get('REPORT_PORTAL_PORT', '8888')
 FLASK_DEBUG = os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
@@ -207,7 +208,7 @@ def create_app():
         try:
             import requests as _rq
             url = os.environ.get('ZBX_URL') or os.environ.get('ZABBIX_URL') \
-                or 'http://zabbix-web:8080/api_jsonrpc.php'
+                or service_url('zabbix-web:8080', '/api_jsonrpc.php', 'ZBX_SCHEME')
             _rq.post(url, json={'jsonrpc': '2.0', 'method': 'apiinfo.version',
                                 'params': {}, 'id': 1},
                      auth=(os.environ.get('ZBX_USER', ''), os.environ.get('ZBX_PASS', '')),
@@ -224,7 +225,7 @@ def create_app():
             if not host:
                 checks['opensearch'] = {'ok': True, 'skipped': 'ES_HOST not configured'}
             else:
-                url = host if host.startswith('http') else 'http://%s' % host
+                url = service_url(host, '', 'ES_SCHEME')
                 _rq.get(url, timeout=3).raise_for_status()
                 checks['opensearch'] = {'ok': True,
                                         'ms': int((_time.time() - started) * 1000)}

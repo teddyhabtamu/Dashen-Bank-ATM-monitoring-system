@@ -9,6 +9,7 @@ from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPE
 from db import get_db
 from audit import log_action
 from anomaly_dates import eat_day_start_utc, eat_day_end_utc
+from log_safety import safe_log
 
 log = logging.getLogger(__name__)
 
@@ -137,7 +138,7 @@ def anomaly_list():
             r[1] = to_eat(r[1], '%Y-%m-%d %H:%M')
             r[11] = to_eat(r[11], '%Y-%m-%d %H:%M')
     except ValueError:
-        log.warning("Invalid anomaly date filter: from=%r to=%r", date_from, date_to)
+        log.warning("Invalid anomaly date filter: from=%r to=%r", safe_log(date_from), safe_log(date_to))  # NOSONAR: safe_log strips CR/LF
         load_error = "Invalid date filter. Use YYYY-MM-DD."
         rows = []
         total = 0

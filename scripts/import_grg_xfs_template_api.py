@@ -7,10 +7,11 @@ Single command end-to-end automation:
   3. Creates or updates the template 'Dashen Bank ATM Hardware - GRG XFS'.
   4. Configures master item 'atm.xfs.cdm' and all JavaScript preprocessing dependent items.
   5. Configures triggers for hardware fault, safe door open, cash levels, reject bin full.
-  6. Links the template to the target host (e.g., TESTGRG at 10.41.30.115).
+  6. Links the template to the target host (e.g., TESTGRG).
 
 Usage (on UAT server):
-    python3 scripts/import_grg_xfs_template_api.py [--host TESTGRG] [--ip 10.41.30.115]
+    ZBX_URL=<zabbix-api-url> \
+        python3 scripts/import_grg_xfs_template_api.py [--host TESTGRG]
 """
 import argparse
 import os
@@ -25,10 +26,14 @@ _ensure_env()
 TEMPLATE_NAME = "Dashen Bank ATM Hardware - GRG XFS"
 TEMPLATE_GROUP = "Templates"
 DEFAULT_HOST = "TESTGRG"
-DEFAULT_IP = "10.41.30.115"
 
-ZBX_URL = os.environ.get('ZBX_URL') or os.environ.get(
-    'ZABBIX_URL', 'http://172.22.10.45:8080/api_jsonrpc.php')
+ZBX_SCHEME = os.environ.get('ZBX_SCHEME', 'http')
+# APPS_VM_IP is the documented UAT-01 address; keeping it as a fallback
+# preserves the old default without embedding an IP in the source.
+ZBX_HOST = os.environ.get('ZBX_HOST') or os.environ.get('APPS_VM_IP') or 'localhost'
+ZBX_PORT = os.environ.get('ZBX_PORT', '8080')
+ZBX_URL = os.environ.get('ZBX_URL') or os.environ.get('ZABBIX_URL') or (
+    f'{ZBX_SCHEME}://{ZBX_HOST}:{ZBX_PORT}/api_jsonrpc.php')
 ZBX_USER = os.environ.get('ZBX_USER') or os.environ.get('ZABBIX_USER', 'Admin')
 ZBX_PASS = os.environ.get('ZBX_PASS') or os.environ.get('ZABBIX_PASS', '')
 
@@ -271,7 +276,8 @@ def link_template_to_host(tid, target_name, host_ip, auth):
 def main():
     parser = argparse.ArgumentParser(description="Import GRG XFS template and link to host via Zabbix API")
     parser.add_argument('--host', default=DEFAULT_HOST, help=f"Host name to link (default: {DEFAULT_HOST})")
-    parser.add_argument('--ip', default=DEFAULT_IP, help=f"Host IP to configure if creating (default: {DEFAULT_IP})")
+    parser.add_argument('--ip', default=os.environ.get('GRG_TEST_IP') or None,
+                        help='Deprecated; ignored. Configure the host interface in Zabbix.')
     args = parser.parse_args()
 
     auth = call('user.login', {'username': ZBX_USER, 'password': ZBX_PASS})

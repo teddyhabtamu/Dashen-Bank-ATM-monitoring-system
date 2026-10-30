@@ -9,6 +9,7 @@ from blueprints.auth import login_required, role_required, ROLE_VIEWER, ROLE_OPE
 from db import get_db
 from audit import log_action
 from ej_text import humanize_ndc_text
+from net_url import service_url
 from datetime import datetime, date, timedelta, timezone
 
 logger = logging.getLogger(__name__)
@@ -434,7 +435,9 @@ def ej_search():
             skipped = 0
             try:
                 resp = requests.get(
-                    f"http://{ES_HOST}/{ES_INDEX}/_search?ignore_unavailable=true",
+                    service_url(ES_HOST,
+                                f"/{ES_INDEX}/_search?ignore_unavailable=true",
+                                'ES_SCHEME'),
                     json={
                         "query": {"bool": {"must": must}},
                         "size": per_page,
@@ -553,7 +556,9 @@ def ej_search_csv():
     elif must:
         try:
             resp = requests.get(
-                f"http://{ES_HOST}/{ES_INDEX}/_search?ignore_unavailable=true",
+                service_url(ES_HOST,
+                            f"/{ES_INDEX}/_search?ignore_unavailable=true",
+                            'ES_SCHEME'),
                 json={"query": {"bool": {"must": must}}, "size": 5000, "sort": [{"@timestamp": "desc"}]},
                 timeout=30,
             )

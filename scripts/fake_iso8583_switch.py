@@ -3,9 +3,10 @@
 Fake ATM switch — lab stand-in for Dashen's real switch.
 
 Sends REAL length-prefixed ISO 8583 0210 bytes over TCP to the
-iso8583-gateway in MODE=tcp (default UAT-02:9876). This exercises the
-production ingest path (framing -> parse -> TID map -> DB write) that
-txn_engine.py bypasses with direct INSERTs.
+iso8583-gateway in MODE=tcp (default localhost:9876; set ISO8583_TARGET or
+--target for UAT-02). This exercises the production ingest path
+(framing -> parse -> TID map -> DB write) that txn_engine.py bypasses with
+direct INSERTs.
 
 Contract (must match camel/iso8583_gateway.py parse_iso8583_message):
   [2-byte big-endian length][MTI 4 ASCII][bitmap 8 bytes][fields ascending]
@@ -19,7 +20,7 @@ Contract (must match camel/iso8583_gateway.py parse_iso8583_message):
       (real F41 is 8 chars; bank TID format is an open switch-spec item).
 
 Usage:
-  python3 scripts/fake_iso8583_switch.py --target 172.22.10.60:9876 \
+  python3 scripts/fake_iso8583_switch.py --target localhost:9876 \
       --tid TIDTEST1 --count 5
   python3 scripts/fake_iso8583_switch.py --target localhost:9876 \
       --tid TIDTEST1 --count 2 --decline-every 2 --txn-type balance
@@ -28,6 +29,7 @@ After the run, verify with source='ISO8583_REAL' rows, then DELETE the
 test rows — fake data must never linger under the REAL tag.
 """
 import argparse
+import os
 from random import SystemRandom
 
 import socket
@@ -86,8 +88,15 @@ def parse_target(target):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument('--target', default='172.22.10.60:9876',
-                    help='host:port of gateway in MODE=tcp')
+    # UAT operators already set DATA_VM_IP; use it when present so the old
+    # one-command invocation keeps working without a hardcoded address.
+    default_target = os.environ.get('ISO8583_TARGET') or (
+        f"{os.environ['DATA_VM_IP']}:9876"
+        if os.environ.get('DATA_VM_IP') else 'localhost:9876')
+    ap.add_argument('--target', default=default_target,
+                    help='host:port of gateway in MODE=tcp '
+                         '(default: ISO8583_TARGET, DATA_VM_IP:9876, '
+                         'or localhost:9876)')
     ap.add_argument('--tid', required=True,
                     help='8-char-max lab TID (field 41)')
     ap.add_argument('--count', type=int, default=5)

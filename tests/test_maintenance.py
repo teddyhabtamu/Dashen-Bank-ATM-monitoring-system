@@ -143,6 +143,13 @@ def test_end_deletes_the_resolved_window_not_a_posted_id():
     assert "log_action('MAINTENANCE_END'" in END
 
 
+def test_successful_maintenance_actions_use_post_redirect_get():
+    """Both routes redirect after POST.  303 is the correct status for that
+    exchange and keeps the success return distinct from the 302 error paths."""
+    assert 'return back, 303' in START
+    assert 'return back, 303' in END
+
+
 def test_the_detail_page_uses_the_role_aware_duration_list():
     assert "maintenance_options(session.get('role') == ROLE_ADMIN)" in ADMIN
 

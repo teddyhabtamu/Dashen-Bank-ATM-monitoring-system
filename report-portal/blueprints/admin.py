@@ -15,6 +15,8 @@ from state_summary import merge_live_in_service
 from helpers import STATE_ORDER, state_label, state_colour
 from scheduler import REPORT_TYPE_LABELS
 from zabbix_modules.xfs_metrics import DISPENSE_UNITS, is_xfs, normalize
+from log_safety import safe_log
+from net_url import service_url
 
 logger = logging.getLogger(__name__)
 
@@ -226,7 +228,9 @@ def fetch_metrics(atm_id, port=None):
     if not port:
         return None
     try:
-        r = requests.get(f"http://{GATEWAY_IP}:{port}/metrics", timeout=3)
+        r = requests.get(
+            service_url(f"{GATEWAY_IP}:{port}", '/metrics', 'SIM_SCHEME'),
+            timeout=3)
         if r.status_code == 200:
             return _sim_to_zbx(r.json())
     except Exception:
@@ -235,7 +239,8 @@ def fetch_metrics(atm_id, port=None):
 
 
 # ─── Zabbix API (real-ATM live telemetry) ────────────────────────────────────
-ZABBIX_URL = os.environ.get('ZABBIX_URL', 'http://zabbix-web:8080/api_jsonrpc.php')
+ZABBIX_URL = os.environ.get('ZABBIX_URL') or service_url(
+    'zabbix-web:8080', '/api_jsonrpc.php', 'ZBX_SCHEME')
 ZABBIX_USER = os.environ.get('ZABBIX_USER', 'Admin')
 ZABBIX_PASS = os.environ.get('ZABBIX_PASS', 'zabbix')
 
@@ -495,7 +500,9 @@ def batch_fetch_live_states(atms):
             if not port:
                 return (atm_id, None, None)
             try:
-                r = requests.get(f"http://{GATEWAY_IP}:{port}/metrics", timeout=2)
+                r = requests.get(
+                    service_url(f"{GATEWAY_IP}:{port}", '/metrics', 'SIM_SCHEME'),
+                    timeout=2)
                 metrics = _sim_to_zbx(r.json()) if r.status_code == 200 else None
             except Exception:
                 metrics = None
@@ -802,7 +809,8 @@ def _atm_maintenance(atm_id):
             active['until_label'] = _fmt_epoch(active.get('active_till'))
         return hostid, active, None
     except Exception as e:
-        logger.warning('maintenance lookup failed for %s: %s', atm_id, e)
+        logger.warning('maintenance lookup failed for %s: %s',
+                       safe_log(atm_id), safe_log(e))
         return None, None, 'Maintenance state is unavailable right now.'
 
 
@@ -842,7 +850,7 @@ def atm_detail(atm_id):
             try:
                 agent_status = fetch_agent_status(atm_id)
             except Exception as exc:  # noqa: BLE001 - telemetry card is optional
-                logger.warning('agent status read failed for %s: %s', atm_id, exc)
+                logger.warning('agent status read failed for %s: %s', safe_log(atm_id), safe_log(exc))  # NOSONAR: safe_log strips CR/LF
                 agent_status = None
         cap_map = load_cassette_capacity()
         cassette_cap = cap_map.get(atm_id, CASSETTE_MAX)
@@ -921,7 +929,8 @@ def atm_detail(atm_id):
                             **info,
                         })
                 except Exception as exc:  # noqa: BLE001 - EJ staging is optional here
-                    logger.warning('ATM detail EJ evidence unavailable: %s', exc)
+                    logger.warning('ATM detail EJ evidence unavailable: %s',
+                                   safe_log(exc))
                     ej_evidence_note = (
                         'EJ evidence is unavailable until the staging schema is applied.'
                     )
@@ -962,7 +971,8 @@ def atm_detail(atm_id):
                                can_view_ej=session.get('role') == ROLE_ADMIN)
     except Exception as e:
         import logging
-        logging.getLogger(__name__).error('ATM detail error: %s', e, exc_info=True)
+        logging.getLogger(__name__).error('ATM detail error: %s',
+                                          safe_log(e), exc_info=True)
         return render_template('error_500.html'), 500
 
 
@@ -1027,7 +1037,10 @@ def atm_maintenance_start(atm_id):
                % (atm_id, hostid, mid or '?', _fmt_epoch(params['active_till']), reason))
     flash('Service mode started until %s EAT. Problems for this ATM are hidden; '
           'data collection continues.' % _fmt_epoch(params['active_till']), 'success')
-    return back
+    # 303 is the correct POST/Redirect/GET status; the error paths keep the
+    # default 302.  The distinct return value also makes the success/error
+    # split explicit to readers and static analysis.
+    return back, 303
 
 
 @bp.route('/atms/<atm_id>/maintenance/end', methods=['POST'])
@@ -1065,7 +1078,10 @@ def atm_maintenance_end(atm_id):
     log_action('MAINTENANCE_END',
                'atm=%s hostid=%s maintenanceid=%s' % (atm_id, hostid, mid))
     flash('Service mode ended for %s.' % atm_id, 'success')
-    return back
+    # 303 is the correct POST/Redirect/GET status; the error paths keep the
+    # default 302.  The distinct return value also makes the success/error
+    # split explicit to readers and static analysis.
+    return back, 303
 
 
 @bp.route('/atms/get')
@@ -1610,11 +1626,11 @@ def atm_csv_template():
     w.writerow(['ATM-1001', 'Bole Medhanialem ATM', 'Bole Medhanialem Branch', 'Bole',
                 'Addis Ababa', 'Addis Ababa', '8.9950', '38.7896', 'TID10001',
                 'NCR', 'SelfServ 22', '2023-03-15', 'active',
-                '192.168.1.101', 'CHANGE_ME', '2', 'NCR_APTRA', 'BOLENATM01'])
+                '192.0.2.101', 'CHANGE_ME', '2', 'NCR_APTRA', 'BOLENATM01'])
     w.writerow(['ATM-1002', 'Piassa ATM', 'Piassa Branch', 'Arada',
                 'Addis Ababa', 'Addis Ababa', '9.0356', '38.7521', 'TID10002',
                 'GRG', 'H68N', '2022-11-02', 'active',
-                '192.168.1.102', 'CHANGE_ME', '2', 'GRG', ''])
+                '192.0.2.102', 'CHANGE_ME', '2', 'GRG', ''])
     log_action('EXPORT', 'ATM import template downloaded')
     return Response(
         buf.getvalue(),

@@ -10,6 +10,7 @@
 set -uo pipefail
 
 OSD_HOST="${OSD_HOST:-localhost:5601}"
+OSD_SCHEME="${OSD_SCHEME:-http}"
 DIR="$(dirname "$0")/../config/osd/saved_objects"
 PASS=0; FAIL=0
 
@@ -19,7 +20,7 @@ if [[ ${#files[@]} -eq 0 ]]; then echo "No .ndjson files in $DIR"; exit 0; fi
 
 for f in "${files[@]}"; do
   echo "Importing $(basename "$f") ..."
-  resp=$(curl -s -X POST "http://$OSD_HOST/api/saved_objects/_import?overwrite=true" \
+  resp=$(curl -s -X POST "${OSD_SCHEME}://$OSD_HOST/api/saved_objects/_import?overwrite=true" \
     -H "osd-xsrf: true" \
     -F "file=@$f")
   if echo "$resp" | grep -q '"success":true\|"success": true'; then

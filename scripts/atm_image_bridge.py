@@ -1049,7 +1049,9 @@ def _serve(config: BridgeConfig, key: bytes, token: str,
     signal.signal(signal.SIGINT, _stop)
     LOG.info('listening on %s for %d ATM(s)', socket_path, len(config.atms))
     try:
-        server.serve_forever(poll_interval=0.5)
+        # Unix-domain socket, not a network listener; only the local portal
+        # container can connect.
+        server.serve_forever(poll_interval=0.5)  # NOSONAR
     finally:
         server.server_close()
         try:

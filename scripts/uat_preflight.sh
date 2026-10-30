@@ -4,7 +4,9 @@
 set -u
 ZBX_HOST="${ZABBIX_HOST:-172.22.10.45}"
 ZBX_PORT="${ZABBIX_PORT:-8080}"
+ZBX_SCHEME="${ZBX_SCHEME:-http}"
 DATA_VM_IP="${DATA_VM_IP:-172.22.10.60}"
+ES_SCHEME="${ES_SCHEME:-http}"
 fail=0
 
 # Two kinds of check live in this file and they must not be sent to the same
@@ -34,7 +36,7 @@ command -v docker >/dev/null 2>&1 && ok "docker present" || bad "docker missing"
 echo "-- Zabbix API reachable --"
 # NOTE: plain GET on api_jsonrpc.php answers 412 (not 200) — either code proves
 # the PHP endpoint is up; only connection failure/timeout means unreachable.
-if curl -s --max-time 5 -o /dev/null -w "%{http_code}" "http://${ZBX_HOST}:${ZBX_PORT}/api_jsonrpc.php" | grep -q "200\|412"; then
+if curl -s --max-time 5 -o /dev/null -w "%{http_code}" "${ZBX_SCHEME}://${ZBX_HOST}:${ZBX_PORT}/api_jsonrpc.php" | grep -q "200\|412"; then
   ok "Zabbix API on ${ZBX_HOST}:${ZBX_PORT}"
 else
   bad "Zabbix API unreachable on ${ZBX_HOST}:${ZBX_PORT}"
@@ -51,7 +53,7 @@ echo "-- SNMP loader present --"
 command -v snmpwalk >/dev/null 2>&1 && ok "snmpwalk present" || bad "snmpwalk missing (sudo dnf install -y net-snmp-utils)"
 
 echo "-- OpenSearch reachable from UAT-01 --"
-if curl -s --max-time 5 -o /dev/null -w "%{http_code}" "http://${DATA_VM_IP}:9200" | grep -q 200; then
+if curl -s --max-time 5 -o /dev/null -w "%{http_code}" "${ES_SCHEME}://${DATA_VM_IP}:9200" | grep -q 200; then
   ok "OpenSearch on ${DATA_VM_IP}:9200"
 else
   bad "OpenSearch unreachable on ${DATA_VM_IP}:9200"
@@ -103,7 +105,7 @@ if command -v python3 >/dev/null 2>&1 && [[ -f scripts/generate_zabbix_templates
 fi
 
 echo "-- EJ index reachable in OpenSearch --"
-ej_idx=$(curl -s --max-time 5 "http://${DATA_VM_IP}:9200/_cat/indices/atm-*?h=index" 2>/dev/null | head -1)
+ej_idx=$(curl -s --max-time 5 "${ES_SCHEME}://${DATA_VM_IP}:9200/_cat/indices/atm-*?h=index" 2>/dev/null | head -1)
 if [[ -n "$ej_idx" ]]; then
   ok "EJ index present: $ej_idx"
 else

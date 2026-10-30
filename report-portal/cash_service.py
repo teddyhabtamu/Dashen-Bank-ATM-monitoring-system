@@ -16,6 +16,7 @@ import logging
 from datetime import datetime, timedelta
 
 from cash_forecast import DEFAULT_WINDOW_DAYS, forecast
+from log_safety import safe_log
 from zabbix_modules.xfs_metrics import DISPENSE_UNITS, is_xfs
 
 logger = logging.getLogger(__name__)
@@ -93,7 +94,7 @@ def _cassette_notes(atm_id):
             return [], 'Cassette levels came back unreadable.'
         return out, ''
     except Exception as e:
-        logger.warning('cash forecast: cassette levels failed for %s: %s', atm_id, e)
+        logger.warning('cash forecast: cassette levels failed for %s: %s', safe_log(atm_id), safe_log(e))  # NOSONAR: safe_log strips CR/LF
         return [], f'Could not read cassette levels: {e}'
 
 
@@ -111,7 +112,7 @@ def _withdrawals(atm_id, window_days):
             cur.close()
             return rows, ''
     except Exception as e:
-        logger.warning('cash forecast: withdrawals failed for %s: %s', atm_id, e)
+        logger.warning('cash forecast: withdrawals failed for %s: %s', safe_log(atm_id), safe_log(e))  # NOSONAR: safe_log strips CR/LF
         return [], f'Could not read transaction history: {e}'
 
 
@@ -129,7 +130,7 @@ def _loads(atm_id, window_days):
             cur.close()
             return rows, ''
     except Exception as e:
-        logger.warning('cash forecast: loads failed for %s: %s', atm_id, e)
+        logger.warning('cash forecast: loads failed for %s: %s', safe_log(atm_id), safe_log(e))  # NOSONAR: safe_log strips CR/LF
         return [], f'Could not read the replenishment log: {e}'
 
 
