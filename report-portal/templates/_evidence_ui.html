@@ -27,8 +27,9 @@
 {% macro confidence_chip(confidence) -%}
 {% set key = (confidence or 'none')|lower %}
 {% set names = {'high': 'Strong match', 'medium': 'Possible match', 'low': 'Weak match', 'none': 'No match'} %}
+{% set classes = {'high': 'strong', 'medium': 'possible', 'low': 'weak', 'none': 'none'} %}
 {% set text = names.get(key, confidence or 'No match') %}
-<span class="ev-chip ev-confidence ev-confidence-{{ key }}" title="Match confidence: {{ text }}">{{ text }}</span>
+<span class="ev-chip ev-confidence ev-confidence-{{ classes.get(key, 'none') }}" title="Match confidence: {{ text }}">{{ text }}</span>
 {%- endmacro %}
 
 
