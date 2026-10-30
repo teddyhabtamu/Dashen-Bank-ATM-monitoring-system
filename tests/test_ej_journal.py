@@ -444,6 +444,15 @@ def test_shadow_row_carries_dispensed_amount_and_warnings():
     assert row['parser_version'] == ej.PARSER_VERSION
 
 
+def test_shadow_row_carries_session_edges_for_exact_image_window():
+    txn = _one(NCR_APPROVED, 'NCR', terminal_map=MAP)
+    row = txn.to_shadow_row()
+    assert row['started_at'] == datetime(2026, 9, 9, 20, 32, 13)
+    assert row['ended_at'] == datetime(2026, 9, 9, 20, 32, 44)
+    assert row['started_at'].tzinfo is None
+    assert row['ended_at'].tzinfo is None
+
+
 def test_money_is_not_ingested_until_the_terminal_maps_to_an_atm():
     txn = _one(NCR_APPROVED, 'NCR')
     assert txn.completed is True

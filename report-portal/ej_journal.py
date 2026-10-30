@@ -229,6 +229,14 @@ class EjTransaction:
             'parser_version': self.parser_version,
             'raw_ref': self.raw_ref,
         })
+        # The session edges make an exact image window possible.  They stay
+        # nullable because older journals, or a session with no end record,
+        # must not be given a fabricated interval.
+        for name in ('started_at', 'ended_at'):
+            value = getattr(self, name)
+            if value is not None:
+                value = value.astimezone(UTC).replace(tzinfo=None)
+            row[name] = value
         return row
 
 

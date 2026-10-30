@@ -672,6 +672,53 @@ class BridgeApp:
                 entry['index'],
             ))
 
+        # A day zip is usually several sessions.  Grouping here keeps the
+        # portal from repeating the same session timestamp on every row.
+        grouped: dict[str, list[dict]] = {}
+        for entry in projected:
+            key = entry['session_at'] or 'Unknown'
+            grouped.setdefault(key, []).append(entry)
+
+        sessions = []
+        for session_at, items in grouped.items():
+            roles = [item['role'] for item in items if item['role']]
+            if 'start' in roles:
+                role = 'start'
+            elif 'in_window' in roles:
+                role = 'in_window'
+            elif 'near_window' in roles:
+                role = 'near_window'
+            elif roles:
+                role = 'other'
+            else:
+                role = ''
+            cameras = sorted({
+                item['camera'] for item in items
+                if isinstance(item['camera'], int)
+            })
+            sessions.append({
+                'session_at': session_at,
+                'label': (session_at[11:19]
+                          if session_at != 'Unknown' and len(session_at) >= 19
+                          else session_at),
+                'count': len(items),
+                'cameras': cameras,
+                'indices': [item['index'] for item in items],
+                'role': role,
+                'match_count': sum(1 for item in items if item['score'] > 0),
+                'first_capture': min(
+                    (item['captured_at'] for item in items
+                     if item['captured_at']), default=''),
+                'last_capture': max(
+                    (item['captured_at'] for item in items
+                     if item['captured_at']), default=''),
+            })
+        sessions.sort(key=lambda item: (
+            -item['match_count'],
+            item['session_at'] == 'Unknown',
+            item['session_at'],
+        ))
+
         result = {
             'kind': 'atm-zip-entries',
             'atm_id': atm.atm_id,
@@ -681,6 +728,7 @@ class BridgeApp:
             'zip_hmac': _hmac(zip_hmac),
             'count': len(projected),
             'entries': projected,
+            'sessions': sessions,
             'caveat': NCR_ENTRY_CAVEAT,
             'available': True,
         }

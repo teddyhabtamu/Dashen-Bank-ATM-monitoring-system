@@ -53,6 +53,7 @@ PARSE_COLUMNS = (
 TXN_COLUMNS = (
     'transaction_key', 'parse_file', 'parse_sha',
     'vendor', 'atm_id', 'terminal_id', 'branch', 'recorded_at',
+    'started_at', 'ended_at',
     'txn_type', 'status', 'amount', 'currency', 'dispensed_amount',
     'card_masked', 'auth_code', 'error_code', 'seq_number',
     'warnings', 'confidence', 'parser_version', 'raw_ref', 'source_file',
@@ -234,12 +235,15 @@ ON CONFLICT (file_path, file_sha256) DO UPDATE SET
         out.write("""
 INSERT INTO public.ej_transactions (
     transaction_key, parse_run_id, vendor, atm_id, terminal_id, branch,
-    recorded_at, txn_type, status, amount, currency, dispensed_amount,
+    recorded_at, started_at, ended_at,
+    txn_type, status, amount, currency, dispensed_amount,
     card_masked, auth_code, error_code, seq_number, warnings, confidence,
     parser_version, raw_ref, source_file
 )
 SELECT t.transaction_key, r.id, t.vendor, t.atm_id, t.terminal_id, t.branch,
-       t.recorded_at::timestamp, t.txn_type, t.status,
+       t.recorded_at::timestamp, NULLIF(t.started_at, '')::timestamp,
+       NULLIF(t.ended_at, '')::timestamp,
+       t.txn_type, t.status,
        NULLIF(t.amount, '')::numeric, NULLIF(t.currency, ''),
        NULLIF(t.dispensed_amount, '')::numeric,
        t.card_masked, t.auth_code, t.error_code, t.seq_number,
@@ -256,6 +260,8 @@ ON CONFLICT (transaction_key) DO UPDATE SET
     terminal_id = EXCLUDED.terminal_id,
     branch = EXCLUDED.branch,
     recorded_at = EXCLUDED.recorded_at,
+    started_at = EXCLUDED.started_at,
+    ended_at = EXCLUDED.ended_at,
     txn_type = EXCLUDED.txn_type,
     status = EXCLUDED.status,
     amount = EXCLUDED.amount,

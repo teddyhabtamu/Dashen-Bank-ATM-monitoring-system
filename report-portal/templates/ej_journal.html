@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_evidence_ui.html" import status_chip, kpi, empty_state %}
 {% block title %}EJ Journal — ATM Monitoring{% endblock %}
 {% block extra_style %}{% include "_ej_journal_style.html" %}{% endblock %}
 {% block body %}
@@ -6,7 +7,19 @@
   <div class="page-header-icon"><i data-lucide="book-open"></i></div>
   <div>
     <h1 class="page-title">EJ Journal</h1>
-    <p class="page-subtitle">Fleet view of journals parsed into quarantine. Not used by KPIs, reports, cash forecasts or anomalies. Auto-refreshes every 120 seconds.</p>
+    <p class="page-subtitle">
+      Fleet view of journals parsed into reconciliation staging.
+      Latest journal file per ATM · period totals above.
+      Not used by KPIs, reports, cash forecasts or anomalies.
+    </p>
+  </div>
+  <div class="page-actions">
+    <label class="ev-live" title="Reload every 120 seconds while this tab is visible">
+      <input id="evLive" type="checkbox" checked> Live
+    </label>
+    <a class="btn btn-outline" href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q) }}">
+      <i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Refresh
+    </a>
   </div>
 </div>
 <div class="page-content">
@@ -15,32 +28,37 @@
 <div class="banner banner-error"><strong>Staging schema missing.</strong> {{ setup_error }}</div>
 {% endif %}
 
-<div class="banner banner-note">
-  <strong>Read-only integration.</strong> These rows are held for reconciliation and never enter the official
-  <span class="mono">atm_transactions</span> table until explicitly promoted. <span class="mono">no_receipt</span>
-  sessions are counted as evidence, never turned into transactions.
+<div class="ev-page-note">
+  <i data-lucide="shield-check"></i>
+  <span><b>Read-only staging.</b> Parsed journals are held for reconciliation and never enter the official
+    <span class="mono">atm_transactions</span> table until explicitly promoted.
+    <span class="mono">no_receipt</span> sessions are counted as evidence, never turned into transactions.</span>
+  <span class="ev-note-tail">
+    <span class="ev-chip ev-status ev-status-ok"><span class="ev-dot"></span>Not used by KPIs</span>
+    <span class="ev-faint">Updated {{ last_updated }}</span>
+  </span>
 </div>
 
-<form method="get" action="/ej-journal" class="ej-filters">
+<form method="get" action="/ej-journal" class="ej-filters" role="search">
   <div class="fg">
-    <label>Period</label>
-    <select name="days">
+    <label for="ej-days">Period</label>
+    <select id="ej-days" name="days">
       {% for d in [1, 7, 30, 90] %}
       <option value="{{ d }}"{% if days == d %} selected{% endif %}>Last {{ d }} day{% if d != 1 %}s{% endif %}</option>
       {% endfor %}
     </select>
   </div>
   <div class="fg">
-    <label>Vendor</label>
-    <select name="vendor">
+    <label for="ej-vendor">Vendor</label>
+    <select id="ej-vendor" name="vendor">
       <option value="">All vendors</option>
       <option value="NCR"{% if vendor == 'NCR' %} selected{% endif %}>NCR</option>
       <option value="GRG"{% if vendor == 'GRG' %} selected{% endif %}>GRG</option>
     </select>
   </div>
   <div class="fg">
-    <label>ATM or branch</label>
-    <input type="search" name="q" value="{{ q }}" placeholder="Search ATM ID or branch">
+    <label for="ej-q">ATM or branch</label>
+    <input id="ej-q" type="search" name="q" value="{{ q }}" placeholder="Search ATM ID or branch">
   </div>
   <div class="actions">
     <button class="btn btn-primary" type="submit"><i data-lucide="filter" style="width:14px;height:14px"></i> Apply</button>
@@ -48,63 +66,127 @@
   </div>
 </form>
 
-<div class="stat-row">
-  <div class="stat-card ok"><div class="num">{{ summary.get('active_atms', 0) }}</div><div class="lbl">Active ATMs</div></div>
-  <div class="stat-card"><div class="num">{{ summary.get('reporting_atms', 0) }}</div><div class="lbl">ATMs reporting files</div></div>
-  <div class="stat-card {% if summary.get('parse_errors', 0) %}bad{% endif %}"><div class="num">{{ summary.get('parse_errors', 0) }}</div><div class="lbl">Parse failures</div></div>
-  <div class="stat-card {% if summary.get('unmapped_files', 0) %}warn{% endif %}"><div class="num">{{ summary.get('unmapped_files', 0) }}</div><div class="lbl">Unmapped files</div></div>
-  <div class="stat-card"><div class="num">{{ summary.get('staged', 0) }}</div><div class="lbl">Staged transactions</div></div>
-  <div class="stat-card"><div class="num">{{ '{:,.2f}'.format(summary.get('approved_amount', 0)|float) }} <small>ETB</small></div><div class="lbl">Approved amount</div></div>
-  <div class="stat-card {% if summary.get('dispensed', 0)|float == 0 and summary.get('approved', 0) %}warn{% endif %}"><div class="num">{{ '{:,.2f}'.format(summary.get('dispensed', 0)|float) }} <small>ETB</small></div><div class="lbl">Cash dispensed evidence</div></div>
-  <div class="stat-card {% if summary.get('no_cash_evidence', 0) %}warn{% endif %}"><div class="num">{{ summary.get('no_cash_evidence', 0) }}</div><div class="lbl">Approved without cash evidence</div></div>
+{% set h = summary.get('health') or {} %}
+{% set health_total = h.get('total') or 0 %}
+{% set health_base = health_total if health_total else 1 %}
+<div class="ev-kpi-grid">
+  {{ kpi('Active ATMs', summary.get('active_atms', 0), 'in the selected fleet') }}
+  {{ kpi('Reporting files', summary.get('reporting_atms', 0), 'ATMs with at least one journal') }}
+  {{ kpi('Parse failures', summary.get('parse_errors', 0), 'files that failed to parse', 'bad' if summary.get('parse_errors', 0) else 'good') }}
+  {{ kpi('Stale', h.get('stale', 0), 'no journal for 2+ days', 'warn' if h.get('stale', 0) else 'good') }}
+</div>
+
+<div class="ev-health-card">
+  <div class="ev-health-head">
+    <span><b>Fleet health</b> · {{ health_total }} active ATM{% if health_total != 1 %}s{% endif %}</span>
+    <span>{{ h.get('ok', 0) }} healthy · {{ h.get('stale', 0) }} stale · {{ h.get('error', 0) }} parse error{% if h.get('error', 0) != 1 %}s{% endif %}</span>
+  </div>
+  <div class="ev-health" role="img"
+       aria-label="{{ h.get('ok', 0) }} healthy, {{ h.get('stale', 0) }} stale, {{ h.get('error', 0) }} parse errors, {{ h.get('no_data', 0) }} no data">
+    <span class="ev-health-ok" style="width:{{ ((h.get('ok', 0) / health_base) * 100)|round(1) }}%"></span>
+    <span class="ev-health-stale" style="width:{{ ((h.get('stale', 0) / health_base) * 100)|round(1) }}%"></span>
+    <span class="ev-health-error" style="width:{{ ((h.get('error', 0) / health_base) * 100)|round(1) }}%"></span>
+    <span class="ev-health-none" style="width:{{ ((h.get('no_data', 0) / health_base) * 100)|round(1) }}%"></span>
+  </div>
+  <div class="ev-health-legend">
+    <span><i class="ev-health-ok"></i>Healthy <b>{{ h.get('ok', 0) }}</b></span>
+    <span><i class="ev-health-stale"></i>Stale <b>{{ h.get('stale', 0) }}</b></span>
+    <span><i class="ev-health-error"></i>Parse error <b>{{ h.get('error', 0) }}</b></span>
+    <span><i class="ev-health-none"></i>No data <b>{{ h.get('no_data', 0) }}</b></span>
+  </div>
+</div>
+
+<div class="ev-page-note" style="margin-bottom:16px">
+  <i data-lucide="activity"></i>
+  <span><b>Period activity</b> · {{ '{:,}'.format(summary.get('staged', 0)) }} parsed transactions ·
+    ETB {{ '{:,.2f}'.format(summary.get('approved_amount', 0)|float) }} approved ·
+    ETB {{ '{:,.2f}'.format(summary.get('dispensed', 0)|float) }} dispensed evidence</span>
+  {% if summary.get('no_cash_evidence', 0) %}
+  <span class="ev-note-tail"><span class="ev-chip ev-status ev-status-stale"><span class="ev-dot"></span>{{ summary.get('no_cash_evidence') }} approved without cash evidence</span></span>
+  {% endif %}
 </div>
 
 {% set attention = summary.get('parse_errors', 0) + summary.get('unmapped_files', 0) + summary.get('unmapped_txns', 0) + summary.get('no_cash_evidence', 0) %}
 {% if attention %}
-<div class="attention">
-  {% if summary.get('parse_errors', 0) %}<div class="item"><span>Parse failures</span><strong>{{ summary.get('parse_errors') }}</strong></div>{% endif %}
-  {% if summary.get('unmapped_files', 0) %}<div class="item"><span>Journal files without an ATM</span><strong>{{ summary.get('unmapped_files') }}</strong></div>{% endif %}
-  {% if summary.get('unmapped_txns', 0) %}<div class="item"><span>Staged rows without an ATM</span><strong>{{ summary.get('unmapped_txns') }}</strong></div>{% endif %}
-  {% if summary.get('no_cash_evidence', 0) %}<div class="item"><span>Approved, no dispense evidence</span><strong>{{ summary.get('no_cash_evidence') }}</strong></div>{% endif %}
+<div class="ev-attention">
+  <span class="ev-attention-label"><i data-lucide="alert-triangle" style="width:14px;height:14px"></i> Needs attention</span>
+  {% if summary.get('parse_errors', 0) %}
+  <a class="ev-attention-item" href="#attention-files"><b>{{ summary.get('parse_errors') }}</b> parse failure{% if summary.get('parse_errors') != 1 %}s{% endif %}</a>
+  {% endif %}
+  {% if summary.get('unmapped_files', 0) %}
+  <a class="ev-attention-item" href="#attention-files"><b>{{ summary.get('unmapped_files') }}</b> file{% if summary.get('unmapped_files') != 1 %}s{% endif %} not linked to an ATM</a>
+  {% endif %}
+  {% if summary.get('unmapped_txns', 0) %}
+  <span class="ev-attention-item"><b>{{ summary.get('unmapped_txns') }}</b> parsed row{% if summary.get('unmapped_txns') != 1 %}s{% endif %} without an ATM</span>
+  {% endif %}
+  {% if summary.get('no_cash_evidence', 0) %}
+  <span class="ev-attention-item"><b>{{ summary.get('no_cash_evidence') }}</b> approved without cash evidence</span>
+  {% endif %}
 </div>
 {% endif %}
 
-<div class="card">
-  <div class="card-header">
-    <h2>ATM EJ Status</h2>
-    <span style="font-size:11px;color:#94A3B8">Latest journal file per ATM · period totals above</span>
+<div class="ev-card">
+  <div class="ev-card-head">
+    <div>
+      <h2>ATM EJ status</h2>
+      <div class="ev-card-sub">Latest journal file per ATM · period totals above · sorted by exceptions, then newest journal</div>
+    </div>
+    <span class="ev-faint" style="font-size:11px">{{ total }} ATM{% if total != 1 %}s{% endif %}</span>
   </div>
-  <div class="op-table-wrap" style="overflow-x:auto">
-    <table class="ej-table">
+  <div class="ev-table-wrap">
+    <table class="ev-table">
       <thead>
         <tr>
-          <th>ATM</th><th>Branch</th><th>Vendor</th><th>Last journal</th><th>Last ingest</th>
-          <th>Sessions</th><th>Completed</th><th>Declined</th><th>Unknown</th><th>No receipt</th><th>Parse</th><th>Status</th>
+          <th>ATM</th>
+          <th>Vendor</th>
+          <th>Latest journal</th>
+          <th>Sessions</th>
+          <th>Health</th>
+          <th aria-label="Open"></th>
         </tr>
       </thead>
       <tbody>
         {% for r in rows %}
         <tr>
-          <td><a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=r.atm_id, days=days) }}">{{ r.atm_id }}</a></td>
-          <td>{{ r.branch or '—' }}</td>
+          <td>
+            <div class="ev-atm-cell">
+              <a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=r.atm_id, days=days) }}">{{ r.atm_id }}</a>
+              <span class="ev-sub">{{ r.branch or 'Unknown branch' }}</span>
+            </div>
+          </td>
           <td>{{ r.vendor or '—' }}</td>
-          <td class="mono">{{ r.journal_date or '—' }}</td>
-          <td class="mono">{{ r.parsed_at }}</td>
-          <td>{{ r.sessions }}</td>
-          <td>{{ r.completed }}</td>
-          <td>{{ r.declined }}</td>
-          <td>{{ r.unknown }}</td>
-          <td>{{ r.no_receipt }}</td>
-          <td>{% if r.parse_errors %}<span class="pill pill-error">{{ r.parse_errors }}</span>{% else %}<span style="color:#94A3B8">—</span>{% endif %}</td>
-          <td><span class="pill pill-{{ r.status|lower|replace(' ', '') }}"{% if r.status == 'stale' %} title="No journal for two or more days. An idle or out-of-service ATM can legitimately produce no new journal."{% endif %}>{{ r.status }}</span></td>
+          <td>
+            {% if r.journal_date and r.journal_date != '—' %}
+            <span class="mono">{{ r.journal_date }}</span>
+            <span class="ev-sub">ingested {{ r.parsed_at }}</span>
+            {% else %}
+            <span class="ev-faint">No journal</span>
+            {% endif %}
+          </td>
+          <td class="ev-session-cell">
+            <strong>{{ r.sessions }}</strong>
+            <span class="ev-sub">{{ r.completed }} completed · {{ r.declined }} declined{% if r.unknown %} · {{ r.unknown }} unknown{% endif %}{% if r.no_receipt %} · {{ r.no_receipt }} no receipt{% endif %}</span>
+          </td>
+          <td>
+            {{ status_chip(r.status) }}
+            {% if r.parse_errors %}
+            <span class="ev-sub" style="color:#B42318">{{ r.parse_errors }} file{% if r.parse_errors != 1 %}s{% endif %} failed</span>
+            {% endif %}
+          </td>
+          <td class="ev-actions-cell">
+            <a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=r.atm_id, days=days) }}"
+               title="Open {{ r.atm_id }}" aria-label="Open {{ r.atm_id }}">
+              <i data-lucide="chevron-right" class="ev-row-chevron"></i>
+            </a>
+          </td>
         </tr>
         {% else %}
-        <tr><td colspan="12" class="ej-empty">No active ATMs match this filter.</td></tr>
+        <tr><td colspan="6" class="ej-empty">No active ATMs match this filter.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  <p style="margin:0;padding:10px 14px 2px;font-size:11px;color:#64748B">
+  <p style="margin:0;padding:10px 16px 4px;font-size:11px;color:#64748B">
     <strong>Stale</strong> means no journal for two or more days. It is not necessarily a puller fault:
     an ATM that is out of service, or has had no transactions, can legitimately have no new journal.
   </p>
@@ -118,20 +200,25 @@
 </div>
 
 {% if attention_files %}
-<div class="card">
-  <div class="card-header"><h2>Files Needing Attention</h2></div>
-  <div class="op-table-wrap" style="overflow-x:auto">
-    <table class="ej-table">
-      <thead><tr><th>Parsed (EAT)</th><th>File</th><th>Host</th><th>Journal date</th><th>Status</th><th>Error</th></tr></thead>
+<div class="ev-card" id="attention-files">
+  <div class="ev-card-head">
+    <div>
+      <h2>Files needing attention</h2>
+      <div class="ev-card-sub">Parse errors and files that could not be linked to an ATM</div>
+    </div>
+  </div>
+  <div class="ev-table-wrap">
+    <table class="ev-table">
+      <thead><tr><th>Parsed (EAT)</th><th>File</th><th>ATM / host</th><th>Journal date</th><th>Status</th><th>Error</th></tr></thead>
       <tbody>
         {% for f in attention_files %}
         <tr>
           <td class="mono">{{ f.parsed_at }}</td>
           <td class="mono" title="{{ f.file_path }}">{{ f.file_path.split('/')[-1] }}</td>
-          <td class="mono">{{ f.hostname or '—' }}</td>
+          <td>{{ f.hostname or 'Not linked' }}</td>
           <td class="mono">{{ f.journal_date }}</td>
-          <td><span class="pill pill-{{ 'error' if f.status == 'error' else 'stale' }}">{{ f.status }}</span></td>
-          <td style="color:#B91C1C">{{ f.error or 'No ATM mapping' }}</td>
+          <td><span class="ev-chip ev-status ev-status-{{ 'error' if f.status == 'error' else 'stale' }}"><span class="ev-dot"></span>{{ f.status }}</span></td>
+          <td style="color:#B42318">{{ f.error or 'No ATM mapping' }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -143,5 +230,29 @@
 </div>
 {% endblock %}
 {% block extra_scripts %}
-<script>window.setTimeout(function () { window.location.reload(); }, 120000);</script>
+<script>
+(function () {
+  var key = 'ej-journal-live';
+  var box = document.getElementById('evLive');
+  var timer = null;
+  var live = true;
+  try { live = localStorage.getItem(key) !== 'off'; } catch (e) { live = true; }
+  if (box) box.checked = live;
+
+  function schedule() {
+    if (timer) clearTimeout(timer);
+    if (!live || document.hidden) return;
+    timer = setTimeout(function () { window.location.reload(); }, 120000);
+  }
+  if (box) {
+    box.addEventListener('change', function () {
+      live = box.checked;
+      try { localStorage.setItem(key, live ? 'on' : 'off'); } catch (e) {}
+      schedule();
+    });
+  }
+  document.addEventListener('visibilitychange', schedule);
+  schedule();
+})();
+</script>
 {% endblock %}

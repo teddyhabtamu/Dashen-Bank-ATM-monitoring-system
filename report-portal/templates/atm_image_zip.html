@@ -1,42 +1,56 @@
 {% extends "base.html" %}
+{% from "_evidence_ui.html" import role_chip, confidence_chip, empty_state %}
 {% block title %}{{ atm.atm_id }} · ATM image archive{% endblock %}
 {% block extra_style %}
 {% include "_ej_journal_style.html" %}
 <style>
-.img-meta{display:flex;flex-wrap:wrap;gap:8px 22px;background:#fff;border:1px solid #EEF1F6;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:#64748B;box-shadow:0 1px 3px rgba(1,33,105,.04)}
-.img-meta b{color:#0F172A}
-.img-name{max-width:480px;word-break:break-word}
-.img-name small{display:block;color:#94A3B8;font-size:10px;margin-top:2px}
-.img-clip{font-size:10px;color:#94A3B8;margin-top:2px}
-.img-role{display:inline-block;padding:2px 9px;border-radius:100px;font-size:10px;font-weight:700;white-space:nowrap;background:#F1F5F9;color:#475569}
-.img-role-start{background:#DBEAFE;color:#1D4ED8}
-.img-role-end{background:#DCFCE7;color:#166534}
-.img-role-near{background:#FEF2F2;color:#991B1B}
-.img-caveat{background:#F8FAFC;border:1px solid #E4E9F1;color:#475569;border-radius:10px;padding:11px 14px;font-size:12px;line-height:1.55;margin-bottom:14px}
-.img-view-link{display:inline-block;padding:5px 11px;border:1px solid #BFDBFE;border-radius:6px;background:#EFF6FF;color:#1D4ED8 !important;font-weight:700;text-decoration:none;white-space:nowrap}
-.img-view-link:hover{background:#DBEAFE;text-decoration:none !important}
-.img-view-link.off{background:#F8FAFC;border-color:#E4E9F1;color:#94A3B8 !important}
+.img-caveat{background:#F8FAFC;border:1px solid var(--ev-border);color:#475569;border-radius:10px;padding:10px 13px;font-size:11.5px;line-height:1.55;margin-bottom:14px}
+.img-caveat b{color:var(--ev-text)}
+.ev-entry-card{background:var(--ev-surface);border:1px solid var(--ev-border);border-radius:11px;padding:11px 12px;box-shadow:var(--ev-shadow);display:flex;flex-direction:column;gap:7px;min-width:0}
+.ev-entry-card.is-anchor{border-color:#B2DDFF;box-shadow:0 0 0 1px #B2DDFF,var(--ev-shadow)}
+.ev-entry-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ev-entry-time{font-family:var(--ev-mono);font-size:14px;font-weight:750;font-variant-numeric:tabular-nums}
+.ev-entry-meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--ev-muted)}
+.ev-entry-name{font-family:var(--ev-mono);font-size:10px;color:var(--ev-faint);word-break:break-all;line-height:1.45}
+.ev-entry-actions{margin-top:auto;display:flex;align-items:center;gap:8px;padding-top:3px}
+.ev-entry-actions .btn{padding:5px 10px;font-size:11px}
+.ev-session-panel .ev-entry-grid{margin-top:2px}
 </style>
 {% endblock %}
 {% block body %}
+{% set sessions = result.get('sessions', []) if result else [] %}
+
 <div class="page-header">
   <div class="page-header-icon"><i data-lucide="archive"></i></div>
   <div>
-    <div class="detail-head">
-      <a class="back" href="{{ url_for('atm_images.atm_images', atm_id=atm.atm_id, day=day_value) }}">← ATM images</a>
-      <a class="back" href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id) }}">EJ Journal</a>
+    <div class="ev-breadcrumb">
+      <a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id) }}">EJ Journal</a>
+      <span class="sep">/</span>
+      <a href="{{ url_for('atm_images.atm_images', atm_id=atm.atm_id, day=day_value) }}">ATM images</a>
+      <span class="sep">/</span>
+      <span>Day archive</span>
     </div>
     <h1 class="page-title">{{ atm.atm_id }} · Image archive</h1>
     <p class="page-subtitle">{{ atm.branch or 'Unknown branch' }} · {{ atm.vendor or '—' }} · {{ day_value }} · admin only</p>
+    <div class="ev-context">
+      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>NCR day archive</span>
+      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Entries by index</span>
+      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Fetched on demand</span>
+    </div>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-outline" href="{{ url_for('atm_images.atm_images', atm_id=atm.atm_id, day=day_value) }}">
+      <i data-lucide="arrow-left" style="width:14px;height:14px"></i> ATM images
+    </a>
   </div>
 </div>
 <div class="page-content">
 
-<div class="banner banner-note">
-  <strong>Archive entries are addressed by index, never by name.</strong>
-  The NCR zip entry name can contain card data and is masked here. The host
-  bridge re-lists the archive and verifies the entry's size and CRC32 before
-  streaming it. The portal does not keep a copy.
+<div class="ev-page-note">
+  <i data-lucide="shield-check"></i>
+  <span><b>Archive entries are addressed by index, never by name.</b>
+    The NCR zip entry name can contain card data and is masked here. The host bridge re-lists the archive and verifies
+    the entry's size and CRC32 before streaming it. The portal does not keep a copy.</span>
 </div>
 
 {% if bridge_error %}
@@ -48,42 +62,133 @@
 {% if unavailable %}
 <div class="banner banner-warn">
   <strong>{{ not_available_text }}</strong>
-  The archive is no longer present on this ATM. It may have rotated off the
-  device; the portal never kept a copy.
+  The archive is no longer present on this ATM. It may have rotated off the device; the portal never kept a copy.
 </div>
 {% endif %}
 
 {% if result %}
-<div class="img-meta">
-  <span>ATM <b>{{ atm.atm_id }}</b></span>
-  <span>Day <b>{{ day_value }}</b></span>
-  <span>Archive <b class="mono">{{ result.get('zip_masked') }}</b></span>
-  <span>Entries <b>{{ result.get('count', 0) }}</b></span>
-  {% if result.get('session_start') %}
-  <span>Session <b class="mono">{{ result.get('session_start') }} → {{ result.get('session_end') }}</b></span>
-  <span>Match <b>{{ result.get('confidence') }}</b></span>
-  <span>Matched <b>{{ result.get('candidate_count', 0) }} of {{ result.get('count', 0) }}</b></span>
-  {% endif %}
-  <span>Locator <b class="mono">{{ zip_hmac[:16] }}…</b></span>
+<div class="ev-card">
+  <div class="ev-card-head">
+    <div>
+      <h2>Day archive</h2>
+      <div class="ev-card-sub">{{ result.get('count', 0) }} entries · {{ sessions|length }} session{% if sessions|length != 1 %}s{% endif %} · {{ day_value }}</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      {% if result.get('session_start') %}
+      {{ confidence_chip(result.get('confidence')) }}
+      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Window {{ result.get('session_start') }} → {{ result.get('session_end') }}</span>
+      {% endif %}
+      <details class="ev-details" style="border:0;margin:0;padding:0">
+        <summary>Technical</summary>
+        <div class="ev-details-body">
+          <div>Archive <b class="mono">{{ result.get('zip_masked') }}</b></div>
+          <div>Locator <b class="mono">{{ zip_hmac[:16] }}…</b></div>
+          <div>Entries <b>{{ result.get('count', 0) }}</b></div>
+          {% if result.get('session_start') %}
+          <div>Match <b>{{ result.get('confidence') }}</b> · {{ result.get('candidate_count', 0) }} matched of {{ result.get('count', 0) }}</div>
+          <div>Session anchors <b>{{ result.get('start_anchor_count', 0) }}</b> · within window <b>{{ result.get('in_window_count', 0) }}</b></div>
+          {% endif %}
+        </div>
+      </details>
+    </div>
+  </div>
+  <div class="ev-card-body" style="padding-bottom:6px">
+    <div class="img-caveat">
+      {{ result.get('caveat') or "The zip name identifies the day container, not a transaction link. Compare the entry capture/session time with the EJ interval; the masked card field is display-only and never the link." }}
+    </div>
+    {% if not result.get('session_start') %}
+    <div class="banner banner-note" style="margin-bottom:0">
+      <strong>No session window selected.</strong>
+      Pick a session below, or open this archive from a transaction's <strong>Images</strong> link to rank the entries.
+    </div>
+    {% endif %}
+  </div>
 </div>
 
-<div class="img-caveat">
-  {{ result.get('caveat') or "The zip name identifies the day container, not a transaction link. Compare the entry capture/session time with the EJ interval; the card field is never the link." }}
-</div>
+{% if sessions %}
+<div class="ev-session-layout">
+  <aside class="ev-session-list" aria-label="Sessions in this archive">
+    <div class="ev-session-list-head">Sessions</div>
+    {% for s in sessions %}
+    <button type="button" class="ev-session-link{% if loop.first %} active{% endif %}"
+            data-session-target="session-{{ loop.index }}"
+            aria-controls="session-{{ loop.index }}"
+            aria-selected="{{ 'true' if loop.first else 'false' }}">
+      <span class="ev-session-time">{{ s.session_at[11:19] if s.session_at|length >= 19 else s.session_at }}</span>
+      <span class="ev-session-count">{{ s.count }} image{% if s.count != 1 %}s{% endif %}</span>
+    </button>
+    {% endfor %}
+  </aside>
 
-{% if not result.get('session_start') %}
-<div class="banner banner-note">
-  <strong>No session window selected.</strong>
-  Entries are shown in archive order with their local capture and session
-  times. Open the archive from a transaction's <strong>Images</strong> link or
-  a candidate search with a session window to rank the entries.
-</div>
-{% endif %}
+  <div class="ev-session-panels">
+    {% for s in sessions %}
+    <section class="ev-session-panel" id="session-{{ loop.index }}"{% if not loop.first %} hidden{% endif %}>
+      <div class="ev-session-panel-head">
+        <div>
+          <h2>Session {{ s.session_at }}</h2>
+          <div class="ev-sub">
+            {{ s.count }} image{% if s.count != 1 %}s{% endif %}
+            {% if s.cameras %} · CAM {{ s.cameras|join(', ') }}{% endif %}
+            {% if s.first_capture and s.last_capture and s.first_capture != s.last_capture %}
+            · {{ s.first_capture[11:19] }} → {{ s.last_capture[11:19] }}
+            {% endif %}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          {% if s.role %}{{ role_chip(s.role) }}{% endif %}
+          {% if s.match_count %}<span class="ev-chip ev-status ev-status-ok"><span class="ev-dot"></span>{{ s.match_count }} matched</span>{% endif %}
+        </div>
+      </div>
 
-<div class="card">
-  <div class="card-header"><h2>Archive entries</h2></div>
-  <div class="op-table-wrap" style="overflow-x:auto">
-    <table class="ej-table">
+      <div class="ev-entry-grid">
+        {% for e in result.get('entries', []) if e.session_at == s.session_at %}
+        <article class="ev-entry-card {% if e.role == 'start' or e.role == 'end' %}is-anchor{% endif %}"
+                 title="{% if e.role == 'start' %}Session start{% elif e.role == 'end' %}Session end{% else %}{{ e.role or 'Archive entry' }}{% endif %}">
+          <div class="ev-entry-head">
+            <span class="ev-cam"><i data-lucide="camera" style="width:12px;height:12px"></i> CAM {{ e.camera if e.camera is not none else '—' }}</span>
+            {% if e.role %}{{ role_chip(e.role) }}{% else %}<span class="ev-role ev-role-other">Entry</span>{% endif %}
+          </div>
+          <div class="ev-entry-time">{{ e.captured_at[11:19] if e.captured_at|length >= 19 else (e.captured_at or '—') }}</div>
+          <div class="ev-entry-meta">
+            <span>Captured (ATM local)</span>
+            <span>Session (ATM local) {{ e.session_at[11:19] if e.session_at|length >= 19 else e.session_at }}</span>
+            <span>{{ e.size_label or ('{:,}'.format(e.length|int) + ' B') }}</span>
+            {% if e.image_type %}<span>{{ e.image_type }}</span>{% endif %}
+          </div>
+          <details class="ev-details" style="border:0;margin:0;padding:0">
+            <summary>Entry {{ e.index }}</summary>
+            <div class="ev-details-body">
+              <div class="ev-entry-name">{{ e.name_masked }}</div>
+              {% if e.zip_mtime_utc and not e.zip_mtime_utc.startswith('0001-') %}
+              <div>ZIP mtime {{ e.zip_mtime_utc }} UTC</div>
+              {% endif %}
+              {% if e.card_field_present %}<div>Masked card field · display only, never the link</div>{% endif %}
+              <div>Role <b>{{ e.role or '—' }}</b>{% if e.delta_start_s is not none %} · session {{ '%+.1f'|format(e.delta_start_s) }}s from start{% endif %}</div>
+            </div>
+          </details>
+          <div class="ev-entry-actions">
+            {% if e.fetchable %}
+            <a class="btn btn-primary"
+               href="{{ url_for('atm_images.atm_image_view', atm_id=atm.atm_id, day=day_value, source='zip', zip_hmac=zip_hmac, index=e.index, kind=('video' if e.content_type == 'video/mp4' else 'image')) }}">
+              <i data-lucide="{{ 'play' if e.content_type == 'video/mp4' else 'eye' }}" style="width:13px;height:13px"></i>
+              {{ 'View clip' if e.content_type == 'video/mp4' else 'View image' }}
+            </a>
+            {% else %}
+            <span class="btn btn-outline" style="color:#94A3B8">Too large</span>
+            {% endif %}
+            <span class="ev-faint" style="font-size:10px">Entry {{ e.index }}</span>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="ev-card">
+  <div class="ev-table-wrap">
+    <table class="ev-table">
       <thead><tr><th>Index</th><th>Captured (ATM local)</th><th>Session (ATM local)</th><th>Match</th><th>Masked entry</th><th>Size</th><th>View</th></tr></thead>
       <tbody>
         {% for e in result.get('entries', []) %}
@@ -92,33 +197,23 @@
           <td class="mono">
             {{ e.captured_at or '—' }}
             {% if e.zip_mtime_utc and not e.zip_mtime_utc.startswith('0001-') %}
-            <div class="img-clip">ZIP mtime {{ e.zip_mtime_utc }} UTC</div>
+            <span class="ev-sub">ZIP mtime {{ e.zip_mtime_utc }} UTC</span>
             {% endif %}
           </td>
           <td class="mono">{{ e.session_at or '—' }}</td>
           <td>
-            {% if e.role %}
-            {% set role_label = {'start': 'Session start', 'in_window': 'Within window', 'near_window': 'Near window', 'other': '—'}.get(e.role, '—') %}
-            <span class="img-role {% if e.role == 'start' %}img-role-start{% elif e.role == 'in_window' %}img-role-end{% elif e.role == 'near_window' %}img-role-near{% endif %}">{{ role_label }}</span>
-            {% if e.delta_start_s is not none %}
-            <div class="img-clip">session {{ '%+.1f'|format(e.delta_start_s) }}s from start</div>
-            {% endif %}
-            {% else %}
-            —
-            {% endif %}
+            {% if e.role %}{{ role_chip(e.role) }}{% if e.role == 'start' %}<span class="ev-sub">Session start</span>{% endif %}{% else %}—{% endif %}
           </td>
-          <td class="img-name">
+          <td>
             <span class="mono">{{ e.name_masked }}</span>
-            {% if e.card_field_present %}
-            <small>Masked card field · display only, never the link</small>
-            {% endif %}
+            {% if e.card_field_present %}<span class="ev-sub">Masked card field · display only, never the link</span>{% endif %}
           </td>
           <td title="{{ e.length|int }} bytes">{{ e.size_label or ('{:,}'.format(e.length|int) + ' B') }}</td>
           <td>
             {% if e.fetchable %}
-            <a class="img-view-link" href="{{ url_for('atm_images.atm_image_view', atm_id=atm.atm_id, day=day_value, source='zip', zip_hmac=zip_hmac, index=e.index, kind=('video' if e.content_type == 'video/mp4' else 'image')) }}">View</a>
+            <a class="btn btn-outline" href="{{ url_for('atm_images.atm_image_view', atm_id=atm.atm_id, day=day_value, source='zip', zip_hmac=zip_hmac, index=e.index, kind=('video' if e.content_type == 'video/mp4' else 'image')) }}">View</a>
             {% else %}
-            <span class="img-view-link off">Too large</span>
+            <span class="btn btn-outline" style="color:#94A3B8">Too large</span>
             {% endif %}
           </td>
         </tr>
@@ -129,11 +224,44 @@
     </table>
   </div>
 </div>
+{% endif %}
+
 {% elif not unavailable and not bridge_error %}
-<div class="card" style="padding:22px;text-align:center;color:#94A3B8">
-  No archive was loaded.
-</div>
+  {{ empty_state('archive', 'No archive was loaded', 'Go back to ATM images and choose a day archive for this ATM.', url_for('atm_images.atm_images', atm_id=atm.atm_id, day=day_value), 'ATM images') }}
 {% endif %}
 
 </div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.ev-session-link'));
+  if (!links.length) return;
+
+  function activate(link) {
+    links.forEach(function (item) {
+      var on = item === link;
+      item.classList.toggle('active', on);
+      item.setAttribute('aria-selected', on ? 'true' : 'false');
+      var panel = document.getElementById(item.dataset.sessionTarget);
+      if (panel) panel.hidden = !on;
+    });
+  }
+
+  links.forEach(function (link) {
+    link.addEventListener('click', function () { activate(link); });
+    link.addEventListener('keydown', function (event) {
+      var index = links.indexOf(link);
+      var next = null;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowRight') next = links[(index + 1) % links.length];
+      if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') next = links[(index - 1 + links.length) % links.length];
+      if (next) {
+        event.preventDefault();
+        next.focus();
+        activate(next);
+      }
+    });
+  });
+})();
+</script>
 {% endblock %}

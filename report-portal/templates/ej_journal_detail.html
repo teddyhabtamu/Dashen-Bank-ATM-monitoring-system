@@ -1,23 +1,43 @@
 {% extends "base.html" %}
+{% from "_evidence_ui.html" import status_chip, kpi, warn_chips, empty_state %}
 {% block title %}{{ atm.atm_id if atm else 'EJ Journal' }} — EJ Journal{% endblock %}
 {% block extra_style %}{% include "_ej_journal_style.html" %}{% endblock %}
 {% block body %}
+{% set latest_day = (parse_runs | selectattr('journal_date', 'ne', '—') | map(attribute='journal_date') | list | first) or '' %}
+{% set tab = request.args.get('tab', 'transactions') %}
+{% if tab not in ['transactions', 'files', 'health'] %}{% set tab = 'transactions' %}{% endif %}
 <div class="page-header">
   <div class="page-header-icon"><i data-lucide="book-open"></i></div>
   <div>
-    <div class="detail-head">
-      <a class="back" href="{{ url_for('ej_journal.ej_journal', days=days) }}">← EJ Journal</a>
+    <div class="ev-breadcrumb">
+      <a href="{{ url_for('ej_journal.ej_journal', days=days) }}">EJ Journal</a>
+      <span class="sep">/</span>
+      <span>{{ atm.atm_id if atm else 'ATM' }}</span>
     </div>
     <h1 class="page-title">{{ atm.atm_id if atm else 'ATM' }} · {{ atm.branch if atm and atm.branch else 'Unknown branch' }}</h1>
     <p class="page-subtitle">
       Terminal {{ atm.terminal_id if atm and atm.terminal_id else '—' }} ·
       EJ host {{ atm.ej_hostname if atm and atm.ej_hostname else '—' }} ·
-      Last {{ days }} day{% if days != 1 %}s{% endif %} · Auto-refreshes every 120 seconds.
+      Last {{ days }} day{% if days != 1 %}s{% endif %} · read-only staging
     </p>
     {% if atm %}
-    <div style="margin-top:8px">
-      <a class="btn btn-outline" href="{{ url_for('atm_images.atm_images', atm_id=atm.atm_id) }}" title="On-demand image evidence for this ATM">ATM images</a>
+    <div class="ev-context">
+      <span class="ev-chip ev-status ev-status-ok"><span class="ev-dot"></span>{{ atm.vendor or 'Vendor unknown' }}</span>
+      {% if latest_day %}<span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Latest journal {{ latest_day }}</span>{% endif %}
+      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Admin only</span>
     </div>
+    {% endif %}
+  </div>
+  <div class="page-actions">
+    {% if atm %}
+    <a class="btn btn-primary"
+       href="{% if latest_day %}{{ url_for('atm_images.atm_images', atm_id=atm.atm_id, day=latest_day) }}{% else %}{{ url_for('atm_images.atm_images', atm_id=atm.atm_id) }}{% endif %}"
+       title="Open on-demand image evidence for this ATM">
+      <i data-lucide="camera" style="width:14px;height:14px"></i> Open images
+    </a>
+    <a class="btn btn-outline" href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id, days=days, tab=tab) }}">
+      <i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Refresh
+    </a>
     {% endif %}
   </div>
 </div>
@@ -27,51 +47,102 @@
 <div class="banner banner-error"><strong>EJ staging unavailable.</strong> {{ setup_error }}</div>
 {% endif %}
 
-<form method="get" action="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id if atm else '') }}" class="ej-filters">
-  <div class="fg">
-    <label>Period</label>
-    <select name="days">
-      {% for d in [1, 7, 30, 90] %}
-      <option value="{{ d }}"{% if days == d %} selected{% endif %}>Last {{ d }} day{% if d != 1 %}s{% endif %}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="actions"><button class="btn btn-primary" type="submit">Apply</button></div>
-</form>
+<div class="ev-page-note">
+  <i data-lucide="shield-check"></i>
+  <span><b>Read-only staging.</b> These rows are held for reconciliation. They do not feed KPIs, reports, cash forecasts or anomalies.</span>
+  <span class="ev-note-tail"><span class="ev-chip ev-status ev-status-ok"><span class="ev-dot"></span>Not official transactions</span></span>
+</div>
 
-<div class="stat-row">
-  <div class="stat-card"><div class="num">{{ summary.get('files', 0) }}</div><div class="lbl">Journal files</div></div>
-  <div class="stat-card"><div class="num">{{ summary.get('sessions', 0) }}</div><div class="lbl">Sessions</div></div>
-  <div class="stat-card"><div class="num">{{ summary.get('completed', 0) }}</div><div class="lbl">Completed</div></div>
-  <div class="stat-card"><div class="num">{{ summary.get('staged', 0) }}</div><div class="lbl">Staged transactions</div></div>
-  <div class="stat-card"><div class="num">{{ '{:,.2f}'.format(summary.get('approved_amount', 0)|float) }} <small>ETB</small></div><div class="lbl">Approved amount</div></div>
-  <div class="stat-card {% if summary.get('dispensed', 0)|float == 0 and summary.get('approved', 0) %}warn{% endif %}"><div class="num">{{ '{:,.2f}'.format(summary.get('dispensed', 0)|float) }} <small>ETB</small></div><div class="lbl">Cash dispensed</div></div>
-  <div class="stat-card {% if summary.get('no_cash_evidence', 0) %}warn{% endif %}"><div class="num">{{ summary.get('no_cash_evidence', 0) }}</div><div class="lbl">Approved, no cash evidence</div></div>
+<div class="ev-toolbar">
+  <div class="ev-segmented" aria-label="Period">
+    {% for d in [1, 7, 30, 90] %}
+    <a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id, days=d, tab=tab) }}"
+       class="{% if days == d %}active{% endif %}">Last {{ d }}d</a>
+    {% endfor %}
+  </div>
+  <span class="ev-faint" style="font-size:11px">Period totals for {{ total }} transaction{% if total != 1 %}s{% endif %}</span>
+</div>
+
+<div class="ev-kpi-grid">
+  {{ kpi('Journal files', summary.get('files', 0), 'in this period') }}
+  {{ kpi('Sessions', summary.get('sessions', 0), summary.get('completed', 0)|string + ' completed · ' + summary.get('declined', 0)|string + ' declined') }}
+  {{ kpi('Parse failures', summary.get('parse_errors', 0), 'files that failed to parse', 'bad' if summary.get('parse_errors', 0) else 'good') }}
+  {{ kpi('No cash evidence', summary.get('no_cash_evidence', 0), 'approved without dispense evidence', 'warn' if summary.get('no_cash_evidence', 0) else 'good') }}
+</div>
+
+<div class="ev-page-note">
+  <i data-lucide="activity"></i>
+  <span><b>Period activity</b> · {{ '{:,}'.format(summary.get('staged', 0)) }} parsed transactions ·
+    ETB {{ '{:,.2f}'.format(summary.get('approved_amount', 0)|float) }} approved ·
+    ETB {{ '{:,.2f}'.format(summary.get('dispensed', 0)|float) }} dispensed evidence</span>
 </div>
 
 {% if summary.get('no_cash_evidence', 0) %}
 <div class="banner banner-warn">
-  <strong>{{ summary.get('no_cash_evidence') }} approved transaction(s) have no cash-dispense evidence.</strong>
-  They remain staged and are not counted as dispensed cash.
+  <strong>{{ summary.get('no_cash_evidence') }} approved transaction{% if summary.get('no_cash_evidence') != 1 %}s{% endif %} have no cash-dispense evidence.</strong>
+  They remain staged and are not counted as dispensed cash. Open the transaction's evidence to compare the journal with the ATM image.
 </div>
 {% endif %}
 
-<div class="two-col">
-  <div class="card">
-    <div class="card-header"><h2>Staged Transactions</h2></div>
-    <div class="op-table-wrap" style="overflow-x:auto">
-      <table class="ej-table">
-        <thead><tr><th>Recorded (EAT)</th><th>Type</th><th>Status</th><th>Amount</th><th>Dispensed</th><th>Warnings</th><th>Images</th></tr></thead>
+<div class="ev-tabs" role="tablist" aria-label="ATM journal sections">
+  <button class="ev-tab" id="tab-transactions" role="tab" aria-controls="panel-transactions"
+          aria-selected="{{ 'true' if tab == 'transactions' else 'false' }}" data-tab="transactions">
+    Transactions <span class="ev-tab-count">{{ total }}</span>
+  </button>
+  <button class="ev-tab" id="tab-files" role="tab" aria-controls="panel-files"
+          aria-selected="{{ 'true' if tab == 'files' else 'false' }}" data-tab="files">
+    Journal files <span class="ev-tab-count">{{ parse_runs|length }}</span>
+  </button>
+  <button class="ev-tab" id="tab-health" role="tab" aria-controls="panel-health"
+          aria-selected="{{ 'true' if tab == 'health' else 'false' }}" data-tab="health">
+    Health
+  </button>
+</div>
+
+<section class="ev-panel" id="panel-transactions" role="tabpanel" aria-labelledby="tab-transactions"{% if tab != 'transactions' %} hidden{% endif %}>
+  <div class="ev-card">
+    <div class="ev-card-head">
+      <div>
+        <h2>Staged transactions</h2>
+        <div class="ev-card-sub">Parsed rows in the selected period · newest first</div>
+      </div>
+      <a class="btn btn-outline" href="{{ url_for('atm_images.atm_images', atm_id=atm.atm_id, day=latest_day) if latest_day else url_for('atm_images.atm_images', atm_id=atm.atm_id) }}">
+        <i data-lucide="camera" style="width:14px;height:14px"></i> ATM images
+      </a>
+    </div>
+    <div class="ev-table-wrap">
+      <table class="ev-table">
+        <thead><tr><th>Session (EAT)</th><th>Type</th><th>Status</th><th>Amount</th><th>Dispensed</th><th>Warnings</th><th>Evidence</th></tr></thead>
         <tbody>
           {% for t in transactions %}
+          {% set same_day = t.started_at and t.ended_at and t.started_at[:10] == t.ended_at[:10] %}
+          {% set evidence_href = url_for('atm_images.atm_images', atm_id=atm.atm_id, day=t.started_at[:10], start=t.started_at[11:19], end=t.ended_at[11:19]) if same_day else url_for('atm_images.atm_images', atm_id=atm.atm_id, at=t.recorded_at) %}
           <tr>
-            <td class="mono">{{ t.recorded_at }}</td>
+            <td class="mono">
+              {% if t.started_at %}
+              {{ t.started_at[11:19] }}{% if t.ended_at %} → {{ t.ended_at[11:19] }}{% endif %}
+              <span class="ev-sub">{{ t.started_at[:10] }}</span>
+              {% else %}
+              {{ t.recorded_at }}
+              {% endif %}
+            </td>
             <td>{{ t.txn_type or '—' }}</td>
             <td><span class="pill pill-{{ t.status|lower }}">{{ t.status }}</span></td>
-            <td>{{ '{:,.2f}'.format(t.amount|float) if t.amount is not none else '—' }}</td>
-            <td>{{ '{:,.2f}'.format(t.dispensed_amount|float) if t.dispensed_amount is not none else '—' }}</td>
-            <td>{% for w in t.warnings %}<span class="warn-chip">{{ w }}</span>{% else %}<span style="color:#94A3B8">—</span>{% endfor %}</td>
-            <td><a href="{{ url_for('atm_images.atm_images', atm_id=atm.atm_id, at=t.recorded_at) }}" title="Find ATM image evidence around this transaction">Images</a></td>
+            <td class="ev-num">{{ '{:,.2f}'.format(t.amount|float) if t.amount is not none else '—' }}</td>
+            <td class="ev-num">{{ '{:,.2f}'.format(t.dispensed_amount|float) if t.dispensed_amount is not none else '—' }}</td>
+            <td>{{ warn_chips(t.warnings, 2) }}</td>
+            <td class="ev-actions-cell">
+              <a class="btn btn-outline" href="{{ evidence_href }}"
+                 title="Find ATM image evidence for this session">
+                <i data-lucide="camera" style="width:13px;height:13px"></i> Images
+              </a>
+              {% if t.parse_run_id %}
+              <a class="btn btn-outline" href="{{ url_for('ej_journal.ej_raw_view', atm_id=atm.atm_id, run_id=t.parse_run_id) }}"
+                 title="View the source journal for this transaction">
+                <i data-lucide="file-text" style="width:13px;height:13px"></i> Raw
+              </a>
+              {% endif %}
+            </td>
           </tr>
           {% else %}
           <tr><td colspan="7" class="ej-empty">No staged transactions in this period.</td></tr>
@@ -81,19 +152,94 @@
     </div>
     {% if total_pages > 1 %}
     <div class="pager">
-      {% if page > 1 %}<a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id, days=days, page=page-1) }}">Previous</a>{% else %}<span class="off">Previous</span>{% endif %}
+      {% if page > 1 %}<a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id, days=days, page=page-1, tab='transactions') }}">Previous</a>{% else %}<span class="off">Previous</span>{% endif %}
       <span>Page {{ page }} of {{ total_pages }} · {{ total }} transaction(s)</span>
-      {% if page < total_pages %}<a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id, days=days, page=page+1) }}">Next</a>{% else %}<span class="off">Next</span>{% endif %}
+      {% if page < total_pages %}<a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id, days=days, page=page+1, tab='transactions') }}">Next</a>{% else %}<span class="off">Next</span>{% endif %}
     </div>
     {% endif %}
   </div>
+</section>
 
-  <div>
-    <div class="card">
-      <div class="card-header"><h2>Warnings</h2></div>
-      <div style="padding:10px 14px 14px">
+<section class="ev-panel" id="panel-files" role="tabpanel" aria-labelledby="tab-files"{% if tab != 'files' %} hidden{% endif %}>
+  <div class="ev-card">
+    <div class="ev-card-head">
+      <div>
+        <h2>Journal files</h2>
+        <div class="ev-card-sub">Raw journal access is admin-only and audited. Downloads are byte-identical.</div>
+      </div>
+    </div>
+    <div class="ev-table-wrap">
+      <table class="ev-table">
+        <thead><tr><th>Journal date</th><th>File</th><th>Sessions</th><th>Status</th><th>Warnings / error</th><th style="width:64px">Actions</th></tr></thead>
+        <tbody>
+          {% for r in parse_runs %}
+          <tr>
+            <td class="mono">{{ r.journal_date }}</td>
+            <td>
+              <span class="mono" title="{{ r.file_path }}">{{ r.file_path.split('/')[-1] }}</span>
+              <span class="ev-sub">{{ r.hostname or 'No host' }} · {{ r.vendor }}</span>
+            </td>
+            <td class="ev-session-cell">
+              <strong>{{ r.sessions }}</strong>
+              <span class="ev-sub">{{ r.completed }} completed · {{ r.declined }} declined{% if r.unknown %} · {{ r.unknown }} unknown{% endif %}</span>
+            </td>
+            <td>{{ status_chip('error' if r.status == 'error' else 'ok', r.status|capitalize) }}</td>
+            <td>
+              {% if r.error %}
+              <span style="color:#B42318" title="{{ r.error }}">{{ r.error[:72] }}{% if r.error|length > 72 %}…{% endif %}</span>
+              {% else %}
+              {{ warn_chips(r.warnings, 2) }}
+              {% endif %}
+            </td>
+            <td class="kebab-wrap">
+              {% if r.raw_available or r.journal_date != '—' %}
+              <button type="button" class="kebab-btn" onclick="toggleKebab(event,this)"
+                      title="Raw and image actions" aria-label="Raw and image actions"
+                      aria-haspopup="menu" aria-expanded="false">&#8942;</button>
+              <div class="kebab-menu" role="menu">
+                {% if r.raw_available %}
+                <a class="kebab-item" role="menuitem"
+                   href="{{ url_for('ej_journal.ej_raw_view', atm_id=atm.atm_id, run_id=r.id) }}">
+                  <i data-lucide="eye"></i> View raw
+                </a>
+                <a class="kebab-item" role="menuitem"
+                   href="{{ url_for('ej_journal.ej_raw_download', atm_id=atm.atm_id, run_id=r.id) }}"
+                   title="Download the original raw evidence ({{ r.raw_size_label }})">
+                  <i data-lucide="download"></i> Download raw
+                  <span class="kebab-hint">{{ r.raw_size_label }}</span>
+                </a>
+                {% else %}
+                <div class="kebab-disabled">Raw not archived</div>
+                {% endif %}
+                {% if r.journal_date != '—' %}
+                {% if r.raw_available %}<div class="kebab-sep" role="separator"></div>{% endif %}
+                <a class="kebab-item" role="menuitem"
+                   href="{{ url_for('atm_images.atm_images', atm_id=atm.atm_id, day=r.journal_date) }}">
+                  <i data-lucide="image"></i> ATM images
+                </a>
+                {% endif %}
+              </div>
+              {% else %}
+              <span class="ev-faint">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="ej-empty">No journal files in this period.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="ev-panel" id="panel-health" role="tabpanel" aria-labelledby="tab-health"{% if tab != 'health' %} hidden{% endif %}>
+  <div class="two-col">
+    <div class="ev-card">
+      <div class="ev-card-head"><div><h2>Warnings</h2><div class="ev-card-sub">Transaction warnings in this period</div></div></div>
+      <div class="ev-card-body">
         {% for w in warnings %}
-        <div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid #F1F5F9;font-size:12px">
+        <div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #F1F5F9;font-size:12px">
           <span class="warn-chip">{{ w.name }}</span><strong>{{ w.rows }}</strong>
         </div>
         {% else %}
@@ -101,82 +247,66 @@
         {% endfor %}
       </div>
     </div>
-    <div class="card">
-      <div class="card-header"><h2>Parse Health</h2></div>
-      <div style="padding:12px 14px;font-size:12px;color:#475569">
-        <div style="display:flex;justify-content:space-between"><span>Journal files</span><strong>{{ summary.get('files', 0) }}</strong></div>
-        <div style="display:flex;justify-content:space-between;margin-top:6px"><span>Parse failures</span><strong style="color:{{ '#DC2626' if summary.get('parse_errors', 0) else '#166534' }}">{{ summary.get('parse_errors', 0) }}</strong></div>
-        <div style="display:flex;justify-content:space-between;margin-top:6px"><span>No-receipt sessions</span><strong>{{ summary.get('no_receipt', 0) }}</strong></div>
-        <div style="display:flex;justify-content:space-between;margin-top:6px"><span>Declined transactions</span><strong>{{ summary.get('declined', 0) }}</strong></div>
+    <div class="ev-card">
+      <div class="ev-card-head"><div><h2>Parse health</h2><div class="ev-card-sub">What the parser saw in this period</div></div></div>
+      <div class="ev-card-body" style="font-size:12px;color:#475569">
+        <div style="display:flex;justify-content:space-between;padding:5px 0"><span>Journal files</span><strong>{{ summary.get('files', 0) }}</strong></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0"><span>Parse failures</span><strong style="color:{{ '#DC2626' if summary.get('parse_errors', 0) else '#166534' }}">{{ summary.get('parse_errors', 0) }}</strong></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0"><span>No-receipt sessions</span><strong>{{ summary.get('no_receipt', 0) }}</strong></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0"><span>Declined transactions</span><strong>{{ summary.get('declined', 0) }}</strong></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0"><span>Approved without cash evidence</span><strong style="color:{{ '#B45309' if summary.get('no_cash_evidence', 0) else '#166534' }}">{{ summary.get('no_cash_evidence', 0) }}</strong></div>
+        <p style="font-size:11px;color:#94A3B8;margin:10px 0 0;line-height:1.5">Parse failures and warnings are staging signals. They do not change the official transaction record.</p>
       </div>
     </div>
   </div>
-</div>
-
-<div class="card">
-  <div class="card-header"><h2>Journal Files</h2></div>
-  <div class="op-table-wrap" style="overflow-x:auto">
-    <table class="ej-table">
-      <thead><tr><th>Journal date</th><th>File</th><th>Host</th><th>Vendor</th><th>Sessions</th><th>Completed</th><th>Declined</th><th>Unknown</th><th>Status</th><th>Warnings / Error</th><th style="width:64px">Actions</th></tr></thead>
-      <tbody>
-        {% for r in parse_runs %}
-        <tr>
-          <td class="mono">{{ r.journal_date }}</td>
-          <td class="mono" title="{{ r.file_path }}">{{ r.file_path.split('/')[-1] }}</td>
-          <td class="mono">{{ r.hostname or '—' }}</td>
-          <td>{{ r.vendor }}</td>
-          <td>{{ r.sessions }}</td>
-          <td>{{ r.completed }}</td>
-          <td>{{ r.declined }}</td>
-          <td>{{ r.unknown }}</td>
-          <td><span class="pill pill-{{ 'error' if r.status == 'error' else 'ok' }}">{{ r.status }}</span></td>
-          <td>{% for w in r.warnings %}<span class="warn-chip">{{ w }}</span>{% endfor %}{% if r.error %}<span style="color:#DC2626">{{ r.error }}</span>{% elif not r.warnings %}<span style="color:#94A3B8">—</span>{% endif %}</td>
-          <td class="kebab-wrap">
-            {% if r.raw_available or r.journal_date != '—' %}
-            <button type="button" class="kebab-btn" onclick="toggleKebab(event,this)"
-                    title="Raw and image actions" aria-label="Raw and image actions"
-                    aria-haspopup="menu" aria-expanded="false">&#8942;</button>
-            <div class="kebab-menu" role="menu">
-              {% if r.raw_available %}
-              <a class="kebab-item" role="menuitem"
-                 href="{{ url_for('ej_journal.ej_raw_view', atm_id=atm.atm_id, run_id=r.id) }}">
-                <i data-lucide="eye"></i> View raw
-              </a>
-              <a class="kebab-item" role="menuitem"
-                 href="{{ url_for('ej_journal.ej_raw_download', atm_id=atm.atm_id, run_id=r.id) }}"
-                 title="Download raw evidence ({{ r.raw_size_label }})">
-                <i data-lucide="download"></i> Download raw
-                <span class="kebab-hint">{{ r.raw_size_label }}</span>
-              </a>
-              {% else %}
-              <div class="kebab-disabled">Raw not archived</div>
-              {% endif %}
-              {% if r.journal_date != '—' %}
-              {% if r.raw_available %}<div class="kebab-sep" role="separator"></div>{% endif %}
-              <a class="kebab-item" role="menuitem"
-                 href="{{ url_for('atm_images.atm_images', atm_id=atm.atm_id, day=r.journal_date) }}">
-                <i data-lucide="image"></i> ATM images
-              </a>
-              {% endif %}
-            </div>
-            {% else %}
-            <span style="color:#94A3B8">—</span>
-            {% endif %}
-          </td>
-        </tr>
-        {% else %}
-        <tr><td colspan="11" class="ej-empty">No journal files in this period.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+</section>
 
 </div>
 {% endblock %}
 {% block extra_scripts %}
 <script>
-window.setTimeout(function () { window.location.reload(); }, 120000);
+(function () {
+  var buttons = Array.prototype.slice.call(document.querySelectorAll('.ev-tab'));
+  var panels = Array.prototype.slice.call(document.querySelectorAll('.ev-panel'));
+  if (!buttons.length) return;
+
+  function activate(name, updateUrl) {
+    var found = false;
+    buttons.forEach(function (button) {
+      var on = button.dataset.tab === name;
+      button.setAttribute('aria-selected', on ? 'true' : 'false');
+      button.tabIndex = on ? 0 : -1;
+      if (on) found = true;
+    });
+    panels.forEach(function (panel) {
+      panel.hidden = panel.id !== 'panel-' + name;
+    });
+    if (!found) return;
+    if (updateUrl && window.history && window.history.replaceState) {
+      var url = new URL(window.location.href);
+      if (name === 'transactions') url.searchParams.delete('tab');
+      else url.searchParams.set('tab', name);
+      window.history.replaceState({}, '', url);
+    }
+  }
+
+  buttons.forEach(function (button) {
+    button.addEventListener('click', function () {
+      activate(button.dataset.tab, true);
+    });
+    button.addEventListener('keydown', function (event) {
+      var index = buttons.indexOf(button);
+      var next = null;
+      if (event.key === 'ArrowRight') next = buttons[(index + 1) % buttons.length];
+      if (event.key === 'ArrowLeft') next = buttons[(index - 1 + buttons.length) % buttons.length];
+      if (next) {
+        event.preventDefault();
+        next.focus();
+        activate(next.dataset.tab, true);
+      }
+    });
+  });
+})();
 
 function closeKebab(menu){
   if(!menu) return;

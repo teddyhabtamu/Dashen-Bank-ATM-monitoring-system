@@ -15,8 +15,10 @@ query reads staging data.
 import logging
 from datetime import datetime, time, timedelta, timezone
 
-from flask import Blueprint, abort, make_response, render_template, request, send_file
+from flask import (Blueprint, abort, make_response, render_template, request,
+                   send_file, url_for)
 from werkzeug.exceptions import HTTPException
+from werkzeug.routing import BuildError
 from db import get_db
 from audit import log_action
 from evidence import (VIEW_MAX_BYTES, VIEW_PAGE_SIZE, paginate_lines, raw_info,
@@ -114,6 +116,61 @@ def _filter_sql(vendor, q, alias):
     return clauses, params
 
 
+def _fleet_health(cur, today, vendor, q):
+    """Count the latest journal state for every active ATM.
+
+    The fleet table only renders one page.  The health bar needs the whole
+    filtered fleet, so this repeats the latest/aggregate CTE and counts the
+    same status rule used by :func:`_status`.  It deliberately does not apply
+    the selected period: an ATM whose last journal is older than the period is
+    still stale, not "no data".
+    """
+    clauses, params = _filter_sql(vendor, q, 'a')
+    where = ["LOWER(COALESCE(a.status, 'active')) = 'active'"]
+    where.extend(clauses)
+    stale_before = today - timedelta(days=1)
+    cur.execute(f"""
+        WITH latest AS (
+            SELECT atm_id, MAX(journal_date) AS journal_date
+              FROM ej_parse_runs
+             WHERE atm_id IS NOT NULL
+             GROUP BY atm_id
+        ), agg AS (
+            SELECT p.atm_id, p.journal_date,
+                   COUNT(*) FILTER (WHERE p.status = 'error')::int
+                       AS parse_errors
+              FROM ej_parse_runs p
+              JOIN latest l
+                ON l.atm_id = p.atm_id
+               AND l.journal_date = p.journal_date
+             GROUP BY p.atm_id, p.journal_date
+        )
+        SELECT
+          COUNT(*) FILTER (WHERE COALESCE(agg.parse_errors, 0) > 0)::int
+              AS error,
+          COUNT(*) FILTER (
+              WHERE COALESCE(agg.parse_errors, 0) = 0
+                AND agg.journal_date IS NULL)::int AS no_data,
+          COUNT(*) FILTER (
+              WHERE COALESCE(agg.parse_errors, 0) = 0
+                AND agg.journal_date < %s)::int AS stale,
+          COUNT(*) FILTER (
+              WHERE COALESCE(agg.parse_errors, 0) = 0
+                AND agg.journal_date >= %s)::int AS ok
+          FROM atm_locations a
+          LEFT JOIN agg ON agg.atm_id = a.atm_id
+         WHERE {' AND '.join(where)}
+    """, [stale_before, stale_before] + params)
+    row = cur.fetchone()
+    return {
+        'ok': row[3] or 0,
+        'stale': row[2] or 0,
+        'error': row[0] or 0,
+        'no_data': row[1] or 0,
+        'total': sum((row[0] or 0, row[1] or 0, row[2] or 0, row[3] or 0)),
+    }
+
+
 def _fleet_summary(cur, since, since_utc, until_utc, vendor, q):
     """Cards and attention counts, all bounded by the selected period."""
     p_clauses = ["COALESCE(journal_date, parsed_at::date) >= %s"]
@@ -173,6 +230,10 @@ def _fleet_summary(cur, since, since_utc, until_utc, vendor, q):
     if vendor:
         a_clauses.append('UPPER(vendor) = %s')
         a_params.append(vendor)
+    if q:
+        pattern = f'%{q}%'
+        a_clauses.append("(atm_id ILIKE %s OR COALESCE(branch, '') ILIKE %s)")
+        a_params.extend([pattern, pattern])
     cur.execute(f"""
         SELECT count(*) FROM atm_locations WHERE {' AND '.join(a_clauses)}
     """, a_params)
@@ -245,6 +306,7 @@ def ej_journal():
         with get_db() as conn:
             cur = conn.cursor()
             summary = _fleet_summary(cur, since, since_utc, until_utc, vendor, q)
+            summary['health'] = _fleet_health(cur, today, vendor, q)
             attention_files = _attention_files(cur, since, vendor)
 
             clauses, params = _filter_sql(vendor, q, 'a')
@@ -339,6 +401,7 @@ def ej_journal():
         page=page,
         total=total,
         total_pages=total_pages,
+        last_updated=_now_eat().strftime('%H:%M'),
     )
 
 
@@ -454,7 +517,8 @@ def ej_journal_detail(atm_id):
 
             cur.execute("""
                 SELECT recorded_at, atm_id, terminal_id, txn_type, status,
-                       amount, dispensed_amount, warnings, source_file
+                       amount, dispensed_amount, warnings, source_file,
+                       parse_run_id, started_at, ended_at
                   FROM ej_transactions
                  WHERE atm_id = %s
                    AND recorded_at >= %s
@@ -468,6 +532,9 @@ def ej_journal_detail(atm_id):
                 'terminal_id': r[2], 'txn_type': r[3], 'status': r[4],
                 'amount': r[5], 'dispensed_amount': r[6],
                 'warnings': _warnings(r[7]), 'source_file': r[8],
+                'parse_run_id': r[9],
+                'started_at': _eat(r[10]) if r[10] else None,
+                'ended_at': _eat(r[11]) if r[11] else None,
             } for r in cur.fetchall()]
 
             cur.execute("""
@@ -627,8 +694,17 @@ def ej_raw_view(atm_id, run_id):
         f'ATM {atm_id} file {path.name} page {view["page"]} '
         f'q_len {len(q)} total {view["total"]}',
     )
+    try:
+        images_url = url_for(
+            'atm_images.atm_images', atm_id=atm_id,
+            day=journal_date.isoformat() if journal_date else None,
+        ) if journal_date else None
+    except BuildError:
+        # The raw viewer is also mounted in isolation by the route tests.
+        images_url = None
     response = make_response(render_template(
         'ej_raw_view.html',
+        images_url=images_url,
         atm_id=atm_id,
         branch=branch,
         run_id=run_id,

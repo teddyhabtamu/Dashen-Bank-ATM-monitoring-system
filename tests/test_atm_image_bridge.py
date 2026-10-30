@@ -250,6 +250,7 @@ def test_zip_entry_projection_uses_an_index_not_a_name(app, monkeypatch):
     assert 'name' not in result['entries'][0]
     assert result['entries'][0]['name_masked'] == 'PAN-************3456.jpg'
     assert result['entries'][0]['size_label'] == '1000 B'
+    assert result['sessions'][0]['count'] == 1
 
     with pytest.raises(bridge.NotAvailable):
         app.zip_entries('ATM-TEST-NCR', '2026-10-21',
@@ -409,3 +410,8 @@ def test_zip_entries_rank_ncr_sessions_without_exposing_the_name(app,
     assert result['entries'][0]['session_at'] == '2026-10-22 10:33:53'
     assert 'name' not in result['entries'][0]
     assert '123456789012345' not in str(result)
+    sessions = result['sessions']
+    assert [s['session_at'] for s in sessions] == [
+        '2026-10-22 10:33:53', '2026-10-22 10:41:55']
+    assert sessions[0]['count'] == 2 and sessions[0]['match_count'] == 2
+    assert sessions[1]['count'] == 1 and sessions[1]['match_count'] == 0

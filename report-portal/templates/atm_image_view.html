@@ -1,13 +1,9 @@
 {% extends "base.html" %}
+{% from "_evidence_ui.html" import meta_item %}
 {% block title %}{{ atm.atm_id }} · ATM evidence{% endblock %}
 {% block extra_style %}
 {% include "_ej_journal_style.html" %}
 <style>
-.ev-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px 24px;background:#fff;border:1px solid #EEF1F6;border-radius:12px;padding:14px 16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(1,33,105,.04)}
-.ev-meta span{display:flex;flex-direction:column;gap:2px;min-width:0}
-.ev-meta span[hidden]{display:none}
-.ev-meta small{font-size:9.5px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px}
-.ev-meta b{color:#0F172A;font-size:12px;font-weight:650;overflow-wrap:anywhere}
 .ev-stage{position:relative;background:#0B1220;border:1px solid #1E293B;border-radius:14px;min-height:460px;display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:0 8px 30px rgba(1,33,105,.12)}
 .ev-media{max-width:100%;max-height:72vh;display:block;opacity:0;transition:opacity .2s ease}
 .ev-media[hidden]{display:none}
@@ -24,9 +20,9 @@
 .ev-error-icon svg{width:22px;height:22px}
 .ev-error strong{font-size:16px;color:#FEE2E2}
 .ev-error span{font-size:12px;color:#94A3B8;max-width:470px;line-height:1.55}
-.ev-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-.ev-note{font-size:12px;color:#64748B;line-height:1.55;margin-top:12px}
-.ev-note code{font-size:11px}
+.ev-stage-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.ev-stage-note{font-size:11.5px;color:var(--ev-muted);line-height:1.55;margin:10px 0 0}
+.ev-stage-note code{font-size:10.5px}
 .ev-sha{word-break:break-all}
 @media(max-width:720px){.ev-stage{min-height:300px}.ev-media{max-height:62vh}.ev-error{padding:20px}}
 </style>
@@ -35,92 +31,115 @@
 <div class="page-header">
   <div class="page-header-icon"><i data-lucide="{{ 'video' if kind == 'video' else 'image' }}"></i></div>
   <div>
-    <div class="detail-head">
-      <a class="back" href="{{ back_url }}">{{ back_label }}</a>
-      <a class="back" href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id) }}">EJ Journal</a>
+    <div class="ev-breadcrumb">
+      <a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id) }}">EJ Journal</a>
+      <span class="sep">/</span>
+      <a href="{{ back_url }}">{{ back_label }}</a>
+      <span class="sep">/</span>
+      <span>{{ 'Video clip' if kind == 'video' else 'Still image' }}</span>
     </div>
     <h1 class="page-title">{{ atm.atm_id }} · ATM evidence</h1>
-    <p class="page-subtitle">
-      {{ atm.branch or 'Unknown branch' }} · {{ atm.vendor or '—' }} ·
-      {{ day_value }} · admin only
-    </p>
+    <p class="page-subtitle">{{ atm.branch or 'Unknown branch' }} · {{ atm.vendor or '—' }} · {{ day_value }} · admin only</p>
+    <div class="ev-context">
+      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>On demand</span>
+      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Not stored centrally</span>
+      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>View audited</span>
+    </div>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-outline" href="{{ back_url }}">
+      <i data-lucide="arrow-left" style="width:14px;height:14px"></i> {{ back_label }}
+    </a>
   </div>
 </div>
+
 <div class="page-content">
-
-<div class="banner banner-note">
-  <strong>Streamed from the ATM for this one view.</strong>
-  The host bridge re-lists the allow-listed folder, matches the keyed locator,
-  verifies the file, and relays it through the portal. The response is not
-  cached, written to disk, or stored in the database. The card field in a
-  filename is display-only and is never used to link an image to a transaction.
-</div>
-
-<div class="ev-meta">
-  <span><small>ATM</small><b>{{ atm.atm_id }}</b></span>
-  <span><small>Day</small><b>{{ day_value }}</b></span>
-  <span><small>Source</small><b>{{ source_label }}</b></span>
-  <span><small>Type</small><b>{{ 'Video clip' if kind == 'video' else 'Still image' }}</b></span>
-  <span><small>Locator</small><b class="mono">{{ locator[:16] }}…</b></span>
-  {% if source == 'file' %}
-  <span><small>Window</small><b>{{ start_value }} → {{ end_value }}</b></span>
-  {% endif %}
-  <span id="ev-size-wrap" hidden><small>Size</small><b id="ev-size">—</b></span>
-  <span id="ev-sha-wrap" hidden><small>SHA-256</small><b class="mono ev-sha" id="ev-sha">—</b></span>
-</div>
-
-<div class="ev-stage" id="ev-stage"
-     data-src="{{ stream_url }}"
-     data-kind="{{ kind }}"
-     data-missing-text="{{ not_available_text }}">
-  <div class="ev-loading" id="ev-loading">
-    <div class="ev-spinner" aria-hidden="true"></div>
-    <strong>Fetching evidence from the ATM…</strong>
-    <span>
-      {% if kind == 'video' %}
-      A video reopens the ATM archive for every chunk and can take over a
-      minute. Keep this tab open; the browser shows the clip when the verified
-      download completes.
-      {% elif source == 'zip' %}
-      The bridge lists the day archive, extracts this entry by index, and
-      verifies its size and CRC32 before sending it. This can take a minute.
-      {% else %}
-      A still image usually takes a few seconds. The browser shows it when the
-      verified download completes.
-      {% endif %}
-    </span>
+  <div class="ev-page-note">
+    <i data-lucide="shield-check"></i>
+    <span><b>Streamed from the ATM for this one view.</b>
+      The host bridge re-lists the allow-listed folder, matches the keyed locator, verifies the file, and relays it
+      through the portal. The response is not cached, written to disk, or stored in the database.</span>
   </div>
 
-  <div class="ev-error" id="ev-error" hidden>
-    <div class="ev-error-icon"><i data-lucide="alert-triangle"></i></div>
-    <strong id="ev-error-title">{{ not_available_text }}</strong>
-    <span id="ev-error-detail">
-      The file may have rotated off the ATM, or the bridge may be unavailable.
-      Go back to the candidate list; a transport failure is shown separately
-      from missing evidence.
-    </span>
-    <a class="btn btn-outline" href="{{ back_url }}">{{ back_label }}</a>
+  <div class="ev-viewer-layout">
+    <div class="ev-viewer-main">
+      <div class="ev-stage" id="ev-stage"
+           data-src="{{ stream_url }}"
+           data-kind="{{ kind }}"
+           data-missing-text="{{ not_available_text }}">
+        <div class="ev-loading" id="ev-loading">
+          <div class="ev-spinner" aria-hidden="true"></div>
+          <strong>Fetching evidence from the ATM…</strong>
+          <span>
+            {% if kind == 'video' %}
+            A video reopens the ATM archive for every chunk and can take over a minute. Keep this tab open; the clip
+            appears when the verified download completes.
+            {% elif source == 'zip' %}
+            The bridge lists the day archive, extracts this entry by index, and verifies its size and CRC32 before
+            sending it. This can take a minute.
+            {% else %}
+            A still image usually takes a few seconds. It appears when the verified download completes.
+            {% endif %}
+          </span>
+        </div>
+
+        <div class="ev-error" id="ev-error" hidden>
+          <div class="ev-error-icon"><i data-lucide="alert-triangle"></i></div>
+          <strong id="ev-error-title">{{ not_available_text }}</strong>
+          <span id="ev-error-detail">
+            The file may have rotated off the ATM, or the bridge may be unavailable. A transport failure is shown
+            separately from missing evidence.
+          </span>
+          <a class="btn btn-outline" href="{{ back_url }}">{{ back_label }}</a>
+        </div>
+
+        {% if kind == 'video' %}
+        <video id="ev-media" class="ev-media" controls playsinline preload="auto" hidden></video>
+        {% else %}
+        <img id="ev-media" class="ev-media" alt="ATM image evidence" hidden>
+        {% endif %}
+      </div>
+
+      <div class="ev-stage-actions">
+        <a class="btn btn-outline" href="{{ back_url }}">{{ back_label }}</a>
+        <a class="btn btn-outline" target="_blank" rel="noopener" href="{{ stream_url }}">Open raw stream</a>
+      </div>
+      <p class="ev-stage-note">
+        The raw stream skips the portal chrome and is only useful when you need the browser's own viewer or a direct
+        URL. Every evidence load is audited as <code>IMAGE_VIEW</code>. A 404 with
+        <code>{{ not_available_text }}</code> means the evidence is gone from the ATM; any other error is a bridge or
+        ATM transport failure.
+      </p>
+    </div>
+
+    <aside class="ev-rail" aria-label="Evidence details">
+      <h3 style="font-size:12px;font-weight:750;margin:0 0 10px">Evidence details</h3>
+      <div class="ev-meta">
+        {{ meta_item('ATM', atm.atm_id) }}
+        {{ meta_item('Day', day_value) }}
+        {{ meta_item('Source', source_label) }}
+        {{ meta_item('Type', 'Video clip' if kind == 'video' else 'Still image') }}
+        {% if source == 'file' %}
+        {{ meta_item('Window', start_value ~ ' → ' ~ end_value) }}
+        {% endif %}
+        <span class="ev-meta-item" id="ev-size-wrap" hidden>
+          <small>Size</small><b id="ev-size">—</b>
+        </span>
+      </div>
+
+      <details class="ev-details">
+        <summary>Technical details</summary>
+        <div class="ev-details-body">
+          <div>Locator <b class="mono">{{ locator[:16] }}…</b></div>
+          <span id="ev-sha-wrap" hidden>
+            <div>SHA-256 <b class="mono ev-sha" id="ev-sha">—</b></div>
+          </span>
+          <div>Transport <b>Read-only chunks via the host bridge</b></div>
+          <div>Retention <b>ATM only; no portal copy</b></div>
+        </div>
+      </details>
+    </aside>
   </div>
-
-  {% if kind == 'video' %}
-  <video id="ev-media" class="ev-media" controls playsinline preload="auto" hidden></video>
-  {% else %}
-  <img id="ev-media" class="ev-media" alt="ATM image evidence" hidden>
-  {% endif %}
-</div>
-
-<div class="ev-actions">
-  <a class="btn btn-outline" href="{{ back_url }}">{{ back_label }}</a>
-  <a class="btn btn-outline" target="_blank" rel="noopener" href="{{ stream_url }}">Open raw stream</a>
-</div>
-<p class="ev-note">
-  The raw stream skips the portal chrome and is only useful when you need the
-  browser's own viewer or a direct URL. Every evidence load, including the one
-  this page starts automatically, is audited as <code>IMAGE_VIEW</code>. A 404 with
-  <code>{{ not_available_text }}</code> means the evidence is gone from the
-  ATM; any other error is a bridge or ATM transport failure.
-</p>
-
 </div>
 {% endblock %}
 {% block extra_scripts %}
@@ -220,7 +239,7 @@
       sizeWrap.hidden = false;
     }
     if (sha) {
-      shaEl.textContent = sha.slice(0, 16) + '…';
+      shaEl.textContent = sha;
       shaEl.title = sha;
       shaWrap.hidden = false;
     }

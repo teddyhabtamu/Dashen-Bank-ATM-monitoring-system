@@ -524,11 +524,13 @@ http://<portal>/ej-journal/ATM-TEST-GRG/images
 
 Then choose the ATM day and the session window. The EJ Journal detail page has
 an **ATM images** button; each staged transaction and each journal file has an
-**Images** link. A transaction link fills a ±2 minute window. The evidence
-table shows the confidence, both anchors, the masked filename, the video clip
-interval, and a **View** link. **View** opens the portal's evidence page, not a
-bare image tab: it keeps the sidebar and the ATM context, shows the fetch state,
-and distinguishes **Not available on ATM** from a bridge/ATM transport failure.
+**Images** link. When the staging row has both session edges, the transaction
+link uses the exact card-inserted → card-returned window; otherwise it falls
+back to ±2 minutes around the recorded time. The evidence table shows the
+confidence, both anchors, the masked filename, the video clip interval, and a
+**View** link. **View** opens the portal's evidence page, not a bare image tab:
+it keeps the sidebar and the ATM context, shows the fetch state, and
+distinguishes **Not available on ATM** from a bridge/ATM transport failure.
 The page fetches the verified stream once and holds it in this browser tab only
 (an object URL); there is no thumbnail cache, disk cache, or second copy. The
 **Open raw stream** action is for a direct URL or the browser's own viewer.
@@ -551,6 +553,18 @@ shows each entry's ATM-local capture time and session time, ranks the session
 start within 5 seconds of the EJ start, and marks captures inside the window.
 The ZIP entry mtime is UTC and is shown only as a secondary line. The card
 field is masked and is never the link.
+
+The exact session window comes from `ej_transactions.started_at` /
+`ended_at`. On an existing database, apply the idempotent staging migration
+before rebuilding the portal:
+
+```bash
+docker exec -i zabbix-db psql -U zabbix -d portal \
+  < scripts/migrate_ej_shadow.sql
+```
+
+The columns are nullable. A journal with no end record keeps `ended_at` null,
+and the UI falls back to the recorded time rather than inventing a window.
 
 ### 6.5 What the audit records
 

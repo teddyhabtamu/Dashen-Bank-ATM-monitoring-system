@@ -107,6 +107,7 @@ def test_build_sql_is_idempotent_and_never_targets_atm_transactions():
         'parse-run staging must be text: COPY into a numeric temp column '
         'fails on an empty value before NULLIF can run')
     assert 'journal_date' in sql and 'hostname' in sql
+    assert 'started_at' in sql and 'ended_at' in sql
     assert 'ON CONFLICT (file_path, file_sha256) DO UPDATE' in sql
     assert 'INSERT INTO public.atm_transactions' not in sql
     assert 'INSERT INTO public.ej_transactions' in sql

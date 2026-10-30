@@ -90,6 +90,8 @@ CREATE TABLE IF NOT EXISTS public.ej_transactions (
     terminal_id      varchar(20),
     branch           varchar(100),
     recorded_at      timestamp without time zone NOT NULL,
+    started_at       timestamp without time zone,
+    ended_at         timestamp without time zone,
     txn_type         varchar(30),
     status           varchar(20),
     amount           numeric(15,2),
@@ -111,10 +113,19 @@ CREATE TABLE IF NOT EXISTS public.ej_transactions (
 COMMENT ON TABLE public.ej_transactions IS
   'Parsed EJ transactions awaiting reconciliation. NOT the official ledger; reports must not read this table.';
 
+-- Session edges.  Nullable on purpose: an old journal, or a session whose
+-- end record was not captured, must not receive a made-up interval.  The
+-- image page uses these only when both edges are present and on the same day.
+ALTER TABLE public.ej_transactions
+    ADD COLUMN IF NOT EXISTS started_at timestamp without time zone,
+    ADD COLUMN IF NOT EXISTS ended_at timestamp without time zone;
+
 CREATE INDEX IF NOT EXISTS idx_ej_txn_recorded_at
     ON public.ej_transactions (recorded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ej_txn_atm_time
     ON public.ej_transactions (atm_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ej_txn_atm_session
+    ON public.ej_transactions (atm_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ej_txn_status
     ON public.ej_transactions (status);
 CREATE INDEX IF NOT EXISTS idx_ej_txn_warnings

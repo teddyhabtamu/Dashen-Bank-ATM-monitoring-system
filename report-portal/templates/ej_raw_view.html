@@ -1,24 +1,26 @@
 {% extends "base.html" %}
+{% from "_evidence_ui.html" import status_chip, meta_item %}
 {% block title %}{{ atm_id }} raw EJ · {{ file_label }}{% endblock %}
 {% block extra_style %}
 {% include "_ej_journal_style.html" %}
 <style>
-.raw-meta{display:flex;flex-wrap:wrap;gap:8px 22px;background:#fff;border:1px solid #EEF1F6;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:#64748B;box-shadow:0 1px 3px rgba(1,33,105,.04)}
-.raw-meta b{color:#0F172A}
-.raw-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;color:#64748B}
-.raw-toolbar .raw-count b{color:#0F172A}
-.raw-toolbar .raw-actions{display:flex;gap:8px;flex-wrap:wrap}
-.raw-shell{background:#fff;border-radius:12px;overflow:auto;max-height:72vh;border:1px solid #E4E9F1;box-shadow:0 1px 3px rgba(1,33,105,.04)}
+.raw-shell{background:#fff;border-radius:12px;overflow:auto;max-height:72vh;border:1px solid var(--ev-border);box-shadow:var(--ev-shadow)}
 .raw-lines{width:100%;border-collapse:collapse;table-layout:fixed}
-.raw-lines th{position:sticky;top:0;z-index:1;text-align:left;background:#F8FAFC;color:#64748B;font-size:10px;text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;border-bottom:1px solid #E4E9F1}
+.raw-lines th{position:sticky;top:0;z-index:1;text-align:left;background:#F8FAFC;color:var(--ev-muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;border-bottom:1px solid var(--ev-border)}
 .raw-lines th.ln{width:72px}
-.raw-lines td{padding:4px 12px;border-bottom:1px solid #F1F5F9;vertical-align:top;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;line-height:1.6}
-.raw-lines td.ln{width:72px;color:#94A3B8;text-align:right;user-select:none;background:#F8FAFC;border-right:1px solid #EEF1F6;font-size:10.5px;padding-top:5px}
+.raw-lines td{padding:4px 12px;border-bottom:1px solid #F1F5F9;vertical-align:top;font-family:var(--ev-mono);font-size:11.5px;line-height:1.65}
+.raw-lines td.ln{width:72px;color:var(--ev-faint);text-align:right;user-select:none;background:#F8FAFC;border-right:1px solid var(--ev-border);font-size:10.5px;padding-top:5px}
 .raw-lines td.code{color:#0F172A;white-space:pre-wrap;word-break:break-word}
 .raw-lines tbody tr:hover td{background:#EEF2FF}
 .raw-lines tbody tr:hover td.ln{background:#E8EDF8}
-.raw-empty{padding:32px 20px;text-align:center;color:#94A3B8;font-size:13px}
-.raw-notice{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.55;margin-bottom:14px}
+.raw-lines mark{background:#FEF08A;color:#713F12;padding:0 1px;border-radius:2px}
+.raw-lines.no-wrap td.code{white-space:pre;word-break:normal}
+.raw-lines.hide-ln th.ln,.raw-lines.hide-ln td.ln{display:none}
+.raw-empty{padding:32px 20px;text-align:center;color:var(--ev-faint);font-size:13px}
+.raw-notice{background:var(--ev-amber-soft);border:1px solid #FDE68A;color:#92400E;border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.55;margin-bottom:14px}
+.raw-search .fg{flex:1 1 320px}
+.raw-search input{width:100% !important;min-width:0 !important}
+.raw-toolbar .raw-actions .btn[aria-pressed="true"]{background:var(--ev-brand-soft);border-color:#B2DDFF;color:var(--ev-brand)}
 @media(max-width:640px){.raw-lines th.ln,.raw-lines td.ln{width:48px}.raw-lines td,.raw-lines th{padding-left:8px;padding-right:8px}}
 </style>
 {% endblock %}
@@ -26,19 +28,43 @@
 <div class="page-header">
   <div class="page-header-icon"><i data-lucide="file-text"></i></div>
   <div>
-    <div class="detail-head">
-      <a class="back" href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm_id) }}">← EJ Journal</a>
-      <a class="back" href="{{ url_for('admin.atm_detail', atm_id=atm_id) }}">ATM detail</a>
+    <div class="ev-breadcrumb">
+      <a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm_id) }}">EJ Journal</a>
+      <span class="sep">/</span>
+      <a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm_id, tab='files') }}">Journal files</a>
+      <span class="sep">/</span>
+      <span>{{ file_label }}</span>
     </div>
     <h1 class="page-title">{{ atm_id }} · Raw EJ file</h1>
     <p class="page-subtitle">{{ file_label }} · {{ file_size }} · {{ journal_date }} · admin only</p>
+    <div class="ev-context">
+      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Archived file</span>
+      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>No ATM contact</span>
+      <span class="ev-chip ev-status ev-status-stale"><span class="ev-dot"></span>May contain card data</span>
+    </div>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-outline" href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm_id, tab='files') }}">
+      <i data-lucide="arrow-left" style="width:14px;height:14px"></i> Back to files
+    </a>
+    <a class="btn btn-primary" href="{{ url_for('ej_journal.ej_raw_download', atm_id=atm_id, run_id=run_id) }}">
+      <i data-lucide="download" style="width:14px;height:14px"></i> Download raw
+    </a>
   </div>
 </div>
 
 <div class="page-content">
-  <div class="banner banner-note">
-    Raw journal from the evidence archive. It may contain card data, so viewing is admin-only and audited.
-    The page reads the archived file only; it does not contact the ATM.
+  <div class="ev-page-note">
+    <i data-lucide="shield-check"></i>
+    <span><b>Raw journal from the evidence archive.</b> It may contain card data, so viewing is admin-only and audited.
+      The page reads the archived file only; it does not contact the ATM. Download preserves the original bytes.</span>
+    <span class="ev-note-tail">
+      {% if images_url %}
+      <a class="btn btn-outline" href="{{ images_url }}">
+        <i data-lucide="camera" style="width:13px;height:13px"></i> Images for this day
+      </a>
+      {% endif %}
+    </span>
   </div>
 
   <div class="raw-meta">
@@ -57,36 +83,37 @@
   {% endif %}
 
   {% if not too_large and not binary %}
-  <form method="post" action="{{ url_for('ej_journal.ej_raw_view', atm_id=atm_id, run_id=run_id) }}" class="ej-filters">
+  <form method="post" action="{{ url_for('ej_journal.ej_raw_view', atm_id=atm_id, run_id=run_id) }}"
+        class="ej-filters raw-search" id="rawSearch">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="fg">
       <label for="raw-q">Search this file</label>
-      <input id="raw-q" name="q" value="{{ q }}" maxlength="200" placeholder="Case-insensitive substring, e.g. terminal ID or response code">
+      <input id="raw-q" name="q" value="{{ q }}" maxlength="200"
+             placeholder="Case-insensitive substring, e.g. terminal ID or response code">
     </div>
     <div class="actions">
-      <button class="btn btn-primary" type="submit">Search</button>
+      <button class="btn btn-primary" type="submit"><i data-lucide="search" style="width:14px;height:14px"></i> Search</button>
       {% if q %}<button class="btn btn-outline" type="submit" name="clear" value="1">Clear</button>{% endif %}
-      <a class="btn btn-outline" href="{{ url_for('ej_journal.ej_raw_download', atm_id=atm_id, run_id=run_id) }}">Download raw</a>
     </div>
   </form>
   {% endif %}
 
   {% if too_large %}
-  <div class="card">
-    <div class="raw-notice">
-      This file is larger than {{ view_max_mb }} MB, the safe text-viewer limit.
-      Download the raw file to inspect it in full; the portal will not show a partial file that looks searchable.
-    </div>
-    <div style="padding:0 16px 16px">
+  <div class="ev-card">
+    <div class="ev-card-body">
+      <div class="raw-notice">
+        This file is larger than {{ view_max_mb }} MB, the safe text-viewer limit.
+        Download the raw file to inspect it in full; the portal will not show a partial file that looks searchable.
+      </div>
       <a class="btn btn-primary" href="{{ url_for('ej_journal.ej_raw_download', atm_id=atm_id, run_id=run_id) }}">Download raw file</a>
     </div>
   </div>
   {% elif binary %}
-  <div class="card">
-    <div class="raw-notice">
-      This archive is not plain text. Download the raw file instead of rendering it in the browser.
-    </div>
-    <div style="padding:0 16px 16px">
+  <div class="ev-card">
+    <div class="ev-card-body">
+      <div class="raw-notice">
+        This archive is not plain text. Download the raw file instead of rendering it in the browser.
+      </div>
       <a class="btn btn-primary" href="{{ url_for('ej_journal.ej_raw_download', atm_id=atm_id, run_id=run_id) }}">Download raw file</a>
     </div>
   </div>
@@ -103,12 +130,22 @@
       {% endif %}
     </div>
     <div class="raw-actions">
-      <a class="btn btn-outline" href="{{ url_for('ej_journal.ej_raw_download', atm_id=atm_id, run_id=run_id) }}">Download raw</a>
+      <button type="button" class="btn btn-outline" id="rawWrap" aria-pressed="false"
+              title="Toggle line wrapping">
+        <i data-lucide="wrap-text" style="width:13px;height:13px"></i> Wrap
+      </button>
+      <button type="button" class="btn btn-outline" id="rawLines" aria-pressed="true"
+              title="Toggle line numbers">
+        <i data-lucide="list" style="width:13px;height:13px"></i> Lines
+      </button>
+      <a class="btn btn-outline" href="{{ url_for('ej_journal.ej_raw_download', atm_id=atm_id, run_id=run_id) }}">
+        <i data-lucide="download" style="width:13px;height:13px"></i> Download raw
+      </a>
     </div>
   </div>
 
   <div class="raw-shell">
-    <table class="raw-lines">
+    <table class="raw-lines" id="rawTable">
       <thead><tr><th class="ln">Line</th><th>Content</th></tr></thead>
       <tbody>
         {% for line in view.lines %}
@@ -135,4 +172,48 @@
   {% endif %}
   {% endif %}
 </div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+(function () {
+  var table = document.getElementById('rawTable');
+  if (!table) return;
+
+  var wrap = document.getElementById('rawWrap');
+  var lines = document.getElementById('rawLines');
+  if (wrap) {
+    wrap.addEventListener('click', function () {
+      var on = table.classList.toggle('no-wrap');
+      wrap.setAttribute('aria-pressed', on ? 'false' : 'true');
+    });
+  }
+  if (lines) {
+    lines.addEventListener('click', function () {
+      var on = table.classList.toggle('hide-ln');
+      lines.setAttribute('aria-pressed', on ? 'false' : 'true');
+    });
+  }
+
+  var query = {{ q|tojson }};
+  if (!query) return;
+  var needle = query.toLowerCase();
+  document.querySelectorAll('#rawTable td.code').forEach(function (cell) {
+    var text = cell.textContent;
+    var lower = text.toLowerCase();
+    if (lower.indexOf(needle) === -1) return;
+    var frag = document.createDocumentFragment();
+    var start = 0, at;
+    while ((at = lower.indexOf(needle, start)) !== -1) {
+      if (at > start) frag.appendChild(document.createTextNode(text.slice(start, at)));
+      var mark = document.createElement('mark');
+      mark.textContent = text.slice(at, at + needle.length);
+      frag.appendChild(mark);
+      start = at + needle.length;
+    }
+    if (start < text.length) frag.appendChild(document.createTextNode(text.slice(start)));
+    cell.textContent = '';
+    cell.appendChild(frag);
+  });
+})();
+</script>
 {% endblock %}
