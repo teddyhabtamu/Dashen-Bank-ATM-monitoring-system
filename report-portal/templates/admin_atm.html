@@ -409,21 +409,21 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
           <div class="form-group" data-field="{{ name }}">
             <label for="field-{{ name }}">{{ label }} {% if not optional %}<span class="required">*</span>{% endif %}</label>
             {% if name == 'snmp_version' %}
-              <select name="snmp_version" id="field-snmp_version">
+              <select name="snmp_version" id="field-snmp_version" aria-label="SNMP Version">
                 <option value="">-- Select --</option>
                 <option value="2">v2c</option>
                 <option value="3">v3</option>
               </select>
             {% elif name == 'ej_log_format' %}
-              <select name="ej_log_format" id="field-ej_log_format">
+              <select name="ej_log_format" id="field-ej_log_format" aria-label="EJ Format">
                 <option value="">-- Select --</option>
                 <option value="NCR_APTRA">NCR_APTRA</option>
                 <option value="GRG">GRG</option>
               </select>
             {% elif name == 'snmp_community' %}
-              <input type="password" name="snmp_community" id="field-snmp_community" maxlength="{{ maxlen or 100 }}" placeholder="Leave blank to keep existing" autocomplete="off">
+              <input type="password" name="snmp_community" id="field-snmp_community" aria-label="SNMP Community" maxlength="{{ maxlen or 100 }}" placeholder="Leave blank to keep existing" autocomplete="off">
             {% elif name == 'vendor' %}
-              <select name="vendor" id="field-vendor" required onchange="onVendorChange(this)">
+              <select name="vendor" id="field-vendor" aria-label="Vendor" required onchange="onVendorChange(this)">
                 <option value="">-- Select --</option>
                 {% for opt in vendor_options %}
                   <option value="{{ opt }}">{{ opt }}</option>

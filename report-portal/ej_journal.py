@@ -391,7 +391,7 @@ def detect_vendor(text):
 
 _NCR_HEADER = re.compile(
     r'^\*(\d+)\*(\d{2}/\d{2}/\d{4})\*(\d{2}):(\d{2})\*?')
-_NCR_EVENT = re.compile(r'^(\d{2}):(\d{2}):(\d{2})[ \t]+([^\r\n]*)$')
+_NCR_EVENT = re.compile(r'^(\d{2}):(\d{2}):(\d{2})[ \t]+(\S.*)')
 _NCR_RECEIPT_HEADER = re.compile(r'^DASHEN BANK\s*\d*$')
 _RECEIPT_DATE = re.compile(
     r'^(\d{2})/(\d{2})/(\d{2,4})\s+(\d{2}):(\d{2})\s+(\S+)$')
@@ -817,7 +817,7 @@ def parse_ncr_text(text, *, atm_id=None, terminal_map=None, raw_ref=None):
 
 
 _GRG_LINE = re.compile(
-    r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)[ \t]+([^\r\n]*)$')
+    r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)[ \t]+(\S.*)')
 _GRG_PAN = re.compile(r'(?:CARD INSERTED|RFCARD INSERTED)\.?\s+PAN:\s*(\S+)')
 _GRG_CHIP_PAN = re.compile(r'CHIP CARD PAN:\s*(\S+)')
 _GRG_AMOUNT = re.compile(r'AMOUNT ENTERED\s+([\d,]+)')

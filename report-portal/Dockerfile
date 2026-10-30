@@ -2,6 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Wheel-only installs are configured through the environment so the pip
+# command stays free of option values that can be mistaken for packages.
+ENV PIP_ONLY_BINARY=:all:
+
 # Dependencies first.  requirements.txt is the named intent; the lock carries
 # the resolved versions and is what actually gets installed.  Copy both before
 # the source so the pip layer is cached across code-only builds.
@@ -9,7 +13,7 @@ COPY requirements.txt requirements.lock ./
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir --only-binary :all: -r requirements.lock
+    && pip install --no-cache-dir --requirement=requirements.lock
 
 # Copy only what the portal serves.  A recursive `COPY . .` would also ship
 # local .env files, caches and editor state if .dockerignore ever drifted.
