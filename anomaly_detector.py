@@ -11,8 +11,8 @@ Runs continuously. Detects:
   5. Off-hours spike    — ATM transaction volume > 3x normal between 00:00-05:00
 
 Writes findings to: atm_anomalies table
-Exposes: /tmp/zabbix_anomaly_count  (Zabbix external check reads this)
-Also writes: /tmp/zabbix_atm_anomaly_{ATM_ID} per-ATM for individual triggers
+Exposes: zabbix_anomaly_count in the platform temp directory (Zabbix reads this)
+Also writes: zabbix_{atm_id}_anomalies per-ATM for individual triggers
 """
 
 import os, tempfile, time, json, psycopg2, logging
@@ -292,7 +292,7 @@ def _publish_text(path, text, mode=0o600):
 def write_zabbix_files(cur):
     """
     Write plain-text files that Zabbix external checks or UserParameter read.
-    Zabbix item key: system.run[cat /tmp/zabbix_anomaly_count]
+    Zabbix reads the count from the same platform temp directory.
     Returns: integer count of unacknowledged anomalies in last 60 minutes.
     """
     cur.execute("""
