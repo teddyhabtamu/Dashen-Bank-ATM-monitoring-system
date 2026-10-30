@@ -241,6 +241,26 @@ def test_changed_ip_updates_the_interface_only(monkeypatch):
     assert 'hostid' in plans[0]['params']
 
 
+def test_changing_snmp_community_keeps_the_agent_interface(monkeypatch):
+    """UAT failure: a GRG host's XFS items ride the agent interface. host.update
+    replaces the interface set, so sending only the SNMP row deleted the agent
+    row and Zabbix refused with 'Interface is linked to item'."""
+    cur = existing(interfaces=[snmp_if(community='old_community'), agent_if()],
+                   parentTemplates=[{'templateid': TGRG}],
+                   macros=[{'macro': '{$ATM_VENDOR}', 'value': 'GRG'}],
+                   groups=[{'groupid': G_ALL}, {'groupid': G_GRG},
+                           {'groupid': G_ADAMA}])
+    install(monkeypatch, FakeZabbix(hosts={'ATM-0001': cur}))
+    _, plans = zs.plan_hosts([row(vendor='GRG', snmp_community='new_community')])
+    p = plans[0]
+    assert 'interface/community' in p['changes']
+    by_type = {str(i['type']): i for i in p['params']['interfaces']}
+    assert set(by_type) == {'1', '2'}, 'the agent interface must not be dropped'
+    assert by_type['1']['interfaceid'] == '10'
+    assert by_type['2']['interfaceid'] == '9'
+    assert by_type['2']['details']['community'] == 'new_community'
+
+
 def test_missing_templates_are_both_linked(monkeypatch):
     install(monkeypatch, FakeZabbix(hosts={'ATM-0001': existing(parentTemplates=[])}))
     _, plans = zs.plan_hosts([row()])

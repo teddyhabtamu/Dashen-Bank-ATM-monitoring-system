@@ -255,22 +255,40 @@ def _plan_update(a, cur, tids, groups, create_groups):
         changed.append("agent interface")
     if snmp:
         det = snmp.get("details") or {}
-        if (snmp.get("ip") != (a.get("ip_address") or "").strip()
+        want_ip = (a.get("ip_address") or "").strip()
+        if (snmp.get("ip") != want_ip
                 or det.get("community") != want_community
                 or str(det.get("version")) != str(want_version)):
             if "interfaces" not in upd:   # do not clobber an agent-interface append
-                # Always an array: Zabbix documents interfaces as a list, and
-                # now that agent rows can be appended the two branches would
-                # otherwise disagree on the payload shape.
-                upd["interfaces"] = [{
-                    "interfaceid": snmp["interfaceid"],
-                    "ip": (a.get("ip_address") or "").strip(),
-                    "details": {"version": want_version, "bulk": 0,
-                                "community": want_community}}]
+                # host.update REPLACES the whole interface set. Sending only
+                # the SNMP row deletes every other row, and Zabbix refuses
+                # with "Interface is linked to item" when the omitted row is
+                # the agent interface carrying the GRG XFS items. Echo every
+                # existing row back and change only the one that needs it.
+                upd["interfaces"] = []
+                for iface in ifaces:
+                    if not iface.get("interfaceid"):
+                        continue
+                    row = {
+                        "interfaceid": iface["interfaceid"],
+                        "type": iface.get("type", "2"),
+                        "main": iface.get("main", "1"),
+                        "useip": iface.get("useip", "1"),
+                        "ip": iface.get("ip"),
+                        "dns": iface.get("dns", ""),
+                        "port": iface.get("port", SNMP_PORT),
+                    }
+                    if iface.get("details"):
+                        row["details"] = iface["details"]
+                    if iface["interfaceid"] == snmp["interfaceid"]:
+                        row["ip"] = want_ip
+                        row["details"] = {"version": want_version, "bulk": 0,
+                                          "community": want_community}
+                    upd["interfaces"].append(row)
             else:
                 for i in upd["interfaces"]:
                     if i.get("interfaceid") == snmp["interfaceid"]:
-                        i["ip"] = (a.get("ip_address") or "").strip()
+                        i["ip"] = want_ip
                         i["details"] = {"version": want_version, "bulk": 0,
                                         "community": want_community}
             changed.append("interface/community")
