@@ -88,7 +88,9 @@
             The file may have rotated off the ATM, or the bridge may be unavailable. A transport failure is shown
             separately from missing evidence.
           </span>
-          <a class="btn btn-outline" href="{{ back_url }}">{{ back_label }}</a>
+          <a class="btn btn-outline" href="{{ back_url }}">
+            <i data-lucide="arrow-left" style="width:13px;height:13px"></i> {{ back_label }}
+          </a>
         </div>
 
         {% if kind == 'video' %}
@@ -99,7 +101,9 @@
       </div>
 
       <div class="ev-stage-actions">
-        <a class="btn btn-outline" href="{{ back_url }}">{{ back_label }}</a>
+        <a class="btn btn-outline" href="{{ back_url }}">
+          <i data-lucide="arrow-left" style="width:13px;height:13px"></i> {{ back_label }}
+        </a>
         <a class="btn btn-outline" target="_blank" rel="noopener" href="{{ stream_url }}">Open raw stream</a>
       </div>
       <p class="ev-stage-note">

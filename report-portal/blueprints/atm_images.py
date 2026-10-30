@@ -379,7 +379,7 @@ def atm_image_view(atm_id):
         back_url = url_for(
             'atm_images.atm_image_zip', atm_id=atm_id,
             day=day.isoformat(), zip_hmac=zip_hmac)
-        back_label = '← Archive entries'
+        back_label = 'Archive entries'
         source_label = f'Zip entry {index}'
         locator = zip_hmac
     else:
@@ -389,7 +389,7 @@ def atm_image_view(atm_id):
         back_url = url_for(
             'atm_images.atm_images', atm_id=atm_id, day=day.isoformat(),
             start=start.strftime('%H:%M:%S'), end=end.strftime('%H:%M:%S'))
-        back_label = '← Candidate list'
+        back_label = 'Candidate list'
         source_label = 'Direct file'
         locator = name_hmac
 
