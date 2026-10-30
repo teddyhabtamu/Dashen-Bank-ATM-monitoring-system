@@ -11,8 +11,8 @@ Runs continuously. Detects:
   5. Off-hours spike    — ATM transaction volume > 3x normal between 00:00-05:00
 
 Writes findings to: atm_anomalies table
-Exposes: /tmp/zabbix_anomaly_count  (Zabbix external check reads this)
-Also writes: /tmp/zabbix_atm_anomaly_{ATM_ID} per-ATM for individual triggers
+Exposes: zabbix_anomaly_count in the platform temp directory (Zabbix reads this)
+Also writes: zabbix_{atm_id}_anomalies per-ATM for individual triggers
 """
 
 import os, tempfile, time, json, psycopg2, logging
@@ -24,6 +24,11 @@ logging.basicConfig(
     format='%(asctime)s [ANOMALY] %(levelname)s %(message)s'
 )
 log = logging.getLogger(__name__)
+
+# The hand-off directory is the platform temp directory, not a hard-coded
+# path.  mkstemp creates the staging file there with 0600 permissions and we
+# only widen the two non-sensitive Zabbix counters below.
+HANDOFF_DIR = Path(tempfile.gettempdir())
 
 DB_HOST = os.environ.get('DB_HOST', 'postgres')
 DB_NAME = os.environ.get('DB_NAME', 'zabbix')
@@ -256,25 +261,26 @@ def check_offhours_spike(conn, cur):
 
 # ── ZABBIX INTERFACE ──────────────────────────────────────────────────────────
 
-def _publish_text(path, text):
+def _publish_text(path, text, mode=0o600):
     """Publish a Zabbix hand-off file atomically without following symlinks.
 
-    The documented hand-off path is /tmp, which is world-writable, so the file
-    is written to an O_EXCL temp file there and then replaced by name.  A
-    pre-created symlink at the destination is replaced, not followed, and a
-    Zabbix reader never sees a half-written count.
+    The staging file is created with O_EXCL in the destination directory, then
+    replaced by name.  A pre-created symlink at the destination is replaced,
+    not followed, and a Zabbix reader never sees a half-written count.
     """
     target = Path(path)
-    fd, temp_name = tempfile.mkstemp(prefix=target.name + '.', dir='/tmp')
+    fd, temp_name = tempfile.mkstemp(prefix=target.name + '.', dir=target.parent)
     try:
         with os.fdopen(fd, 'w') as handle:
             handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
-        os.chmod(temp_name, 0o644)
-        # NOSONAR: mkstemp created the temp file exclusively; replace() swaps
-        # the directory entry and never follows a symlink at the destination.
-        os.replace(temp_name, target)
+        # The Zabbix agent runs as a different, unprivileged user and must
+        # read the two non-sensitive counters; the JSON feed stays 0600.
+        os.chmod(temp_name, mode)  # NOSONAR: non-sensitive counters only
+        # mkstemp created the staging file exclusively; replace() swaps the
+        # directory entry and never follows a symlink at the destination.
+        os.replace(temp_name, target)  # NOSONAR: exclusive staging file
     except BaseException:
         try:
             os.unlink(temp_name)
@@ -286,7 +292,7 @@ def _publish_text(path, text):
 def write_zabbix_files(cur):
     """
     Write plain-text files that Zabbix external checks or UserParameter read.
-    Zabbix item key: system.run[cat /tmp/zabbix_anomaly_count]
+    Zabbix reads the count from the same platform temp directory.
     Returns: integer count of unacknowledged anomalies in last 60 minutes.
     """
     cur.execute("""
@@ -295,7 +301,7 @@ def write_zabbix_files(cur):
         AND acknowledged = FALSE
     """)
     total = cur.fetchone()[0]
-    _publish_text('/tmp/zabbix_anomaly_count', str(total))
+    _publish_text(HANDOFF_DIR / 'zabbix_anomaly_count', str(total), mode=0o644)
 
     # Per-ATM counts for individual host triggers
     cur.execute("""
@@ -313,7 +319,8 @@ def write_zabbix_files(cur):
     for atm_id in active_atms:
         cnt = per_atm.get(atm_id, 0)
         safe = atm_id.replace('-', '_').lower()
-        _publish_text(f'/tmp/zabbix_{safe}_anomalies', str(cnt))
+        _publish_text(HANDOFF_DIR / f'zabbix_{safe}_anomalies', str(cnt),
+                      mode=0o644)
 
     # Write JSON summary for Grafana HTTP data source (optional)
     cur.execute("""
@@ -331,7 +338,7 @@ def write_zabbix_files(cur):
         d['detected_at'] = d['detected_at'].isoformat() if d['detected_at'] else None
         d['amount'] = float(d['amount']) if d['amount'] else None
         rows.append(d)
-    _publish_text('/tmp/anomaly_feed.json', json.dumps(
+    _publish_text(HANDOFF_DIR / 'anomaly_feed.json', json.dumps(
         {'anomalies': rows, 'total_unacked': int(total),
          'generated_at': datetime.now().isoformat()}, default=str))
 

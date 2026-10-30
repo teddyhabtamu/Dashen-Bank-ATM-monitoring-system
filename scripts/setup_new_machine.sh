@@ -36,7 +36,7 @@ echo ""
 echo "Step 2: Checking Docker..."
 if ! command -v docker &> /dev/null; then
     echo "  Docker not found. Installing..."
-    curl -fsSL https://get.docker.com | sh
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL https://get.docker.com | sh
     sudo usermod -aG docker $USER
     echo "  Docker installed. Please log out and back in, then re-run."
     exit 1
@@ -239,7 +239,7 @@ if [[ "$GLPI_FILES_OK" = "0" ]]; then
     if [[ "$?" != "0" ]]; then
         echo "  Container cannot reach GitHub — downloading on host and copying in..."
         rm -f /tmp/glpi-10.0.15.tgz
-        wget -q https://github.com/glpi-project/glpi/releases/download/10.0.15/glpi-10.0.15.tgz -O /tmp/glpi-10.0.15.tgz
+        wget --https-only -q https://github.com/glpi-project/glpi/releases/download/10.0.15/glpi-10.0.15.tgz -O /tmp/glpi-10.0.15.tgz
         if [[ -f /tmp/glpi-10.0.15.tgz ]]; then
             docker cp /tmp/glpi-10.0.15.tgz glpi:/var/www/html/
             rm -f /tmp/glpi-10.0.15.tgz

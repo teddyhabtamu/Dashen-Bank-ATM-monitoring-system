@@ -276,6 +276,24 @@ def test_dockerfile_installs_the_lock():
     dockerfile = (REPO / 'report-portal' / 'Dockerfile').read_text()
     assert 'requirements.lock' in dockerfile, (
         'the Dockerfile must install requirements.lock')
+    assert 'PIP_ONLY_BINARY=:all:' in dockerfile, (
+        'the Dockerfile must keep the wheel-only install guarantee')
+
+
+def test_lock_pins_every_declared_runtime_dependency():
+    """The lock is what the image installs, so it must cover every package
+    named in requirements.txt with an exact version."""
+    reqs = {
+        line.strip().lower() for line in
+        (REPO / 'report-portal' / 'requirements.txt').read_text().split('\n')
+        if line.strip() and not line.startswith('#')
+    }
+    pinned = {
+        line.split('==', 1)[0].strip().lower() for line in
+        (REPO / 'report-portal' / 'requirements.lock').read_text().split('\n')
+        if '==' in line and not line.lstrip().startswith('#')
+    }
+    assert reqs <= pinned, sorted(reqs - pinned)
 
 
 def test_dockerfile_copies_requirements_before_installing_them():
@@ -284,7 +302,7 @@ def test_dockerfile_copies_requirements_before_installing_them():
     container running."""
     dockerfile = (REPO / 'report-portal' / 'Dockerfile').read_text()
     assert dockerfile.index('COPY requirements.txt') < dockerfile.index(
-        'pip install --no-cache-dir --only-binary :all: -r requirements.lock')
+        'pip install --no-cache-dir --requirement=requirements.lock')
 
 
 def test_ncr_recon_has_progress_and_a_watchdog():

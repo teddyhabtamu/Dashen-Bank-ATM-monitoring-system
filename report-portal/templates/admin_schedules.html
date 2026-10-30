@@ -412,6 +412,14 @@ function _recipValid(email){
   return parts[0].length > 0 && parts[1].indexOf('.') > 0 &&
     parts[1].split('.').every(function(label){ return label.length > 0; });
 }
+function _stripTrailingSeparators(value){
+  var text = String(value || '').trim();
+  var end = text.length;
+  while(end > 0 && (text.charAt(end - 1) === ';' || text.charAt(end - 1) === ',')){
+    end -= 1;
+  }
+  return text.slice(0, end).trim();
+}
 function renderRecipTags(){
   var box = document.getElementById('recipTags');
   box.innerHTML = '';
@@ -431,7 +439,7 @@ function renderRecipTags(){
   });
 }
 function addRecipTag(raw){
-  var email = String(raw || '').trim().replace(/[;,]+$/, '').trim();
+  var email = _stripTrailingSeparators(raw);
   if(!email) return false;
   if(!_recipValid(email)){ showToast('"' + email + '" is not a valid email address.', 'error', 5000); return false; }
   if(_recipTags.indexOf(email) === -1) _recipTags.push(email);
@@ -444,7 +452,7 @@ function commitRecipInput(opts){
   var parts = input.value.split(/[,;\n]+/);
   var leftover = [];
   parts.forEach(function(p){
-    var email = String(p || '').trim().replace(/[;,]+$/, '').trim();
+    var email = _stripTrailingSeparators(p);
     if(!email) return;
     if(!_recipValid(email)){
       if(!opts.quiet) showToast('"' + email + '" is not a valid email address.', 'error', 5000);
