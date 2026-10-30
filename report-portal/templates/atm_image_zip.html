@@ -3,10 +3,10 @@
 {% block title %}{{ atm.atm_id }} · ATM image archive{% endblock %}
 {% block extra_style %}
 {% include "_ej_journal_style.html" %}
-.img-caveat{background:#F8FAFC;border:1px solid var(--ev-border);color:#475569;border-radius:10px;padding:10px 13px;font-size:11.5px;line-height:1.55;margin-bottom:14px}
+.img-caveat{background:#F8FAFC;border:1px solid var(--ev-border);color:#475569;border-radius:3px;padding:10px 13px;font-size:11.5px;line-height:1.55;margin-bottom:14px}
 .img-caveat b{color:var(--ev-text)}
-.ev-entry-card{background:var(--ev-surface);border:1px solid var(--ev-border);border-radius:11px;padding:11px 12px;box-shadow:var(--ev-shadow);display:flex;flex-direction:column;gap:7px;min-width:0}
-.ev-entry-card.is-anchor{border-color:#B2DDFF;box-shadow:0 0 0 1px #B2DDFF,var(--ev-shadow)}
+.ev-entry-card{background:var(--ev-surface);border:1px solid var(--ev-border);border-radius:4px;padding:11px 12px;box-shadow:none;display:flex;flex-direction:column;gap:7px;min-width:0}
+.ev-entry-card.is-anchor{border-color:#9DB4D8;box-shadow:none}
 .ev-entry-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .ev-entry-time{font-family:var(--ev-mono);font-size:14px;font-weight:750;font-variant-numeric:tabular-nums}
 .ev-entry-meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--ev-muted)}
@@ -31,9 +31,9 @@
     <h1 class="page-title">{{ atm.atm_id }} · Image archive</h1>
     <p class="page-subtitle">{{ atm.branch or 'Unknown branch' }} · {{ atm.vendor or '—' }} · {{ day_value }} · admin only</p>
     <div class="ev-context">
-      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>NCR day archive</span>
-      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Entries by index</span>
-      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Fetched on demand</span>
+      <span class="ev-chip">NCR day archive</span>
+      <span class="ev-chip">Entries by index</span>
+      <span class="ev-chip">Fetched on demand</span>
     </div>
   </div>
   <div class="page-actions">
@@ -74,7 +74,7 @@
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       {% if result.get('session_start') %}
       {{ confidence_chip(result.get('confidence')) }}
-      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Window {{ result.get('session_start') }} → {{ result.get('session_end') }}</span>
+      <span class="ev-chip">Window {{ result.get('session_start') }} → {{ result.get('session_end') }}</span>
       {% endif %}
       <details class="ev-details" style="border:0;margin:0;padding:0">
         <summary>Technical</summary>

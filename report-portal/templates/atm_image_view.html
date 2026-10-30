@@ -3,19 +3,19 @@
 {% block title %}{{ atm.atm_id }} · ATM evidence{% endblock %}
 {% block extra_style %}
 {% include "_ej_journal_style.html" %}
-.ev-stage{position:relative;background:#0B1220;border:1px solid #1E293B;border-radius:14px;min-height:460px;display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:0 8px 30px rgba(1,33,105,.12)}
+.ev-stage{position:relative;background:#0B1220;border:1px solid #1E293B;border-radius:4px;min-height:460px;display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:none}
 .ev-media{max-width:100%;max-height:72vh;display:block;opacity:0;transition:opacity .2s ease}
 .ev-media[hidden]{display:none}
 .ev-media.ready{opacity:1}
-.ev-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;text-align:center;color:#CBD5E1;padding:24px;background:radial-gradient(circle at center,#172033 0%,#0B1220 70%)}
+.ev-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;text-align:center;color:#CBD5E1;padding:24px;background:#0B1220}
 .ev-loading[hidden]{display:none}
 .ev-loading strong{color:#F8FAFC;font-size:14px}
 .ev-loading span{font-size:12px;max-width:460px;line-height:1.55;color:#94A3B8}
 .ev-spinner{width:34px;height:34px;border:3px solid rgba(148,163,184,.25);border-top-color:#60A5FA;border-radius:50%;animation:ev-spin .9s linear infinite;margin-bottom:3px}
 @keyframes ev-spin{to{transform:rotate(360deg)}}
-.ev-error{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:30px;background:radial-gradient(circle at center,#1F1720 0%,#0B1220 72%);color:#FCA5A5}
+.ev-error{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:30px;background:#140F12;color:#FCA5A5}
 .ev-error[hidden]{display:none}
-.ev-error-icon{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(248,113,113,.12);color:#F87171}
+.ev-error-icon{width:42px;height:42px;border-radius:4px;display:flex;align-items:center;justify-content:center;background:rgba(248,113,113,.12);color:#F87171}
 .ev-error-icon svg{width:22px;height:22px}
 .ev-error strong{font-size:16px;color:#FEE2E2}
 .ev-error span{font-size:12px;color:#94A3B8;max-width:470px;line-height:1.55}
@@ -39,9 +39,9 @@
     <h1 class="page-title">{{ atm.atm_id }} · ATM evidence</h1>
     <p class="page-subtitle">{{ atm.branch or 'Unknown branch' }} · {{ atm.vendor or '—' }} · {{ day_value }} · admin only</p>
     <div class="ev-context">
-      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>On demand</span>
-      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Not stored centrally</span>
-      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>View audited</span>
+      <span class="ev-chip">On demand</span>
+      <span class="ev-chip">Not stored centrally</span>
+      <span class="ev-chip">View audited</span>
     </div>
   </div>
   <div class="page-actions">

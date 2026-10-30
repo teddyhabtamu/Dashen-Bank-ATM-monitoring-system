@@ -22,9 +22,9 @@
     </p>
     {% if atm %}
     <div class="ev-context">
-      <span class="ev-chip ev-status ev-status-ok"><span class="ev-dot"></span>{{ atm.vendor or 'Vendor unknown' }}</span>
-      {% if latest_day %}<span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Latest journal {{ latest_day }}</span>{% endif %}
-      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Admin only</span>
+      <span class="ev-chip">{{ atm.vendor or 'Vendor unknown' }}</span>
+      {% if latest_day %}<span class="ev-chip">Latest journal {{ latest_day }}</span>{% endif %}
+      <span class="ev-chip">Admin only</span>
     </div>
     {% endif %}
   </div>
@@ -50,7 +50,6 @@
 <div class="ev-page-note">
   <i data-lucide="shield-check"></i>
   <span><b>Read-only staging.</b> These rows are held for reconciliation. They do not feed KPIs, reports, cash forecasts or anomalies.</span>
-  <span class="ev-note-tail"><span class="ev-chip ev-status ev-status-ok"><span class="ev-dot"></span>Not official transactions</span></span>
 </div>
 
 <div class="ev-toolbar">

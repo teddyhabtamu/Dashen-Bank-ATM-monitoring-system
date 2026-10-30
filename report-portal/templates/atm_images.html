@@ -26,12 +26,12 @@
 .ev-hero .ev-hero-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .ev-summary-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--ev-muted);margin-top:7px}
 .ev-summary-line b{color:var(--ev-text)}
-.ev-caveat{background:#F8FAFC;border:1px solid var(--ev-border);color:#475569;border-radius:10px;padding:10px 13px;font-size:11.5px;line-height:1.55;margin-bottom:14px}
+.ev-caveat{background:#F8FAFC;border:1px solid var(--ev-border);color:#475569;border-radius:3px;padding:10px 13px;font-size:11.5px;line-height:1.55;margin-bottom:14px}
 .ev-caveat b{color:var(--ev-text)}
 .ev-group{margin-bottom:18px}
 .ev-group-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .ev-group-head h2{font-size:12.5px;font-weight:750;margin:0}
-.ev-group-head .ev-group-count{font-size:10px;font-weight:700;color:var(--ev-muted);background:#F1F5F9;border-radius:999px;padding:1px 7px}
+.ev-group-head .ev-group-count{font-size:10px;font-weight:700;color:var(--ev-muted);background:none;border-radius:0;padding:0}
 @media(max-width:980px){.fp-field{width:100%;min-width:100%}}
 @media(max-width:720px){.ev-hero{padding:13px}.ev-hero h2{font-size:14px}}
 {% endblock %}
@@ -61,9 +61,9 @@
     <h1 class="page-title">{{ atm.atm_id }} · ATM image evidence</h1>
     <p class="page-subtitle">{{ atm.branch or 'Unknown branch' }} · {{ atm.vendor or '—' }} · on demand from the ATM</p>
     <div class="ev-context">
-      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Admin only</span>
-      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Not stored centrally</span>
-      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Audited views</span>
+      <span class="ev-chip">Admin only</span>
+      <span class="ev-chip">Not stored centrally</span>
+      <span class="ev-chip">Audited views</span>
     </div>
   </div>
   <div class="page-actions">
@@ -165,7 +165,7 @@
       <p>The NCR zip is the day container, not a transaction link. Open an archive, then pick the session whose time
         matches the EJ session. The archive groups entries by their ATM-local session timestamp.</p>
       <div class="ev-summary-line">
-        <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Day container</span>
+        <span class="ev-chip">Day container</span>
         <span><b>{{ result.get('candidate_count', 0) }}</b> archive{% if result.get('candidate_count', 0) != 1 %}s{% endif %}</span>
         <span><b>{{ total_zip_images.value }}</b> image{% if total_zip_images.value != 1 %}s{% endif %}</span>
         {% if has_window and result.get('session_start') %}<span>Window <b class="mono">{{ result.get('session_start') }} → {{ result.get('session_end') }}</b></span>{% endif %}
@@ -242,7 +242,7 @@
     </div>
     <div class="ev-hero-actions">
       {% if has_window and result.get('session_start') %}
-      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Window {{ result.get('session_start') }} → {{ result.get('session_end') }}</span>
+      <span class="ev-chip">Window {{ result.get('session_start') }} → {{ result.get('session_end') }}</span>
       {% endif %}
     </div>
   </div>

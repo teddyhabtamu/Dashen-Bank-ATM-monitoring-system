@@ -3,7 +3,7 @@
 {% block title %}{{ atm_id }} raw EJ · {{ file_label }}{% endblock %}
 {% block extra_style %}
 {% include "_ej_journal_style.html" %}
-.raw-shell{background:#fff;border-radius:12px;overflow:auto;max-height:72vh;border:1px solid var(--ev-border);box-shadow:var(--ev-shadow)}
+.raw-shell{background:#fff;border-radius:4px;overflow:auto;max-height:72vh;border:1px solid var(--ev-border);box-shadow:none}
 .raw-lines{width:100%;border-collapse:collapse;table-layout:fixed}
 .raw-lines th{position:sticky;top:0;z-index:1;text-align:left;background:#F8FAFC;color:var(--ev-muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;border-bottom:1px solid var(--ev-border)}
 .raw-lines th.ln{width:72px}
@@ -16,7 +16,7 @@
 .raw-lines.no-wrap td.code{white-space:pre;word-break:normal}
 .raw-lines.hide-ln th.ln,.raw-lines.hide-ln td.ln{display:none}
 .raw-empty{padding:32px 20px;text-align:center;color:var(--ev-faint);font-size:13px}
-.raw-notice{background:var(--ev-amber-soft);border:1px solid #FDE68A;color:#92400E;border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.55;margin-bottom:14px}
+.raw-notice{background:var(--ev-amber-soft);border:1px solid #FDE68A;border-left:3px solid #D97706;color:#92400E;border-radius:3px;padding:12px 14px;font-size:12px;line-height:1.55;margin-bottom:14px}
 .raw-search .fg{flex:1 1 320px}
 .raw-search input{width:100% !important;min-width:0 !important}
 .raw-toolbar .raw-actions .btn[aria-pressed="true"]{background:var(--ev-brand-soft);border-color:#B2DDFF;color:var(--ev-brand)}
@@ -36,9 +36,9 @@
     <h1 class="page-title">{{ atm_id }} · Raw EJ file</h1>
     <p class="page-subtitle">{{ file_label }} · {{ file_size }} · {{ journal_date }} · admin only</p>
     <div class="ev-context">
-      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>Archived file</span>
-      <span class="ev-chip ev-status ev-status-no-data"><span class="ev-dot"></span>No ATM contact</span>
-      <span class="ev-chip ev-status ev-status-stale"><span class="ev-dot"></span>May contain card data</span>
+      <span class="ev-chip">Archived file</span>
+      <span class="ev-chip">No ATM contact</span>
+      <span class="ev-chip ev-status-stale">May contain card data</span>
     </div>
   </div>
   <div class="page-actions">

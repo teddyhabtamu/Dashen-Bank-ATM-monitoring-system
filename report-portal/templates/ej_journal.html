@@ -34,7 +34,6 @@
     <span class="mono">atm_transactions</span> table until explicitly promoted.
     <span class="mono">no_receipt</span> sessions are counted as evidence, never turned into transactions.</span>
   <span class="ev-note-tail">
-    <span class="ev-chip ev-status ev-status-ok"><span class="ev-dot"></span>Not used by KPIs</span>
     <span class="ev-faint">Updated {{ last_updated }}</span>
   </span>
 </div>
@@ -101,9 +100,6 @@
   <span><b>Period activity</b> · {{ '{:,}'.format(summary.get('staged', 0)) }} parsed transactions ·
     ETB {{ '{:,.2f}'.format(summary.get('approved_amount', 0)|float) }} approved ·
     ETB {{ '{:,.2f}'.format(summary.get('dispensed', 0)|float) }} dispensed evidence</span>
-  {% if summary.get('no_cash_evidence', 0) %}
-  <span class="ev-note-tail"><span class="ev-chip ev-status ev-status-stale"><span class="ev-dot"></span>{{ summary.get('no_cash_evidence') }} approved without cash evidence</span></span>
-  {% endif %}
 </div>
 
 {% set attention = summary.get('parse_errors', 0) + summary.get('unmapped_files', 0) + summary.get('unmapped_txns', 0) + summary.get('no_cash_evidence', 0) %}
