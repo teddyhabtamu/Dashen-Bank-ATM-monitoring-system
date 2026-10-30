@@ -17,7 +17,7 @@
     <label class="ev-live" title="Reload every 120 seconds while this tab is visible">
       <input id="evLive" type="checkbox" checked> Live
     </label>
-    <a class="btn btn-outline" href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q) }}">
+    <a class="btn btn-outline" href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, page=page) }}">
       <i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Refresh
     </a>
   </div>

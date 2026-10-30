@@ -43,7 +43,6 @@
 {% set during_n = (result.get('candidates', []) | selectattr('role', 'equalto', 'in_window') | list | length) if result else 0 %}
 {% set end_n = (result.get('candidates', []) | selectattr('role', 'equalto', 'end') | list | length) if result else 0 %}
 {% set near_n = (result.get('candidates', []) | selectattr('role', 'equalto', 'near_window') | list | length) if result else 0 %}
-{% set service_n = (result.get('candidates', []) | selectattr('service', 'equalto', True) | list | length) if result else 0 %}
 {% set total_zip_images = namespace(value=0) %}
 {% if is_ncr %}
   {% for c in result.get('candidates', []) %}
