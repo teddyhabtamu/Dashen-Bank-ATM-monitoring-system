@@ -47,6 +47,15 @@ def test_the_config_check_uses_agent2_flags():
     assert '& $Exe -T' not in module
 
 
+def test_the_service_restart_waits_for_a_start_pending_msi_service():
+    """msiexec can return while the freshly installed service is still
+    StartPending. A stop request then fails with 1061, so the restart has to
+    wait for Running before calling Stop-Service."""
+    module = (INSTALLER / 'AtmInstall.psm1').read_text()
+    restart = module[module.index("$Action -eq 'restart'"):]
+    assert restart.index("StartPending") < restart.index('Stop-Service')
+
+
 def test_the_payload_exit_codes_are_documented_and_distinct():
     module = (INSTALLER / 'AtmInstall.psm1').read_text()
     for name in ('InvalidProfile', 'NotReady', 'ProfileHashMismatch',

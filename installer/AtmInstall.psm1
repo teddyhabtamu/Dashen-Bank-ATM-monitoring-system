@@ -1116,7 +1116,7 @@ function Stop-LegacyAgent {
 }
 
 function Set-AgentService {
-    param([string]$Action)
+    param([string]$Action, [string]$LogPath)
     if ($Action -eq 'unchanged' -or $Action -eq 'skip') { return }
     $service = Get-ServiceSafe $script:AgentServiceName
     if (-not $service) {
@@ -1126,17 +1126,46 @@ function Set-AgentService {
     if ($LASTEXITCODE -ne 0) {
         throw "sc config failed with exit code $LASTEXITCODE"
     }
+    if ($LogPath) { Write-Log ("service status before ${Action}: " + $service.Status) -LogPath $LogPath }
     if ($Action -eq 'restart') {
+        # msiexec can return while the newly installed service is still
+        # StartPending. A stop request in that state fails with 1061
+        # ("cannot accept control messages"), so wait for Running first.
+        if ($service.Status -eq 'StartPending') {
+            $service.WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
+        }
+        if ($service.Status -eq 'StopPending') {
+            $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
+        }
         if ($service.Status -ne 'Stopped') {
-            Stop-Service -Name $script:AgentServiceName -Force -ErrorAction Stop
+            # Retry a transient 1061 while the SCM settles after the MSI's
+            # own start; give up only after the same 30-second budget.
+            $deadline = (Get-Date).AddSeconds(30)
+            while ($true) {
+                try {
+                    Stop-Service -Name $script:AgentServiceName -Force -ErrorAction Stop
+                    break
+                } catch {
+                    $service.Refresh()
+                    if ($service.Status -eq 'Stopped') { break }
+                    if ((Get-Date) -ge $deadline) { throw }
+                    Start-Sleep -Milliseconds 500
+                }
+            }
             $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
         }
         Start-Service -Name $script:AgentServiceName -ErrorAction Stop
-    } elseif ($Action -eq 'start' -and $service.Status -eq 'Stopped') {
-        Start-Service -Name $script:AgentServiceName -ErrorAction Stop
+    } elseif ($Action -eq 'start') {
+        if ($service.Status -eq 'StopPending') {
+            $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
+        }
+        if ($service.Status -eq 'Stopped') {
+            Start-Service -Name $script:AgentServiceName -ErrorAction Stop
+        }
     }
     $service = Get-Service -Name $script:AgentServiceName
     $service.WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
+    if ($LogPath) { Write-Log ("service status after ${Action}: " + $service.Status) -LogPath $LogPath }
 }
 
 function Get-AgentTestValue {
@@ -1561,7 +1590,7 @@ function Invoke-InstallPlan {
         $serviceItem = $Plan.Items | Where-Object { $_.Kind -eq 'service' } | Select-Object -First 1
         if ($serviceItem) {
             if ($LogPath) { Write-Log ("service action: " + $serviceItem.Action) -LogPath $LogPath }
-            Set-AgentService -Action $serviceItem.Action
+            Set-AgentService -Action $serviceItem.Action -LogPath $LogPath
         }
         if (-not (Wait-TcpPort -Port $script:AgentPort -TimeoutSeconds 20)) {
             throw "nothing is listening on TCP $($script:AgentPort) after the restart"
