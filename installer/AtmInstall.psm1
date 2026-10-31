@@ -1147,7 +1147,7 @@ function Start-AgentServiceWithRetry {
             Start-Service -Name $Name -ErrorAction Stop
             $svc = Get-Service -Name $Name
             $svc.WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
-            if ($LogPath) { Write-Log ("service start attempt $attempt/$Attempts: Running") -LogPath $LogPath }
+            if ($LogPath) { Write-Log ("service start attempt $attempt/${Attempts}: Running") -LogPath $LogPath }
             return
         } catch {
             $last = $_
