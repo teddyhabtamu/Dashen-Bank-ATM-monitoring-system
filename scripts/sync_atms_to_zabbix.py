@@ -409,7 +409,7 @@ def do_apply(atms, import_templates=False):
 
         ok = z.create_host(host, name, template_ids, group_ids, ip, proxy_id,
                            community, version, snmp_v3, vendor,
-                           agent_interface=bool(agent_tid))
+                           agent_interface=(vendor in ('NCR', 'GRG')))
         if ok:
             created += 1
         else:
