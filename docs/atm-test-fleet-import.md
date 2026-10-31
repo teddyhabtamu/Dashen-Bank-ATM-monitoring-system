@@ -18,6 +18,7 @@ district and vendor string. The portal import also requires `atm_id`, `city`,
 | `model` | Approved default: NCR `SelfServ 34`, GRG `AD2600` |
 | `branch` | Owner branch, normalised to `… BRANCH`; missing values use the ATM name |
 | `status` | `active` |
+| `ip_address` | `synthetic` mode uses RFC 2544 addresses. `real` mode keeps workbook IPs and fills gaps; a public address is quarantined unless `--allow-public-ips` is set. |
 | `snmp_community` | `--snmp-community` value, default `public`; real polling may fail |
 | `ej_log_format` | `NCR_APTRA` / `GRG` |
 | `ej_hostname`, `latitude`, `longitude`, `install_date` | Left empty |
@@ -64,6 +65,9 @@ must not be committed.
    immediately. The full 1,202 takes roughly 45 minutes.
 4. **Protect the UI.** The first Fleet health sweep over 1,202 hosts is
    expensive. Run it once and let the 15-minute cache serve the page.
+5. **Check the public-IP quarantine.** The workbook contains one public
+   address (`PAGRL223` / `17.28.90.1`). Real mode replaces it with an RFC 2544
+   address by default; `--allow-public-ips` is the explicit override.
 
 ## 4. Import
 

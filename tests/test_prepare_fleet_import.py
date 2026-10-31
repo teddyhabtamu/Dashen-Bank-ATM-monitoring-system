@@ -165,6 +165,29 @@ def test_a_validation_error_blocks_import_ready_status(tmp_path):
     assert 'terminal_id' in details[0]['validation_errors']
 
 
+def test_real_mode_quarantines_public_addresses_by_default(tmp_path):
+    rows = [[1, 'TID001', 'ATM ONE', '17.28.90.1', 'B1', 'NAD',
+             'Moti engineering/NCR', 'ATM']]
+    prepared, details, summary = prep.build_rows(
+        raw_rows(tmp_path, rows), prefix='TST', ip_mode='real')
+
+    assert prepared[0]['ip_address'].startswith('198.18.')
+    assert details[0]['ip_kind'] == 'synthetic-public'
+    assert 'public IP replaced' in details[0]['notes']
+    assert summary['validation_errors'] == 0
+
+
+def test_real_mode_keeps_public_addresses_only_when_explicitly_allowed(tmp_path):
+    rows = [[1, 'TID001', 'ATM ONE', '17.28.90.1', 'B1', 'NAD',
+             'Moti engineering/NCR', 'ATM']]
+    prepared, details, _summary = prep.build_rows(
+        raw_rows(tmp_path, rows), prefix='TST', ip_mode='real',
+        allow_public_ips=True)
+
+    assert prepared[0]['ip_address'] == '17.28.90.1'
+    assert details[0]['ip_kind'] == 'real'
+
+
 def test_custom_snmp_community_is_carried_into_every_row(tmp_path):
     rows, _details, _summary = prep.build_rows(
         raw_rows(tmp_path, base_rows()), prefix='TST', ip_mode='synthetic',

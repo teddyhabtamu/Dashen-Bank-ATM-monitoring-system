@@ -221,7 +221,7 @@ def _sample(rows, limit):
 
 
 def build_rows(raw_rows, prefix='TST', ip_mode='synthetic', limit=0,
-               snmp_community='public'):
+               snmp_community='public', allow_public_ips=False):
     """Return (csv_rows, detail_rows, summary). Pure apart from validation."""
     prefix = clean(prefix).rstrip('-') or 'TST'
     if not re.match(r'^[A-Za-z0-9][A-Za-z0-9_-]*$', prefix):
@@ -298,15 +298,24 @@ def build_rows(raw_rows, prefix='TST', ip_mode='synthetic', limit=0,
             notes.append('synthetic RFC 2544 address')
         else:
             valid = False
+            address = None
             if ip_raw:
                 try:
                     # The portal validator accepts IPv4 only; treat IPv6 as a
                     # gap rather than writing a row the import route rejects.
-                    ipaddress.IPv4Address(ip_raw)
+                    address = ipaddress.IPv4Address(ip_raw)
                     valid = True
                 except ValueError:
                     valid = False
-            if not valid:
+            if valid and not address.is_private and not allow_public_ips:
+                # A public address in an ATM inventory is a data error (or a
+                # dangerous target). Never send SNMP to it by default.
+                ip_value = next_synthetic()
+                ip_kind = 'synthetic-public'
+                filled.append('ip_address')
+                notes.append('public IP replaced with RFC 2544 address; '
+                             'verify the inventory entry')
+            elif not valid:
                 ip_value = next_synthetic()
                 ip_kind = 'synthetic-fill'
                 filled.append('ip_address')
@@ -427,7 +436,7 @@ def write_report(path, summary, csv_path, details_path, excel_path):
         '| `model` | Approved default per vendor: NCR `SelfServ 34`, GRG `AD2600`. |',
         '| `branch` | Owner branch, normalised to the portal `… BRANCH` convention. Missing values use the ATM name. |',
         '| `atm_id` | Stable test key `<prefix>-<workbook No>`, e.g. `TST-0001`. |',
-        '| `ip_address` | `synthetic` mode uses RFC 2544 `198.18.0.0/15`; `real` mode preserves the workbook IP and fills only gaps. |',
+        '| `ip_address` | `synthetic` mode uses RFC 2544 `198.18.0.0/15`; `real` mode preserves workbook IPs and fills only gaps. Public addresses are quarantined unless `--allow-public-ips` is set. |',
         '| `ej_log_format` | `NCR_APTRA` for NCR, `GRG` for GRG. |',
         '| `snmp_community` | `--snmp-community` value (default `public`). Polling will fail where the real community differs. |',
         '| `ej_hostname` | Left empty. EJ pullers skip these rows until a real hostname is known. |',
@@ -442,6 +451,7 @@ def write_report(path, summary, csv_path, details_path, excel_path):
         '- The `TST-` prefix is the cleanup key. Do not import these rows with a production prefix.',
         '- `synthetic` mode is the recommended first pass: it exercises import, provisioning, the outbox, the UI and the scheduler without polling production ATMs.',
         '- `real` mode will make Zabbix poll the workbook IPs. Get network/security approval first, and expect unreachable hosts where the SNMP community or firewall is wrong.',
+        '- Public addresses are treated as inventory errors: `real` mode replaces them with RFC 2544 addresses unless `--allow-public-ips` is set. Look for `synthetic-public` in the details CSV.',
         '- **Disable the GLPI ticket action or put the `TST-` hosts in a Zabbix maintenance window before the full import.** Otherwise the agent-unavailable triggers can create a ticket per unreachable ATM — potentially 1,202 tickets.',
         '- Import a small pilot first (`--limit 50`), watch the outbox and Zabbix server load, then import the full set. The portal queues every row in `atm_provision_state`; the scheduler creates about 25 hosts per minute, so 1,202 rows take roughly 45 minutes after the immediate first pass.',
         '- The first Fleet health sweep over 1,202 hosts is the expensive UI operation. Run it once, then use the 15-minute cache; do not hammer **Recompute now**.',
@@ -481,6 +491,8 @@ def main(argv=None):
                         help='Prepare a deterministic sample of N rows (0 = all)')
     parser.add_argument('--snmp-community', default='public',
                         help='SNMP community for the generated rows (default public)')
+    parser.add_argument('--allow-public-ips', action='store_true',
+                        help='Real mode: keep public addresses instead of quarantining them')
     parser.add_argument('--allow-errors', action='store_true',
                         help='Write the CSV even if portal validation fails')
     args = parser.parse_args(argv)
@@ -497,7 +509,8 @@ def main(argv=None):
     try:
         csv_rows, details, summary = build_rows(
             raw_rows, prefix=args.prefix, ip_mode=args.ip_mode, limit=args.limit,
-            snmp_community=args.snmp_community)
+            snmp_community=args.snmp_community,
+            allow_public_ips=args.allow_public_ips)
     except ValueError as exc:
         print(f'error: {exc}', file=sys.stderr)
         return 2
