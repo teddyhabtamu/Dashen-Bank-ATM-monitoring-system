@@ -10,6 +10,18 @@
 > machine, *Zabbix* = the monitoring dashboard, *portal* = the bank's
 > ATM web pages, *GLPI* = the ticket system.
 
+## What is automatic now
+
+Saving an ATM creates a durable provisioning job. The portal retries it with
+backoff until the Zabbix host exists, instead of losing the work if Zabbix is
+briefly unavailable. The Agent setup page shows **Synced / Retrying / Needs
+registry change** and has a **Retry provisioning now** button.
+
+The agent's `atm.identity` item is collected passively by Zabbix every hour.
+The portal reads its latest value every five minutes and stores it as evidence;
+the manual paste is only a fallback. **Refresh from Zabbix** asks for a check
+immediately after an install.
+
 ---
 
 ## Before You Start — collect these (ask the ATM/hardware team)
@@ -53,6 +65,10 @@ portal pages, maps, reports). Preferred method — the portal form:
       (ask the team — never invent column names; the table has grown).
 - [ ] Record the row: `SELECT atm_id, vendor, ip_address, district FROM
       atm_locations WHERE atm_id = '<ATM-ID>';` must show your values.
+- [ ] Open the ATM → **Agent setup** and confirm **Zabbix provisioning** is
+      **Synced** (or **Retrying** with a named error). The host is created
+      automatically after save; Step 3 is the manual fallback, not the normal
+      path.
 
 ---
 
@@ -109,8 +125,11 @@ wired by hand.
       writes the passive-only config, restarts the service, and verifies
       `atm.identity`/`atm.parts` as `SYSTEM`. A running Agent 1 needs
       `/REPLACELEGACY`; it is stopped and disabled, not uninstalled.
-- [ ] Paste the output of `atm.identity` into **Submit identity**. Conflicts
-      are shown for review; the registry is never changed automatically.
+- [ ] Identity arrives automatically: Zabbix collects `atm.identity` hourly and
+      the portal stores it within five minutes. Use **Refresh from Zabbix** on
+      the Agent setup page for an immediate check. If that is unavailable, paste
+      the probe output into **Submit identity** as the fallback. Conflicts are
+      shown for review; the registry is never changed automatically.
 - [ ] Set `ATM_PROFILE_SECRET` in `.env` before production. An unsigned
       profile is allowed only in the UAT lab, and the page says so.
 - [ ] Full installer flags, exit codes, rollback and signing steps:
@@ -118,18 +137,24 @@ wired by hand.
 
 ---
 
-## Step 3 — Create the monitoring host (UAT-01, one command)
+## Step 3 — Monitoring host (automatic, with a manual fallback)
 
-Registering is automatic and safe to repeat (existing hosts are skipped,
-never duplicated):
+Saving the ATM in Step 1 already queued host creation. The worker retries
+transient Zabbix failures on its own; existing hosts are skipped, never
+duplicated. Use the command below only when the Agent setup page says
+**Needs registry change**, after a Zabbix restore, or for a bulk import:
 
 - [ ] Run, no passwords to type (they come from the server config):
       `python3 scripts/sync_atms_to_zabbix.py --apply`
 - [ ] Expected last line: `Done: 1 created, N skipped, 0 without IP`
       (the `1 created` is your box; reruns print `0 created` — healthy).
 - [ ] What it wires for you: NCR gets the SNMP template + the WMI Parts
-      template + both network interfaces; GRG gets its SNMP template.
-      You do not link anything by hand.
+      template + both network interfaces; GRG gets its SNMP template (and the
+      XFS agent template when it exists). You do not link anything by hand.
+- [ ] One-time after upgrading: re-import the agent templates so the passive
+      `atm.identity` item exists. NCR: `python3 scripts/import_wmi_template_api.py`.
+      GRG: `python3 scripts/import_grg_xfs_template_api.py`. The item is
+      harmless on a box without the agent; it simply stays unsupported.
 
 ## Step 4 — Prove data flows (one command, then Zabbix UI)
 
@@ -144,6 +169,11 @@ calling an ATM live.
       agent not running, all items unsupported).
       `NONE  <ATM-ID>   not_provisioned` — no Zabbix host yet: run Step 3.
       Widen the window when a box polls slowly: `--window 30`.
+- [ ] Confirm identity is automatic, not pasted:
+      `docker exec report-portal python3 -c "from identity_sync import sync_one; print(sync_one('<ATM-ID>'))"`
+      → `stored` or `unchanged`, and **Agent setup → Box identity** shows
+      **Reported**. `no_item` means the `atm.identity` template item was not
+      imported/linked; `no_value` means the agent has not answered yet.
 - [ ] Whole fleet at once (bulk rollout / after a Zabbix restore):
       `docker exec report-portal python3 verify.py`
       prints one line per ATM — status, vendor, IP and the next action —

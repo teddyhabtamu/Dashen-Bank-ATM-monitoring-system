@@ -27,27 +27,30 @@ FILTER_STATES = STATE_ORDER + ('NOT_PROVISIONED', 'INACTIVE')
 
 
 def _bg_zabbix_sync(rows):
-    """Best-effort background host creation - never fails the request.
+    """Queue host provisioning and run one worker pass - never fails the save.
 
-    Routed through provision.provision_atms() (the single provisioning front
-    door) instead of calling zabbix_sync directly, so the onboarding wizard
-    provisions through the exact same code path. dry_run=False because this is
-    the real write; the provisioner reads the COMMITTED DB row (the save has
-    already committed before this thread starts) rather than the submitted form
-    dict, so what gets provisioned is what is actually stored.
+    The old version called provision_atms() directly from a daemon thread. If
+    Zabbix was down, the thread logged and vanished, leaving a saved ATM with
+    no host and no retry. Now the rows go into the durable outbox first; the
+    same scheduler worker that retries failures does the write. The immediate
+    pass is only for latency - the outbox is the guarantee.
     """
     try:
-        from provision import provision_atms
+        from provision_state import enqueue_many, run_due
         ids = [r.get('atm_id') for r in (rows or []) if (r.get('atm_id') or '').strip()]
         if not ids:
             return
-        out = provision_atms(ids, dry_run=False, actor='registration-save')
+        enqueue_many(ids, reason='registration-save')
+        # Bound the immediate pass; the scheduler picks up the rest. An import
+        # of 1,200 rows must not hold one thread for the whole fleet.
+        out = run_due(limit=min(len(ids), 100))
         if out.get('error'):
             logger.warning('background provisioning read failed: %s', out['error'])
         summary = out.get('summary') or {}
-        log_action('ZABBIX_SYNC', 'auto: created={} reenabled={} macros={} updated={} skipped={} no_ip={} failed={}'.format(
-            summary.get('created', 0), summary.get('reenabled', 0), summary.get('macros_fixed', 0),
-            summary.get('updated', 0), summary.get('skipped', 0), summary.get('no_ip', 0),
+        log_action('ZABBIX_SYNC', 'auto-enqueue: n={} created={} reenabled={} macros={} updated={} skipped={} no_ip={} failed={}'.format(
+            len(ids), summary.get('created', 0), summary.get('reenabled', 0),
+            summary.get('macros_fixed', 0), summary.get('updated', 0),
+            summary.get('skipped', 0), summary.get('no_ip', 0),
             summary.get('failed', 0)))
     except Exception as e:
         logger.warning('background Zabbix sync failed: %s', e)
@@ -1855,29 +1858,42 @@ def atm_import():
 @login_required
 @role_required(ROLE_OPERATOR, ROLE_ADMIN)
 def atm_zabbix_sync():
-    """On-demand server-side sync: create missing Zabbix hosts for given (or all) ATMs."""
-    from zabbix_sync import MAX_BATCH, sync_hosts
+    """On-demand server-side sync: create missing Zabbix hosts for given (or all) ATMs.
+
+    Routed through provision.provision_atms() so a manual sync also updates the
+    durable state table. The old direct sync_hosts() call left the state badge
+    saying "retry" after a successful manual repair.
+    """
+    from zabbix_sync import MAX_BATCH
+    from provision import provision_atms
     data = request.get_json(silent=True) or {}
     ids = [str(i).strip() for i in (data.get('ids') or []) if str(i).strip()][:MAX_BATCH]
     with get_db() as conn:
         cur = conn.cursor()
         if ids:
             placeholders = ','.join(['%s'] * len(ids))
-            cur.execute(f"""SELECT atm_id, atm_name, ip_address, vendor,
-                                   snmp_community, snmp_version, district
-                            FROM atm_locations WHERE atm_id IN ({placeholders})""", ids)
+            cur.execute(f"""SELECT atm_id FROM atm_locations
+                            WHERE atm_id IN ({placeholders})""", ids)
         else:
-            cur.execute(f"""SELECT atm_id, atm_name, ip_address, vendor,
-                                   snmp_community, snmp_version, district
-                            FROM atm_locations WHERE status = 'active'
+            cur.execute(f"""SELECT atm_id FROM atm_locations
+                            WHERE status = 'active'
                             ORDER BY atm_id LIMIT {MAX_BATCH}""")
-        cols = [d[0] for d in cur.description]
-        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        ids = [r[0] for r in cur.fetchall()]
         cur.close()
-    summary = sync_hosts(rows)
-    log_action('ZABBIX_SYNC', f'manual: created={summary["created"]} reenabled={summary.get("reenabled", 0)} macros={summary.get("macros_fixed", 0)} updated={summary.get("updated", 0)} '
-                           f'skipped={summary["skipped"]} no_ip={summary["no_ip"]} failed={summary["failed"]} (n={len(rows)})')
-    return jsonify({'success': True, 'checked': len(rows), **summary})
+    if not ids:
+        return jsonify({'success': True, 'checked': 0, 'created': 0, 'updated': 0,
+                        'skipped': 0, 'no_ip': 0, 'failed': 0})
+    out = provision_atms(ids, dry_run=False, actor='manual-sync')
+    summary = out.get('summary') or {}
+    log_action('ZABBIX_SYNC', f'manual: created={summary.get("created", 0)} '
+                              f'reenabled={summary.get("reenabled", 0)} '
+                              f'macros={summary.get("macros_fixed", 0)} '
+                              f'updated={summary.get("updated", 0)} '
+                              f'skipped={summary.get("skipped", 0)} '
+                              f'no_ip={summary.get("no_ip", 0)} '
+                              f'failed={summary.get("failed", 0)} (n={len(ids)})')
+    return jsonify({'success': not out.get('error'), 'checked': len(ids),
+                    'error': out.get('error') or '', **summary})
 
 
 @bp.route('/atms/zabbix-status')

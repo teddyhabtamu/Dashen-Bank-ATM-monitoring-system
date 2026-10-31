@@ -86,6 +86,12 @@ def app(monkeypatch):
     monkeypatch.setattr(agent_mod, '_atm', lambda atm_id: ATM)
     monkeypatch.setattr(agent_mod, 'load_identity', lambda atm_id: STORED)
     monkeypatch.setattr(agent_mod, 'log_action', lambda *args, **kwargs: None)
+    monkeypatch.setattr(agent_mod, '_provision_state', lambda atm_id: {
+        'atm_id': atm_id, 'status': 'synced', 'attempts': 0,
+        'last_action': 'create', 'last_error': None,
+        'next_attempt_at': None, 'last_success_at': '2026-10-30 09:00',
+        'updated_at': '2026-10-30 09:00',
+    })
 
     app = Flask(
         __name__,
@@ -149,6 +155,8 @@ def test_an_admin_can_open_the_agent_page(app):
     assert b'atm-identity.ps1' in response.data
     assert b'Download SHA-256' in response.data
     assert b'/EXPECTEDHASH=' in response.data
+    assert b'Zabbix provisioning' in response.data
+    assert b'Refresh from Zabbix' in response.data
 
 
 def test_a_missing_profile_and_identity_still_render(app, monkeypatch):
@@ -267,3 +275,33 @@ def test_image_roots_are_validated_before_storage(app, monkeypatch):
     assert good.status_code == 302
     assert saved == [('ATM-TEST-NCR', ['C:\\ATM\\images', 'C:\\ATM\\other'])]
     assert b'Image roots not saved' in bad.data
+
+
+def test_identity_refresh_asks_zabbix_for_a_fresh_value(app, monkeypatch):
+    import identity_sync
+    seen = []
+    monkeypatch.setattr(identity_sync, 'refresh_one',
+                        lambda atm_id: seen.append(atm_id) or {'status': 'stored'})
+    with app.test_client() as client:
+        login(client)
+        response = client.post('/atms/ATM-TEST-NCR/agent/identity/refresh')
+    assert response.status_code == 302
+    assert seen == ['ATM-TEST-NCR']
+
+
+def test_provision_retry_runs_through_the_durable_path(app, monkeypatch):
+    import provision
+    import provision_state
+    seen = []
+    monkeypatch.setattr(provision_state, 'retry_now',
+                        lambda atm_id: seen.append(('retry', atm_id)) or True)
+    monkeypatch.setattr(provision, 'provision_atms',
+                        lambda ids, dry_run=True, actor='':
+                        seen.append(('provision', ids, dry_run, actor)) or
+                        {'summary': {'created': 1}, 'error': ''})
+    with app.test_client() as client:
+        login(client)
+        response = client.post('/atms/ATM-TEST-NCR/agent/provision')
+    assert response.status_code == 302
+    assert ('retry', 'ATM-TEST-NCR') in seen
+    assert ('provision', ['ATM-TEST-NCR'], False, 'agent-retry') in seen

@@ -40,6 +40,7 @@ atm_locations
 atm_network_correlation
 atm_network_events
 atm_network_metrics
+atm_provision_state
 atm_state_history
 atm_transactions
 atm_transactions_visible

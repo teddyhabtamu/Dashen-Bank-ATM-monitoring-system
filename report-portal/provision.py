@@ -152,6 +152,16 @@ def provision_atms(atm_ids=None, dry_run=True, actor='', active_only=False,
 
     result['summary'] = summary
     result['ok'] = not summary.get('failed')
+
+    # Every write path (registration, wizard, manual retry, worker) records
+    # its outcome here. A dry run never touches the state table: planning is
+    # not evidence that anything was provisioned.
+    if not dry_run:
+        try:
+            from provision_state import record_outcomes
+            record_outcomes(result['results'])
+        except Exception as e:  # noqa: BLE001 - the Zabbix write already landed
+            logger.warning('provision state update failed: %s', e)
     return result
 
 

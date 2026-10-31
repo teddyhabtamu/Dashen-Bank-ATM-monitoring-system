@@ -84,6 +84,11 @@ Artifacts land in `installer/dist/`:
 
    The log is `C:\ProgramData\AtmMonitor\logs\install.log`. The state file is
    `C:\monitor\atm-agent-state.json`.
+7. In the portal open **ATM → Agent setup** and confirm **Box identity** is
+   **Reported** within five minutes. The portal reads the passive
+   `atm.identity` item from Zabbix automatically; **Refresh from Zabbix**
+   requests a check immediately. Manual paste is only the fallback when the
+   Zabbix API user cannot run `task.create` or the item is not linked yet.
 
 ### Useful flags
 

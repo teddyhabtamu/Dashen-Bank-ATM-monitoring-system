@@ -7,9 +7,23 @@ a template, and dry run is the default so a caller must opt in to writing.
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'report-portal'))
 
 import provision  # noqa: E402
+import provision_state  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def no_state_database(monkeypatch):
+    """The provisioner's tests are about planning, not PostgreSQL.
+
+    provision_atms() now records every write in the durable state table. The
+    unit tests monkeypatch the Zabbix side, so the state write must be stubbed
+    too; otherwise each test would try to open a real DB connection.
+    """
+    monkeypatch.setattr(provision_state, 'record_outcomes', lambda results: None)
 
 
 ROWS = [
@@ -154,3 +168,22 @@ def test_reindex_covers_every_active_atm(monkeypatch):
 def test_review_queue_reports_only_unknown_vendors():
     assert [r['atm_id'] for r in provision.review_queue(ROWS)] == ['ATM-0003']
     assert provision.review_queue([]) == []
+
+
+def test_a_write_records_the_durable_state(monkeypatch):
+    install(monkeypatch, ROWS)
+    recorded = []
+    monkeypatch.setattr(provision_state, 'record_outcomes',
+                        lambda results: recorded.extend(results))
+    provision.provision_atms(['ATM-0001'], dry_run=False, actor='test')
+    assert [r['atm_id'] for r in recorded] == ['ATM-0001']
+    assert recorded[0]['action'] == 'create'
+
+
+def test_a_dry_run_never_records_state(monkeypatch):
+    install(monkeypatch, ROWS)
+    recorded = []
+    monkeypatch.setattr(provision_state, 'record_outcomes',
+                        lambda results: recorded.extend(results))
+    provision.provision_atms(['ATM-0001'], dry_run=True, actor='test')
+    assert recorded == []

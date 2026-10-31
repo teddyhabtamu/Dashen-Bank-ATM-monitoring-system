@@ -546,6 +546,39 @@ def _check_schedules():
         logger.error('Schedule poll failed: %s', e)
 
 
+def _provision_due():
+    """Durable Zabbix provisioning worker.
+
+    Runs in the scheduler-lock holder only, so one worker owns the outbox.
+    claim_due() is still SKIP LOCKED, which keeps a manual/background pass from
+    double-claiming if that assumption ever changes.
+    """
+    try:
+        from provision_state import run_due
+        out = run_due(limit=25)
+        if out.get('claimed'):
+            logger.info('provision worker: claimed=%s summary=%s error=%s',
+                        out.get('claimed'), out.get('summary'),
+                        out.get('error') or '-')
+    except Exception as e:  # noqa: BLE001 - never kill the scheduler
+        logger.error('Provisioning worker failed: %s', e)
+
+
+def _sync_identity():
+    """Read atm.identity values from Zabbix and store them as evidence.
+
+    This is the automatic replacement for the manual paste. It uses the
+    passive item's lastvalue, so no ServerActive and no ATM-to-portal path.
+    """
+    try:
+        from identity_sync import sync_all
+        out = sync_all()
+        if out.get('stored') or out.get('rejected') or out.get('errors'):
+            logger.info('identity sync: %s', out)
+    except Exception as e:  # noqa: BLE001 - never kill the scheduler
+        logger.error('Identity sync failed: %s', e)
+
+
 def load_schedules(scheduler):
     """Legacy — polling handles everything, no need to preload."""
     pass
@@ -579,6 +612,15 @@ def create_scheduler(app):
         return None
     sched = BackgroundScheduler(daemon=True)
     sched.add_job(_check_schedules, trigger='interval', seconds=30, id='schedule_poller')
+    # Provisioning retries are deliberately separate from report polling: a
+    # Zabbix outage must not delay a scheduled email, and a long fleet sweep
+    # must not delay a retry.
+    sched.add_job(_provision_due, trigger='interval', seconds=60, id='provision_worker',
+                  next_run_time=datetime.now() + timedelta(seconds=15))
+    # Identity is evidence, not a time series. One read every five minutes
+    # picks up the passive item's lastvalue; the item itself collects hourly.
+    sched.add_job(_sync_identity, trigger='interval', seconds=300, id='identity_sync',
+                  next_run_time=datetime.now() + timedelta(seconds=45))
     sched.start()
-    logger.info('Report scheduler started (polling every 30s)')
+    logger.info('Report scheduler started (reports 30s, provisioning 60s, identity 300s)')
     return sched

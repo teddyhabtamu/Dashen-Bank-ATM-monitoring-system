@@ -40,7 +40,9 @@ def test_the_agent_page_template_exists_and_posts_with_csrf():
     assert "url_for('agent.agent_roots_save'" in TEMPLATE
     assert "url_for('agent.agent_identity_ingest'" in TEMPLATE
     assert "url_for('agent.agent_profile_download'" in TEMPLATE
-    assert TEMPLATE.count('name="csrf_token"') == 2
+    assert "url_for('agent.agent_identity_refresh'" in TEMPLATE
+    assert "url_for('agent.agent_provision_retry'" in TEMPLATE
+    assert TEMPLATE.count('name="csrf_token"') == 4
     assert 'for="roots"' in TEMPLATE
     assert 'for="payload"' in TEMPLATE
 
@@ -76,6 +78,16 @@ def test_the_identity_table_is_created_and_backed_up():
     assert 'ADD COLUMN IF NOT EXISTS image_roots TEXT[]' in REGISTRY
     tables = (REPO / 'config' / 'portal_tables.txt').read_text().split()
     assert 'atm_agent_identity' in tables
+
+
+def test_the_provisioning_outbox_is_initialised_and_scheduled():
+    assert 'init_provision_state_table' in APP
+    assert 'init_provision_state_table()' in APP
+    scheduler = (PORTAL / 'scheduler.py').read_text()
+    assert "id='provision_worker'" in scheduler
+    assert "id='identity_sync'" in scheduler
+    tables = (REPO / 'config' / 'portal_tables.txt').read_text().split()
+    assert 'atm_provision_state' in tables
 
 
 def test_the_blueprint_never_writes_identity_into_atm_locations():

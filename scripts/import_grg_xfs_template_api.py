@@ -273,6 +273,40 @@ def link_template_to_host(tid, target_name, host_ip, auth):
         print(f"Portal host {h_display} ({hid}) is already linked to {TEMPLATE_NAME}")
 
 
+def ensure_identity_item(tid, auth):
+    """Create/update the passive `atm.identity` item on the GRG XFS template.
+
+    GRG hosts that link this template already need an agent interface for the
+    XFS items; identity uses the same path. Hosts that are SNMP-only will not
+    have this item, and the portal reports it as missing rather than inventing
+    an identity.
+    """
+    key = 'atm.identity'
+    payload = {
+        'name': 'ATM identity — JSON evidence',
+        'key_': key,
+        'hostid': tid,
+        'type': 0,           # ZABBIX_AGENT
+        'value_type': 4,     # TEXT
+        'delay': '1h',
+        'history': '1d',
+        'trends': '0',
+        'description': ('Read-only JSON from C:\\monitor\\atm-identity.ps1. '
+                        'The portal ingests it automatically; it is evidence, '
+                        'never authority.'),
+    }
+    found = call('item.get', {'templateids': [tid],
+                              'filter': {'key_': [key]},
+                              'output': ['itemid']}, auth)
+    if found:
+        upd = {k: v for k, v in payload.items() if k != 'hostid'}
+        call('item.update', {'itemid': found[0]['itemid'], **upd}, auth)
+        print(f'Identity item present ({found[0]["itemid"]})')
+    else:
+        call('item.create', payload, auth)
+        print('Identity item created')
+
+
 def main():
     parser = argparse.ArgumentParser(description="Import GRG XFS template and link to host via Zabbix API")
     parser.add_argument('--host', default=DEFAULT_HOST, help=f"Host name to link (default: {DEFAULT_HOST})")
@@ -352,6 +386,7 @@ def main():
 
     print(f'Items synced: {created} created, {updated} updated.')
     ensure_triggers(tid, auth)
+    ensure_identity_item(tid, auth)
 
     if args.host:
         link_template_to_host(tid, args.host, args.ip, auth)

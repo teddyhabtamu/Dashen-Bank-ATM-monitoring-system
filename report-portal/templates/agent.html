@@ -88,6 +88,29 @@ details.profile-file .code-block{border-radius:0 0 8px 8px;margin:0}
   </div>
   {% endif %}
 
+  <div class="card" style="margin-bottom:18px">
+    <div class="card-body">
+      <div class="kv">
+        <span class="k">Next action</span>
+        <span class="v" style="font-size:14px;line-height:1.55">
+          {% if provision_state and provision_state.status == 'blocked' %}
+            Fix the registry, then retry: {{ provision_state.last_error }}
+          {% elif provision_state and provision_state.status == 'retry' %}
+            Zabbix provisioning is retrying automatically. Last error: {{ provision_state.last_error or 'not recorded' }}
+          {% elif not stored %}
+            Install the agent/profile, then use <b>Refresh from Zabbix</b> below. Manual paste is the fallback.
+          {% elif readiness and readiness.images_unapproved %}
+            Review the proposed image roots below; approve only the folders this ATM should expose.
+          {% elif readiness and not readiness.ej_ready %}
+            Set the EJ hostname in ATM Registration so the journal puller can find this box.
+          {% else %}
+            Monitoring onboarding is complete. Confirm telemetry in <b>Fleet health</b>; EJ and images have their own readiness badges below.
+          {% endif %}
+        </span>
+      </div>
+    </div>
+  </div>
+
   <div class="agent-summary">
     <div class="agent-stat {{ 'ok' if profile and profile.ready else 'warn' }}">
       <div class="v">{{ 'Ready' if profile and profile.ready else 'Not ready' }}</div>
@@ -278,12 +301,48 @@ details.profile-file .code-block{border-radius:0 0 8px 8px;margin:0}
           {% endif %}
           {% else %}
           <div class="empty">No identity has been reported for this ATM yet. Paste the probe output below.</div>
+          <p class="agent-note" style="margin-top:10px">Automatic ingest needs the passive <span class="mono">atm.identity</span> item on the host's agent template. If it stays empty after the agent is running, re-import the NCR WMI or GRG XFS template (onboarding Step 3) and use <b>Refresh from Zabbix</b>.</p>
           {% endif %}
         </div>
       </div>
     </div>
 
     <div class="agent-col">
+      <div class="card">
+        <div class="card-header"><h2>Zabbix provisioning</h2></div>
+        <div class="card-body">
+          {% if provision_state %}
+          {% set ps = provision_state.status %}
+          <div class="badge-row">
+            <span class="badge {{ 'ok' if ps == 'synced' else ('bad' if ps == 'blocked' else ('warn' if ps == 'retry' else 'muted')) }}">
+              {{ 'Synced' if ps == 'synced' else ('Needs registry change' if ps == 'blocked' else ('Retrying' if ps == 'retry' else ('Syncing' if ps == 'syncing' else 'Queued'))) }}
+            </span>
+            {% if provision_state.attempts %}
+            <span class="badge muted">{{ provision_state.attempts }} attempt{{ '' if provision_state.attempts == 1 else 's' }}</span>
+            {% endif %}
+          </div>
+          <div class="kv-grid" style="margin-top:12px">
+            <div class="kv"><span class="k">Last action</span><span class="v">{{ provision_state.last_action or '—' }}</span></div>
+            <div class="kv"><span class="k">Last success</span><span class="v">{{ provision_state.last_success_at or '—' }}</span></div>
+            <div class="kv"><span class="k">Next attempt</span><span class="v">{{ provision_state.next_attempt_at or '—' }}</span></div>
+            <div class="kv"><span class="k">Updated</span><span class="v">{{ provision_state.updated_at or '—' }}</span></div>
+          </div>
+          {% if provision_state.last_error %}
+          <div class="warn-item bad" style="margin-top:12px">
+            <i data-lucide="server"></i>
+            <div>{{ provision_state.last_error }}</div>
+          </div>
+          {% endif %}
+          {% else %}
+          <p class="agent-note">No provisioning record yet. Saving the ATM creates one; the worker retries automatically if Zabbix is unavailable.</p>
+          {% endif %}
+          <form method="post" action="{{ url_for('agent.agent_provision_retry', atm_id=atm.atm_id) }}" style="margin-top:14px">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-actions"><button type="submit" class="btn btn-outline">Retry provisioning now</button></div>
+          </form>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-header"><h2>Approved image roots</h2></div>
         <div class="card-body">
@@ -306,6 +365,11 @@ details.profile-file .code-block{border-radius:0 0 8px 8px;margin:0}
             <textarea id="payload" name="payload" spellcheck="false" placeholder='{"schema": 1, "vendor": "NCR", "terminal_id": "TID006", "terminal_source": "ej-header", ...}'></textarea>
             <p class="hint">The document is validated before it is stored. Unknown fields are dropped; conflicts are shown, never applied.</p>
             <div class="form-actions"><button type="submit" class="btn btn-primary">Validate and store</button></div>
+          </form>
+          <form method="post" action="{{ url_for('agent.agent_identity_refresh', atm_id=atm.atm_id) }}" style="margin-top:12px">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <p class="hint">The portal also reads <span class="mono">atm.identity</span> from Zabbix automatically every 5 minutes. Use this to ask for a fresh check now.</p>
+            <div class="form-actions"><button type="submit" class="btn btn-outline">Refresh from Zabbix</button></div>
           </form>
         </div>
       </div>

@@ -69,6 +69,21 @@ def _expected_probes(profile):
             for p in (profile or {}).get('probes') or []}
 
 
+def _provision_state(atm_id):
+    """Durable provisioning state, or None when the table is not readable.
+
+    The Agent page is a diagnostic surface: a missing state row (old DB, first
+    boot before the schema init) must render as "not recorded", never as a 500.
+    """
+    try:
+        from provision_state import get
+        return get(atm_id)
+    except Exception as exc:  # noqa: BLE001 - page must still render
+        logger.warning('provision state read failed for %s: %s',
+                       safe_log(atm_id), safe_log(exc))  # NOSONAR: safe_log strips CR/LF
+        return None
+
+
 def _download_payload(profile):
     """The exact bytes the download route serves, and their SHA-256.
 
@@ -119,6 +134,7 @@ def agent_page(atm_id):
         signed=bool((profile or {}).get('signature')),
         signature_valid=signature_valid,
         download_sha256=download_sha256,
+        provision_state=_provision_state(atm_id),
     )
 
 
@@ -187,6 +203,74 @@ def agent_identity_ingest(atm_id):
         flash(f'Identity stored — {len(conflict_rows)} conflict(s) need review.', 'error')
     else:
         flash('Identity stored; the box agrees with the registry.', 'success')
+    return redirect(url_for('agent.agent_page', atm_id=atm_id))
+
+
+@bp.route('/atms/<atm_id>/agent/identity/refresh', methods=['POST'])
+@login_required
+@role_required(ROLE_ADMIN)
+def agent_identity_refresh(atm_id):
+    """Ask Zabbix to run atm.identity now, then ingest the result.
+
+    The passive item runs hourly on its own; this is the on-demand path for a
+    technician who has just installed the agent. It is best-effort: if the
+    Zabbix API user lacks Super-admin (task.create), the page says so and the
+    hourly collection still happens.
+    """
+    _atm(atm_id)
+    try:
+        from identity_sync import refresh_one
+        out = refresh_one(atm_id)
+    except Exception as exc:  # noqa: BLE001 - report, do not 500
+        logger.warning('identity refresh failed for %s: %s',
+                       safe_log(atm_id), safe_log(exc))  # NOSONAR: safe_log strips CR/LF
+        flash('Could not refresh identity from Zabbix; try again or paste the probe output.', 'error')
+        return redirect(url_for('agent.agent_page', atm_id=atm_id))
+
+    status = out.get('status')
+    if status in ('stored', 'unchanged'):
+        flash('Identity refreshed from Zabbix.', 'success')
+    elif status == 'request_failed':
+        flash(f'Could not request a fresh check: {out.get("error") or "Zabbix refused it"}', 'error')
+    else:
+        flash(out.get('message') or
+              'Identity check requested; the value will appear after the next collection.', 'info')
+    log_action('AGENT_IDENTITY_REFRESH', f'{atm_id} status={status}')
+    return redirect(url_for('agent.agent_page', atm_id=atm_id))
+
+
+@bp.route('/atms/<atm_id>/agent/provision', methods=['POST'])
+@login_required
+@role_required(ROLE_ADMIN)
+def agent_provision_retry(atm_id):
+    """Retry Zabbix host provisioning for one ATM, now.
+
+    This bypasses the outbox delay but not the outbox itself: retry_now()
+    makes the row due and provision_atms() records the new outcome.
+    """
+    _atm(atm_id)
+    try:
+        from provision import provision_atms
+        from provision_state import retry_now
+        retry_now(atm_id)
+        out = provision_atms([atm_id], dry_run=False, actor='agent-retry')
+    except Exception as exc:  # noqa: BLE001 - report, do not 500
+        logger.warning('provision retry failed for %s: %s',
+                       safe_log(atm_id), safe_log(exc))  # NOSONAR: safe_log strips CR/LF
+        flash('Provisioning retry failed; the error is recorded on this page.', 'error')
+        return redirect(url_for('agent.agent_page', atm_id=atm_id))
+
+    summary = out.get('summary') or {}
+    if out.get('error'):
+        flash(f'Provisioning retry failed: {out["error"]}', 'error')
+    elif summary.get('failed'):
+        flash('Provisioning retry failed; the error is shown on this page.', 'error')
+    else:
+        flash('Provisioning retry completed.', 'success')
+    log_action('ZABBIX_SYNC', f'agent retry: {atm_id} created={summary.get("created", 0)} '
+                              f'updated={summary.get("updated", 0)} '
+                              f'skipped={summary.get("skipped", 0)} '
+                              f'failed={summary.get("failed", 0)}')
     return redirect(url_for('agent.agent_page', atm_id=atm_id))
 
 

@@ -90,6 +90,23 @@ def build_template():
     _el(m, "description",
         "Raw single-line JSON payload from C:\\monitor\\grg-xfs-probe.ps1 -Json querying XFS msxfs.dll")
 
+    # Identity is a passive agent item, independent of the XFS master. It
+    # lives here because this is the template GRG hosts link for agent items;
+    # the portal reads its lastvalue through the Zabbix API.
+    identity_key = "atm.identity"
+    ident = _el(items, "item")
+    _el(ident, "uuid", make_uuid(f"item:{identity_key}"))
+    _el(ident, "name", "ATM identity — JSON evidence")
+    _el(ident, "type", "ZABBIX_AGENT")
+    _el(ident, "key", identity_key)
+    _el(ident, "delay", "1h")
+    _el(ident, "history", "1d")
+    _el(ident, "trends", "0")
+    _el(ident, "value_type", "TEXT")
+    _el(ident, "description",
+        "Read-only JSON from C:\\monitor\\atm-identity.ps1. The portal ingests "
+        "it automatically; it is evidence, never authority.")
+
     # Helper for adding dependent items
     def add_dep(name, key, js_expr, val_type="UNSIGNED", units=None, valuemap=None, desc=""):
         it = _el(items, "item")

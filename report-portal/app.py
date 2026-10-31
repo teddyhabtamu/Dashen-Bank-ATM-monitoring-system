@@ -72,6 +72,7 @@ def create_app():
     from routes                import bp as report_bp
     from audit                 import init_audit_schema
     from agent_registry        import init_agent_identity_table
+    from provision_state       import init_provision_state_table
     from scheduler             import init_scheduler_table, create_scheduler
 
     app.register_blueprint(auth_bp)
@@ -91,6 +92,7 @@ def create_app():
 
     init_audit_schema()
     init_agent_identity_table()
+    init_provision_state_table()
     init_admin_user()
     init_scheduler_table()
     app.config['SCHEDULER'] = create_scheduler(app)

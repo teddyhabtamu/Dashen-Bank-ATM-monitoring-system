@@ -132,6 +132,23 @@ def main():
     _el(master, "history", "7d")
     _el(master, "trends", "0")
     _el(master, "value_type", "TEXT")
+
+    # Identity is a passive agent item, not a WMI dependent. It rides the
+    # same template because that is what NCR hosts already link for agent
+    # items; the portal reads its lastvalue through the Zabbix API. One hour
+    # is enough for evidence that changes only on reinstall/reconfigure.
+    identity = ET.SubElement(items_el, "item")
+    _el(identity, "uuid", _uid("item", "identity"))
+    _el(identity, "name", "ATM identity — JSON evidence")
+    _el(identity, "type", "ZABBIX_AGENT")
+    _el(identity, "key", "atm.identity")
+    _el(identity, "delay", "1h")
+    _el(identity, "history", "1d")
+    _el(identity, "trends", "0")
+    _el(identity, "value_type", "TEXT")
+    _el(identity, "description",
+        "Read-only JSON from C:\\monitor\\atm-identity.ps1. The portal ingests "
+        "it automatically; it is evidence, never authority.")
     n_dep = 0
     for part, repl in PARTS:
         _dependent(items_el, part, "part_status", "Status")
@@ -161,7 +178,7 @@ def main():
     xml = minidom.parseString(ET.tostring(zbx, encoding="unicode")).toprettyxml(indent="  ")
     with open("config/zabbix/template_atm_wmi.xml", "w") as f:
         f.write(xml)
-    print(f"Wrote template_atm_wmi.xml: 1 master + {n_dep} dependents")
+    print(f"Wrote template_atm_wmi.xml: 2 masters + {n_dep} dependents")
 
 
 if __name__ == "__main__":

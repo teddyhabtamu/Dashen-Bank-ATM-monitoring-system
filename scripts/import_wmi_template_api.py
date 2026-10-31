@@ -156,6 +156,40 @@ def ensure_master_nodata_trigger(tid, auth):
     print(f'Health trigger created ({nid})')
 
 
+def ensure_identity_item(tid, auth):
+    """Create/update the passive `atm.identity` item on the WMI template.
+
+    Kept separate from wanted_items(): that generator describes WMI part
+    dependents with a master and JSONPath/JavaScript preprocessing. Identity is
+    a plain passive agent item with its own interval, and forcing it into that
+    tuple shape would make the importer harder to read for no benefit.
+    """
+    key = 'atm.identity'
+    payload = {
+        'name': 'ATM identity — JSON evidence',
+        'key_': key,
+        'hostid': tid,
+        'type': 0,           # ZABBIX_AGENT
+        'value_type': 4,     # TEXT
+        'delay': '1h',
+        'history': '1d',
+        'trends': '0',
+        'description': ('Read-only JSON from C:\\monitor\\atm-identity.ps1. '
+                        'The portal ingests it automatically; it is evidence, '
+                        'never authority.'),
+    }
+    found = call('item.get', {'templateids': [tid],
+                              'filter': {'key_': [key]},
+                              'output': ['itemid']}, auth)
+    if found:
+        upd = {k: v for k, v in payload.items() if k != 'hostid'}
+        call('item.update', {'itemid': found[0]['itemid'], **upd}, auth)
+        print(f'Identity item present ({found[0]["itemid"]})')
+    else:
+        call('item.create', payload, auth)
+        print('Identity item created')
+
+
 def main():
     recreate = '--recreate' in sys.argv
     auth = call('user.login', {'username': ZBX_USER, 'password': ZBX_PASS})
@@ -230,12 +264,13 @@ def main():
                                    'error_handler': 0,
                                    'error_handler_params': ''}]}, auth)
         made += 1
-    want_total = 1 + sum(1 + int(r) for _, r in PARTS) + len(DEVICES)
+    want_total = 2 + sum(1 + int(r) for _, r in PARTS) + len(DEVICES)
     print(f'Done: {made} items created, {fixed} paths repaired, '
           f'{len(have) - fixed} already present '
           f'({len(have) + made} total, want {want_total})')
     ensure_master_nodata_trigger(tid, auth)
     ensure_proven_triggers(tid, auth)
+    ensure_identity_item(tid, auth)
     call('user.logout', [], auth)
     return 0
 
