@@ -105,6 +105,9 @@ table.txn tbody tr:hover{background:#EEF2FF}
     </div>
   </div>
   <div class="page-actions">
+    {% if session.get('role') == 'admin' %}
+    <a href="{{ url_for('agent.agent_page', atm_id=atm.atm_id) }}" class="btn btn-outline"><i data-lucide="cpu" style="width:14px;height:14px"></i> Agent setup</a>
+    {% endif %}
     <a href="/atms" class="btn btn-outline"><i data-lucide="arrow-left" style="width:14px;height:14px"></i> Back to List</a>
     <a href="{{ grafana_url }}" target="_blank" rel="noopener" class="btn-live btn-primary"><i data-lucide="bar-chart-3" style="width:15px;height:15px"></i> Live Dashboards</a>
   </div>

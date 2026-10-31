@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+
+{% block title %}Agent Profile — {{ atm.atm_id }}{% endblock %}
+
+{% block extra_style %}
+.agent-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:24px;align-items:start}
+.agent-col{display:flex;flex-direction:column;gap:24px;min-width:0}
+.agent-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.agent-stat{background:#fff;border:1px solid #EEF1F6;border-radius:12px;padding:15px 18px;box-shadow:0 1px 3px rgba(1,33,105,.04)}
+.agent-stat .v{font-size:20px;font-weight:800;color:#0F172A;line-height:1.2;overflow-wrap:anywhere}
+.agent-stat .k{font-size:11px;color:#64748B;margin-top:5px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.agent-stat.ok .v{color:#047857}
+.agent-stat.warn .v{color:#B45309}
+.agent-stat.bad .v{color:#B91C1C}
+.agent-stat.muted .v{color:#64748B}
+.kv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px 22px}
+.kv{display:flex;flex-direction:column;gap:3px;min-width:0}
+.kv .k{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#94A3B8;font-weight:600}
+.kv .v{font-size:13px;color:#0F172A;font-weight:500;overflow-wrap:anywhere}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px}
+.agent-note{font-size:12px;color:#64748B;line-height:1.55}
+.agent-note + .agent-note{margin-top:6px}
+.warn-list{display:flex;flex-direction:column;gap:8px}
+.warn-item{display:flex;gap:9px;align-items:flex-start;background:#FFFBEB;border:1px solid #FDE68A;border-radius:9px;padding:10px 12px;font-size:12px;color:#78350F;line-height:1.5}
+.warn-item svg{width:15px;height:15px;flex:0 0 auto;margin-top:1px;color:#B45309}
+.warn-item.bad{background:#FEF2F2;border-color:#FECACA;color:#7F1D1D}
+.warn-item.bad svg{color:#DC2626}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.badge.ok{background:#DCFCE7;color:#166534}
+.badge.warn{background:#FEF3C7;color:#92400E}
+.badge.bad{background:#FEE2E2;color:#991B1B}
+.badge.muted{background:#F1F5F9;color:#475569}
+.badge-row{display:flex;flex-wrap:wrap;gap:7px}
+table.agent-table{width:100%;border-collapse:collapse;font-size:12px}
+table.agent-table th{background:#012169;color:#fff;font-weight:600;padding:9px 11px;text-align:left;white-space:nowrap}
+table.agent-table td{padding:8px 11px;border-bottom:1px solid #EEF1F6;vertical-align:top}
+table.agent-table tbody tr:nth-child(even){background:#F8FAFC}
+table.agent-table tbody tr:hover{background:#EEF2FF}
+.table-wrap{overflow-x:auto}
+.code-block{position:relative;background:#0F172A;color:#E2E8F0;border-radius:9px;padding:13px 14px;overflow-x:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;line-height:1.55;white-space:pre;max-height:340px}
+.code-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:14px 0 7px}
+.code-head:first-child{margin-top:0}
+.code-title{font-size:12px;font-weight:700;color:#0F172A;overflow-wrap:anywhere}
+.copy-btn{padding:5px 10px;font-size:11px}
+details.profile-file{border:1px solid #E4E9F1;border-radius:9px;margin-top:10px;background:#fff}
+details.profile-file summary{cursor:pointer;padding:10px 13px;font-size:12px;font-weight:600;color:#012169;border-radius:9px}
+details.profile-file summary:focus-visible{outline:2px solid #012169;outline-offset:2px}
+details.profile-file[open] summary{border-bottom:1px solid #EEF1F6}
+details.profile-file .code-block{border-radius:0 0 8px 8px;margin:0}
+.agent-form{display:flex;flex-direction:column;gap:8px}
+.agent-form label{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#94A3B8;font-weight:700}
+.agent-form textarea{width:100%;min-height:150px;padding:10px 12px;border:1px solid #E2E8F0;border-radius:8px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;line-height:1.5;color:#0F172A;background:#fff;resize:vertical}
+.agent-form textarea:focus{outline:none;border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.1)}
+.agent-form .hint{font-size:11px;color:#94A3B8;line-height:1.5}
+.form-actions{display:flex;gap:9px;justify-content:flex-end;margin-top:2px}
+.empty{padding:26px 12px;text-align:center;color:#94A3B8;font-size:13px}
+.conflict-field{font-weight:700;color:#0F172A}
+.conflict-note{display:block;color:#64748B;font-size:11px;margin-top:2px}
+.sev-high{color:#B91C1C;font-weight:700}
+.sev-medium{color:#B45309;font-weight:700}
+.sev-low{color:#475569;font-weight:700}
+.root-list{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.root-list li{background:#F8FAFC;border:1px solid #EEF1F6;border-radius:6px;padding:7px 9px;font-size:11px;overflow-wrap:anywhere}
+@media(max-width:1100px){.agent-grid{grid-template-columns:1fr}.agent-summary{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.agent-summary{grid-template-columns:1fr}.form-actions{flex-direction:column}.form-actions .btn{justify-content:center}}
+{% endblock %}
+
+{% block body %}
+<div class="page-header">
+  <div class="page-header-icon"><i data-lucide="cpu"></i></div>
+  <div>
+    <h1 class="page-title">Agent profile</h1>
+    <p class="page-subtitle">{{ atm.atm_name or atm.atm_id }} · {{ atm.atm_id }}{% if atm.vendor %} · {{ atm.vendor }}{% endif %}</p>
+  </div>
+  <div class="page-actions">
+    <a href="{{ url_for('admin.atm_detail', atm_id=atm.atm_id) }}" class="btn btn-outline"><i data-lucide="arrow-left" style="width:14px;height:14px"></i> Back to ATM</a>
+    {% if profile %}
+    <a href="{{ url_for('agent.agent_profile_download', atm_id=atm.atm_id) }}" class="btn btn-primary"><i data-lucide="download" style="width:14px;height:14px"></i> Download profile</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="page-content">
+  {% if profile_error %}
+  <div class="warn-item bad" style="margin-bottom:18px">
+    <i data-lucide="alert-octagon"></i>
+    <div><b>The profile cannot be rendered.</b> {{ profile_error }}</div>
+  </div>
+  {% endif %}
+
+  <div class="agent-summary">
+    <div class="agent-stat {{ 'ok' if profile and profile.ready else 'warn' }}">
+      <div class="v">{{ 'Ready' if profile and profile.ready else 'Not ready' }}</div>
+      <div class="k">Deployable profile</div>
+    </div>
+    <div class="agent-stat {{ 'ok' if signature_valid else ('warn' if signed else 'muted') }}">
+      <div class="v">{% if signature_valid %}Verified{% elif signed %}Invalid{% elif profile and profile.signature %}Unverified{% else %}Unsigned{% endif %}</div>
+      <div class="k">Profile signature</div>
+    </div>
+    <div class="agent-stat {{ 'ok' if stored else 'muted' }}">
+      <div class="v">{{ 'Reported' if stored else 'Not reported' }}</div>
+      <div class="k">Box identity</div>
+    </div>
+    <div class="agent-stat {{ 'bad' if conflicts else ('ok' if stored else 'muted') }}">
+      <div class="v">{{ conflicts|length }}</div>
+      <div class="k">Registry conflict{{ '' if conflicts|length == 1 else 's' }}</div>
+    </div>
+  </div>
+
+  <div class="agent-grid">
+    <div class="agent-col">
+      <div class="card">
+        <div class="card-header"><h2>Desired state</h2></div>
+        <div class="card-body">
+          {% if profile %}
+          {% if profile.warnings %}
+          <div class="warn-list" style="margin-bottom:16px">
+            {% for warning in profile.warnings %}
+            <div class="warn-item"><i data-lucide="alert-triangle"></i><div>{{ warning }}</div></div>
+            {% endfor %}
+          </div>
+          {% endif %}
+
+          <div class="kv-grid">
+            <div class="kv"><span class="k">Hostname</span><span class="v mono">{{ profile.hostname }}</span></div>
+            <div class="kv"><span class="k">Vendor</span><span class="v">{{ profile.vendor }}</span></div>
+            <div class="kv"><span class="k">Agent server</span><span class="v mono">{{ profile.agent.server or 'Not configured' }}</span></div>
+            <div class="kv"><span class="k">Server source</span><span class="v">{{ profile.agent.server_source }}</span></div>
+            <div class="kv"><span class="k">Listen port</span><span class="v">{{ profile.agent.listen_port }}</span></div>
+            <div class="kv"><span class="k">Timeout</span><span class="v">{{ profile.agent.timeout }} s</span></div>
+            <div class="kv"><span class="k">Generated</span><span class="v">{{ profile.generated_at }}</span></div>
+            <div class="kv"><span class="k">Profile hash</span><span class="v mono" title="{{ profile.profile_hash }}">{{ profile.profile_hash[:16] }}…</span></div>
+          </div>
+
+          <div class="code-head">
+            <span class="code-title">Agent configuration</span>
+            <button type="button" class="btn btn-outline copy-btn" data-copy-target="agent-conf">Copy</button>
+          </div>
+          <pre class="code-block" id="agent-conf">{{ profile.agent.config_text }}</pre>
+
+          <div class="code-head">
+            <span class="code-title">User parameters</span>
+            <button type="button" class="btn btn-outline copy-btn" data-copy-target="agent-params">Copy</button>
+          </div>
+          <pre class="code-block" id="agent-params">{{ profile.user_parameters|join('\n') }}</pre>
+
+          {% for file in profile.files %}
+          <details class="profile-file">
+            <summary>{{ file.dest }}</summary>
+            <pre class="code-block" id="agent-file-{{ loop.index }}">{{ file.content }}</pre>
+          </details>
+          {% endfor %}
+
+          <h3 style="font-size:13px;font-weight:700;color:#0F172A;margin:20px 0 8px">Deployable probes</h3>
+          <div class="table-wrap">
+            <table class="agent-table">
+              <thead>
+                <tr><th scope="col">File</th><th scope="col">Version</th><th scope="col">SHA-256</th><th scope="col">Destination</th></tr>
+              </thead>
+              <tbody>
+                {% for probe in profile.probes %}
+                <tr>
+                  <td class="mono">{{ probe.name }}</td>
+                  <td>{{ probe.version or '—' }}</td>
+                  <td class="mono" title="{{ probe.sha256 or '' }}">{{ (probe.sha256 or '—')[:16] }}{% if probe.sha256 %}…{% endif %}</td>
+                  <td class="mono">{{ probe.dest }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <h3 style="font-size:13px;font-weight:700;color:#0F172A;margin:20px 0 8px">Approved image roots</h3>
+          {% if profile.image_roots %}
+          <ul class="root-list">
+            {% for root in profile.image_roots %}<li class="mono">{{ root }}</li>{% endfor %}
+          </ul>
+          {% else %}
+          <p class="agent-note">No roots approved. Image keys are omitted from the profile and the roots file will not be written.</p>
+          {% endif %}
+          {% else %}
+          <div class="empty">No profile can be rendered for this ATM.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2>Reported identity</h2></div>
+        <div class="card-body">
+          {% if stored and identity %}
+          <div class="kv-grid">
+            <div class="kv"><span class="k">Reported</span><span class="v">{{ stored.reported_at }}</span></div>
+            <div class="kv"><span class="k">Received by</span><span class="v">{{ stored.received_by or '—' }}</span></div>
+            <div class="kv"><span class="k">Computer</span><span class="v mono">{{ identity.computer or '—' }}</span></div>
+            <div class="kv"><span class="k">Vendor</span><span class="v">{{ identity.vendor or '—' }}{% if identity.vendor_source %} <span class="mono" style="color:#94A3B8">({{ identity.vendor_source }})</span>{% endif %}</span></div>
+            <div class="kv"><span class="k">Model</span><span class="v">{{ identity.model or '—' }}</span></div>
+            <div class="kv"><span class="k">Serial</span><span class="v mono">{{ identity.serial or '—' }}</span></div>
+            <div class="kv"><span class="k">Terminal ID</span><span class="v mono">{{ identity.terminal_id or '—' }}</span></div>
+            <div class="kv"><span class="k">Terminal source</span><span class="v">{{ identity.terminal_source }}{% if identity.terminal_confidence %} · {{ identity.terminal_confidence }}{% endif %}</span></div>
+            <div class="kv"><span class="k">EJ hostname</span><span class="v mono">{{ identity.ej.hostname or '—' }}</span></div>
+            <div class="kv"><span class="k">EJ source</span><span class="v">{{ identity.ej.hostname_source }}</span></div>
+            <div class="kv"><span class="k">Agent version</span><span class="v">{{ identity.agent.version or '—' }}</span></div>
+            <div class="kv"><span class="k">Collected</span><span class="v">{{ identity.collected_at or '—' }}</span></div>
+          </div>
+
+          {% if identity.ip_addresses %}
+          <h3 style="font-size:13px;font-weight:700;color:#0F172A;margin:18px 0 7px">Reported addresses</h3>
+          <div class="badge-row">
+            {% for address in identity.ip_addresses %}<span class="badge muted mono">{{ address }}</span>{% endfor %}
+          </div>
+          {% endif %}
+
+          <h3 style="font-size:13px;font-weight:700;color:#0F172A;margin:18px 0 7px">Readiness</h3>
+          <div class="badge-row">
+            <span class="badge {{ 'ok' if readiness.ej_ready else 'warn' }}">EJ {{ 'ready' if readiness.ej_ready else 'incomplete' }}</span>
+            <span class="badge {{ 'ok' if readiness.images_ready else 'muted' }}">Images {{ 'reported' if readiness.images_ready else 'not reported' }}</span>
+            <span class="badge {{ 'ok' if readiness.probes_reported else 'muted' }}">Probes {{ 'reported' if readiness.probes_reported else 'not reported' }}</span>
+            {% if readiness.images_unapproved %}
+            <span class="badge warn">{{ readiness.images_unapproved|length }} unapproved root{{ '' if readiness.images_unapproved|length == 1 else 's' }}</span>
+            {% endif %}
+          </div>
+
+          {% if readiness.images_unapproved %}
+          <div class="warn-list" style="margin-top:10px">
+            <div class="warn-item">
+              <i data-lucide="folder-lock"></i>
+              <div><b>The box proposed image roots the registry has not approved.</b>
+                Add the ones that should be readable below; the probe stays fail-closed until then.
+                <ul class="root-list" style="margin-top:7px">
+                  {% for root in readiness.images_unapproved %}<li class="mono">{{ root }}</li>{% endfor %}
+                </ul>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if drift %}
+          <h3 style="font-size:13px;font-weight:700;color:#0F172A;margin:18px 0 7px">Probe drift</h3>
+          <div class="badge-row">
+            <span class="badge {{ 'ok' if drift.ok else 'bad' }}">{{ 'Matches the manifest' if drift.ok else 'Needs attention' }}</span>
+          </div>
+          {% if drift.missing %}
+          <p class="agent-note" style="margin-top:8px"><b>Missing:</b> <span class="mono">{{ drift.missing|join(', ') }}</span></p>
+          {% endif %}
+          {% if drift.hash_mismatch %}
+          <p class="agent-note"><b>Hash mismatch:</b> <span class="mono">{{ drift.hash_mismatch|join(', ') }}</span></p>
+          {% endif %}
+          {% if drift.version_mismatch %}
+          <p class="agent-note"><b>Version mismatch:</b> <span class="mono">{{ drift.version_mismatch|join(', ') }}</span></p>
+          {% endif %}
+          {% if drift.unexpected %}
+          <p class="agent-note"><b>Unexpected:</b> <span class="mono">{{ drift.unexpected|join(', ') }}</span></p>
+          {% endif %}
+          {% endif %}
+
+          {% if conflicts %}
+          <h3 style="font-size:13px;font-weight:700;color:#0F172A;margin:20px 0 8px">Registry conflicts</h3>
+          <div class="table-wrap">
+            <table class="agent-table">
+              <thead>
+                <tr><th scope="col">Field</th><th scope="col">Registry</th><th scope="col">Reported</th><th scope="col">Severity</th></tr>
+              </thead>
+              <tbody>
+                {% for conflict in conflicts %}
+                <tr>
+                  <td><span class="conflict-field">{{ conflict.field }}</span><span class="conflict-note">{{ conflict.note }}</span></td>
+                  <td class="mono">{{ conflict.registered or '—' }}</td>
+                  <td class="mono">{{ conflict.reported or '—' }}</td>
+                  <td><span class="sev-{{ conflict.severity }}">{{ conflict.severity }}</span></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <p class="agent-note" style="margin-top:8px">The registry is not changed automatically. Correct it through the registration form, then re-submit the identity.</p>
+          {% endif %}
+          {% else %}
+          <div class="empty">No identity has been reported for this ATM yet. Paste the probe output below.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="agent-col">
+      <div class="card">
+        <div class="card-header"><h2>Approved image roots</h2></div>
+        <div class="card-body">
+          <form class="agent-form" method="post" action="{{ url_for('agent.agent_roots_save', atm_id=atm.atm_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="roots">One absolute Windows directory per line</label>
+            <textarea id="roots" name="roots" spellcheck="false" placeholder="C:\ATM\images">{{ (profile.image_roots if profile else [])|join('\n') }}</textarea>
+            <p class="hint">Only approved roots reach the agent. Blank lines and <code>#</code> comments are ignored. Drive roots, UNC paths, wildcards and <code>..</code> are rejected.</p>
+            <div class="form-actions"><button type="submit" class="btn btn-primary">Save roots</button></div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2>Submit identity</h2></div>
+        <div class="card-body">
+          <form class="agent-form" method="post" action="{{ url_for('agent.agent_identity_ingest', atm_id=atm.atm_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="payload">Identity probe JSON</label>
+            <textarea id="payload" name="payload" spellcheck="false" placeholder='{"schema": 1, "vendor": "NCR", "terminal_id": "TID006", "terminal_source": "ej-header", ...}'></textarea>
+            <p class="hint">The document is validated before it is stored. Unknown fields are dropped; conflicts are shown, never applied.</p>
+            <div class="form-actions"><button type="submit" class="btn btn-primary">Validate and store</button></div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2>Profile signature</h2></div>
+        <div class="card-body">
+          {% if signature_valid %}
+          <p class="agent-note">This profile is signed with <span class="mono">ATM_PROFILE_SECRET</span> and the signature verifies against the exact body rendered here.</p>
+          {% elif signed %}
+          <div class="warn-item bad"><i data-lucide="shield-alert"></i><div>The profile carries a signature that does not verify. Check <span class="mono">ATM_PROFILE_SECRET</span> before deploying it.</div></div>
+          {% else %}
+          <div class="warn-item"><i data-lucide="shield-off"></i><div>No signature is configured. Unsigned profiles are acceptable only in the UAT lab; set <span class="mono">ATM_PROFILE_SECRET</span> before production.</div></div>
+          {% endif %}
+          {% if profile and profile.signature %}
+          <p class="agent-note" style="margin-top:10px;word-break:break-all"><span class="mono">{{ profile.signature }}</span></p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+  function fallbackCopy(text){
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand('copy'); } finally { document.body.removeChild(area); }
+  }
+  document.querySelectorAll('.copy-btn').forEach(function(button){
+    button.addEventListener('click', function(){
+      var target = document.getElementById(button.getAttribute('data-copy-target'));
+      if(!target) return;
+      var text = target.textContent;
+      var done = function(){
+        var original = button.textContent;
+        button.textContent = 'Copied';
+        setTimeout(function(){ button.textContent = original; }, 1500);
+      };
+      if(navigator.clipboard && window.isSecureContext){
+        navigator.clipboard.writeText(text).then(done).catch(function(){ fallbackCopy(text); done(); });
+      } else {
+        fallbackCopy(text);
+        done();
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

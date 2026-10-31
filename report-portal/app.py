@@ -59,6 +59,7 @@ def create_app():
     from blueprints.auth       import bp as auth_bp, init_admin_user
     from blueprints.portal     import bp as portal_bp
     from blueprints.admin      import bp as admin_bp
+    from blueprints.agent      import bp as agent_bp
     from blueprints.ej_search  import bp as ej_bp
     from blueprints.ej_journal import bp as ej_journal_bp
     from blueprints.atm_images import bp as atm_images_bp
@@ -70,11 +71,13 @@ def create_app():
     from blueprints.incidents import bp as incidents_bp
     from routes                import bp as report_bp
     from audit                 import init_audit_schema
+    from agent_registry        import init_agent_identity_table
     from scheduler             import init_scheduler_table, create_scheduler
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(portal_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(agent_bp)
     app.register_blueprint(ej_bp)
     app.register_blueprint(ej_journal_bp)
     app.register_blueprint(atm_images_bp)
@@ -87,6 +90,7 @@ def create_app():
     app.register_blueprint(report_bp)
 
     init_audit_schema()
+    init_agent_identity_table()
     init_admin_user()
     init_scheduler_table()
     app.config['SCHEDULER'] = create_scheduler(app)

@@ -84,6 +84,28 @@ changes to cash, software, or settings.
 
 ---
 
+## Step 2C — Agent profile and identity (portal, admin)
+
+The portal can render the exact agent files for one ATM, so the installer
+never re-implements policy. This is optional for a box already wired by hand,
+but it is the supported path for a new rollout.
+
+- [ ] Open the portal → the ATM → **Agent setup** (admin only).
+- [ ] **Download profile.** It lists every deployable probe with its SHA-256,
+      the agent `Server=`/`Hostname=` config, the approved image roots, and an
+      HMAC signature. It never contains the SNMP community or a PSK.
+- [ ] Copy the listed probes to `C:\monitor\` and apply the rendered config.
+      `atm-identity.ps1` is part of the profile and provides the
+      `atm.identity` UserParameter.
+- [ ] Approve image roots on the same page. The probe only *proposes* roots it
+      can see; a human approves them, and the roots file stays fail-closed.
+- [ ] Paste the output of `atm.identity` into **Submit identity**. Conflicts
+      are shown for review; the registry is never changed automatically.
+- [ ] Set `ATM_PROFILE_SECRET` in `.env` before production. An unsigned
+      profile is allowed only in the UAT lab, and the page says so.
+
+---
+
 ## Step 3 — Create the monitoring host (UAT-01, one command)
 
 Registering is automatic and safe to repeat (existing hosts are skipped,
