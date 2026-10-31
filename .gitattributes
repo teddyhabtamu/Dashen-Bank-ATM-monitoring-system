@@ -1,0 +1,8 @@
+# The Zabbix agent manifest hashes the probe files byte-for-byte. Git must
+# never rewrite their line endings: windows-latest checks out text files with
+# CRLF by default, which changes every SHA-256 and makes
+# `python scripts/build_agent_manifest.py --check` fail before the installer
+# is even built. Treat PowerShell files as non-text so the committed bytes are
+# the checked-out bytes on every platform.
+*.ps1 -text
+*.psm1 -text

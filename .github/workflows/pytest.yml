@@ -1,4 +1,4 @@
-name: pytest (dependency-free suite)
+name: pytest (portal suite)
 
 on:
   push:
@@ -14,7 +14,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install test runner only (suite is dependency-free by design)
-        run: "pip install --only-binary :all: pytest==9.1.1"
+      - name: Install the runtime dependencies the tests import
+        run: "python -m pip install --only-binary :all: -r tests/requirements.txt"
+      - name: Install test runner
+        run: "python -m pip install --only-binary :all: pytest==9.1.1"
       - name: Run suite (lab-dependent cases skip, never fail)
         run: python -m pytest tests/ -v

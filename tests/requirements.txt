@@ -1,0 +1,9 @@
+# Runtime imports needed by the portal test modules.
+#
+# The suite is not dependency-free: it imports Flask, requests, psycopg2 and
+# PyYAML. Install the deployed lock so CI exercises the same libraries the
+# portal ships, plus the one test-only import that is not a runtime
+# dependency. Keeping this next to the tests makes the requirement explicit
+# instead of silently collecting 11 import errors.
+-r ../report-portal/requirements.lock
+PyYAML==6.0.3

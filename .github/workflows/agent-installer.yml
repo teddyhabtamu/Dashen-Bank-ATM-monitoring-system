@@ -11,6 +11,7 @@ on:
       - 'report-portal/agent_manifest.json'
       - 'report-portal/agent_profile.py'
       - 'report-portal/atm_identity.py'
+      - '.gitattributes'
       - '.github/workflows/agent-installer.yml'
   pull_request:
     paths:
@@ -20,6 +21,7 @@ on:
       - 'report-portal/agent_manifest.json'
       - 'report-portal/agent_profile.py'
       - 'report-portal/atm_identity.py'
+      - '.gitattributes'
       - '.github/workflows/agent-installer.yml'
 
 permissions:
