@@ -245,6 +245,21 @@ def test_unknown_userparameter_keys_in_the_include_are_refused(tmp_path):
     assert 'unknown UserParameter' in _result(output)['error']
 
 
+def test_a_second_managed_file_with_the_same_name_is_refused(tmp_path):
+    profiles, monitor = _profiles(tmp_path)
+    profile = json.loads((profiles / 'ncr.profile.json').read_text())
+    include = next(entry for entry in profile['files']
+                   if entry['dest'].endswith('atm-agent.conf'))
+    duplicate = dict(include)
+    duplicate['dest'] = str(monitor / 'nested' / 'atm-agent.conf')
+    profile['files'].append(duplicate)
+    bad = profiles / 'duplicate-include.profile.json'
+    bad.write_text(json.dumps(profile), encoding='utf-8')
+    code, output = _run('-Profile', str(bad), *_common(monitor), '-DryRun')
+    assert code == 10, output
+    assert 'more than one atm-agent.conf' in _result(output)['error']
+
+
 def test_a_profile_for_another_atm_cannot_take_over_a_managed_root(tmp_path):
     profiles, monitor = _profiles(tmp_path)
     first, output = _run('-Profile', str(profiles / 'ncr.profile.json'),

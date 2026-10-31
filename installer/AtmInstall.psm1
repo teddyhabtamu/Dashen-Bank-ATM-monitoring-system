@@ -497,8 +497,10 @@ function Test-ProfileDocument {
         $seenDest[$dest] = $true
         $leaf = Split-Path -Leaf $dest
         if ($leaf -ieq 'atm-agent.conf') {
+            if ($includeDest) { Add-CheckError $result 'profile carries more than one atm-agent.conf' }
             $includeDest = $dest
         } elseif ($leaf -ieq 'atm-image-roots.txt') {
+            if ($rootsDest) { Add-CheckError $result 'profile carries more than one roots file' }
             $rootsDest = $dest
         } else {
             Add-CheckError $result "profile writes an unexpected file name '$leaf' under $MonitorRoot"
