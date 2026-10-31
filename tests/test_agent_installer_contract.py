@@ -35,6 +35,15 @@ def test_the_build_script_pins_the_manifest_and_agent_msi():
     assert 'RequireSignature' in build
 
 
+def test_the_config_check_uses_agent2_flags():
+    """Agent 2 has no -T; that is the Agent 1 config-test flag. Using it makes
+    every install fail with 'flag provided but not defined' before the service
+    is touched."""
+    module = (INSTALLER / 'AtmInstall.psm1').read_text()
+    assert '& $Exe -c $Conf -p' in module
+    assert '& $Exe -T' not in module
+
+
 def test_the_payload_exit_codes_are_documented_and_distinct():
     module = (INSTALLER / 'AtmInstall.psm1').read_text()
     for name in ('InvalidProfile', 'NotReady', 'ProfileHashMismatch',

@@ -102,7 +102,7 @@ jobs:
 
       # The tests above prove the plan and the files. This proves the part a
       # bare runner can actually prove: the real MSI installs, the service is
-      # named as expected, the rendered config passes `-T`, TCP 10050 listens,
+      # named as expected, the rendered config passes `-p`, TCP 10050 listens,
       # and atm.identity runs as the service account. The parts/XFS probes are
       # removed from the include because this runner has no ATM hardware; a
       # failure here is an installer failure, not a missing cassette.
@@ -148,7 +148,7 @@ jobs:
             Write-Host "::error title=Agent smoke install failed ($code)::$tail"
             $exe = Join-Path $env:ProgramFiles 'Zabbix Agent 2\zabbix_agent2.exe'
             Write-Host '--- agent config test ---'
-            if (Test-Path $exe) { & $exe -T -c $conf 2>&1 | Write-Host }
+            if (Test-Path $exe) { & $exe -c $conf -p 2>&1 | Write-Host }
             Write-Host '--- service configuration ---'
             & sc.exe qc 'Zabbix Agent 2' 2>&1 | Write-Host
             & sc.exe queryex 'Zabbix Agent 2' 2>&1 | Write-Host

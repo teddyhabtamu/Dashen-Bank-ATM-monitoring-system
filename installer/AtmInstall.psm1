@@ -1141,12 +1141,18 @@ function Set-AgentService {
 
 function Test-AgentConfig {
     param([string]$Exe, [string]$Conf)
-    $output = & $Exe -T -c $Conf 2>&1
+    # Agent 2 has no -T (that is the Agent 1 config-test flag). -p parses the
+    # configuration, prints the supported items and exits; a broken config
+    # makes it exit non-zero. The item list is truncated so a failure message
+    # stays readable.
+    $output = & $Exe -c $Conf -p 2>&1
     $code = $LASTEXITCODE
+    $text = (($output | ForEach-Object { [string]$_ }) -join "`n")
+    if ($text.Length -gt 2000) { $text = $text.Substring(0, 2000) + '...' }
     return @{
         Ok       = ($code -eq 0)
         ExitCode = $code
-        Output   = (($output | ForEach-Object { [string]$_ }) -join "`n")
+        Output   = $text
     }
 }
 
