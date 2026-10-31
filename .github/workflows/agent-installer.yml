@@ -99,3 +99,106 @@ jobs:
             installer/dist/*.exe
             installer/dist/*.sha256
             installer/dist/release.json
+
+      # The tests above prove the plan and the files. This proves the part a
+      # bare runner can actually prove: the real MSI installs, the service is
+      # named as expected, the rendered config passes `-T`, TCP 10050 listens,
+      # and atm.identity runs as the service account. The parts/XFS probes are
+      # removed from the include because this runner has no ATM hardware; a
+      # failure here is an installer failure, not a missing cassette.
+      - name: Render a hardware-free smoke profile
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'atm-smoke'
+          python installer\make_test_profiles.py `
+            --out (Join-Path $root 'profiles') `
+            --monitor-root (Join-Path $root 'monitor') `
+            --identity-only
+          $include = Get-Content (Join-Path $root 'profiles\ncr.profile.json') -Raw |
+            ConvertFrom-Json |
+            Select-Object -ExpandProperty files |
+            Where-Object { $_.dest -like '*atm-agent.conf' }
+          $keys = ([regex]::Matches($include.content, 'UserParameter=([^,]+)') |
+            ForEach-Object { $_.Groups[1].Value }) -join ','
+          if ($keys -ne 'atm.identity') {
+            throw "smoke profile must expose only atm.identity, got: $keys"
+          }
+
+      - name: Install Agent 2 and verify as the service account
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:RUNNER_TEMP 'atm-smoke'
+          $monitor = Join-Path $root 'monitor'
+          $profile = Join-Path $root 'profiles\ncr.profile.json'
+          $conf = Join-Path $env:ProgramFiles 'Zabbix Agent 2\zabbix_agent2.conf'
+          $msi = (Get-ChildItem installer\staging\payload\agent\*.msi |
+            Select-Object -First 1).FullName
+          $log = Join-Path $root 'install.log'
+
+          $out = & powershell.exe -NoProfile -NonInteractive `
+            -ExecutionPolicy Bypass -File installer\atm-install.ps1 `
+            -Profile $profile -MonitorRoot $monitor -ProbeRoot scripts `
+            -AgentConf $conf -AgentMsi $msi -LogPath $log 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          Write-Host $out
+          if ($code -ne 0) {
+            $tail = ((Get-Content $log -Tail 40 -ErrorAction SilentlyContinue) -join ' | ')
+            $tail = $tail.Substring(0, [Math]::Min(3000, $tail.Length))
+            Write-Host "::error title=Agent smoke install failed ($code)::$tail"
+            exit $code
+          }
+
+          $svc = Get-Service -Name 'Zabbix Agent 2' -ErrorAction Stop
+          if ($svc.Status -ne 'Running') {
+            throw "Zabbix Agent 2 service is $($svc.Status), not Running"
+          }
+          $state = Get-Content (Join-Path $monitor 'atm-agent-state.json') -Raw |
+            ConvertFrom-Json
+          if ($state.service_account_check -ne 'passed') {
+            throw "service-account check was '$($state.service_account_check)', not passed"
+          }
+          if ($out -notmatch '"service_account_check":"passed"') {
+            throw 'RESULT did not report a passed service-account check'
+          }
+
+          $client = New-Object System.Net.Sockets.TcpClient
+          try {
+            $client.Connect('127.0.0.1', 10050)
+            if (-not $client.Connected) { throw 'TCP 10050 did not connect' }
+          } finally { $client.Close() }
+          Write-Host 'agent is listening on TCP 10050'
+
+      - name: Require a second apply to be a no-op
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:RUNNER_TEMP 'atm-smoke'
+          $monitor = Join-Path $root 'monitor'
+          $profile = Join-Path $root 'profiles\ncr.profile.json'
+          $conf = Join-Path $env:ProgramFiles 'Zabbix Agent 2\zabbix_agent2.conf'
+          $msi = (Get-ChildItem installer\staging\payload\agent\*.msi |
+            Select-Object -First 1).FullName
+          $backup = Join-Path $monitor 'backup'
+          $before = @(Get-ChildItem $backup -Directory -ErrorAction SilentlyContinue).Count
+
+          $out = & powershell.exe -NoProfile -NonInteractive `
+            -ExecutionPolicy Bypass -File installer\atm-install.ps1 `
+            -Profile $profile -MonitorRoot $monitor -ProbeRoot scripts `
+            -AgentConf $conf -AgentMsi $msi `
+            -LogPath (Join-Path $root 'install-2.log') 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          Write-Host $out
+          if ($code -ne 0) {
+            Write-Host "::error title=Second apply failed ($code)::$($out.Substring(0,[Math]::Min(3000,$out.Length)))"
+            exit $code
+          }
+          if ($out -notmatch '"changed":false') {
+            Write-Host "::error title=Second apply was not a no-op::$($out.Substring(0,[Math]::Min(3000,$out.Length)))"
+            exit 1
+          }
+          $after = @(Get-ChildItem $backup -Directory -ErrorAction SilentlyContinue).Count
+          if ($after -ne $before) {
+            throw "second apply created a backup ($before -> $after)"
+          }
+          Write-Host 'second apply changed nothing and made no backup'

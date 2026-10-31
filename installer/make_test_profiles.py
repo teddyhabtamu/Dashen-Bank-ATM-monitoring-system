@@ -70,6 +70,26 @@ def _build(row, monitor_root, image_root, secret=SECRET):
     return _rewrite(profile, monitor_root, image_root)
 
 
+def _identity_only(profile):
+    """Leave a profile whose include declares only atm.identity.
+
+    The CI smoke install runs on a Windows runner with no ATM hardware. The
+    parts/XFS probes would fail there for the right reason, which would make a
+    real MSI/service failure indistinguishable from missing hardware. The
+    identity probe is explicitly built to return nulls on an unknown box, so it
+    is the one key a bare runner can prove end to end.
+    """
+    for entry in profile['files']:
+        if not entry['dest'].lower().endswith('atm-agent.conf'):
+            continue
+        lines = entry['content'].splitlines()
+        kept = [line for line in lines
+                if not line.startswith('UserParameter=')
+                or line.startswith('UserParameter=atm.identity,')]
+        entry['content'] = '\n'.join(kept) + '\n'
+    return profile
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', required=True, help='directory for the profiles')
@@ -77,6 +97,8 @@ def main(argv=None) -> int:
                         help='deployment root written into the fixtures')
     parser.add_argument('--unsigned', action='store_true',
                         help='render an unsigned profile for the rejection test')
+    parser.add_argument('--identity-only', action='store_true',
+                        help='keep only atm.identity for a hardware-free smoke install')
     args = parser.parse_args(argv)
 
     out = pathlib.Path(args.out)
@@ -100,6 +122,10 @@ def main(argv=None) -> int:
     profiles['unready.profile.json'] = _build(
         unready_row, monitor_root, image_root, secret)
     os.environ['ATM_AGENT_SERVER'] = '10.255.0.10'
+
+    if args.identity_only:
+        for profile in profiles.values():
+            _identity_only(profile)
 
     for name, profile in profiles.items():
         path = out / name
