@@ -335,7 +335,7 @@ def test_the_split_aborts_rather_than_dumping_everything():
     assert re.search(r'-t \$', src) or 'T_COUNT' in src, 'the flag count must be checked'
 
 
-def test_the_list_is_read_even_without_a_trailing_newline():
+def test_the_list_is_read_even_without_a_trailing_newline(tmp_path):
     """Guards the order of sed then grep in portal_table_names.
 
     sed always newline-terminates its output, so it repairs a list file whose
@@ -345,13 +345,16 @@ def test_the_list_is_read_even_without_a_trailing_newline():
     fixed it. The test stands as a guard against the pipeline being reordered or
     sed being dropped, either of which really would lose the last table.
     """
-    # Written without a trailing newline on purpose.
-    pathlib.Path('/tmp/opencode/_nonl.txt').write_text('alpha\nbravo\ncharlie')
+    # Written without a trailing newline on purpose. Use tmp_path: the CI
+    # runner has no /tmp/opencode, and a test that writes there only passes on
+    # the machine where it was written.
+    list_file = tmp_path / '_nonl.txt'
+    list_file.write_text('alpha\nbravo\ncharlie')
     r = subprocess.run(
         ['bash', '-c',
          'source scripts/portal_tables.sh; portal_table_count; portal_table_names'],
         cwd=str(REPO), capture_output=True, text=True,
-        env={**os.environ, 'PORTAL_TABLES_FILE': '/tmp/opencode/_nonl.txt'},
+        env={**os.environ, 'PORTAL_TABLES_FILE': str(list_file)},
         timeout=60)
     assert r.returncode == 0, r.stderr
     assert r.stdout.split('\n')[0].strip() == '3', r.stdout
