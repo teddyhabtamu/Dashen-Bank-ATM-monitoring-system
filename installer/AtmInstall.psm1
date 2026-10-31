@@ -1393,10 +1393,33 @@ function Invoke-ServiceAccountVerification {
     [System.IO.File]::WriteAllText($wrapper, $batch, [System.Text.Encoding]::Default)
 
     try {
-        & schtasks.exe /Create /TN $taskName /TR ('cmd.exe /c "' + $wrapper + '"') `
-            /SC ONCE /ST 00:00 /RU SYSTEM /RL HIGHEST /F | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            return @{ Ok = $false; Status = 'failed'; Message = "schtasks create failed with $LASTEXITCODE" }
+        $created = $false
+        # schtasks defaults to "No Start On Batteries", which leaves the task
+        # Queued on a laptop and makes the verification time out. Prefer the
+        # ScheduledTasks cmdlets, which can explicitly allow battery power.
+        if (Get-Command Register-ScheduledTask -ErrorAction SilentlyContinue) {
+            try {
+                $action = New-ScheduledTaskAction -Execute 'cmd.exe' `
+                    -Argument ('/c "' + $wrapper + '"')
+                $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' `
+                    -LogonType ServiceAccount -RunLevel Highest
+                $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries `
+                    -DontStopIfGoingOnBatteries -StartWhenAvailable
+                Register-ScheduledTask -TaskName $taskName -Action $action `
+                    -Principal $principal -Settings $settings -Force | Out-Null
+                $created = $true
+            } catch {
+                if ($LogPath) {
+                    Write-Log ('scheduled task registration failed: ' + $_.Exception.Message) 'WARN' $LogPath
+                }
+            }
+        }
+        if (-not $created) {
+            & schtasks.exe /Create /TN $taskName /TR ('cmd.exe /c "' + $wrapper + '"') `
+                /SC ONCE /ST 00:00 /RU SYSTEM /RL HIGHEST /F | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                return @{ Ok = $false; Status = 'failed'; Message = "schtasks create failed with $LASTEXITCODE" }
+            }
         }
         & schtasks.exe /Run /TN $taskName | Out-Null
         if ($LASTEXITCODE -ne 0) {

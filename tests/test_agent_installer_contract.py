@@ -57,6 +57,14 @@ def test_the_wrapper_explains_a_missing_profile_instead_of_exiting_silently():
     assert 'No .profile.json was found' in branch
 
 
+def test_the_verification_task_is_allowed_to_run_on_battery():
+    """schtasks defaults to 'No Start On Batteries'; on a laptop the SYSTEM
+    verification task then sits Queued until the installer times out."""
+    module = (INSTALLER / 'AtmInstall.psm1').read_text()
+    assert 'AllowStartIfOnBatteries' in module
+    assert 'DontStopIfGoingOnBatteries' in module
+
+
 def test_the_service_restart_waits_for_a_start_pending_msi_service():
     """msiexec can return while the freshly installed service is still
     StartPending. A stop request then fails with 1061, so the restart has to
