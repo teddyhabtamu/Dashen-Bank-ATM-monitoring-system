@@ -101,7 +101,12 @@ begin
   Count := 0;
   Found := '';
   if not FindFirst(AddBackslash(Directory) + '*.profile.json', FindRec) then
+  begin
+    MsgBox('No .profile.json was found next to the installer.' + #13#10 +
+           'Download the profile from the portal and put it beside this EXE,' + #13#10 +
+           'or pass /PROFILE=<path>.', mbError, MB_OK);
     Exit;
+  end;
   try
     repeat
       if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) = 0 then

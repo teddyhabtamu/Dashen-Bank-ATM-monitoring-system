@@ -47,6 +47,16 @@ def test_the_config_check_uses_agent2_flags():
     assert '& $Exe -T' not in module
 
 
+def test_the_wrapper_explains_a_missing_profile_instead_of_exiting_silently():
+    """With no *.profile.json beside the EXE, FindFirst fails and the old
+    wrapper returned before reaching the "No .profile.json" message, so the
+    installer vanished after UAC with no explanation."""
+    spec = (INSTALLER / 'AtmMonitorSetup.iss').read_text()
+    findfirst = spec[spec.index('if not FindFirst'):]
+    branch = findfirst[:findfirst.index('try')]
+    assert 'No .profile.json was found' in branch
+
+
 def test_the_service_restart_waits_for_a_start_pending_msi_service():
     """msiexec can return while the freshly installed service is still
     StartPending. A stop request then fails with 1061, so the restart has to
