@@ -91,7 +91,7 @@ function Get-ExitCodeForError {
     if ($Message -match 'msiexec|agent MSI|Zabbix Agent 2 is not installed|refusing to downgrade') { return (Get-ExitCode AgentInstallFailed) }
     if ($Message -match 'service-account verification') { return (Get-ExitCode VerifyFailed) }
     if ($Message -match 'agent config test|listening on TCP') { return (Get-ExitCode ConfigTestFailed) }
-    if ($Message -match 'sc config|service does not exist|schtasks|service action') { return (Get-ExitCode ServiceFailed) }
+    if ($Message -match 'sc config|service does not exist|schtasks|service action|Failed to (start|stop|restart) service|Timeout while waiting for service|Start-Service|Stop-Service') { return (Get-ExitCode ServiceFailed) }
     if ($Message -match 'preflight failed|not a safe|outside|unsigned|not ready|schema|hostname|vendor|ServerActive|Include=|Hostname must|ListenPort|Timeout=|profile SHA-256|already managed') {
         return (Get-ExitCode InvalidProfile)
     }

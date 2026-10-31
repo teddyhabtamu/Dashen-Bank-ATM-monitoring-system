@@ -65,6 +65,17 @@ def test_the_verification_task_is_allowed_to_run_on_battery():
     assert 'DontStopIfGoingOnBatteries' in module
 
 
+def test_service_control_failures_map_to_the_service_exit_code():
+    """Start-Service throws "Failed to start service '...'", which matched no
+    branch and fell through to WriteFailed (20). A technician then reads a
+    write error for a service that simply refused to start."""
+    script = (INSTALLER / 'atm-install.ps1').read_text()
+    mapping = script[script.index('function Get-ExitCodeForError'):]
+    mapping = mapping[:mapping.index('\n}')]
+    assert 'Failed to (start|stop|restart) service' in mapping
+    assert 'Timeout while waiting for service' in mapping
+
+
 def test_the_service_restart_waits_for_a_start_pending_msi_service():
     """msiexec can return while the freshly installed service is still
     StartPending. A stop request then fails with 1061, so the restart has to
