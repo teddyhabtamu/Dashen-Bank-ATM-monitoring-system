@@ -60,3 +60,7 @@ config/backups/
 snmpwalk_output.txt
 snmpwalk_*.txt
 *:Zone.Identifier
+
+# Generated test-fleet import artefacts (contain real fleet IPs/TIDs)
+config/postgres/atm_locations_test_*.csv
+docs/atm-import-readiness-*.md
