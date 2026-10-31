@@ -26,7 +26,8 @@ from __future__ import annotations
 import logging
 import time
 
-from agent_registry import load_identity, save_identity
+from agent_registry import (load_identity, save_identity,
+                            set_ej_hostname_if_empty)
 from atm_identity import IdentityError, conflicts, parse
 from audit import log_action
 from log_safety import safe_log
@@ -124,6 +125,25 @@ def ingest_value(atm_id, raw, clock=None, source='zabbix:auto'):
     except Exception as exc:  # noqa: BLE001 - the identity is already stored
         logger.warning('identity audit write failed for %s: %s',
                        safe_log(atm_id), safe_log(exc))  # NOSONAR: safe_log strips CR/LF
+
+    # Seed only an EMPTY EJ hostname, and only from the strongest source: the
+    # <HOST> tag in the journal filename. This is what lets the existing
+    # hourly puller pick up a new ATM without a second portal visit. An
+    # existing value is never overwritten; a mismatch stays a conflict.
+    ej = identity.get('ej') or {}
+    if (not (atm.get('ej_hostname') or '').strip()
+            and ej.get('hostname')
+            and ej.get('hostname_source') == 'ej-filename'):
+        try:
+            if set_ej_hostname_if_empty(atm_id, ej['hostname']):
+                log_action('AGENT_EJ_HOSTNAME_SET',
+                           f'{atm_id} hostname={ej["hostname"]} '
+                           f'source=auto:identity')
+                logger.info('seeded EJ hostname for %s from identity', atm_id)
+        except Exception as exc:  # noqa: BLE001 - identity is already stored
+            logger.warning('EJ hostname seed failed for %s: %s',
+                           safe_log(atm_id), safe_log(exc))  # NOSONAR: safe_log strips CR/LF
+
     return {'status': 'stored', 'atm_id': atm_id, 'identity': identity,
             'conflicts': conflict_rows}
 

@@ -72,14 +72,17 @@ so a box offline longer than that correctly reports no current value.
 It requires Super-admin; if the portal's API user lacks it, the button says so
 and the hourly collection remains the fallback.
 
-### 3. Evidence is still not authority
+### 3. Evidence is still not authority, with one narrow exception
 
-`identity_sync` writes only the side table. It never changes `atm_locations`.
-Conflicts are shown, never auto-healed. This preserves the existing rule for
-terminal ID, vendor and EJ hostname.
+`identity_sync` writes the side table. It never overwrites a registry value.
+The one exception is an **empty** `ej_hostname` whose identity source is
+`ej-filename` (the `<HOST>` tag in the journal filename): it seeds that field
+so the existing hourly puller can pick the ATM up without a second portal
+visit. An existing value is never overwritten; a mismatch stays a conflict for
+a human.
 
-Image roots remain a human approval. EJ hostname conflicts remain a human
-decision. Those are control boundaries, not missing automation.
+Terminal ID, vendor and model are never auto-healed. Image roots remain a
+human approval. Those are control boundaries, not missing automation.
 
 ## Consequences
 
@@ -87,6 +90,8 @@ decision. Those are control boundaries, not missing automation.
 - The Agent setup page shows **Synced / Retrying / Needs registry change** and
   a **Retry provisioning now** button.
 - Identity appears without a paste; the Agent page shows its source and age.
+- An empty EJ hostname is seeded from the journal filename, so the existing
+  hourly puller starts collecting without a second portal edit.
 - The portal now has a scheduler job that reads Zabbix every five minutes. It
   is one `host.get` + one `item.get` per 250 ATMs, not per ATM.
 - `atm_provision_state` is in `config/portal_tables.txt`, the backup/split
@@ -99,8 +104,9 @@ decision. Those are control boundaries, not missing automation.
 1. **Onboarding state machine.** Combine provisioning, reporting, identity,
    EJ and image readiness into one per-ATM status with one next action. The
    Agent page already has the pieces; the fleet page needs the rollup.
-2. **EJ auto-enable.** When identity reports an EJ hostname and the registry is
-   empty, propose it for one-click approval. EJ is server-side: once the
+2. **EJ completion.** The empty-hostname case is seeded automatically. Still
+   needed: pull/ingest status per ATM, and a review action for a hostname that
+   conflicts with an existing registry value. EJ is server-side: once the
    registry is valid, the existing puller needs no ATM revisit.
 3. **Images.** Approval changes the agent profile, so a reapply is required.
    Show "profile stale", verify probe hashes after reapply, and check the

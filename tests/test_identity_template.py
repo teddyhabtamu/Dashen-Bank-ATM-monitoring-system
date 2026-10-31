@@ -49,3 +49,5 @@ def test_the_api_importers_create_the_item():
         assert 'def ensure_identity_item' in source, name
         assert 'ensure_identity_item(tid, auth)' in source, name
         assert 'atm.identity' in source, name
+    grg = (REPO / 'scripts' / 'import_grg_xfs_template_api.py').read_text()
+    assert "'--no-link'" in grg, 'template-only import must not link/delete a host'

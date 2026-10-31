@@ -96,6 +96,57 @@ def test_bad_evidence_is_rejected_without_writing(monkeypatch):
     assert saved == []
 
 
+def test_an_empty_ej_hostname_is_seeded_from_the_filename(monkeypatch):
+    seeded, audits = [], []
+    monkeypatch.setattr(identity_sync, 'load_identity', lambda atm_id: None)
+    monkeypatch.setattr(identity_sync, 'save_identity', lambda *a, **k: None)
+    monkeypatch.setattr(identity_sync, '_atm_row',
+                        lambda atm_id: dict(ATM_ROW, ej_hostname=None))
+    monkeypatch.setattr(identity_sync, 'set_ej_hostname_if_empty',
+                        lambda atm_id, hostname:
+                        seeded.append((atm_id, hostname)) or True)
+    monkeypatch.setattr(identity_sync, 'log_action',
+                        lambda action, detail=None: audits.append((action, detail)))
+
+    out = identity_sync.ingest_value('ATM-1', json.dumps(identity()))
+
+    assert out['status'] == 'stored'
+    assert seeded == [('ATM-1', 'ATM-TEST-NCR')]
+    assert any(action == 'AGENT_EJ_HOSTNAME_SET' for action, _ in audits)
+
+
+def test_an_existing_ej_hostname_is_never_overwritten(monkeypatch):
+    seeded = []
+    monkeypatch.setattr(identity_sync, 'load_identity', lambda atm_id: None)
+    monkeypatch.setattr(identity_sync, 'save_identity', lambda *a, **k: None)
+    monkeypatch.setattr(identity_sync, '_atm_row',
+                        lambda atm_id: dict(ATM_ROW, ej_hostname='OLD-NAME'))
+    monkeypatch.setattr(identity_sync, 'set_ej_hostname_if_empty',
+                        lambda atm_id, hostname: seeded.append((atm_id, hostname)))
+    monkeypatch.setattr(identity_sync, 'log_action', lambda *a, **k: None)
+
+    identity_sync.ingest_value('ATM-1', json.dumps(identity()))
+
+    assert seeded == []
+
+
+def test_a_weak_ej_source_does_not_seed_the_registry(monkeypatch):
+    payload = identity()
+    payload['ej']['hostname_source'] = 'computer-name'
+    seeded = []
+    monkeypatch.setattr(identity_sync, 'load_identity', lambda atm_id: None)
+    monkeypatch.setattr(identity_sync, 'save_identity', lambda *a, **k: None)
+    monkeypatch.setattr(identity_sync, '_atm_row',
+                        lambda atm_id: dict(ATM_ROW, ej_hostname=None))
+    monkeypatch.setattr(identity_sync, 'set_ej_hostname_if_empty',
+                        lambda atm_id, hostname: seeded.append((atm_id, hostname)))
+    monkeypatch.setattr(identity_sync, 'log_action', lambda *a, **k: None)
+
+    identity_sync.ingest_value('ATM-1', json.dumps(payload))
+
+    assert seeded == []
+
+
 def test_an_unchanged_document_is_not_rewritten(monkeypatch):
     saved = []
     monkeypatch.setattr(identity_sync, 'load_identity',

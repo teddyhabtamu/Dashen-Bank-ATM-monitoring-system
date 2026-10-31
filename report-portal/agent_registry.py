@@ -133,3 +133,30 @@ def set_image_roots(atm_id, roots):
         changed = cur.rowcount
         cur.close()
     return bool(changed)
+
+
+def set_ej_hostname_if_empty(atm_id, hostname):
+    """Seed an empty EJ hostname from the strongest identity evidence.
+
+    This is the one deliberate registry write from identity, and it is
+    narrowly scoped: only when the stored value is empty, and the caller has
+    already checked `hostname_source == 'ej-filename'`. An existing value is
+    never overwritten — a mismatch stays a conflict for a human to resolve.
+    The journal puller only needs `ej_hostname`; once seeded, the existing
+    hourly pull picks the ATM up without another visit.
+    """
+    hostname = (hostname or '').strip()
+    if not hostname:
+        return False
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE atm_locations
+               SET ej_hostname = %s
+             WHERE atm_id = %s
+               AND BTRIM(COALESCE(ej_hostname, '')) = ''
+        """, (hostname, atm_id))
+        conn.commit()
+        changed = cur.rowcount
+        cur.close()
+    return bool(changed)

@@ -312,6 +312,8 @@ def main():
     parser.add_argument('--host', default=DEFAULT_HOST, help=f"Host name to link (default: {DEFAULT_HOST})")
     parser.add_argument('--ip', default=os.environ.get('GRG_TEST_IP') or None,
                         help='Deprecated; ignored. Configure the host interface in Zabbix.')
+    parser.add_argument('--no-link', action='store_true',
+                        help='Import/update the template only; do not link it to a host.')
     args = parser.parse_args()
 
     auth = call('user.login', {'username': ZBX_USER, 'password': ZBX_PASS})
@@ -388,7 +390,7 @@ def main():
     ensure_triggers(tid, auth)
     ensure_identity_item(tid, auth)
 
-    if args.host:
+    if not args.no_link:
         link_template_to_host(tid, args.host, args.ip, auth)
 
     call('user.logout', [], auth)

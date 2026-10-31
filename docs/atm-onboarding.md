@@ -153,7 +153,8 @@ duplicated. Use the command below only when the Agent setup page says
       XFS agent template when it exists). You do not link anything by hand.
 - [ ] One-time after upgrading: re-import the agent templates so the passive
       `atm.identity` item exists. NCR: `python3 scripts/import_wmi_template_api.py`.
-      GRG: `python3 scripts/import_grg_xfs_template_api.py`. The item is
+      GRG: `python3 scripts/import_grg_xfs_template_api.py --no-link`
+      (template only; `zabbix_sync` links it to GRG hosts). The item is
       harmless on a box without the agent; it simply stays unsupported.
 
 ## Step 4 — Prove data flows (one command, then Zabbix UI)
@@ -196,16 +197,18 @@ calling an ATM live.
 
 ## Step 5 — Journals for disputes (NCR and GRG)
 
-- [ ] Nothing to edit. The pull list is data, not code: open portal →
-      ATM Registration → the new ATM → set **EJ Hostname** to the machine
-      name used in the local evidence file (`<date>_<HOST>_EJDATA.log`) and
-      save. For NCR it is the middle part of the `E:\EJLogs` filename. For
-      GRG it is the box hostname (the journal itself is `EJ<yymmdd>.log`).
+- [ ] The pull list is data, not code. After identity ingest, the portal seeds
+      an **empty** EJ Hostname from the journal filename
+      (`<date>_<HOST>_EJDATA.log`) — for NCR the middle part of the
+      `E:\EJLogs` filename; for GRG the box hostname (`EJ<yymmdd>.log`). It
+      never overwrites an existing value; a mismatch is shown as a conflict.
+      Review it in ATM Registration if the identity page reports one.
 - [ ] Confirm the resolver agrees, on the pull host:
       `python3 scripts/ej_pull_targets.py --vendor GRG --explain`
       (use no `--vendor` for the NCR list).
       → prints `ATM-ID:IP:HOSTNAME` for every eligible box plus skip reasons.
-      `no EJ hostname recorded` means step one above is not done.
+      `no EJ hostname recorded` means identity has not arrived yet, or the
+      journal filename had no host tag; set it manually in Registration.
 - [ ] Pull GRG journals:
       `python3 scripts/pull_grg_ej_logs.py --days 3`
       → writes `ej-logs/<date>_<HOST>_EJDATA.log` and raw evidence under
