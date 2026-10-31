@@ -153,7 +153,7 @@ td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:
   <div class="table-wrap">
   <table>
     <thead>
-      <tr><th>ATM</th><th>Onboarding</th><th>Reporting</th><th>Provisioning</th>
+      <tr><th>ATM</th><th>State</th><th>Onboarding</th><th>Reporting</th><th>Provisioning</th>
           <th>Identity</th><th>EJ</th><th>Images</th>
           <th>What is wrong</th><th>Next action</th></tr>
     </thead>
@@ -163,6 +163,10 @@ td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:
       <tr>
         <td class="atm"><a href="/atms/{{ r.atm_id }}">{{ r.atm_id }}</a>
           <span class="sub">{{ r.vendor or '—' }} · {{ r.ip or 'no IP' }}</span></td>
+        <td class="status">
+          {% if r.state %}<span class="state-pill" style="background:{{ r.state | state_colour }};color:{{ r.state | state_ink }}">{{ r.state | state_label }}</span>
+          {% else %}<span class="sub">—</span>{% endif %}
+        </td>
         <td class="status">{{ stage_badge(r.onboarding_status, r.onboarding_label) }}</td>
         <td class="status">{{ stage_badge(r.status, r.status_label) }}</td>
         {% for key in ('provisioning', 'identity', 'ej', 'images') %}

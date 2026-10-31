@@ -14,11 +14,11 @@ import fleet_report as fr  # noqa: E402
 
 
 def v(atm_id, verdict='reporting', blockers=(), reporting=10, total=90,
-      vendor='NCR', ip='10.0.0.1'):
+      vendor='NCR', ip='10.0.0.1', state='IN_SERVICE'):
     return {'atm_id': atm_id, 'verdict': verdict, 'ok': verdict == 'reporting',
             'blockers': list(blockers),
             'facts': {'items_reporting': reporting, 'items_total': total,
-                      'vendor': vendor, 'ip_address': ip},
+                      'vendor': vendor, 'ip_address': ip, 'state': state},
             'checks': []}
 
 
@@ -108,9 +108,17 @@ def test_csv_carries_the_actionable_rows():
     ])
     csv = fr.to_csv(rows)
     lines = csv.strip().splitlines()
-    assert lines[0].startswith('atm_id,status,needs_action')
+    assert lines[0].startswith('atm_id,status,state,needs_action')
     assert 'ATM-2' in lines[1] and 'No GRG telemetry' in lines[1]
-    assert 'no' in [l for l in lines if l.startswith('ATM-1')][0].split(',')[2]
+    assert 'no' in [l for l in lines if l.startswith('ATM-1')][0].split(',')[3]
+
+
+def test_operator_state_is_carried_beside_onboarding():
+    """State and onboarding answer different questions. The fleet table shows
+    both, and the CSV keeps the state so the rollout tracker can filter by it."""
+    row = fr.summarise([v('ATM-STATE', state='OUT_OF_CASH')])[0]
+    assert row['state'] == 'OUT_OF_CASH'
+    assert 'OUT_OF_CASH' in fr.to_csv([row])
 
 
 def test_next_action_per_status():

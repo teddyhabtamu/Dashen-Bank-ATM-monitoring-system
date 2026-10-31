@@ -87,6 +87,10 @@ def summarise(verify_results, plan_results=None):
             'blockers': blockers,
             'vendor': facts.get('vendor') or '',
             'ip': facts.get('ip_address') or '',
+            # The operator-facing state (the eight NetXMS states). Kept beside
+            # onboarding because they answer different questions: "is this ATM
+            # in service?" vs "is this ATM fully onboarded?".
+            'state': facts.get('state') or '',
             'items_reporting': facts.get('items_reporting'),
             'items_total': facts.get('items_total'),
             'changes': (plan or {}).get('changes') or [],
@@ -170,17 +174,17 @@ def to_csv(rows):
     import io
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(['atm_id', 'status', 'needs_action', 'vendor', 'ip_address',
-                'items_reporting', 'items_total', 'provisioning_action',
-                'planned_changes', 'blocker', 'onboarding_status',
-                'identity_status', 'identity_detail', 'ej_status', 'ej_detail',
-                'images_status', 'images_detail'])
+    w.writerow(['atm_id', 'status', 'state', 'needs_action', 'vendor',
+                'ip_address', 'items_reporting', 'items_total',
+                'provisioning_action', 'planned_changes', 'blocker',
+                'onboarding_status', 'identity_status', 'identity_detail',
+                'ej_status', 'ej_detail', 'images_status', 'images_detail'])
     for r in rows or []:
         identity_status, identity_detail = _stage_csv(r, 'identity')
         ej_status, ej_detail = _stage_csv(r, 'ej')
         images_status, images_detail = _stage_csv(r, 'images')
         w.writerow([
-            r.get('atm_id', ''), r.get('status', ''),
+            r.get('atm_id', ''), r.get('status', ''), r.get('state', ''),
             'yes' if r.get('needs_action') else 'no',
             r.get('vendor', ''), r.get('ip', ''),
             r.get('items_reporting'), r.get('items_total'),

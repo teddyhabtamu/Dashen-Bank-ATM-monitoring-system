@@ -534,9 +534,10 @@ emailed, or downloaded on demand. The fleet report is cached in
 - `ej_parse_runs`
 - approved `image_roots`
 
-It produces one row per ATM, worst first, with the five stages and one next
-action. The result is cached in `fleet_report_cache` and rendered by
-`/admin/onboard/fleet`. The CSV export is the rollout tracker.
+It produces one row per ATM, worst first, with the current operator state
+(the same eight NetXMS states and colours as the dashboard), the five stages
+and one next action. The result is cached in `fleet_report_cache` and rendered
+by `/admin/onboard/fleet`. The CSV export is the rollout tracker.
 
 ---
 
@@ -658,7 +659,7 @@ from verify import fleet
 out = fleet()
 print(out['counts'])
 for row in out['rows']:
-    print(row['atm_id'], row['onboarding_status'],
+    print(row['atm_id'], row.get('state'), row['onboarding_status'],
           {k: v['status'] for k, v in row['stages'].items()})
 PY
 
