@@ -31,6 +31,7 @@
 # quietly covers less than it appears to and nothing says so.
 
 app_users
+atm_agent_identity
 atm_cassette_levels
 atm_anomalies
 atm_current_state

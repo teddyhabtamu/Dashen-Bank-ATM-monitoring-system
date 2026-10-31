@@ -1,0 +1,40 @@
+{
+  "files": {
+    "atm-identity.ps1": {
+      "dest": "C:\\monitor\\atm-identity.ps1",
+      "kind": "identity",
+      "sha256": "1c95d45bc370fd727e5088e09ec67e7784bf49cf613432945394b58c8c5bb9d8",
+      "source": "scripts/atm-identity.ps1",
+      "version": "2026-10-30.1"
+    },
+    "atm-image-chunk.ps1": {
+      "dest": "C:\\monitor\\atm-image-chunk.ps1",
+      "kind": "image",
+      "sha256": "22955ee36d275efd4240653845ea7edba91e7e7eec533851afa22939fc45bc44",
+      "source": "scripts/atm-image-chunk.ps1",
+      "version": null
+    },
+    "atm-wmi-collector.ps1": {
+      "dest": "C:\\monitor\\atm-wmi-collector.ps1",
+      "kind": "collector",
+      "sha256": "d21dda6e0561d264b097b5d9ef41c1dac3c6d04ba647b2977baea22ebf54edff",
+      "source": "scripts/atm-wmi-collector.ps1",
+      "version": null
+    },
+    "grg-xfs-probe.ps1": {
+      "dest": "C:\\monitor\\grg-xfs-probe.ps1",
+      "kind": "xfs",
+      "sha256": "121f3c6ce11d8f4c8ca5d789610e1edd5607fa91fcad18fd7b16583425397e4e",
+      "source": "scripts/grg-xfs-probe.ps1",
+      "version": null
+    },
+    "ncr-xfs-probe.ps1": {
+      "dest": "C:\\monitor\\ncr-xfs-probe.ps1",
+      "kind": "xfs",
+      "sha256": "58132a4d6521eeb5bf46674bd6e5921238e5fe074c469e3e984b19e3ba5c851f",
+      "source": "scripts/ncr-xfs-probe.ps1",
+      "version": "2026-10-29.3"
+    }
+  },
+  "schema": 1
+}

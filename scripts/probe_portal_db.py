@@ -144,6 +144,7 @@ def main():
         ('atm_network_correlation', 'correlations'),
         ('atm_network_events', 'network events'),
         ('atm_cassette_levels', 'cassette levels'),
+        ('atm_agent_identity', 'reported box identity'),
         ('cash_replenishments', 'replenishments'),
         ('fault_type_map', 'vendor fault codes'),
         ('ticket_seen', 'ticket dedupe'),
