@@ -145,8 +145,14 @@ HOST_STATE_SELECT = {
 }
 
 
-def _host_states(z, hosts, chunk=None):
-    """Zabbix state for many hosts in a handful of calls, keyed by technical name.
+def _host_states(z, hosts, chunk=None, field="host"):
+    """Zabbix state for many hosts in a handful of calls, keyed by `field`.
+
+    `field` is the technical name by default (the one that equals atm_id). The
+    same batched read is also used with field="name" to recover a host that
+    still owns an ATM's visible name after the portal row was deleted: delete
+    only disables the Zabbix host, so a re-import gets a new atm_id and must
+    adopt the disabled host by visible name instead of creating a duplicate.
 
     _build_plans() asked host.get once per ATM. That was invisible at three
     ATMs and became the fleet report's bottleneck: the verify sweep had already
@@ -175,35 +181,37 @@ def _host_states(z, hosts, chunk=None):
         part = wanted[i:i + step]
         try:
             res = z.call("host.get", {
-                # `host` is the TECHNICAL name - the one that equals atm_id, and
-                # the one the filter matches on. It MUST be in output: the
-                # results are keyed by it below, and leaving it out made the key
-                # silently fall back to `name` (the VISIBLE name, e.g. "4 Kilo
-                # ATM"), so every lookup by atm_id missed and the plan reported
-                # "create host" for hosts that already existed. verify.py's
-                # snapshot documents the same trap from the other direction.
+                # `host` is the TECHNICAL name - the one that equals atm_id.
+                # It MUST be in output: the results are keyed by it, and
+                # leaving it out made the key silently fall back to `name`
+                # (the VISIBLE name, e.g. "4 Kilo ATM"), so every lookup by
+                # atm_id missed and the plan reported "create host" for hosts
+                # that already existed. verify.py's snapshot documents the same
+                # trap from the other direction.
                 "output": ["hostid", "host", "status", "name"],
-                "filter": {"host": part},
+                "filter": {field: part},
                 **HOST_STATE_SELECT})
         except Exception as e:
-            logger.warning("host.get batch failed (%d hosts): %s", len(part), e)
+            logger.warning("host.get batch failed (%d %ss): %s", len(part), field, e)
             ok = False
             continue
         if res is None:
-            logger.warning("host.get batch returned no result (%d hosts): %s",
-                           len(part), getattr(z, 'last_error', '') or 'no error text')
+            logger.warning("host.get batch returned no result (%d %ss): %s",
+                           len(part), field,
+                           getattr(z, 'last_error', '') or 'no error text')
             ok = False
             continue
         for h in res:
-            key = (h.get("host") or "").strip()
+            key = (h.get(field) or "").strip()
             if not key:
-                # Only reachable if `host` is dropped from output above. Say so
-                # loudly rather than keying by the visible name, which is what
-                # made every existing host look absent.
-                logger.warning('host.get returned no technical name for %r; '
+                logger.warning('host.get returned no %s for %r; '
                                'this host will look unprovisioned',
-                               h.get('name'))
-                key = (h.get("name") or "").strip()
+                               field, h.get('name'))
+                # A technical-name read can fall back to the visible name (the
+                # field is still in output), but a visible-name read has no
+                # second identity to fall back to.
+                if field == "host":
+                    key = (h.get("name") or "").strip()
             if key:
                 out[key] = h
     return out, ok
@@ -455,6 +463,35 @@ def _build_plans(atm_dicts, create_groups=True, max_batch=MAX_BATCH):
                 for r in rows]
             return summary, plans, _CLIENT[0]
 
+        # Delete only DISABLES a Zabbix host. If the portal row was deleted and
+        # re-imported, the new row has a new atm_id while the old disabled host
+        # still owns the same visible name. host.create would then fail with
+        # "Host with the same visible name ... already exists" forever. Find
+        # those orphaned disabled hosts by visible name and adopt them instead.
+        unresolved_names = []
+        for a in rows:
+            host = (a.get("atm_id") or "").strip()
+            if not host or host in known:
+                continue
+            if not (a.get("ip_address") or "").strip():
+                continue
+            name = (a.get("atm_name") or "").strip() or host
+            unresolved_names.append(name)
+        by_name = {}
+        if unresolved_names:
+            by_name, name_read_ok = _host_states(
+                z, sorted(set(unresolved_names)), field="name")
+            if not name_read_ok:
+                summary["failed"] = len(rows)
+                summary["details"] = [
+                    {"atm_id": r.get("atm_id"),
+                     "error": "Could not read host state by visible name from Zabbix"}
+                    for r in rows]
+                return summary, plans, _CLIENT[0]
+        known_hostids = {str(h.get("hostid")) for h in known.values()
+                         if h.get("hostid")}
+        adopted_hostids = set()
+
         for a in rows:
             host = (a.get("atm_id") or "").strip()
             if not host:
@@ -466,8 +503,30 @@ def _build_plans(atm_dicts, create_groups=True, max_batch=MAX_BATCH):
                               "changes": [], "error": "skipped: no IP address", "pending_groups": []})
                 continue
             cur = known.get(host)
+            adopted = False
+            if cur is None:
+                want_name = (a.get("atm_name") or "").strip() or host
+                cand = by_name.get(want_name)
+                hid = str((cand or {}).get("hostid") or "")
+                gids = {str(g.get("groupid")) for g in (cand or {}).get("groups") or []}
+                atms_group = groups.get("ATMs")
+                candidate_in_atms = (not atms_group) or (str(atms_group) in gids)
+                if (cand and str(cand.get("status")) == "1"
+                        and hid and hid not in known_hostids
+                        and hid not in adopted_hostids and candidate_in_atms):
+                    cur = cand
+                    adopted = True
+                    adopted_hostids.add(hid)
+                    logger.info(
+                        "adopting disabled Zabbix host %s (%r) for %s after re-import",
+                        cand.get("host"), cand.get("name"), host)
             if cur:
                 upd, changed = _plan_update(a, cur, tids, groups, create_groups)
+                if adopted:
+                    if upd is None:
+                        upd = {"hostid": cur["hostid"]}
+                    upd["host"] = host
+                    changed = ["technical name"] + changed
                 if changed:
                     plans.append({"atm_id": host, "action": "update", "params": upd,
                                   "changes": changed, "error": None})

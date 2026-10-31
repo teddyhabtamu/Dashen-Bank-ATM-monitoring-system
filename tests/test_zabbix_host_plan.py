@@ -82,15 +82,24 @@ class FakeZabbix:
             self.groups[params['name']] = str(self.next_group_id)
             return {'groupids': [str(self.next_group_id)]}
         if method == 'host.get':
-            # Zabbix accepts an ARRAY in filter.host. The fake used to read
+            # Zabbix accepts an ARRAY in the filter. The fake used to read
             # only [0], so a batched caller silently saw one host and looked
             # correct - a fake that cannot express the batched contract would
             # make the batching test above meaningless.
-            wanted = params['filter']['host']
-            if isinstance(wanted, str):
-                wanted = [wanted]
-            return [_project(self.hosts[h], params) for h in wanted
-                    if h in self.hosts]
+            filt = params.get('filter') or {}
+            if 'host' in filt:
+                wanted = filt['host']
+                if isinstance(wanted, str):
+                    wanted = [wanted]
+                return [_project(self.hosts[h], params) for h in wanted
+                        if h in self.hosts]
+            if 'name' in filt:
+                wanted = filt['name']
+                if isinstance(wanted, str):
+                    wanted = [wanted]
+                return [_project(h, params) for h in self.hosts.values()
+                        if h.get('name') in wanted]
+            return []
         if method in ('host.create', 'host.update'):
             if method == 'host.create':
                 self.hosts[params['host']] = {'hostid': '500', 'host': params['host'], 'status': '0',
@@ -101,11 +110,21 @@ class FakeZabbix:
                 # Zabbix replaces the given sets wholesale - templates,
                 # interfaces, groups - it does not merge them. Emulating that
                 # is what catches a payload that would unlink a template.
-                cur = self.hosts.get(next(iter(self.hosts)), {})
+                hid = str(params.get('hostid'))
+                old_key = next((k for k, v in self.hosts.items()
+                                if str(v.get('hostid')) == hid), None)
+                cur = dict(self.hosts.get(old_key, {}))
                 for key in ('templates', 'interfaces', 'groups'):
                     if key in params:
                         cur['parentTemplates' if key == 'templates' else key] = params[key]
-                self.hosts[params.get('host') or next(iter(self.hosts))] = cur
+                for key in ('status', 'name', 'host'):
+                    if key in params:
+                        cur[key] = str(params[key]) if key == 'status' else params[key]
+                new_key = params.get('host') or old_key
+                if old_key and new_key != old_key:
+                    del self.hosts[old_key]
+                if new_key:
+                    self.hosts[new_key] = cur
             return {'hostids': ['1']}
         return None
 
@@ -234,6 +253,53 @@ def test_disabled_host_is_re_enabled(monkeypatch):
     assert plans[0]['changes'] == ['re-enabled']
     assert plans[0]['params']['status'] == 0
     assert summary['updated'] == 1  # planned; sync_hosts reports it as reenabled
+
+
+def test_disabled_host_is_adopted_by_visible_name_after_reimport(monkeypatch):
+    """Delete disables the old host and the re-import gets a new atm_id.
+
+    The old host keeps the visible name, so host.create fails with "Host with
+    the same visible name already exists". Matching by technical name can
+    never find it; adopt the disabled host and move it to the new atm_id.
+    """
+    old = existing(host='TST-0001', status='1')   # same name, old technical id
+    install(monkeypatch, FakeZabbix(hosts={'TST-0001': old}))
+
+    summary, plans = zs.plan_hosts([row(atm_id='ATM-0001')])
+
+    p = plans[0]
+    assert p['action'] == 'update'
+    assert p['params']['hostid'] == '77'
+    assert p['params']['host'] == 'ATM-0001'
+    assert p['params']['status'] == 0
+    assert 'technical name' in p['changes']
+    assert summary['updated'] == 1
+
+
+def test_adoption_moves_the_host_and_is_idempotent(monkeypatch):
+    old = existing(host='TST-0001', status='1')
+    fake = install(monkeypatch, FakeZabbix(hosts={'TST-0001': old}))
+
+    out = zs.sync_hosts([row(atm_id='ATM-0001')])
+
+    assert out['reenabled'] == 1 and out['failed'] == 0
+    assert 'ATM-0001' in fake.hosts
+    assert 'TST-0001' not in fake.hosts
+    assert fake.hosts['ATM-0001']['status'] == '0'
+    assert zs.sync_hosts([row(atm_id='ATM-0001')])['skipped'] == 1
+
+
+def test_active_host_is_not_stolen_by_visible_name(monkeypatch):
+    """Only a disabled host (the portal-delete path) may be adopted. An active
+    host with the same visible name stays untouched; its real conflict must be
+    resolved by a human instead of silently renaming another ATM's host."""
+    old = existing(host='TST-0001', status='0')
+    install(monkeypatch, FakeZabbix(hosts={'TST-0001': old}))
+
+    _, plans = zs.plan_hosts([row(atm_id='ATM-0001')])
+
+    assert plans[0]['action'] == 'create'
+    assert plans[0]['params']['host'] == 'ATM-0001'
 
 
 def test_changed_ip_updates_the_interface_only(monkeypatch):
@@ -453,12 +519,16 @@ def test_planning_reads_hosts_in_batches_not_once_per_atm(monkeypatch):
     zs.plan_hosts(atms, max_batch=len(atms))
 
     gets = [c for c in fake.calls if c[0] == 'host.get']
-    assert len(gets) <= 4, (
+    # Two batched reads: technical names and visible names. The exact chunking
+    # is HOST_STATE_CHUNK, so allow an extra call per chunk for the name read.
+    chunks = (len(atms) + zs.HOST_STATE_CHUNK - 1) // zs.HOST_STATE_CHUNK
+    assert len(gets) <= 2 * chunks, (
         'host.get must be batched, not one call per ATM: %d calls for %d ATMs'
         % (len(gets), len(atms)))
     # And the batch must actually carry the ATMs, or "fewer calls" just means
     # "fewer hosts looked at" - the failure mode a naive count would hide.
-    asked = sum(len(c[1]['filter']['host']) for c in gets)
+    tech_gets = [c for c in gets if 'host' in c[1]['filter']]
+    asked = sum(len(c[1]['filter']['host']) for c in tech_gets)
     assert asked == len(atms), 'every ATM must appear in a batch: %d of %d' % (asked, len(atms))
 
 

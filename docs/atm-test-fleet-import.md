@@ -116,6 +116,9 @@ PY
 
 All test rows share the `TST-` prefix. In the portal, search `/atms?search=TST-`,
 select the rows and use **Delete Selected** page by page. The bulk delete
-disables the matching Zabbix hosts and removes the portal rows.
+disables the matching Zabbix hosts and removes the portal rows. A later
+TID-only re-import re-adopts that disabled host by its visible name and moves
+it to the new ATM ID, so re-importing after a cleanup does not create a second
+Zabbix host with the same name.
 
 Do **not** delete by vendor or district: those groups also contain real ATMs.
