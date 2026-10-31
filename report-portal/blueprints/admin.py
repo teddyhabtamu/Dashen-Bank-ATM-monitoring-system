@@ -706,9 +706,13 @@ def atm_list():
         base_params = []
         if search:
             like = f'%{search}%'
-            base_clauses.append("(l.atm_id ILIKE %s OR l.branch ILIKE %s "
-                                "OR l.district ILIKE %s OR l.city ILIKE %s OR l.region ILIKE %s)")
-            base_params.extend([like, like, like, like, like])
+            # The ATM team knows the terminal id (ISO 8583 field 41), not the
+            # portal's atm_id. Search both, plus the human name and location.
+            base_clauses.append("(l.atm_id ILIKE %s OR l.atm_name ILIKE %s "
+                                "OR l.terminal_id ILIKE %s OR l.branch ILIKE %s "
+                                "OR l.district ILIKE %s OR l.city ILIKE %s "
+                                "OR l.region ILIKE %s)")
+            base_params.extend([like, like, like, like, like, like, like])
         if vendor:
             base_clauses.append("l.vendor = %s")
             base_params.append(vendor)

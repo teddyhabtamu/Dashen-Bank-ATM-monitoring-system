@@ -61,6 +61,13 @@ portal pages, maps, reports). Preferred method — the portal form:
 - [ ] Open the portal → **ATM Registration → Add New ATM**, fill every
       field from the Before-You-Start list, **Vendor** spelled exactly
       `NCR` or `GRG`, status **active**, Save.
+
+      > **ATM ID vs Terminal ID.** The ATM team usually knows the terminal ID
+      > (TID), not the portal's `atm_id`. Search **ATMs** by TID first: an
+      > existing row gives you its ATM ID. For a new ATM, keep the TID from the
+      > ATM team and assign the next monitoring `atm_id` (for example
+      > `ATM-0107`). They are different keys; see
+      > `docs/system-workflow.md` §4.1.
 - [ ] If the form is unreachable, the same row can be added with SQL
       (ask the team — never invent column names; the table has grown).
 - [ ] Record the row: `SELECT atm_id, vendor, ip_address, district FROM

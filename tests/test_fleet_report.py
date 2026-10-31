@@ -14,11 +14,12 @@ import fleet_report as fr  # noqa: E402
 
 
 def v(atm_id, verdict='reporting', blockers=(), reporting=10, total=90,
-      vendor='NCR', ip='10.0.0.1', state='IN_SERVICE'):
+      vendor='NCR', ip='10.0.0.1', state='IN_SERVICE', terminal_id='TID006'):
     return {'atm_id': atm_id, 'verdict': verdict, 'ok': verdict == 'reporting',
             'blockers': list(blockers),
             'facts': {'items_reporting': reporting, 'items_total': total,
-                      'vendor': vendor, 'ip_address': ip, 'state': state},
+                      'vendor': vendor, 'ip_address': ip, 'state': state,
+                      'terminal_id': terminal_id},
             'checks': []}
 
 
@@ -108,9 +109,19 @@ def test_csv_carries_the_actionable_rows():
     ])
     csv = fr.to_csv(rows)
     lines = csv.strip().splitlines()
-    assert lines[0].startswith('atm_id,status,state,needs_action')
+    assert lines[0].startswith('atm_id,terminal_id,status,state,needs_action')
     assert 'ATM-2' in lines[1] and 'No GRG telemetry' in lines[1]
-    assert 'no' in [l for l in lines if l.startswith('ATM-1')][0].split(',')[3]
+    assert 'no' in [l for l in lines if l.startswith('ATM-1')][0].split(',')[4]
+
+
+def test_terminal_id_is_carried_for_the_atm_team():
+    """The ATM team knows the switch terminal id, not the portal's atm_id.
+    Keep both on the row and in the CSV so a TID can be resolved without a
+    second system."""
+    row = fr.summarise([v('ATM-TID', terminal_id='TID006')])[0]
+    assert row['terminal_id'] == 'TID006'
+    csv = fr.to_csv([row])
+    assert 'ATM-TID,TID006' in csv
 
 
 def test_operator_state_is_carried_beside_onboarding():

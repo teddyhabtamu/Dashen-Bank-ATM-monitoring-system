@@ -176,7 +176,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
     <h2>Registered ATMs ({{ atm_count }})</h2>
     <div style="display:flex;gap:8px;align-items:center">
       <form method="get" action="/atms" id="searchForm" style="display:flex;gap:6px;align-items:center" onsubmit="event.preventDefault(); applyFilter();">
-        <input type="text" name="search" id="atmSearch" aria-label="Search ATMs" placeholder="Search ATM ID, branch, city…" value="{{ search }}" maxlength="100"
+        <input type="text" name="search" id="atmSearch" aria-label="Search ATMs" placeholder="Search ATM ID, terminal ID, branch…" value="{{ search }}" maxlength="100"
                style="padding:7px 12px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;width:220px;transition:border-color .2s"
                onfocus="this.style.borderColor='#012169'" onblur="this.style.borderColor='#E4E9F1'">
         <button type="submit" class="btn btn-outline" style="padding:7px 12px" onclick="event.preventDefault(); applyFilter();"><i data-lucide="search" style="width:14px;height:14px"></i></button>

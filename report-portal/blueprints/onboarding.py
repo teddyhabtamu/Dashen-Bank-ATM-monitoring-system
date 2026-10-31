@@ -403,7 +403,9 @@ def onboard_fleet():
     q = (request.args.get('q') or '').strip().lower()
     if q:
         rows = [r for r in rows
-                if q in str(r.get('atm_id', '')).lower() or q in str(r.get('ip', '')).lower()
+                if q in str(r.get('atm_id', '')).lower()
+                or q in str(r.get('terminal_id', '')).lower()
+                or q in str(r.get('ip', '')).lower()
                 or q in str(r.get('vendor', '')).lower()]
     # computing means "nothing to show yet, wait for the first sweep". A
     # recompute over an existing report is NOT that: the template already has a

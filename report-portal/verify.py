@@ -656,6 +656,7 @@ def _result(atm_id, verdict, ok, checks, blockers, z, db, window_minutes):
                   'newest_data_age_seconds': z['newest_data_age_seconds'],
                   'interfaces': z['interfaces'],
                   'vendor': db['row'].get('vendor'), 'ip_address': db['row'].get('ip_address'),
+                  'terminal_id': db['row'].get('terminal_id'),
                   'state': db.get('state'),
                   # Onboarding evidence: the fleet report turns these into the
                   # identity / EJ / image stages. Missing keys mean the report

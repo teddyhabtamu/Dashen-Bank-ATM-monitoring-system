@@ -144,8 +144,9 @@ td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:
     <a class="btn {{ 'btn-primary' if filter_mode == 'images' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=images">Images</a>
     <form method="get" action="/admin/onboard/fleet" style="display:flex;gap:8px;align-items:center">
       <input type="hidden" name="filter" value="{{ filter_mode }}">
-      <input type="text" name="q" id="fleetSearch" aria-label="Search fleet" value="{{ q }}" placeholder="ATM ID, vendor or IP"
-             style="padding:7px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;width:220px">
+      <input type="text" name="q" id="fleetSearch" aria-label="Search fleet" value="{{ q }}"
+             placeholder="ATM ID, terminal ID, vendor or IP"
+             style="padding:7px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;width:240px">
       <button type="submit" class="btn btn-outline">Filter</button>
     </form>
     <span class="sp">Generated {{ cached.generated_label if cached else '' }} · cached {{ ttl }} min</span>
@@ -163,7 +164,7 @@ td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:
       {% set s = r.stages or {} %}
       <tr>
         <td class="atm"><a href="/atms/{{ r.atm_id }}">{{ r.atm_id }}</a>
-          <span class="sub">{{ r.vendor or '—' }} · {{ r.ip or 'no IP' }}</span></td>
+          <span class="sub">{{ r.vendor or '—' }} · {{ r.ip or 'no IP' }} · TID {{ r.terminal_id or '—' }}</span></td>
         <td class="status">
           {% if r.state %}<span class="state-pill" style="background:{{ r.state | state_colour }};color:{{ r.state | state_ink }}">{{ r.state | state_label }}</span>
           {% else %}<span class="sub">—</span>{% endif %}

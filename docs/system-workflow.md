@@ -161,6 +161,58 @@ flowchart LR
 | Tickets | Zabbix triggers | GLPI webhook | GLPI | Portal incidents, GLPI |
 | Audit | Portal actions | Direct write | `audit_log` | Audit page, investigations |
 
+### 4.1 Identity keys — ATM ID vs Terminal ID
+
+These are not interchangeable. The monitoring platform owns `atm_id`; the
+ATM/switch team owns `terminal_id`.
+
+| Key | Meaning | Who uses it | Where it lives |
+|---|---|---|---|
+| `atm_id` | Stable monitoring key and Zabbix technical host name. Examples: `ATM-0107`, `ATM-TEST-NCR`. | Monitoring team, portal, Zabbix | `atm_locations.atm_id`, Zabbix `host`, portal URLs, `atm_current_state`, image-bridge allow-list |
+| `terminal_id` | The terminal identity the switch uses (ISO 8583 field 41). Printed on EJ receipts and known by ATM operations/vendors. | ATM team, switch team, EJ reconciliation | `atm_locations.terminal_id`, `atm_transactions.terminal_id`, `atm_agent_identity.terminal_id` |
+| `ej_hostname` | The `<HOST>` tag in `<date>_<HOST>_EJDATA.log`. | EJ puller, identity probe | `atm_locations.ej_hostname`; seeded only from `ej-filename` when empty |
+| `atm_name` | Human-readable label and Zabbix visible name. Not a key. | Operations, Zabbix UI | `atm_locations.atm_name` |
+| `ip_address` | Transport address. Can change; never an identity. | Network team, Zabbix | `atm_locations.ip_address` |
+
+Rules:
+
+- **`atm_id` is stable.** Renaming it is a migration: the Zabbix technical
+  host name, portal URLs, state history, image-bridge allow-list and EJ
+  mapping all key off it.
+- **`terminal_id` is the ATM team's key.** `atm.identity` can report it from
+  the newest EJ header (`ej-header`, high confidence) or vendor configuration
+  (`vendor-config`), but it is evidence: a mismatch is shown for review and
+  never auto-overwrites the registry.
+- **`ej_hostname` is not the terminal ID.** NCR journals use the filename host
+  tag; GRG may use the computer name. The puller needs it; the switch does not.
+- **A new ATM needs both.** Get the TID from the ATM team, then assign the
+  monitoring `atm_id` (the bulk importer can generate `ATM-XXX`).
+
+**TID → ATM ID lookup**
+
+1. Portal → **ATMs** → search box: type the TID. The list searches `atm_id`,
+   `atm_name`, `terminal_id`, branch, district, city and region.
+2. **Fleet health** → search box: type the TID; the row shows `TID …` under
+   the ATM ID.
+3. **Agent setup → Reported identity** shows the TID the box reports, its
+   source (`ej-header`, `vendor-config`, `registry-file`, `manual`) and any
+   conflict.
+4. **EJ Journal / EJ Search** show the Terminal ID on each result; use the ATM
+   ID for the ATM filter.
+5. Direct DB lookup:
+
+   ```sql
+   SELECT atm_id, atm_name, terminal_id, ej_hostname
+     FROM atm_locations
+    WHERE terminal_id = 'TID006';
+   ```
+
+**How identity learns the TID.** `atm.identity` reads the newest local EJ
+receipt/header first (`terminal_source: ej-header`), then vendor
+configuration. `identity_sync` stores it in `atm_agent_identity`; `conflicts()`
+compares it with the registry. A high/medium mismatch (TID or vendor) is a
+review item. The registry is never changed automatically.
+
 ---
 
 ## 5. End-to-end ATM onboarding
