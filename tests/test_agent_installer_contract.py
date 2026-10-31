@@ -85,6 +85,22 @@ def test_the_service_restart_waits_for_a_start_pending_msi_service():
     assert restart.index("StartPending") < restart.index('Stop-Service')
 
 
+def test_service_start_is_retried_for_the_known_agent2_startup_bug():
+    """ZBX-25530: Agent 2 6.4.21 randomly exits during startup with
+    "cannot load os dependent items ... buffer". 6.4 is EOL and has no fix,
+    so the installer retries the SCM start instead of failing the whole
+    install on the first crash. A persistent failure still names the status."""
+    module = (INSTALLER / 'AtmInstall.psm1').read_text()
+    assert 'function Start-AgentServiceWithRetry' in module
+    assert 'ZBX-25530' in module
+    assert 'Start-AgentServiceWithRetry -Name $script:AgentServiceName' in module
+    assert 'Failed to start service' in module
+    retry = module[module.index('function Start-AgentServiceWithRetry'):]
+    retry = retry[:retry.index('function Set-AgentService')]
+    assert '$Attempts = 3' in retry
+    assert 'Start-Sleep -Seconds 2' in retry
+
+
 def test_the_payload_exit_codes_are_documented_and_distinct():
     module = (INSTALLER / 'AtmInstall.psm1').read_text()
     for name in ('InvalidProfile', 'NotReady', 'ProfileHashMismatch',

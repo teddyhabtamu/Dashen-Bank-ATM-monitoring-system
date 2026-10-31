@@ -41,9 +41,13 @@ returned to `retry` after 15 minutes, so a killed worker cannot park an ATM.
 `blocked` is deliberately not retried. Retrying an ATM with no IP forever
 would hide the actual fix, which is a registry edit.
 
-### 2. Identity rides a passive Zabbix item
+### 2. Identity rides a passive Zabbix item on one shared template
 
-A new item on the NCR WMI template and the GRG XFS template:
+A new item on the shared **Dashen Bank ATM Agent** template. It is not on the
+vendor templates: the first implementation put it on both, and Zabbix rejected
+the GRG import as soon as the UAT host linked both ("Cannot inherit item with
+key atm.identity ... already inherited"). One template owns the common agent
+contract; vendor templates own vendor telemetry.
 
 ```text
 key:        atm.identity
@@ -96,8 +100,11 @@ human approval. Those are control boundaries, not missing automation.
   is one `host.get` + one `item.get` per 250 ATMs, not per ATM.
 - `atm_provision_state` is in `config/portal_tables.txt`, the backup/split
   list, and the Stage-3 probe.
-- A one-time template re-import is required after upgrade so the item exists
-  on existing hosts.
+- A one-time migration is required after upgrade:
+  `python3 scripts/import_agent_template_api.py --link-all`. It creates the
+  shared template, removes the legacy item from the WMI and GRG XFS templates,
+  and links the shared template to ATM-group hosts that already have an agent
+  interface. `zabbix_sync` repairs hosts that do not.
 
 ## Next
 

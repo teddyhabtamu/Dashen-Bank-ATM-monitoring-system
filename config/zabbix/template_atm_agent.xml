@@ -1,0 +1,35 @@
+<?xml version="1.0" ?>
+<zabbix_export>
+  <version>6.4</version>
+  <template_groups>
+    <template_group>
+      <uuid>94c4cebd-d633-5308-9868-4f65fe2757b8</uuid>
+      <name>Templates</name>
+    </template_group>
+  </template_groups>
+  <templates>
+    <template>
+      <uuid>048a0291-cf8c-5d04-aa1b-42326eac0182</uuid>
+      <template>Dashen Bank ATM Agent</template>
+      <name>Dashen Bank ATM Agent</name>
+      <groups>
+        <group>
+          <name>Templates</name>
+        </group>
+      </groups>
+      <items>
+        <item>
+          <uuid>a93ebcfd-bda7-5f11-b091-ed42c553c873</uuid>
+          <name>ATM identity — JSON evidence</name>
+          <type>ZABBIX_AGENT</type>
+          <key>atm.identity</key>
+          <delay>1h</delay>
+          <history>1d</history>
+          <trends>0</trends>
+          <value_type>TEXT</value_type>
+          <description>Read-only JSON from C:\monitor\atm-identity.ps1. The portal ingests it automatically; it is evidence, never authority.</description>
+        </item>
+      </items>
+    </template>
+  </templates>
+</zabbix_export>

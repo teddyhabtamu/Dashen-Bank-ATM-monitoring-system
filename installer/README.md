@@ -191,3 +191,9 @@ back.
 - Only x64 Windows is built. A 32-bit ATM needs a separate i386 artifact.
 - The installer does not open the network firewall, register the host, or
   uninstall Agent 1. Those are deliberate separate actions.
+- Zabbix Agent 2 6.4.21 has a known random startup crash on Windows
+  ([ZBX-25530](https://support.zabbix.com/browse/ZBX-25530)): the agent exits
+  with `cannot load os dependent items ... buffer`. The installer retries the
+  SCM start up to three times, which usually clears it. The upstream fix is in
+  6.0.39 / 7.0.10+; 6.4 is end-of-life and has no fix. If all three attempts
+  fail, the agent log is the evidence — this is not a profile or probe error.

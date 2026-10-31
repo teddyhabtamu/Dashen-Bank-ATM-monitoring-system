@@ -273,38 +273,21 @@ def link_template_to_host(tid, target_name, host_ip, auth):
         print(f"Portal host {h_display} ({hid}) is already linked to {TEMPLATE_NAME}")
 
 
-def ensure_identity_item(tid, auth):
-    """Create/update the passive `atm.identity` item on the GRG XFS template.
+def remove_legacy_identity_item(tid, auth):
+    """Remove `atm.identity` from this vendor template.
 
-    GRG hosts that link this template already need an agent interface for the
-    XFS items; identity uses the same path. Hosts that are SNMP-only will not
-    have this item, and the portal reports it as missing rather than inventing
-    an identity.
+    It now belongs to the shared "Dashen Bank ATM Agent" template. Keeping a
+    copy here makes a host that links both this template and the NCR WMI
+    template inherit the same key twice, which Zabbix rejects.
     """
-    key = 'atm.identity'
-    payload = {
-        'name': 'ATM identity — JSON evidence',
-        'key_': key,
-        'hostid': tid,
-        'type': 0,           # ZABBIX_AGENT
-        'value_type': 4,     # TEXT
-        'delay': '1h',
-        'history': '1d',
-        'trends': '0',
-        'description': ('Read-only JSON from C:\\monitor\\atm-identity.ps1. '
-                        'The portal ingests it automatically; it is evidence, '
-                        'never authority.'),
-    }
     found = call('item.get', {'templateids': [tid],
-                              'filter': {'key_': [key]},
+                              'filter': {'key_': ['atm.identity']},
                               'output': ['itemid']}, auth)
-    if found:
-        upd = {k: v for k, v in payload.items() if k != 'hostid'}
-        call('item.update', {'itemid': found[0]['itemid'], **upd}, auth)
-        print(f'Identity item present ({found[0]["itemid"]})')
-    else:
-        call('item.create', payload, auth)
-        print('Identity item created')
+    for item in found:
+        call('item.delete', [item['itemid']], auth)
+        print(f'Removed legacy identity item ({item["itemid"]})')
+    if not found:
+        print('No legacy identity item on this template')
 
 
 def main():
@@ -388,7 +371,7 @@ def main():
 
     print(f'Items synced: {created} created, {updated} updated.')
     ensure_triggers(tid, auth)
-    ensure_identity_item(tid, auth)
+    remove_legacy_identity_item(tid, auth)
 
     if not args.no_link:
         link_template_to_host(tid, args.host, args.ip, auth)

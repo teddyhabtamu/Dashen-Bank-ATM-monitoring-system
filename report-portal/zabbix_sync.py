@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 TEMPLATE_NCR_NAME = "Dashen Bank ATM Hardware"
 TEMPLATE_GRG_NAME = "Dashen Bank ATM Hardware - GRG"
 TEMPLATE_GRG_XFS_NAME = "Dashen Bank ATM Hardware - GRG XFS"
+# Common agent contract (identity today). One owner for `atm.identity`: putting
+# it on both vendor templates made a host that links both inherit the key
+# twice, which Zabbix rejects at import time.
+TEMPLATE_AGENT_NAME = "Dashen Bank ATM Agent"
 # NCR hardware facts come from WMI through the Zabbix agent, not from SNMP:
 # the NCR SNMP OIDs are unmapped simulator-era roots (see admin.build_hardware).
 # So an NCR host needs this template AND an agent interface, or its parts items
@@ -97,7 +101,8 @@ class _Client:
 
 def _template_ids(z):
     out = {}
-    for name in (TEMPLATE_NCR_NAME, TEMPLATE_GRG_XFS_NAME, TEMPLATE_GRG_NAME, TEMPLATE_WMI_NAME):
+    for name in (TEMPLATE_NCR_NAME, TEMPLATE_GRG_XFS_NAME, TEMPLATE_GRG_NAME,
+                 TEMPLATE_WMI_NAME, TEMPLATE_AGENT_NAME):
         res = z.call("template.get", {"output": ["templateid"], "filter": {"name": [name]}})
         out[name] = res[0]["templateid"] if res else None
     return out
@@ -218,8 +223,13 @@ def _snmp_interface(ip, community, version):
 
 
 def _templates_for(vendor, tids):
-    """Template ids an ATM of this vendor must be linked to. NCR carries the
-    WMI Parts template too; GRG prefers XFS and falls back to SNMP."""
+    """Template ids an ATM of this vendor must be linked to.
+
+    NCR carries the WMI Parts template too; GRG prefers XFS and falls back to
+    SNMP. Both vendors also carry the shared Agent template when it exists:
+    that is the single owner of `atm.identity`, so no host can inherit the
+    same key from two vendor templates.
+    """
     if vendor == "NCR":
         names = [TEMPLATE_NCR_NAME]
     elif vendor == "GRG":
@@ -230,6 +240,8 @@ def _templates_for(vendor, tids):
     ids = [tids.get(n) for n in names]
     if vendor == "NCR" and tids.get(TEMPLATE_WMI_NAME):
         ids.append(tids.get(TEMPLATE_WMI_NAME))
+    if vendor in ("NCR", "GRG") and tids.get(TEMPLATE_AGENT_NAME):
+        ids.append(tids.get(TEMPLATE_AGENT_NAME))
     return [i for i in ids if i]
 
 
@@ -255,9 +267,11 @@ def _plan_update(a, cur, tids, groups, create_groups):
     ifaces = cur.get("interfaces") or []
     snmp = next((i for i in ifaces if str(i.get("type")) == "2"), None)
     has_agent = any(str(i.get("type")) == "1" for i in ifaces)
-    if vendor == "NCR" and not has_agent:
+    if vendor in ("NCR", "GRG") and not has_agent:
         # Additive: keep every existing interface exactly as it is and append
         # the agent row, so we never rewrite a field a human tuned by hand.
+        # GRG needs it too when the XFS/Agent templates are linked; without it
+        # every agent item (XFS and identity) stays unsupported.
         upd["interfaces"] = [{"interfaceid": i["interfaceid"], "type": i.get("type", "2"),
                               "main": i.get("main", "1"), "useip": i.get("useip", "1"),
                               "ip": i.get("ip"), "dns": i.get("dns", ""),
@@ -367,10 +381,12 @@ def _create_params(a, tids, groups, create_groups=True):
                    [groups.get("ATMs"),
                     groups.get("ATM-NCR") if vendor == "NCR" else groups.get("ATM-GRG"),
                     dgroup] if g],
-        # NCR carries an SNMP interface AND an agent interface: the WMI parts
-        # items ride the agent (10050), the legacy SNMP items ride 161.
+        # Every managed ATM carries SNMP and an agent interface: vendor
+        # telemetry rides SNMP, while WMI/XFS/identity ride the agent
+        # (10050). GRG used to be SNMP-only, but the XFS template is
+        # agent-based and the standard installer deploys Agent 2 there too.
         "interfaces": ([_snmp_interface(ip, community, version)]
-                       + ([_agent_interface(ip)] if vendor == "NCR" else [])),
+                       + [_agent_interface(ip)]),
         "macros": [{"macro": "{$ATM_VENDOR}", "value": vendor}],
         "status": 0,
     }

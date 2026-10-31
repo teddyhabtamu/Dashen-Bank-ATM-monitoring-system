@@ -1115,6 +1115,55 @@ function Stop-LegacyAgent {
     }
 }
 
+function Start-AgentServiceWithRetry {
+    param(
+        [string]$Name,
+        [int]$Attempts = 3,
+        [string]$LogPath
+    )
+    # Zabbix Agent 2 6.4.21 has a known random startup failure on Windows
+    # (ZBX-25530: "cannot load os dependent items ... buffer"), fixed only in
+    # 6.0.39/7.0.10+. 6.4 is EOL, so a bounded retry is the safe mitigation:
+    # the agent usually starts on the next SCM attempt. A real config or
+    # permission failure still fails all attempts and is reported with the
+    # service status, not hidden.
+    $last = $null
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        $svc = Get-ServiceSafe $Name
+        if ($svc -and $svc.Status -eq 'Running') {
+            if ($LogPath) { Write-Log ("service already Running (attempt $attempt/$Attempts)") -LogPath $LogPath }
+            return
+        }
+        if ($svc -and $svc.Status -eq 'StartPending') {
+            try {
+                $svc.WaitForStatus('Running', [TimeSpan]::FromSeconds(15))
+                if ($LogPath) { Write-Log ("service reached Running from StartPending (attempt $attempt/$Attempts)") -LogPath $LogPath }
+                return
+            } catch {
+                $last = $_
+            }
+        }
+        try {
+            Start-Service -Name $Name -ErrorAction Stop
+            $svc = Get-Service -Name $Name
+            $svc.WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
+            if ($LogPath) { Write-Log ("service start attempt $attempt/$Attempts: Running") -LogPath $LogPath }
+            return
+        } catch {
+            $last = $_
+            $svc = Get-ServiceSafe $Name
+            $status = if ($svc) { [string]$svc.Status } else { 'missing' }
+            if ($LogPath) {
+                Write-Log ("service start attempt $attempt/$Attempts failed (status $status): " + $_.Exception.Message) 'WARN' $LogPath
+            }
+            if ($attempt -lt $Attempts) { Start-Sleep -Seconds 2 }
+        }
+    }
+    $detail = if ($last) { $last.Exception.Message } else { 'unknown error' }
+    throw ("Failed to start service '$Name' after $Attempts attempts: " + $detail)
+}
+
+
 function Set-AgentService {
     param([string]$Action, [string]$LogPath)
     if ($Action -eq 'unchanged' -or $Action -eq 'skip') { return }
@@ -1154,13 +1203,13 @@ function Set-AgentService {
             }
             $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
         }
-        Start-Service -Name $script:AgentServiceName -ErrorAction Stop
+        Start-AgentServiceWithRetry -Name $script:AgentServiceName -LogPath $LogPath
     } elseif ($Action -eq 'start') {
         if ($service.Status -eq 'StopPending') {
             $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
         }
         if ($service.Status -eq 'Stopped') {
-            Start-Service -Name $script:AgentServiceName -ErrorAction Stop
+            Start-AgentServiceWithRetry -Name $script:AgentServiceName -LogPath $LogPath
         }
     }
     $service = Get-Service -Name $script:AgentServiceName

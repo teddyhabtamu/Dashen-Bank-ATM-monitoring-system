@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 import zabbix_sync as zs  # noqa: E402
 
-TCR, TGRG, TWMI = '101', '102', '103'
+TCR, TGRG, TWMI, TAGENT = '101', '102', '103', '104'
 G_ALL, G_NCR, G_GRG, G_ADAMA = '11', '12', '13', '14'
 
 
@@ -54,7 +54,7 @@ class FakeZabbix:
         self.groups = groups if groups is not None else {'ATMs': G_ALL, 'ATM-NCR': G_NCR, 'ATM-GRG': G_GRG}
         self.templates = templates if templates is not None else {
             zs.TEMPLATE_NCR_NAME: TCR, zs.TEMPLATE_GRG_NAME: TGRG,
-            zs.TEMPLATE_WMI_NAME: TWMI}
+            zs.TEMPLATE_WMI_NAME: TWMI, zs.TEMPLATE_AGENT_NAME: TAGENT}
         self.calls = []
         self.next_group_id = 900
         self.login_ok = True
@@ -140,9 +140,11 @@ def test_new_host_gets_the_exact_legacy_payload(monkeypatch):
     params = p['params']
     assert params['host'] == 'ATM-0001'
     assert params['name'] == '4 Kilo ATM'
-    # NCR carries the WMI Parts template alongside SNMP, plus an agent
-    # interface — without them the parts items never collect.
-    assert params['templates'] == [{'templateid': TCR}, {'templateid': TWMI}]
+    # NCR carries the WMI Parts template and the shared Agent template
+    # alongside SNMP, plus an agent interface — without them the parts and
+    # identity items never collect.
+    assert params['templates'] == [{'templateid': TCR}, {'templateid': TWMI},
+                                   {'templateid': TAGENT}]
     assert params['interfaces'] == [
         {'type': 2, 'main': 1, 'useip': 1, 'ip': '10.41.30.5',
          'dns': '', 'port': '161',
@@ -165,13 +167,14 @@ def test_apply_creates_the_missing_district_group(monkeypatch):
     assert any(g['groupid'] == fake.groups['ATM-ADAMA'] for g in host_create['groups'])
 
 
-def test_grg_host_uses_grg_template_and_group(monkeypatch):
+def test_grg_host_uses_grg_and_agent_templates(monkeypatch):
     install(monkeypatch, FakeZabbix(groups={'ATMs': G_ALL, 'ATM-GRG': G_GRG}))
     _, plans = zs.plan_hosts([row(vendor='GRG', model='AD2600')])
     params = plans[0]['params']
-    assert params['templates'] == [{'templateid': TGRG}], 'GRG is SNMP-only, no WMI template'
-    assert len(params['interfaces']) == 1, 'GRG gets no agent interface'
+    assert params['templates'] == [{'templateid': TGRG}, {'templateid': TAGENT}]
+    assert len(params['interfaces']) == 2, 'GRG XFS/identity items need the agent interface'
     assert params['interfaces'][0]['port'] == '161'
+    assert params['interfaces'][1]['port'] == '10050'
     assert any(g['groupid'] == G_GRG for g in params['groups'])
     assert not any(g['groupid'] == G_NCR for g in params['groups'])
 
@@ -210,7 +213,8 @@ def existing(**over):
     base = {'hostid': '77', 'host': 'ATM-0001', 'status': '0', 'name': '4 Kilo ATM',
             'interfaces': [snmp_if(), agent_if()],
             'macros': [{'macro': '{$ATM_VENDOR}', 'value': 'NCR'}],
-            'parentTemplates': [{'templateid': TCR}, {'templateid': TWMI}],
+            'parentTemplates': [{'templateid': TCR}, {'templateid': TWMI},
+                                {'templateid': TAGENT}],
             'groups': [{'groupid': G_ALL}, {'groupid': G_NCR}, {'groupid': G_ADAMA}]}
     base.update(over)
     return base
@@ -294,7 +298,8 @@ def test_ip_change_with_a_placeholder_keeps_the_zabbix_community(monkeypatch):
 def test_missing_templates_are_both_linked(monkeypatch):
     install(monkeypatch, FakeZabbix(hosts={'ATM-0001': existing(parentTemplates=[])}))
     _, plans = zs.plan_hosts([row()])
-    assert plans[0]['params']['templates'] == [{'templateid': TCR}, {'templateid': TWMI}]
+    assert plans[0]['params']['templates'] == [{'templateid': TCR}, {'templateid': TWMI},
+                                                {'templateid': TAGENT}]
     assert 'vendor + WMI templates' in plans[0]['changes']
 
 
@@ -308,9 +313,11 @@ def test_agent_interface_is_added_to_an_snpm_only_host(monkeypatch):
     assert len(ifaces) == 2
     assert ifaces[0]['interfaceid'] == '9' and ifaces[0]['type'] == '2', 'SNMP row preserved'
     assert str(ifaces[1]['type']) == '1' and str(ifaces[1]['port']) == '10050'
-    # The WMI template is ADDED, not swapped in: host.update replaces the
-    # template set, so the existing vendor template must be sent back too.
-    assert plans[0]['params']['templates'] == [{'templateid': TCR}, {'templateid': TWMI}]
+    # The WMI and Agent templates are ADDED, not swapped in: host.update
+    # replaces the template set, so the existing vendor template must be sent
+    # back too.
+    assert plans[0]['params']['templates'] == [{'templateid': TCR}, {'templateid': TWMI},
+                                                {'templateid': TAGENT}]
     assert 'agent interface' in plans[0]['changes']
 
 
@@ -351,7 +358,7 @@ def test_applying_a_repair_keeps_both_templates(monkeypatch):
     assert out['updated'] == 1
     stored = fake.hosts['ATM-0001']['parentTemplates']
     ids = {t['templateid'] for t in stored}
-    assert ids == {TCR, TWMI}, f'templates after repair: {stored}'
+    assert ids == {TCR, TWMI, TAGENT}, f'templates after repair: {stored}'
     assert zs.sync_hosts([row()])['skipped'] == 1, 'then idempotent'
 
 
@@ -360,7 +367,7 @@ def test_reconciliation_is_additive_only(monkeypatch):
     cur = existing(groups=[{'groupid': G_ALL}, {'groupid': G_NCR}, {'groupid': G_ADAMA},
                             {'groupid': '777'}],
                    parentTemplates=[{'templateid': TCR}, {'templateid': TWMI},
-                                    {'templateid': '999'}])
+                                    {'templateid': TAGENT}, {'templateid': '999'}])
     install(monkeypatch, FakeZabbix(hosts={'ATM-0001': cur}))
     _, plans = zs.plan_hosts([row(branch='new branch')])
     assert 'groups' not in plans[0]['changes']   # nothing missing -> no group write

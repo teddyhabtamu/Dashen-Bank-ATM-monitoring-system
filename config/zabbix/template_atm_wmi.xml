@@ -29,17 +29,6 @@
           <value_type>TEXT</value_type>
         </item>
         <item>
-          <uuid>eda7abf9-45e4-5e1b-ba85-db45919e744c</uuid>
-          <name>ATM identity — JSON evidence</name>
-          <type>ZABBIX_AGENT</type>
-          <key>atm.identity</key>
-          <delay>1h</delay>
-          <history>1d</history>
-          <trends>0</trends>
-          <value_type>TEXT</value_type>
-          <description>Read-only JSON from C:\monitor\atm-identity.ps1. The portal ingests it automatically; it is evidence, never authority.</description>
-        </item>
-        <item>
           <uuid>4e228392-9ed7-58d1-b3ae-4f4238b24064</uuid>
           <name>ATM Part — Capture Bin Status</name>
           <type>DEPENDENT</type>

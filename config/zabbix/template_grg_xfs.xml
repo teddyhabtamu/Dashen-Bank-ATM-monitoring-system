@@ -31,17 +31,6 @@
                     <description>Raw single-line JSON payload from C:\monitor\grg-xfs-probe.ps1 -Json querying XFS msxfs.dll</description>
                 </item>
                 <item>
-                    <uuid>05adac81-d3f4-5d02-9a43-e27040b5b71a</uuid>
-                    <name>ATM identity — JSON evidence</name>
-                    <type>ZABBIX_AGENT</type>
-                    <key>atm.identity</key>
-                    <delay>1h</delay>
-                    <history>1d</history>
-                    <trends>0</trends>
-                    <value_type>TEXT</value_type>
-                    <description>Read-only JSON from C:\monitor\atm-identity.ps1. The portal ingests it automatically; it is evidence, never authority.</description>
-                </item>
-                <item>
                     <uuid>29a08b83-1471-5f2e-a7aa-0bb304734da2</uuid>
                     <name>CDM — Device Status</name>
                     <type>DEPENDENT</type>

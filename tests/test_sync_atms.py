@@ -67,6 +67,17 @@ def test_grg_prefers_xfs_when_available():
     assert group == 'ATM-GRG'
 
 
+def test_every_vendor_gets_the_shared_agent_template():
+    """`atm.identity` has one owner. Bulk host creation must link it for both
+    vendors, otherwise a new GRG host never reports identity."""
+    ncr, _ = sync.select_templates('NCR', 'ncr-tid', 'grg-tid', 'wmi-tid',
+                                   agent_tid='agent-tid')
+    grg, _ = sync.select_templates('GRG', 'ncr-tid', 'grg-tid', 'wmi-tid',
+                                   agent_tid='agent-tid')
+    assert ncr == ['ncr-tid', 'wmi-tid', 'agent-tid']
+    assert grg == ['grg-tid', 'agent-tid']
+
+
 def test_unknown_vendor_skips():
     assert sync.select_templates('HYOSUNG', 'n', 'g', 'w') == (None, None)
     assert sync.select_templates('', 'n', 'g', 'w') == (None, None)

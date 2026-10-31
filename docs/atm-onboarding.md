@@ -149,13 +149,19 @@ duplicated. Use the command below only when the Agent setup page says
 - [ ] Expected last line: `Done: 1 created, N skipped, 0 without IP`
       (the `1 created` is your box; reruns print `0 created` — healthy).
 - [ ] What it wires for you: NCR gets the SNMP template + the WMI Parts
-      template + both network interfaces; GRG gets its SNMP template (and the
-      XFS agent template when it exists). You do not link anything by hand.
-- [ ] One-time after upgrading: re-import the agent templates so the passive
-      `atm.identity` item exists. NCR: `python3 scripts/import_wmi_template_api.py`.
-      GRG: `python3 scripts/import_grg_xfs_template_api.py --no-link`
-      (template only; `zabbix_sync` links it to GRG hosts). The item is
-      harmless on a box without the agent; it simply stays unsupported.
+      template + the shared Agent template + both network interfaces; GRG gets
+      its SNMP/XFS template + the shared Agent template + both interfaces.
+      You do not link anything by hand.
+- [ ] One-time after upgrading to this build: create the shared Agent template
+      and move `atm.identity` onto it:
+      `python3 scripts/import_agent_template_api.py --link-all`
+      This also removes the old copy from the WMI and GRG XFS templates. That
+      removal is required: a host that links both vendor templates cannot
+      inherit the same key twice. Then refresh the vendor templates:
+      `python3 scripts/import_wmi_template_api.py` and
+      `python3 scripts/import_grg_xfs_template_api.py --no-link`.
+      The shared item is harmless on a box without the agent; it simply stays
+      unsupported.
 
 ## Step 4 — Prove data flows (one command, then Zabbix UI)
 
