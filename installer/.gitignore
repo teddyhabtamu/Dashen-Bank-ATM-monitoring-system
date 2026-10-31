@@ -1,0 +1,5 @@
+# Build inputs and outputs are reproducible from the committed manifest and
+# the pinned Zabbix CDN package. Never commit a downloaded MSI or a signed EXE.
+.cache/
+staging/
+dist/

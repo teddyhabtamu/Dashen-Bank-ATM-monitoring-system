@@ -1,0 +1,91 @@
+name: agent installer (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [uat-prep, main]
+    paths:
+      - 'installer/**'
+      - 'scripts/*.ps1'
+      - 'tests/test_agent_installer*.py'
+      - 'report-portal/agent_manifest.json'
+      - 'report-portal/agent_profile.py'
+      - 'report-portal/atm_identity.py'
+      - '.github/workflows/agent-installer.yml'
+  pull_request:
+    paths:
+      - 'installer/**'
+      - 'scripts/*.ps1'
+      - 'tests/test_agent_installer*.py'
+      - 'report-portal/agent_manifest.json'
+      - 'report-portal/agent_profile.py'
+      - 'report-portal/atm_identity.py'
+      - '.github/workflows/agent-installer.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify the committed manifest
+        run: python scripts/build_agent_manifest.py --check
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Install the test runner
+        run: "python -m pip install --only-binary :all: pytest==9.1.1"
+
+      - name: Exercise the installer against rendered profiles
+        run: python -m pytest tests/test_agent_installer.py tests/test_agent_installer_contract.py -v
+
+      - name: Cache the pinned agent MSI
+        uses: actions/cache@v4
+        with:
+          path: installer/.cache
+          key: zabbix-agent2-windows-${{ runner.os }}-6.4.21
+          restore-keys: |
+            zabbix-agent2-windows-${{ runner.os }}-
+
+      - name: Build AtmMonitorSetup.exe
+        shell: pwsh
+        env:
+          WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        run: |
+          $arguments = @{ Version = "0.0.0-ci.${{ github.run_number }}" }
+          if ($env:WINDOWS_PFX_BASE64) {
+            $pfx = Join-Path $env:RUNNER_TEMP 'signing.pfx'
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_PFX_BASE64))
+            $arguments.SignPfx = $pfx
+            $arguments.SignPassword = $env:WINDOWS_PFX_PASSWORD
+            $arguments.RequireSignature = $true
+          }
+          & .\installer\build_agent_setup.ps1 @arguments
+
+      - name: Refuse to tag an unsigned release
+        if: startsWith(github.ref, 'refs/tags/agent-v')
+        shell: pwsh
+        run: |
+          $release = Get-Content installer\dist\release.json -Raw | ConvertFrom-Json
+          if (-not $release.signed) {
+            throw 'Release tags must be signed. Add WINDOWS_PFX_BASE64 and WINDOWS_PFX_PASSWORD.'
+          }
+
+      - name: Upload the release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AtmMonitorSetup
+          if-no-files-found: error
+          path: |
+            installer/dist/*.exe
+            installer/dist/*.sha256
+            installer/dist/release.json

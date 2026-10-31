@@ -84,25 +84,34 @@ changes to cash, software, or settings.
 
 ---
 
-## Step 2C — Agent profile and identity (portal, admin)
+## Step 2C — Agent profile and installer (portal, admin)
 
-The portal can render the exact agent files for one ATM, so the installer
-never re-implements policy. This is optional for a box already wired by hand,
-but it is the supported path for a new rollout.
+The portal renders the exact agent files for one ATM, and one signed
+`AtmMonitorSetup.exe` applies them. The installer never re-implements policy:
+it writes the profile's own text, verifies every probe hash, and tests the
+result as the agent's service account. This is the supported path for a new
+rollout; the manual copy in Step 2A is the fallback for an NCR box already
+wired by hand.
 
 - [ ] Open the portal → the ATM → **Agent setup** (admin only).
 - [ ] **Download profile.** It lists every deployable probe with its SHA-256,
       the agent `Server=`/`Hostname=` config, the approved image roots, and an
       HMAC signature. It never contains the SNMP community or a PSK.
-- [ ] Copy the listed probes to `C:\monitor\` and apply the rendered config.
-      `atm-identity.ps1` is part of the profile and provides the
-      `atm.identity` UserParameter.
 - [ ] Approve image roots on the same page. The probe only *proposes* roots it
       can see; a human approves them, and the roots file stays fail-closed.
+- [ ] Put the profile next to `AtmMonitorSetup.exe` and run `/DRYRUN` first.
+      The dry run prints every action and writes nothing. Then run it again
+      without `/DRYRUN` and confirm the ATM id.
+- [ ] The installer writes `C:\monitor`, installs/updates Zabbix Agent 2 6.4,
+      writes the passive-only config, restarts the service, and verifies
+      `atm.identity`/`atm.parts` as `SYSTEM`. A running Agent 1 needs
+      `/REPLACELEGACY`; it is stopped and disabled, not uninstalled.
 - [ ] Paste the output of `atm.identity` into **Submit identity**. Conflicts
       are shown for review; the registry is never changed automatically.
 - [ ] Set `ATM_PROFILE_SECRET` in `.env` before production. An unsigned
       profile is allowed only in the UAT lab, and the page says so.
+- [ ] Full installer flags, exit codes, rollback and signing steps:
+      `installer/README.md`.
 
 ---
 
