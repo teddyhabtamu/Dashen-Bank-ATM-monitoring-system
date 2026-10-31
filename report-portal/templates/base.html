@@ -269,6 +269,10 @@ button.profile-item{width:100%;background:none;border:0;font-family:inherit;text
 .card{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(1,33,105,.04);border:1px solid #EEF1F6;margin-bottom:24px;animation:fadeSlideUp .4s ease}
 .card-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;background:#FAFBFC;border-bottom:1px solid #EEF1F6;overflow:hidden;border-radius:12px 12px 0 0}
 .card-header h2{font-size:15px;font-weight:700}
+/* Pages that use .card-body without a local rule (agent.html) must not render
+   flush against the card border. Pages that need a different inset override it
+   in their own extra_style block. */
+.card-body{padding:20px 24px}
 /* ── SHARED FORM ── */
 .form-group{display:flex;flex-direction:column;gap:4px}
 .form-group label{font-size:10px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.6px}

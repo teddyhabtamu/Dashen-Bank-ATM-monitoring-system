@@ -57,6 +57,16 @@ def test_the_atm_detail_page_links_admins_to_the_agent_setup():
     assert "session.get('role') == 'admin'" in DETAIL
 
 
+def test_the_agent_cards_keep_their_body_padding():
+    """agent.html uses .card-body but has no local rule for it. Without a
+    shared default every card body sits flush against the card border, which
+    is what the Agent setup page looked like in the browser."""
+    assert 'class="card-body"' in TEMPLATE
+    for name in ('templates/base.html', 'static/style.css'):
+        css = (PORTAL / name).read_text()
+        assert re.search(r'\.card-body\s*\{[^}]*padding:\s*20px 24px', css), name
+
+
 def test_the_portal_image_ships_the_generated_manifest():
     assert 'COPY agent_manifest.json ./' in DOCKERFILE
 
