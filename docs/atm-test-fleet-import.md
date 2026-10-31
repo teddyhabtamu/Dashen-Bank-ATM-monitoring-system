@@ -8,8 +8,10 @@
 ## 1. What the workbook lacks
 
 `docs/ATM INFORMATION.xlsx` has the terminal ID, name, IP, owner branch,
-district and vendor string. The portal import also requires `atm_id`, `city`,
-`region`, `model` and `status`. The preparation script fills only those gaps:
+district and vendor string. The portal import also requires `city`, `region`,
+`model` and `status`; `atm_id` is optional and would be generated from the
+terminal ID. The preparation script fills these gaps (and still writes an
+explicit `TST-` key so the test fleet is easy to remove):
 
 | Field | Rule |
 |---|---|

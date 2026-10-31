@@ -43,6 +43,13 @@ def test_unknown_district_stops():
     assert 'district' in errors
 
 
+def test_blank_atm_id_is_allowed_because_the_writer_generates_it():
+    c, errors = validate_facts(_good(atm_id=''))
+    assert 'atm_id' not in errors
+    assert c['atm_id'] == ''
+    assert c['terminal_id'] == 'TID-107'
+
+
 def test_bad_ids_and_ips_stop():
     _, e1 = validate_facts(_good(atm_id='bad id!'))
     assert 'atm_id' in e1

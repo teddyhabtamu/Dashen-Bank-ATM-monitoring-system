@@ -190,8 +190,13 @@ Rules:
   template also lists `terminal_id` before `atm_id`.
 - **`ej_hostname` is not the terminal ID.** NCR journals use the filename host
   tag; GRG may use the computer name. The puller needs it; the switch does not.
-- **A new ATM needs both.** Get the TID from the ATM team, then assign the
-  monitoring `atm_id` (the bulk importer can generate `ATM-XXX`).
+- **A new ATM only needs the terminal ID.** Registration, the onboarding
+  wizard and CSV import all accept a blank `atm_id` and generate a unique
+  internal key from the TID: `PATML001` → `ATM-PATML001`. If a different
+  terminal already owns that key, a numeric suffix is added. A known TID
+  keeps its already-registered `atm_id`, so a TID-only re-import updates the
+  same row instead of creating a duplicate. An explicit `atm_id` is still
+  accepted for existing integrations.
 
 **TID → ATM ID lookup**
 

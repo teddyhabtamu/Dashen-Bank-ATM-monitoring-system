@@ -88,7 +88,10 @@ def validate_facts(f):
     """Return (cleaned_dict, errors_dict). Pure logic — no I/O."""
     errors = {}
     c = {k: (f.get(k, '') or '').strip() for k in _FACT_FIELDS}
-    if not ATM_ID_RE.match(c['atm_id'] or '') or len(c['atm_id']) > 20:
+    # The ATM team knows the terminal ID, not our internal key. Blank is valid
+    # here: the shared writer allocates ATM-<TID> (or reuses the existing key
+    # for a known TID). A supplied ID still has to be well formed.
+    if c['atm_id'] and (not ATM_ID_RE.match(c['atm_id']) or len(c['atm_id']) > 20):
         errors['atm_id'] = ('ATM ID must start alphanumeric, '
                             'letters/numbers/_/- only, max 20.')
     for req in ('branch', 'district', 'city', 'terminal_id', 'ip_address'):

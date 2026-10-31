@@ -15,7 +15,8 @@ else stays engineer-owned. Reuses: Registration form + CSV import,
   (`credential_ref`), selected from a dropdown of sealed entries.
 
 ## Screen 1 — Facts (all validated inline, nothing submits yet)
-Fields: ATM ID (format `ATM-XXXX`, uniqueness checked live), name, branch,
+Fields: ATM ID (optional; blank auto-generates `ATM-<Terminal ID>`, a
+supplied value is format-checked and uniqueness-checked live), name, branch,
 district (closed dropdown — zone codes + names map shown), city, region,
 GPS lat/lng (map picker, required: geo-map has no fallback), Terminal ID
 (exact-match format check), vendor (closed: NCR/GRG), model (closed list
@@ -27,7 +28,8 @@ error codes, never stack traces.
 
 ## Screen 2 — Pre-flight (automatic, one click, ~60 seconds)
 Runs in order, stops at first red with the fix written beside it:
-1. DB uniqueness (ATM ID / IP / TID not already registered).
+1. DB uniqueness (ATM ID if supplied / IP / TID). A known TID resolves to
+   its existing row and continues as an update.
 2. Network reachability (ping where policy allows, else TCP port per
    vendor path: NCR 10050, GRG 161/UDP).
 3. Credential check against escrow reference (NCR: agent key via Zabbix

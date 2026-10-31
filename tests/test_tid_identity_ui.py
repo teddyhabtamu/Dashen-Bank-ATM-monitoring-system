@@ -61,3 +61,28 @@ def test_onboarding_form_asks_for_terminal_id_first():
     html = (TEMPLATES / 'onboarding.html').read_text()
     assert html.index("fld('terminal_id'") < html.index("fld('atm_id'"), (
         'the wizard should ask for the bank identifier before the internal key')
+
+
+def test_registration_atm_id_is_optional_and_explains_generation():
+    html = (TEMPLATES / 'admin_atm.html').read_text()
+    assert "name in ('atm_id'" in html, (
+        'the registration form must not mark atm_id as required')
+    assert 'Leave blank and the ATM ID is generated from the Terminal ID' in html
+    assert 'if(!v) return;  // generated server-side from Terminal ID' in html
+
+
+def test_import_accepts_a_terminal_id_only_csv():
+    src = ADMIN.read_text()
+    import_required = src.split("    required = ['branch'", 1)[1].split(']', 1)[0]
+    assert "'atm_id'" not in import_required, (
+        'CSV import must not require the internal key')
+    assert "'terminal_id'" in import_required
+    assert 'choose_atm_id(terminal_id, used_ids,' in src, (
+        'the importer must allocate missing ATM IDs in memory')
+    assert "row['terminal_id'] = terminal_id" in src
+
+
+def test_onboarding_atm_id_is_optional():
+    html = (TEMPLATES / 'onboarding.html').read_text()
+    assert "fld('atm_id', 'ATM ID (optional)'" in html
+    assert 'Leave blank and the portal generates a unique internal key' in html

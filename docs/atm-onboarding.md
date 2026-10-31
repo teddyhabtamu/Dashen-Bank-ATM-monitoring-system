@@ -26,10 +26,12 @@ immediately after an install.
 
 ## Before You Start — collect these (ask the ATM/hardware team)
 
-- [ ] ATM ID (example: `ATM-0107`) — short, unique, never reused
 - [ ] ATM name, branch, district **code** (example: `Kirkos` today;
       fleet uses zone codes like NAD/SAD — confirm which list applies),
       city, region
+- [ ] ATM ID — **optional**. Leave blank and the portal generates
+      `ATM-<Terminal ID>`; only supply one for an integration that already
+      uses a specific key
 - [ ] GPS coordinates (latitude, longitude) — for the map
 - [ ] IP address of the ATM on the bank network
 - [ ] Terminal ID / TID (must match the switch records exactly)
@@ -63,12 +65,13 @@ portal pages, maps, reports). Preferred method — the portal form:
       `NCR` or `GRG`, status **active**, Save.
 
       > **ATM ID vs Terminal ID.** The ATM team usually knows the terminal ID
-      > (TID), not the portal's `atm_id`. The ATM list now shows the terminal
-      > ID first and the internal ATM ID as the small system line under it.
+      > (TID), not the portal's `atm_id`. The ATM list shows the terminal ID
+      > first and the internal ATM ID as the small system line under it.
       > Search **ATMs** by TID first: an existing row gives you its ATM ID.
-      > For a new ATM, keep the TID from the ATM team and assign the next
-      > monitoring `atm_id` (for example `ATM-0107`). They are different keys;
-      > see `docs/system-workflow.md` §4.1.
+      > For a new ATM, leave **ATM ID** blank: the portal generates
+      > `ATM-<TID>` (for example `TID006` → `ATM-TID006`). A known TID keeps
+      > its existing key. Only type an ATM ID when an integration already
+      > depends on a specific one; see `docs/system-workflow.md` §4.1.
 - [ ] If the form is unreachable, the same row can be added with SQL
       (ask the team — never invent column names; the table has grown).
 - [ ] Record the row: `SELECT atm_id, vendor, ip_address, district FROM

@@ -17,6 +17,7 @@ from scheduler import REPORT_TYPE_LABELS
 from zabbix_modules.xfs_metrics import DISPENSE_UNITS, is_xfs, normalize
 from log_safety import safe_log
 from net_url import service_url
+from atm_key import choose_atm_id, terminal_key
 
 logger = logging.getLogger(__name__)
 
@@ -680,6 +681,45 @@ FIELDS = [
 ]
 
 
+def registry_key_index(cur):
+    """Return (terminal_id -> atm_id, set of used atm_ids) from the registry.
+
+    One query per save/import, not one per row: a 1,200-row import must not
+    issue 1,200 lookups just to allocate keys.
+    """
+    cur.execute("SELECT atm_id, terminal_id FROM atm_locations ORDER BY atm_id")
+    existing = {}
+    used = set()
+    for atm_id, terminal_id in cur.fetchall():
+        if atm_id:
+            used.add(atm_id)
+        if terminal_id:
+            existing.setdefault(terminal_key(terminal_id), atm_id)
+    return existing, used
+
+
+def assign_atm_id(data):
+    """Fill data['atm_id'] when the caller did not supply one.
+
+    The terminal ID is the bank's key; the monitoring key is derived from it.
+    An existing terminal ID keeps its registered atm_id, so a TID-only
+    re-import or edit updates the same row. Raises on DB failure.
+    """
+    current = (data.get('atm_id') or '').strip()
+    if current:
+        data['atm_id'] = current
+        return current
+    terminal_id = (data.get('terminal_id') or '').strip()
+    if not terminal_id:
+        return None
+    with get_db() as conn:
+        cur = conn.cursor()
+        existing, used = registry_key_index(cur)
+        cur.close()
+    data['atm_id'] = choose_atm_id(terminal_id, used, existing)
+    return data['atm_id']
+
+
 @bp.route('/atms')
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
@@ -1257,6 +1297,15 @@ def save_atm_record(data, source='registration'):
     Returns {'ok', 'errors', 'audit_detail', 'atm_id', 'created'}. Never
     raises: a database failure comes back as errors.
     """
+    if not (data.get('atm_id') or '').strip():
+        try:
+            assign_atm_id(data)
+        except Exception as e:
+            logger.warning('ATM ID allocation failed: %s', e)
+            return {'ok': False,
+                    'errors': {'_general': 'Could not generate an ATM ID. '
+                                           'Check the database and try again.'},
+                    'audit_detail': '', 'atm_id': None, 'created': False}
     errors = _validate(data)
     if errors:
         return {'ok': False, 'errors': errors, 'audit_detail': '',
@@ -1538,19 +1587,28 @@ def atm_bulk_delete():
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def atm_check():
-    data = request.get_json(silent=True)
-    if not data or 'ids' not in data:
-        return jsonify({'existing': []})
-    ids = [i.strip() for i in data['ids'] if i.strip()]
-    if not ids:
-        return jsonify({'existing': []})
+    data = request.get_json(silent=True) or {}
+    ids = [str(i).strip() for i in (data.get('ids') or []) if str(i).strip()]
+    # Case-insensitive so an import preview recognises PATML001 and patml001
+    # as the same terminal the way the allocator does.
+    terminal_ids = [str(t).strip().upper()
+                    for t in (data.get('terminal_ids') or []) if str(t).strip()]
+    if not ids and not terminal_ids:
+        return jsonify({'existing': [], 'terminal_matches': {}})
+    existing = []
+    terminal_matches = {}
     with get_db() as conn:
         cur = conn.cursor()
-        placeholders = ','.join(['%s'] * len(ids))
-        cur.execute(f"SELECT atm_id FROM atm_locations WHERE atm_id IN ({placeholders})", ids)
-        existing = [r[0] for r in cur.fetchall()]
+        if ids:
+            placeholders = ','.join(['%s'] * len(ids))
+            cur.execute(f"SELECT atm_id FROM atm_locations WHERE atm_id IN ({placeholders})", ids)
+            existing = [r[0] for r in cur.fetchall()]
+        if terminal_ids:
+            cur.execute("SELECT UPPER(TRIM(terminal_id)), atm_id FROM atm_locations "
+                        "WHERE UPPER(TRIM(terminal_id)) = ANY(%s)", (terminal_ids,))
+            terminal_matches = {tid: atm_id for tid, atm_id in cur.fetchall()}
         cur.close()
-    return jsonify({'existing': existing})
+    return jsonify({'existing': existing, 'terminal_matches': terminal_matches})
 
 
 @bp.route('/cash')
@@ -1710,11 +1768,13 @@ def atm_csv_template():
                 'install_date', 'status',
                 'ip_address', 'snmp_community', 'snmp_version', 'ej_log_format',
                 'ej_hostname'])
-    w.writerow(['TID10001', 'ATM-1001', 'Bole Medhanialem ATM', 'Bole Medhanialem Branch', 'Bole',
+    # atm_id is blank on purpose: the portal generates ATM-<terminal_id>.
+    # An explicit value is still accepted for existing integrations.
+    w.writerow(['TID10001', '', 'Bole Medhanialem ATM', 'Bole Medhanialem Branch', 'Bole',
                 'Addis Ababa', 'Addis Ababa', '8.9950', '38.7896',
                 'NCR', 'SelfServ 22', '2023-03-15', 'active',
                 '192.0.2.101', 'CHANGE_ME', '2', 'NCR_APTRA', 'BOLENATM01'])
-    w.writerow(['TID10002', 'ATM-1002', 'Piassa ATM', 'Piassa Branch', 'Arada',
+    w.writerow(['TID10002', '', 'Piassa ATM', 'Piassa Branch', 'Arada',
                 'Addis Ababa', 'Addis Ababa', '9.0356', '38.7521',
                 'GRG', 'H68N', '2022-11-02', 'active',
                 '192.0.2.102', 'CHANGE_ME', '2', 'GRG', ''])
@@ -1740,24 +1800,79 @@ def atm_import():
         return jsonify({'error': True, 'message': 'Could not read file. Ensure it is a valid UTF-8 CSV.'})
 
     reader = csv.DictReader(io.StringIO(content))
-    required = ['atm_id', 'branch', 'district', 'city', 'region',
+    # atm_id is deliberately absent: the ATM team uploads terminal IDs only.
+    required = ['branch', 'district', 'city', 'region',
                 'terminal_id', 'vendor', 'model', 'status']
     missing_cols = [c for c in required if c not in reader.fieldnames]
     if missing_cols:
         return jsonify({'error': True, 'message': f'Missing required columns: {", ".join(missing_cols)}'})
 
+    # One registry read for the whole file, then allocate in memory. A TID-only
+    # re-import must resolve to the row that already owns that terminal ID, not
+    # create a second key (ATM-PATML001-2) on every upload.
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            existing_by_terminal, used_ids = registry_key_index(cur)
+            cur.close()
+    except Exception as e:
+        logger.warning('ATM import registry read failed: %s', e)
+        return jsonify({'error': True,
+                        'message': 'Could not read the ATM registry. Try again.'})
+
     rows = []
     errors = []
+    seen_terminals = {}
+    seen_ids = {}
     line = 1
     for row in reader:
         line += 1
+        # CSV cells arrive as strings; trim them before validation so a stray
+        # space cannot turn "NCR" into an unknown vendor or " " into a value.
+        for key, value in list(row.items()):
+            if isinstance(value, str):
+                row[key] = value.strip()
         if 'branch' in row:
             row['branch'] = _norm_branch(row.get('branch'))
+        row['atm_id'] = row.get('atm_id') or ''
+        terminal_id = row.get('terminal_id') or ''
+        row['terminal_id'] = terminal_id
+        terminal = terminal_key(terminal_id)
+        label = row.get('atm_id') or terminal_id or '?'
+        if not row['atm_id'] and terminal:
+            try:
+                row['atm_id'] = choose_atm_id(terminal_id, used_ids,
+                                              existing_by_terminal)
+            except ValueError as e:
+                errors.append({'line': line, 'atm_id': label,
+                               'errors': {'_general': str(e)}})
+                continue
         errs = _validate(row)
         if errs:
-            errors.append({'line': line, 'atm_id': row.get('atm_id', '?'), 'errors': errs})
-        else:
-            rows.append(row)
+            errors.append({'line': line, 'atm_id': label, 'errors': errs})
+            continue
+        # Duplicate checks happen only after a row is otherwise valid: a bad
+        # row does not reserve a TID/ID, so a later corrected row can import.
+        if terminal:
+            if terminal in seen_terminals:
+                errors.append({'line': line, 'atm_id': label,
+                               'errors': {'terminal_id':
+                                          f'Duplicate terminal ID in file '
+                                          f'(first on line {seen_terminals[terminal]})'}})
+                continue
+            seen_terminals[terminal] = line
+        atm_id = row['atm_id']
+        if atm_id in seen_ids:
+            errors.append({'line': line, 'atm_id': atm_id,
+                           'errors': {'atm_id':
+                                      f'Duplicate ATM ID in file '
+                                      f'(first on line {seen_ids[atm_id]})'}})
+            continue
+        seen_ids[atm_id] = line
+        used_ids.add(atm_id)
+        if terminal:
+            existing_by_terminal[terminal] = atm_id
+        rows.append(row)
 
     if errors and not rows:
         return jsonify({'error': True, 'message': f'All {len(errors)} row(s) have errors. No data imported.',
@@ -1917,7 +2032,8 @@ def _validate(data):
                 'terminal_id', 'vendor', 'model', 'status']
     for field in required:
         if not data.get(field):
-            errors[field] = 'This field is required'
+            errors[field] = ('Required (or provide a Terminal ID to generate one)'
+                             if field == 'atm_id' else 'This field is required')
     if data.get('atm_id') and len(data['atm_id']) < 3:
         errors['atm_id'] = 'ATM ID must be at least 3 characters'
     if data.get('atm_id') and not re.match(r'^[A-Za-z0-9][A-Za-z0-9_-]*$', data['atm_id']):

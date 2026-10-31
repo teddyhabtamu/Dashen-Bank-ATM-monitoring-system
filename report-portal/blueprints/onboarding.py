@@ -165,6 +165,13 @@ def onboard():
     if request.method == 'GET':
         return _page({}, {}, None, stage='facts')
     values = _form_values()
+    # Show the key the writer will actually use, so the pre-flight can check
+    # the right ATM ID and later steps carry it. Read-only: no row is written.
+    try:
+        from blueprints.admin import assign_atm_id
+        assign_atm_id(values)
+    except Exception as e:
+        logger.warning('onboard: ATM ID pre-allocation failed: %s', e)
     cleaned, errors = validate_facts(values)
     if errors:
         return _page(values, errors, None, stage='facts')
@@ -192,6 +199,9 @@ def onboard_save():
         return _page(cleaned, res['errors'], _preflight(cleaned), stage='provision',
                      saved=False, save_errors=res['errors'])
     log_action('ATM_SAVE', res['audit_detail'])
+    # The writer may have generated the key from the terminal ID. Carry the
+    # saved key into the page (hidden step forms and the status summary).
+    cleaned['atm_id'] = res['atm_id']
     plan = provision_atms([data['atm_id']], dry_run=True, actor='onboarding-wizard')
     return _page(cleaned, {}, _preflight(cleaned), stage='provision',
                  saved=True, plan=plan)

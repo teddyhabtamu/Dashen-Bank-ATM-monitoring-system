@@ -169,7 +169,7 @@ details.wstep.pending>summary{opacity:.55}
     {% endmacro %}
     <div class="form-grid">
     {{ fld('terminal_id', 'Terminal ID', 'TID-UAT-107', True, 'The bank’s real ATM ID (ISO 8583 field 41). Search and reports use this first.') }}
-    {{ fld('atm_id', 'ATM ID (monitoring key)', 'ATM-0107', True, 'Internal key and Zabbix host name; not the terminal ID.') }}
+    {{ fld('atm_id', 'ATM ID (optional)', 'Auto: ATM-<Terminal ID>', False, 'Leave blank and the portal generates a unique internal key (and Zabbix host name) from the Terminal ID.') }}
     {{ fld('atm_name', 'ATM name (optional)', '4 Kilo Branch ATM 3') }}
     {{ fld('branch', 'Branch', '4 Kilo Building BRANCH', True) }}
     <div class="form-group{% if errors.get('district') %} error{% endif %}">

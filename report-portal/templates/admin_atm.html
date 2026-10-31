@@ -413,7 +413,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
       <div class="modal-alert" id="formAlert"></div>
       <div class="form-grid">
         {% for name, label, typ, maxlen in fields %}
-          {% set optional = name == 'atm_name' or name in ('ip_address', 'snmp_community', 'snmp_version', 'ej_log_format', 'ej_hostname') %}
+          {% set optional = name == 'atm_name' or name in ('atm_id', 'ip_address', 'snmp_community', 'snmp_version', 'ej_log_format', 'ej_hostname') %}
           <div class="form-group" data-field="{{ name }}">
             <label for="field-{{ name }}">{{ label }} {% if not optional %}<span class="required">*</span>{% endif %}</label>
             {% if name == 'snmp_version' %}
@@ -451,12 +451,12 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
             {% elif typ == 'number' %}
               <input type="number" name="{{ name }}" id="field-{{ name }}" step="any" required>
             {% elif optional %}
-              <input type="text" name="{{ name }}" id="field-{{ name }}" maxlength="{{ maxlen or '' }}" placeholder="Defaults to Branch if left blank">
+              <input type="text" name="{{ name }}" id="field-{{ name }}" maxlength="{{ maxlen or '' }}" placeholder="{{ 'Auto from Terminal ID' if name == 'atm_id' else 'Defaults to Branch if left blank' }}">
             {% else %}
               <input type="text" name="{{ name }}" id="field-{{ name }}" maxlength="{{ maxlen or '' }}" required>
             {% endif %}
             {% if name == 'atm_id' %}
-            <div style="font-size:10px;color:#94A3B8;margin-top:2px;line-height:1.5">Internal monitoring key and Zabbix host name. The ATM team’s identifier is the Terminal ID.</div>
+            <div style="font-size:10px;color:#94A3B8;margin-top:2px;line-height:1.5">Optional. Leave blank and the ATM ID is generated from the Terminal ID (for a known TID, its existing key is reused). This is the internal monitoring key and Zabbix host name.</div>
             {% elif name == 'terminal_id' %}
             <div style="font-size:10px;color:#94A3B8;margin-top:2px;line-height:1.5">The bank’s real ATM ID (ISO 8583 field 41). Search and reports show this first.</div>
             {% endif %}
@@ -494,10 +494,12 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
     </div>
     <div id="importStepFile" style="padding:36px 32px;text-align:center">
       <p style="font-size:14px;color:#475569;margin:0 0 8px;line-height:1.6">
-        Upload a CSV file with columns: <code>terminal_id, atm_id, branch, district, city, region, latitude, longitude, vendor, model, install_date, status</code>
-        (optional: <code>atm_name, ip_address, snmp_community, snmp_version, ej_log_format</code>).
-        <strong>Terminal ID</strong> is the bank’s ATM identifier; <code>atm_id</code> is the internal monitoring key and Zabbix host name.
-        Existing ATMs with matching IDs will be updated (blank network fields keep existing values).
+        Upload a CSV file with columns: <code>terminal_id, branch, district, city, region, vendor, model, status</code>
+        (optional: <code>atm_id, atm_name, latitude, longitude, install_date, ip_address, snmp_community, snmp_version, ej_log_format</code>).
+        <strong>Terminal ID</strong> is the bank’s ATM identifier. Leave <code>atm_id</code>
+        blank — or omit the column entirely — and the portal generates a unique internal
+        key from the Terminal ID. Re-importing a known Terminal ID updates its existing row
+        (blank network fields keep existing values).
       </p>
       <a href="/atms/template" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#012169;font-weight:500;text-decoration:none;margin-bottom:24px">
         <i data-lucide="download" style="width:14px;height:14px"></i> Download import template
@@ -761,7 +763,7 @@ document.getElementById('field-atm_id').addEventListener('blur', function(){
 
 var VALIDATORS = {
   atm_id: function(v){
-    if(!v) return 'ATM ID is required';
+    if(!v) return;  // generated server-side from Terminal ID
     if(v.length < 3) return 'ATM ID must be at least 3 characters';
     if(!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(v)) return 'Only letters, numbers, hyphens and underscores';
   },
@@ -937,15 +939,17 @@ function selectImportFile(file){
     _importRows = parsed;
 
     var allIds = [];
+    var allTids = [];
     for(var i = 0; i < _importRows.length; i++){
       if(_importRows[i].atm_id) allIds.push(_importRows[i].atm_id);
+      if(_importRows[i].terminal_id) allTids.push(_importRows[i].terminal_id);
     }
 
-    if(allIds.length > 0){
+    if(allIds.length > 0 || allTids.length > 0){
       fetch('/atms/check', {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-        body: JSON.stringify({ids: allIds})
+        body: JSON.stringify({ids: allIds, terminal_ids: allTids})
       })
       .then(function(r){ return r.json(); })
       .then(function(data){
@@ -955,8 +959,14 @@ function selectImportFile(file){
             existingMap[data.existing[e]] = true;
           }
         }
+        var terminalMap = data.terminal_matches || {};
         for(var i = 0; i < _importRows.length; i++){
-          _importRows[i]._exists = !!existingMap[_importRows[i].atm_id];
+          var aid = _importRows[i].atm_id;
+          var tid = (_importRows[i].terminal_id || '').toUpperCase();
+          // An explicit atm_id must match itself. A blank one resolves to the
+          // row that already owns the terminal ID, exactly like the server.
+          _importRows[i]._exists = aid ? !!existingMap[aid]
+                                       : !!(tid && terminalMap[tid]);
         }
         renderPreviewTable(file.name);
       })
@@ -1028,9 +1038,11 @@ function splitLine(line){
 
 function validateRow(row){
   var errs = {};
-  if(!row.atm_id) errs.atm_id = 'Required';
-  else if(row.atm_id.length < 3) errs.atm_id = 'Min 3 chars';
-  else if(!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(row.atm_id)) errs.atm_id = 'Invalid format';
+  // Blank is valid: the server derives ATM-<terminal_id>.
+  if(row.atm_id){
+    if(row.atm_id.length < 3) errs.atm_id = 'Min 3 chars';
+    else if(!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(row.atm_id)) errs.atm_id = 'Invalid format';
+  }
   if(!row.branch) errs.branch = 'Required';
   else if(row.branch.length < 2) errs.branch = 'Min 2 chars';
   if(!row.district) errs.district = 'Required';
@@ -1092,9 +1104,25 @@ function renderPreviewTable(fileName){
   var errorCount = 0;
   var warnCount = 0;
   var rowsWithErrors = [];
+  var seenTids = {};
+  var seenAtmIds = {};
 
   for(var i = 0; i < _importRows.length; i++){
-    var errs = validateRow(_importRows[i]);
+    var row = _importRows[i];
+    var errs = validateRow(row);
+    // Mirror the server: only an otherwise valid row reserves a TID/atm_id,
+    // so a later corrected row can still import.
+    if(Object.keys(errs).length === 0){
+      var tid = (row.terminal_id || '').toUpperCase();
+      if(tid){
+        if(seenTids[tid]) errs.terminal_id = 'Duplicate in file (row ' + seenTids[tid] + ')';
+        else seenTids[tid] = i + 1;
+      }
+      if(Object.keys(errs).length === 0 && row.atm_id){
+        if(seenAtmIds[row.atm_id]) errs.atm_id = 'Duplicate in file (row ' + seenAtmIds[row.atm_id] + ')';
+        else seenAtmIds[row.atm_id] = i + 1;
+      }
+    }
     _importRows[i]._errors = errs;
     _importRows[i]._warnings = warnRow(_importRows[i]);
     _importRows[i]._rowNum = i + 1;
@@ -1202,8 +1230,14 @@ function renderPreviewTable(fileName){
     for(var c = 0; c < COLS.length; c++){
       var td = document.createElement('td');
       var val = row[COLS[c]] || '';
-      td.textContent = val || '—';
       td.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:' + COL_WIDTHS[c] + ';max-width:' + COL_WIDTHS[c];
+      if(COLS[c] === 'atm_id' && !val){
+        td.textContent = 'auto';
+        td.style.color = '#94A3B8';
+        td.title = 'Generated from the Terminal ID on import';
+      } else {
+        td.textContent = val || '—';
+      }
       if(row._errors[COLS[c]]){
         td.style.cssText += ';background:#FEF2F2;color:#DC2626;border-bottom:2px solid #DC2626;cursor:help';
         td.title = row._errors[COLS[c]];

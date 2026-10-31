@@ -4,7 +4,9 @@
 The workbook (`docs/ATM INFORMATION.xlsx`) is the bank's inventory, not the
 portal's import contract. It carries the terminal id, name, IP, branch,
 district and vendor string, but not the fields the portal requires for every
-row: city, region, model and a stable atm_id.
+row: city, region and model. It also writes an explicit test `atm_id` so this
+fleet can be removed easily; the portal would otherwise generate one from the
+terminal ID.
 
 This script fills only what is missing, using explicit and reviewable rules:
 
