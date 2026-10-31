@@ -43,16 +43,18 @@ def install(monkeypatch, rows, **sync_kwargs):
             return [r for r in rows if r['atm_id'] in keep]
         return rows
     monkeypatch.setattr(provision, 'load_atms', fake_load)
+    monkeypatch.setattr(provision, 'load_live_atm_ids',
+                        lambda: {r['atm_id'] for r in rows})
     calls = []
 
-    def fake_plan(atms):
+    def fake_plan(atms, **kwargs):
         calls.append(('plan', [a['atm_id'] for a in atms]))
         return ({'created': len(atms), 'reenabled': 0, 'macros_fixed': 0, 'updated': 0,
                  'skipped': 0, 'no_ip': 0, 'failed': 0, 'details': []},
                 [{'atm_id': a['atm_id'], 'action': 'create', 'changes': ['host'],
                   'pending_groups': [], 'error': ''} for a in atms])
 
-    def fake_sync(atms):
+    def fake_sync(atms, **kwargs):
         calls.append(('sync', [a['atm_id'] for a in atms]))
         return ({'created': len(atms), 'reenabled': 0, 'macros_fixed': 0, 'updated': 0,
                  'skipped': 0, 'no_ip': 0, 'failed': 0, 'details': []},
@@ -99,7 +101,7 @@ def test_results_cover_every_requested_atm(monkeypatch):
 def test_failed_write_is_reported_as_failed_not_created(monkeypatch):
     install(monkeypatch, ROWS[:1])
 
-    def fake_sync(atms):
+    def fake_sync(atms, **kwargs):
         return ({'created': 0, 'reenabled': 0, 'macros_fixed': 0, 'updated': 0,
                  'skipped': 0, 'no_ip': 0, 'failed': 1,
                  'details': [{'atm_id': 'ATM-0001', 'error': 'host.create failed'}]},
@@ -132,8 +134,10 @@ def test_a_narrower_row_set_can_never_widen_the_write(monkeypatch):
     """Belt and braces: even if load_atms ever returns extra rows, the
     provisioner must only ever touch the ATMs it was asked about."""
     monkeypatch.setattr(provision, 'load_atms', lambda ids=None, active_only=False: ROWS)
+    monkeypatch.setattr(provision, 'load_live_atm_ids',
+                        lambda: {r['atm_id'] for r in ROWS})
     calls = []
-    monkeypatch.setattr(provision, 'sync_hosts_detailed', lambda a: (
+    monkeypatch.setattr(provision, 'sync_hosts_detailed', lambda a, **kwargs: (
         {'created': 0, 'reenabled': 0, 'macros_fixed': 0, 'updated': 0, 'skipped': 0,
          'no_ip': 0, 'failed': 0, 'details': []},
         [{'atm_id': r['atm_id'], 'action': 'skipped', 'changes': [], 'applied': False,
@@ -156,10 +160,13 @@ def test_reindex_covers_every_active_atm(monkeypatch):
         seen['active_only'] = active_only
         return ROWS[:2]
     monkeypatch.setattr(provision, 'load_atms', fake_load)
+    monkeypatch.setattr(provision, 'load_live_atm_ids',
+                        lambda: {'ATM-0001', 'ATM-0002'})
     monkeypatch.setattr(provision, 'plan_hosts',
-                        lambda a: ({'created': 0, 'reenabled': 0, 'macros_fixed': 0,
-                                    'updated': 0, 'skipped': 2, 'no_ip': 0, 'failed': 0,
-                                    'details': []}, []))
+                        lambda a, **kwargs: ({'created': 0, 'reenabled': 0,
+                                              'macros_fixed': 0, 'updated': 0,
+                                              'skipped': 2, 'no_ip': 0, 'failed': 0,
+                                              'details': []}, []))
     out = provision.reindex_active(dry_run=True)
     assert seen['active_only'] is True
     assert out['summary']['skipped'] == 2

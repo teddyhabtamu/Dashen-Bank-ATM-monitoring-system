@@ -290,9 +290,10 @@ def test_adoption_moves_the_host_and_is_idempotent(monkeypatch):
 
 
 def test_active_host_is_not_stolen_by_visible_name(monkeypatch):
-    """Only a disabled host (the portal-delete path) may be adopted. An active
-    host with the same visible name stays untouched; its real conflict must be
-    resolved by a human instead of silently renaming another ATM's host."""
+    """Without a registry view, only a disabled host (the portal-delete path)
+    may be adopted. An active host with the same visible name stays untouched;
+    its real conflict must be resolved by a human instead of silently renaming
+    another ATM's host."""
     old = existing(host='TST-0001', status='0')
     install(monkeypatch, FakeZabbix(hosts={'TST-0001': old}))
 
@@ -300,6 +301,35 @@ def test_active_host_is_not_stolen_by_visible_name(monkeypatch):
 
     assert plans[0]['action'] == 'create'
     assert plans[0]['params']['host'] == 'ATM-0001'
+
+
+def test_active_orphan_is_adopted_when_the_registry_is_known(monkeypatch):
+    """A host can fail to disable during delete and remain active. Its old
+    technical name is not in atm_locations, so no live portal ATM owns it; the
+    same visible name proves it is the deleted ATM's host. Adopt it instead of
+    leaving the re-import permanently failed."""
+    old = existing(host='TST-0001', status='0')
+    install(monkeypatch, FakeZabbix(hosts={'TST-0001': old}))
+
+    summary, plans = zs.plan_hosts(
+        [row(atm_id='ATM-0001')], live_atm_ids={'ATM-0001'})
+
+    p = plans[0]
+    assert p['action'] == 'update'
+    assert p['params']['host'] == 'ATM-0001'
+    assert summary['created'] == 0
+
+
+def test_active_live_host_is_not_stolen_even_with_registry(monkeypatch):
+    """The old technical name still belongs to a live portal ATM: this is a
+    genuine name collision, not an orphan, so do not rename it silently."""
+    old = existing(host='ATM-OTHER', status='0')
+    install(monkeypatch, FakeZabbix(hosts={'ATM-OTHER': old}))
+
+    _, plans = zs.plan_hosts(
+        [row(atm_id='ATM-0001')], live_atm_ids={'ATM-0001', 'ATM-OTHER'})
+
+    assert plans[0]['action'] == 'create'
 
 
 def test_changed_ip_updates_the_interface_only(monkeypatch):

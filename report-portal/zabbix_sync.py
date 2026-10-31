@@ -406,7 +406,8 @@ def _create_params(a, tids, groups, create_groups=True):
 _CLIENT = [None]
 
 
-def _build_plans(atm_dicts, create_groups=True, max_batch=MAX_BATCH):
+def _build_plans(atm_dicts, create_groups=True, max_batch=MAX_BATCH,
+                 live_atm_ids=None):
     """Read Zabbix state and decide, per ATM, what must change. Only reads,
     plus hostgroup.create when create_groups=True. Returns (summary, plans,
     client); every plan is {atm_id, action, params, changes, error} with
@@ -508,18 +509,28 @@ def _build_plans(atm_dicts, create_groups=True, max_batch=MAX_BATCH):
                 want_name = (a.get("atm_name") or "").strip() or host
                 cand = by_name.get(want_name)
                 hid = str((cand or {}).get("hostid") or "")
+                cand_host = str((cand or {}).get("host") or "")
                 gids = {str(g.get("groupid")) for g in (cand or {}).get("groups") or []}
                 atms_group = groups.get("ATMs")
                 candidate_in_atms = (not atms_group) or (str(atms_group) in gids)
-                if (cand and str(cand.get("status")) == "1"
-                        and hid and hid not in known_hostids
-                        and hid not in adopted_hostids and candidate_in_atms):
+                if live_atm_ids is None:
+                    # No registry view: only adopt the clear delete case (the
+                    # portal disabled this host).
+                    adoptable = (str((cand or {}).get("status")) == "1"
+                                 and candidate_in_atms)
+                else:
+                    # The old technical name is not in atm_locations, so no
+                    # live portal ATM can own this host. Safe to adopt even if
+                    # its disable failed and it is still enabled.
+                    adoptable = bool(cand_host and cand_host not in live_atm_ids)
+                if (cand and adoptable and hid and hid not in known_hostids
+                        and hid not in adopted_hostids):
                     cur = cand
                     adopted = True
                     adopted_hostids.add(hid)
                     logger.info(
-                        "adopting disabled Zabbix host %s (%r) for %s after re-import",
-                        cand.get("host"), cand.get("name"), host)
+                        "adopting Zabbix host %s (%r, status=%s) for %s after re-import",
+                        cand.get("host"), cand.get("name"), cand.get("status"), host)
             if cur:
                 upd, changed = _plan_update(a, cur, tids, groups, create_groups)
                 if adopted:
@@ -565,20 +576,26 @@ def _summarise(plans):
     return summary
 
 
-def plan_hosts(atm_dicts, max_batch=MAX_BATCH):
+def plan_hosts(atm_dicts, max_batch=MAX_BATCH, live_atm_ids=None):
     """DRY RUN. What would change in Zabbix for these ATMs, changing nothing.
     Returns (summary, plans) — the summary counts would-be outcomes.
 
     max_batch is explicit so a fleet-wide caller can raise the cap rather than
-    silently receiving a 200-row slice of a 1,300-row fleet."""
+    silently receiving a 200-row slice of a 1,300-row fleet.
+
+    live_atm_ids is every atm_id currently in the portal registry. It lets an
+    orphaned Zabbix host (old technical name, same visible name) be adopted
+    even if the earlier delete failed to disable it. None = registry unknown,
+    so only disabled hosts are adopted."""
     summary, plans, _z = _build_plans(atm_dicts, create_groups=False,
-                                      max_batch=max_batch)
+                                      max_batch=max_batch,
+                                      live_atm_ids=live_atm_ids)
     if not plans and summary["failed"]:
         return summary, plans
     return _summarise(plans), plans
 
 
-def _sync(atm_dicts):
+def _sync(atm_dicts, live_atm_ids=None):
     """Plan, then apply. Returns (summary, applied) where applied[i] is the
     plan plus `applied` (bool) and `error` (str) so a caller can report what
     actually happened per ATM, not just totals."""
@@ -586,7 +603,8 @@ def _sync(atm_dicts):
     rows = (atm_dicts or [])[:MAX_BATCH]
     if not rows:
         return summary, []
-    planned, plans, z = _build_plans(atm_dicts, create_groups=True)
+    planned, plans, z = _build_plans(atm_dicts, create_groups=True,
+                                     live_atm_ids=live_atm_ids)
     if not plans and planned["failed"]:
         return planned, []
     applied = []
@@ -642,16 +660,16 @@ def _sync(atm_dicts):
     return summary, applied
 
 
-def sync_hosts(atm_dicts):
+def sync_hosts(atm_dicts, live_atm_ids=None):
     """Create missing Zabbix hosts; re-enable ones disabled by portal delete.
     Never raises. Same summary keys as before the plan/apply split."""
-    return _sync(atm_dicts)[0]
+    return _sync(atm_dicts, live_atm_ids=live_atm_ids)[0]
 
 
-def sync_hosts_detailed(atm_dicts):
+def sync_hosts_detailed(atm_dicts, live_atm_ids=None):
     """Same as sync_hosts but also returns the per-ATM outcome, for callers
     that must show what happened (onboarding wizard, repair report)."""
-    return _sync(atm_dicts)
+    return _sync(atm_dicts, live_atm_ids=live_atm_ids)
 
 
 def disable_hosts(atm_ids):

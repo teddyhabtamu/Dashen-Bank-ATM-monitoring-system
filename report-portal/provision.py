@@ -68,6 +68,26 @@ def load_atms(atm_ids=None, active_only=False):
     return rows
 
 
+def load_live_atm_ids():
+    """Every atm_id currently in the registry, for orphan-host adoption.
+
+    A Zabbix host whose technical name is absent from this set cannot belong
+    to any live portal ATM. The sync may safely re-adopt it when it still owns
+    an ATM's visible name after a delete/re-import. None on a DB read failure,
+    which makes the sync fall back to disabled-only adoption.
+    """
+    try:
+        with _db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT atm_id FROM atm_locations")
+            ids = {str(row[0]) for row in cur.fetchall() if row[0]}
+            cur.close()
+        return ids
+    except Exception as e:
+        logger.warning('provision: could not read live ATM ids: %s', e)
+        return None
+
+
 def review_queue(rows):
     """ATMs this system must not provision on its own: unknown vendor, or a
     vendor with no template. They are reported, never silently skipped."""
@@ -118,15 +138,20 @@ def provision_atms(atm_ids=None, dry_run=True, actor='', active_only=False,
 
     blocked = {b['atm_id']: b['reason'] for b in review_queue(rows)}
     passable = [r for r in rows if r['atm_id'] not in blocked]
+    live_ids = load_live_atm_ids()
 
     try:
         if dry_run:
             # max_batch is threaded through so a read-only fleet report can
             # plan every ATM instead of the write path's default slice.
-            summary, outcomes = (plan_hosts(passable, max_batch=max_batch)
-                                 if max_batch else plan_hosts(passable))
+            summary, outcomes = (
+                plan_hosts(passable, max_batch=max_batch,
+                           live_atm_ids=live_ids)
+                if max_batch else
+                plan_hosts(passable, live_atm_ids=live_ids))
         else:
-            summary, outcomes = sync_hosts_detailed(passable)
+            summary, outcomes = sync_hosts_detailed(
+                passable, live_atm_ids=live_ids)
     except Exception as e:  # both are best-effort, but never trust that
         result['error'] = f'Zabbix call failed: {e}'
         logger.warning('provision: %s', e)
