@@ -138,11 +138,14 @@ def test_agent_profile_hash_is_optional_and_normalised():
     inventing convergence. A reported hash is lowercase SHA-256 evidence."""
     payload = identity()
     assert normalize(payload)['agent']['profile_hash'] is None
+    assert normalize(payload)['agent']['deploy_hash'] is None
 
     payload['agent']['profile_hash'] = 'C' * 64
+    payload['agent']['deploy_hash'] = 'D' * 64
     payload['agent']['applied_at'] = '2026-10-31T09:00:00Z'
     got = normalize(payload)
     assert got['agent']['profile_hash'] == 'c' * 64
+    assert got['agent']['deploy_hash'] == 'd' * 64
     assert got['agent']['applied_at'] == '2026-10-31T09:00:00Z'
 
 
@@ -150,6 +153,13 @@ def test_a_malformed_agent_profile_hash_is_rejected():
     payload = identity()
     payload['agent']['profile_hash'] = 'not-a-hash'
     with pytest.raises(IdentityError, match='profile_hash'):
+        normalize(payload)
+
+
+def test_a_malformed_agent_deploy_hash_is_rejected():
+    payload = identity()
+    payload['agent']['deploy_hash'] = 'not-a-hash'
+    with pytest.raises(IdentityError, match='deploy_hash'):
         normalize(payload)
 
 

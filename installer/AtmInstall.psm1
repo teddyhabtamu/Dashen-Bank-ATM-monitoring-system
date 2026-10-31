@@ -430,6 +430,13 @@ function Test-ProfileDocument {
     if ($profileHash -notmatch '^[0-9a-fA-F]{64}$') {
         Add-CheckError $result 'profile_hash is missing or malformed'
     }
+    # Optional for older profiles: the deploy hash proves what was written,
+    # while profile_hash covers the whole signed document. When present it
+    # must be a SHA-256, or the box cannot report convergence.
+    $deployHash = [string](Get-MapValue $Profile 'deploy_hash')
+    if ($deployHash -and $deployHash -notmatch '^[0-9a-fA-F]{64}$') {
+        Add-CheckError $result 'deploy_hash is malformed'
+    }
 
     # ── agent block ───────────────────────────────────────────────────────
     $agent = Get-MapValue $Profile 'agent'
@@ -1530,6 +1537,7 @@ function Write-InstallerState {
         schema                = 1
         atm_id                = [string](Get-MapValue $Profile 'atm_id')
         profile_hash          = [string](Get-MapValue $Profile 'profile_hash')
+        deploy_hash           = [string](Get-MapValue $Profile 'deploy_hash')
         profile_sha256        = $ProfileSha256
         profile_file          = $ProfilePath
         applied_at            = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')

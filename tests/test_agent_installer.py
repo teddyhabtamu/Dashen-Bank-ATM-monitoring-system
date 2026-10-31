@@ -152,6 +152,7 @@ def test_apply_writes_the_profiles_exact_bytes_and_records_state(tmp_path):
     state = json.loads((monitor / 'atm-agent-state.json').read_text())
     assert state['atm_id'] == 'ATM-INSTALLER-NCR'
     assert state['profile_hash'] == profile['profile_hash']
+    assert state['deploy_hash'] == profile['deploy_hash']
     assert str(monitor / 'atm-agent.conf') in state['managed_files']
 
 

@@ -22,7 +22,8 @@
     * images.roots  — existing directories from C:\monitor\atm-image-roots.txt
     * probes        — SHA-256 and probe_version of each deployed probe
     * agent         — Zabbix agent file version and config hash
-    * agent.profile_hash — canonical hash of the profile the installer applied
+    * agent.profile_hash — canonical hash of the whole profile the installer applied
+    * agent.deploy_hash  — hash of the files/config actually written to the box
     * serial        — BIOS serial number (asset evidence; never reconciled)
 
   Run it by hand first:
@@ -37,7 +38,7 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 # The manifest builder reads this exact assignment. Bump it whenever the
 # output contract changes; the portal compares it with the deployed copy.
-$probe_version = '2026-10-31.1'
+$probe_version = '2026-10-31.2'
 
 # PowerShell 2.0 has no $PSScriptRoot. Resolve the script folder once so the
 # roots and probes are read from beside this script regardless of the caller.
@@ -438,10 +439,10 @@ function Get-AgentInfo {
 function Get-AppliedProfile {
     # The installer records the canonical hash of the profile it applied in
     # atm-agent-state.json. PowerShell 2.0 has no ConvertFrom-Json, so
-    # read the two scalars with anchored regexes. A missing or malformed
+    # read the three scalars with anchored regexes. A missing or malformed
     # state file is null evidence, never an invented hash: the portal then
     # says "reapply the profile" instead of claiming the box is current.
-    $out = @{ profile_hash = $null; applied_at = $null }
+    $out = @{ profile_hash = $null; deploy_hash = $null; applied_at = $null }
     $path = Join-Path $Script:MonitorRoot 'atm-agent-state.json'
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $out }
     $text = ''
@@ -450,6 +451,11 @@ function Get-AppliedProfile {
     if ($hash.Success) {
         $value = [string]$hash.Groups[1].Value
         $out['profile_hash'] = $value.ToLowerInvariant()
+    }
+    $deploy = [regex]::Match($text, '"deploy_hash"\s*:\s*"([0-9a-fA-F]{64})"')
+    if ($deploy.Success) {
+        $value = [string]$deploy.Groups[1].Value
+        $out['deploy_hash'] = $value.ToLowerInvariant()
     }
     $when = [regex]::Match($text, '"applied_at"\s*:\s*"([^"]{1,40})"')
     if ($when.Success) { $out['applied_at'] = $when.Groups[1].Value }
@@ -487,6 +493,7 @@ if ($bios) { $serial = [string]$bios.SystemSerialNumber }
 $appliedProfile = Get-AppliedProfile
 $agentInfo = Get-AgentInfo
 $agentInfo['profile_hash'] = $appliedProfile['profile_hash']
+$agentInfo['deploy_hash'] = $appliedProfile['deploy_hash']
 $agentInfo['applied_at'] = $appliedProfile['applied_at']
 
 $document = @{

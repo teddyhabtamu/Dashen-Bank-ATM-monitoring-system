@@ -116,9 +116,9 @@ wired by hand.
 - [ ] Approve image roots on the same page. The probe only *proposes* roots it
       can see; a human approves them, and the roots file stays fail-closed.
       Approval changes the desired profile, so approve **before** downloading
-      it. After the reapply, the box reports the applied `profile_hash`; Fleet
+      it. After the reapply, the box reports the applied `deploy_hash`; Fleet
       health keeps Images at **Reapply needed** until it matches the current
-      profile.
+      deployable profile.
 - [ ] Put the profile next to `AtmMonitorSetup.exe` and run `/DRYRUN` first.
       The dry run prints every action and writes nothing. Then run it again
       without `/DRYRUN` and confirm the ATM id.
@@ -198,7 +198,7 @@ calling an ATM live.
       whose stage is not ready. A row is **Onboarded** only when all five are
       ready; reporting telemetry alone is not enough. Images is ready only
       when the approved roots are on the box *and* the reported applied
-      `profile_hash` matches the profile the portal would hand out now.
+      `deploy_hash` matches the profile the portal would hand out now.
 - [ ] **NCR:** on UAT-01 run
       `zabbix_get -s <ATM-IP> -k "atm.parts" | python3 -m json.tool > /dev/null && echo JSON-OK`
       then open Zabbix → Monitoring → Latest data → filter the new host:

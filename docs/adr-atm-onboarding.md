@@ -100,7 +100,7 @@ human approval. Those are control boundaries, not missing automation.
 | Reporting | the vendor's authoritative telemetry is fresh |
 | Identity | `atm.identity` is under 24h old and has no high/medium conflict |
 | EJ | an EJ hostname is set and the latest parsed journal is from today or yesterday |
-| Images | every reported root is approved **and** the box’s applied profile hash matches the current profile |
+| Images | every reported root is approved **and** the box’s applied `deploy_hash` matches the current profile |
 
 The overall status is the worst stage, and the **next action** is the first
 stage that is not ready in that order. `unknown` means the sweep could not
@@ -138,9 +138,11 @@ the rule that keeps "healthy" honest during a 1,202-ATM rollout.
    server-side: once the registry is valid, the existing puller needs no ATM
    revisit.
 3. ~~**Images profile freshness.**~~ Done: the identity probe reports the
-   applied `profile_hash` from `atm-agent-state.json`, and the Images stage
-   stays **Reapply needed** until the box runs the current profile. Approval
-   changes the profile, so approve first, then reapply once. Still check the
+   applied `deploy_hash` from `atm-agent-state.json`, and the Images stage
+   stays **Reapply needed** until the box runs the current deployable profile.
+   The hash covers only the files/config the installer writes, so identity
+   seeding the EJ hostname does not force a second reapply. Approval changes
+   the profile, so approve first, then reapply once. Still check the
    bridge/sample read after reapply. Do not build a bespoke push channel yet.
 4. **Policy refresh channel.** Only if reapply friction proves real. It needs
    client authentication, TLS, code signing and audit; it is a larger security

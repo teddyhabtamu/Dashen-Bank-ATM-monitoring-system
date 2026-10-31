@@ -213,7 +213,8 @@ def _read_onboarding(cur, atm_ids):
     rows, error = _safe_rows(cur, """
         SELECT atm_id, reported_at, terminal_id, ej_hostname, conflicts,
                payload->'images'->'roots', payload->'probes',
-               payload->'agent'->>'profile_hash', payload->'agent'->>'applied_at'
+               payload->'agent'->>'profile_hash', payload->'agent'->>'applied_at',
+               payload->'agent'->>'deploy_hash'
           FROM atm_agent_identity
          WHERE atm_id = ANY(%s)
     """, (ids,))
@@ -234,6 +235,7 @@ def _read_onboarding(cur, atm_ids):
             'has_probes': bool(r[6]),
             'profile_hash': (r[7] or '').lower(),
             'applied_at': r[8] or '',
+            'deploy_hash': (r[9] or '').lower(),
         }
 
     # Same rule as the EJ Journal page: the latest journal date is the
@@ -617,13 +619,15 @@ def verify_atm(atm_id, window_minutes=15, client=None, db_facts=None,
 _MANIFEST_CACHE = None
 
 
-def _current_profile_hash(row):
-    """Canonical hash of the profile the portal would hand out now.
+def _current_deploy_hash(row):
+    """Hash of the files/config the portal would write now.
 
-    The identity probe reports the hash the installer actually applied. The
+    The identity probe reports the hash the installer actually deployed. The
     two matching is the only evidence that the box runs the current approved
-    roots and probes, not an older subset that still looks approved. An
-    unavailable manifest is unknown evidence, never a false "stale".
+    roots and probes, not an older subset that still looks approved. The hash
+    excludes informational registry fields, so seeding an EJ hostname does not
+    demand a second reapply. An unavailable manifest is unknown evidence,
+    never a false "stale".
     """
     global _MANIFEST_CACHE
     if not row:
@@ -632,9 +636,9 @@ def _current_profile_hash(row):
         from agent_profile import build_profile, load_manifest
         if _MANIFEST_CACHE is None:
             _MANIFEST_CACHE = load_manifest()
-        return build_profile(row, _MANIFEST_CACHE).get('profile_hash') or ''
+        return build_profile(row, _MANIFEST_CACHE).get('deploy_hash') or ''
     except Exception as exc:  # noqa: BLE001 - evidence, not a hard failure
-        logger.warning('verify: current profile hash unavailable for %s: %s',
+        logger.warning('verify: current deploy hash unavailable for %s: %s',
                        row.get('atm_id'), exc)
         return ''
 
@@ -660,7 +664,7 @@ def _result(atm_id, verdict, ok, checks, blockers, z, db, window_minutes):
                   'identity': db.get('identity'),
                   'ej': db.get('ej'),
                   'approved_image_roots': db.get('image_roots') or [],
-                  'current_profile_hash': _current_profile_hash(db.get('row')),
+                  'current_deploy_hash': _current_deploy_hash(db.get('row')),
                   'identity_unavailable': db.get('identity_unavailable') or '',
                   'ej_unavailable': db.get('ej_unavailable') or '',
                   'image_roots_unavailable': db.get('image_roots_unavailable') or '',

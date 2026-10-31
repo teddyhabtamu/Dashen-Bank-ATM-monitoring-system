@@ -307,6 +307,7 @@ def build_profile(row, manifest, secret=None):
             'format': (row.get('ej_log_format') or '').strip() or None,
             'roots': [],
         },
+        'deploy_hash': '',
         'profile_hash': '',
         'signature': None,
     }
@@ -318,6 +319,32 @@ def build_profile(row, manifest, secret=None):
     roots_text = render_roots(profile)
     if roots_text:
         profile['files'].append({'dest': ROOTS_FILE, 'content': roots_text})
+
+    # The deploy hash covers exactly what the installer writes to the box:
+    # the agent config text, the probe files and their hashes, the include and
+    # the roots file. It deliberately excludes informational registry fields
+    # (EJ hostname, city, warnings). Identity seeds the EJ hostname after the
+    # first apply; hashing that field would force a pointless second reapply
+    # on every new ATM.
+    deployable = {
+        'schema': PROFILE_SCHEMA,
+        'atm_id': atm_id,
+        'hostname': atm_id,
+        'vendor': vendor,
+        'agent': {
+            'series': AGENT_SERIES,
+            'server': server,
+            'listen_port': AGENT_PORT,
+            'timeout': AGENT_TIMEOUT,
+            'passive_only': True,
+            'config_text': profile['agent']['config_text'],
+        },
+        'probes': probes,
+        'user_parameters': profile['user_parameters'],
+        'files': profile['files'],
+        'image_roots': image_roots,
+    }
+    profile['deploy_hash'] = hashlib.sha256(_canonical(deployable)).hexdigest()
 
     body = {k: v for k, v in profile.items() if k not in ('profile_hash', 'signature')}
     profile['profile_hash'] = hashlib.sha256(_canonical(body)).hexdigest()

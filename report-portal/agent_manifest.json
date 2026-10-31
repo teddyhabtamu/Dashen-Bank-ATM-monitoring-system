@@ -3,9 +3,9 @@
     "atm-identity.ps1": {
       "dest": "C:\\monitor\\atm-identity.ps1",
       "kind": "identity",
-      "sha256": "f6ae4f0f59dcf53742004e11fcbc73f3dc2cc18042da0383713c4cdbd5e2719f",
+      "sha256": "cbbde9327834f7f73e8252da6909c0d496f0c46bc519f77ebdf6ed1deca7e6e9",
       "source": "scripts/atm-identity.ps1",
-      "version": "2026-10-31.1"
+      "version": "2026-10-31.2"
     },
     "atm-image-chunk.ps1": {
       "dest": "C:\\monitor\\atm-image-chunk.ps1",

@@ -332,7 +332,7 @@ symptom, so the cause sorts first.
 - image roots and candidates
 - probe SHA-256/version
 - agent version and config hash
-- the canonical `profile_hash` the installer applied (and when)
+- the full `profile_hash` and the `deploy_hash` of the files/config the installer wrote (and when)
 - IP addresses, serial, model, computer name
 
 The portal’s `identity_sync` job runs every **5 minutes**:
@@ -398,19 +398,22 @@ Images are **on demand**, never stored centrally.
    bytes back through the portal for one view.
 7. The portal writes an audit record and sends `Cache-Control: no-store`.
 
-The identity probe also reports the canonical `profile_hash` the installer
-recorded in `C:\monitor\atm-agent-state.json`. The portal rebuilds the
-current profile from the registry and compares the two. If they differ — or the
-box cannot report a hash — the Images stage stays **Reapply needed** even when
-every root the old profile exposes is approved. This is what catches the
-dangerous case: a newly approved root is absent from the box, but the old
-profile’s roots are a subset of the allow-list, so a root-only comparison would
-look green.
+The identity probe also reports the `deploy_hash` the installer recorded in
+`C:\monitor\atm-agent-state.json`. That hash covers exactly what was written to
+the box — the agent config, probes, include and roots file — and deliberately
+ignores informational fields such as the EJ hostname. The portal rebuilds the
+current profile from the registry and compares the deploy hashes. If they
+differ — or the box cannot report one — the Images stage stays **Reapply
+needed** even when every root the old profile exposes is approved. This is what
+catches the dangerous case: a newly approved root is absent from the box, but
+the old profile’s roots are a subset of the allow-list, so a root-only
+comparison would look green. The full `profile_hash` is still recorded as audit
+evidence for the whole signed document.
 
 The image viewer working does **not** prove the onboarding Images stage is ready:
 the viewer uses the host bridge allow-list; the onboarding stage uses the
 registry’s approved `image_roots`, the identity-reported roots, and the applied
-profile hash.
+deploy hash.
 
 ### Phase 8 — Fleet onboarding state and acceptance
 
@@ -422,7 +425,7 @@ The **Fleet health** page combines five evidenced stages per ATM:
 | **Reporting** | Vendor authoritative telemetry is fresh |
 | **Identity** | `atm.identity` is under 24h old and has no high/medium conflict |
 | **EJ** | EJ hostname is set and the latest parsed journal is today or yesterday |
-| **Images** | Every reported root is approved **and** the box’s applied `profile_hash` matches the current profile |
+| **Images** | Every reported root is approved **and** the box’s applied `deploy_hash` matches the current profile |
 
 The overall status is the worst stage. The **next action** is the first stage
 that is not ready in that order. `unknown` means the sweep could not evaluate a

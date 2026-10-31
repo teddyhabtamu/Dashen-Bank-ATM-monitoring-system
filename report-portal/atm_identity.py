@@ -237,6 +237,11 @@ def normalize(payload):
         profile_hash = profile_hash.lower()
         if not _SHA256_RE.match(profile_hash):
             raise IdentityError('agent.profile_hash is not a SHA-256')
+    deploy_hash = _text(agent_raw.get('deploy_hash'), 'agent.deploy_hash', 64)
+    if deploy_hash is not None:
+        deploy_hash = deploy_hash.lower()
+        if not _SHA256_RE.match(deploy_hash):
+            raise IdentityError('agent.deploy_hash is not a SHA-256')
 
     return {
         'schema': IDENTITY_SCHEMA,
@@ -266,6 +271,7 @@ def normalize(payload):
             'version': _text(agent_raw.get('version'), 'agent.version', 32),
             'config_hash': _text(agent_raw.get('config_hash'), 'agent.config_hash', 64),
             'profile_hash': profile_hash,
+            'deploy_hash': deploy_hash,
             'applied_at': _iso(agent_raw.get('applied_at'), 'agent.applied_at'),
         },
     }

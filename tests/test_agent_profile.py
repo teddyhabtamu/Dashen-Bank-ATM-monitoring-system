@@ -97,9 +97,41 @@ def test_profile_is_deterministic_and_verifies():
     first = build()
     second = build()
     assert first['profile_hash'] == second['profile_hash']
+    assert first['deploy_hash'] == second['deploy_hash']
     assert first['signature'] == second['signature']
     assert verify(first, 'test-secret') is True
     assert verify(first, 'wrong-secret') is False
+
+
+def test_deploy_hash_ignores_informational_registry_fields():
+    """Identity seeds the EJ hostname after the first apply. Hashing that
+    field would force a pointless second reapply on every new ATM, so the
+    deploy hash covers only the bytes the installer writes."""
+    baseline = build()
+    changed = build(dict(ATM, ej_hostname='SEEDED-BY-IDENTITY',
+                         city='Hawassa', atm_name='Renamed ATM'))
+    assert changed['deploy_hash'] == baseline['deploy_hash']
+    assert changed['profile_hash'] != baseline['profile_hash'], (
+        'the full signed document still changes, as it should')
+
+
+def test_approving_an_image_root_changes_the_deploy_hash():
+    without = build(GRG)
+    with_root = build(dict(GRG, image_roots=['E:\\pic']))
+    assert with_root['deploy_hash'] != without['deploy_hash']
+
+
+def test_a_probe_change_changes_the_deploy_hash():
+    manifest = load_manifest()
+    manifest['files']['atm-identity.ps1']['sha256'] = 'a' * 64
+    changed = build_profile(ATM, manifest, secret='test-secret')
+    assert changed['deploy_hash'] != build()['deploy_hash']
+
+
+def test_the_deploy_hash_is_inside_the_signed_body():
+    profile = build()
+    profile['deploy_hash'] = '0' * 64
+    assert verify(profile, 'test-secret') is False
 
 
 def test_profile_has_no_render_timestamp_so_the_download_hash_is_stable():
