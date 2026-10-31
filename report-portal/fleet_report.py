@@ -11,6 +11,8 @@ decides what an operator must act on - is unit-tested rather than eyeballed.
 No writes, ever: the caller decides what to do with the rows.
 """
 
+from onboarding_state import STAGES, evaluate as evaluate_onboarding
+
 # Ordered worst-first so the top of any report is what needs attention.
 SEVERITY = ('failed', 'no_ip', 'provisioned_not_reporting', 'not_provisioned',
             'review', 'unknown', 'reporting')
@@ -75,12 +77,11 @@ def summarise(verify_results, plan_results=None):
         # the symptom it produced. Prefer the cause when both exist.
         if plan and plan.get('error'):
             blockers = [plan['error']] + [b for b in blockers if b != plan['error']]
-        needs_action = status != 'reporting' or bool(blockers)
         row = {
             'atm_id': r['atm_id'],
             'status': status,
             'status_label': SEVERITY_LABEL.get(status, status.replace('_', ' ').title()),
-            'needs_action': bool(needs_action),
+            'needs_action': False,
             'verdict': verdict,
             'blocker': blockers[0] if blockers else '',
             'blockers': blockers,
@@ -91,11 +92,32 @@ def summarise(verify_results, plan_results=None):
             'changes': (plan or {}).get('changes') or [],
             'plan_action': (plan or {}).get('action') or '',
         }
+        # Onboarding is more than "telemetry arrives": identity, journals and
+        # image approval each have their own evidence and their own next step.
+        onboarding = evaluate_onboarding(row, facts=facts)
+        row['onboarding'] = onboarding
+        row['stages'] = onboarding['stages']
+        row['onboarding_status'] = onboarding['status']
+        row['onboarding_label'] = onboarding['label']
+        row['needs_action'] = (status != 'reporting' or bool(blockers)
+                               or onboarding['needs_action'])
+        # A reporting ATM can still have an empty verify blocker while an
+        # onboarding stage is pending. Give the "what is wrong" column the
+        # first stage that needs work, so the row is never blank and vague.
+        row['problem'] = row['blocker'] or next(
+            (onboarding['stages'][key]['detail'] for key in STAGES
+             if onboarding['stages'][key]['status'] in
+             ('blocked', 'review', 'stale', 'pending')),
+            '')
         row['summary'] = _summary(row)
         rows.append(row)
 
+    # Within a severity band, an ATM that still has onboarding stages to
+    # finish comes before one that is genuinely complete. A fully onboarded
+    # row is the only thing that should sit at the bottom of the report.
     rows.sort(key=lambda x: (SEVERITY.index(x['status'])
                              if x['status'] in SEVERITY else len(SEVERITY),
+                             0 if x.get('onboarding_status') != 'complete' else 1,
                              x['atm_id']))
     return rows
 
@@ -128,7 +150,18 @@ def counts(rows):
     out['reporting'] = out.get('reporting', 0)
     out['needs_action'] = sum(1 for r in rows or [] if r.get('needs_action'))
     out['healthy'] = out['total'] - out['needs_action']
+    out['onboarded'] = sum(1 for r in rows or []
+                           if r.get('onboarding_status') == 'complete')
+    for key in ('identity', 'ej', 'images'):
+        out[f'{key}_ready'] = sum(
+            1 for r in rows or []
+            if ((r.get('stages') or {}).get(key) or {}).get('status') == 'ok')
     return out
+
+
+def _stage_csv(row, key):
+    stage = (row.get('stages') or {}).get(key) or {}
+    return stage.get('status', ''), stage.get('detail', '')
 
 
 def to_csv(rows):
@@ -139,15 +172,22 @@ def to_csv(rows):
     w = csv.writer(buf)
     w.writerow(['atm_id', 'status', 'needs_action', 'vendor', 'ip_address',
                 'items_reporting', 'items_total', 'provisioning_action',
-                'planned_changes', 'blocker'])
+                'planned_changes', 'blocker', 'onboarding_status',
+                'identity_status', 'identity_detail', 'ej_status', 'ej_detail',
+                'images_status', 'images_detail'])
     for r in rows or []:
+        identity_status, identity_detail = _stage_csv(r, 'identity')
+        ej_status, ej_detail = _stage_csv(r, 'ej')
+        images_status, images_detail = _stage_csv(r, 'images')
         w.writerow([
             r.get('atm_id', ''), r.get('status', ''),
             'yes' if r.get('needs_action') else 'no',
             r.get('vendor', ''), r.get('ip', ''),
             r.get('items_reporting'), r.get('items_total'),
             r.get('plan_action', ''), '; '.join(r.get('changes') or []),
-            r.get('blocker', ''),
+            r.get('blocker', ''), r.get('onboarding_status', ''),
+            identity_status, identity_detail, ej_status, ej_detail,
+            images_status, images_detail,
         ])
     return buf.getvalue()
 
@@ -168,6 +208,9 @@ def recommend_next_action(row):
     if status == 'reporting':
         if row.get('changes'):
             return f"Planned change is ready to apply: {', '.join(row['changes'])}"
+        action = (row.get('onboarding') or {}).get('next_action') or ''
+        if action and action != 'No action needed.':
+            return action
         return 'No action needed.'
 
     if status == 'provisioned_not_reporting':

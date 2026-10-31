@@ -188,6 +188,11 @@ calling an ATM live.
       human. `--csv` writes the same report as CSV for the rollout tracker.
       This is the bulk tool: importing 1,202 ATMs is one CSV, and this report
       tells you exactly which rows did not come up.
+- [ ] Portal → **Fleet health** shows the same fleet with five stages per ATM:
+      **Provisioning, Reporting, Identity, EJ, Images**, plus the single next
+      action. Filter by **Identity**, **EJ** or **Images** to see only the rows
+      whose stage is not ready. A row is **Onboarded** only when all five are
+      ready; reporting telemetry alone is not enough.
 - [ ] **NCR:** on UAT-01 run
       `zabbix_get -s <ATM-IP> -k "atm.parts" | python3 -m json.tool > /dev/null && echo JSON-OK`
       then open Zabbix → Monitoring → Latest data → filter the new host:

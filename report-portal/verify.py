@@ -174,9 +174,118 @@ def _zabbix_snapshot(client, atm_ids):
     return out
 
 
+def _safe_rows(cur, sql, params):
+    """Run one read inside a savepoint; return (rows, error).
+
+    A missing side table must not abort the transaction and take the other
+    onboarding source down with it. The savepoint is the same pattern
+    agent_registry.init_agent_identity_table uses at startup.
+    """
+    try:
+        cur.execute("SAVEPOINT sp_onboarding")
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+        cur.execute("RELEASE SAVEPOINT sp_onboarding")
+        return rows, ''
+    except Exception as e:
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT sp_onboarding")
+            cur.execute("RELEASE SAVEPOINT sp_onboarding")
+        except Exception:
+            pass
+        return [], str(e)
+
+
+def _read_onboarding(cur, atm_ids):
+    """Identity, EJ and image-root evidence for a batch.
+
+    Each source is read in its own savepoint: a deployment that has not yet
+    created `atm_agent_identity` or `ej_parse_runs` must still produce a
+    reporting verdict. A missing side table is recorded as unavailable, not
+    turned into "no identity received" (which would send an operator to the
+    box for a database problem).
+    """
+    out = {a: {'identity': None, 'ej': None, 'image_roots': []} for a in atm_ids}
+    ids = list(atm_ids)
+    if not ids:
+        return out
+
+    rows, error = _safe_rows(cur, """
+        SELECT atm_id, reported_at, terminal_id, ej_hostname, conflicts,
+               payload->'images'->'roots', payload->'probes'
+          FROM atm_agent_identity
+         WHERE atm_id = ANY(%s)
+    """, (ids,))
+    if error:
+        logger.warning('verify: identity evidence unavailable: %s', error)
+        for row in out.values():
+            row['identity_unavailable'] = error
+    for r in rows:
+        row = out.get(r[0])
+        if row is None:
+            continue
+        row['identity'] = {
+            'reported_at': r[1].isoformat() if r[1] else '',
+            'terminal_id': r[2] or '',
+            'ej_hostname': r[3] or '',
+            'conflicts': r[4] or [],
+            'image_roots': [str(p) for p in (r[5] or [])],
+            'has_probes': bool(r[6]),
+        }
+
+    # Same rule as the EJ Journal page: the latest journal date is the
+    # evidence, and a parse error on that date outranks age.
+    rows, error = _safe_rows(cur, """
+        WITH latest AS (
+            SELECT atm_id, MAX(journal_date) AS journal_date
+              FROM ej_parse_runs
+             WHERE atm_id = ANY(%s) AND journal_date IS NOT NULL
+             GROUP BY atm_id
+        )
+        SELECT l.atm_id, l.journal_date,
+               COUNT(*) FILTER (WHERE p.status = 'error')::int,
+               MAX(p.parsed_at)
+          FROM latest l
+          JOIN ej_parse_runs p
+            ON p.atm_id = l.atm_id
+           AND p.journal_date = l.journal_date
+         GROUP BY l.atm_id, l.journal_date
+    """, (ids,))
+    if error:
+        logger.warning('verify: EJ evidence unavailable: %s', error)
+        for row in out.values():
+            row['ej_unavailable'] = error
+    for r in rows:
+        row = out.get(r[0])
+        if row is None:
+            continue
+        row['ej'] = {
+            'journal_date': r[1].isoformat() if r[1] else '',
+            'parse_errors': int(r[2] or 0),
+            'parsed_at': r[3].isoformat() if r[3] else '',
+        }
+
+    # The approved allow-list lives on atm_locations. Read it separately so a
+    # deployment that has not added the column yet loses the image stage, not
+    # the whole fleet's reporting verdict.
+    rows, error = _safe_rows(cur, """
+        SELECT atm_id, image_roots FROM atm_locations WHERE atm_id = ANY(%s)
+    """, (ids,))
+    if error:
+        logger.warning('verify: image-root evidence unavailable: %s', error)
+        for row in out.values():
+            row['image_roots_unavailable'] = error
+    for r in rows:
+        row = out.get(r[0])
+        if row is not None:
+            row['image_roots'] = list(r[1] or [])
+    return out
+
+
 def _db_snapshot(atm_ids):
-    """Portal evidence for the whole fleet in two queries instead of two per ATM."""
-    out = {a: {'row': {}, 'state': '', 'last_seen': '', 'db_error': ''} for a in atm_ids}
+    """Portal evidence for the whole fleet in a handful of queries, not two per ATM."""
+    out = {a: {'row': {}, 'state': '', 'last_seen': '', 'db_error': '',
+               'identity': None, 'ej': None, 'image_roots': []} for a in atm_ids}
     if not atm_ids:
         return out
     try:
@@ -196,6 +305,8 @@ def _db_snapshot(atm_ids):
                 if r[0] in out:
                     out[r[0]]['state'] = r[1] or ''
                     out[r[0]]['last_seen'] = r[2].isoformat() if r[2] else ''
+            for atm_id, extra in _read_onboarding(cur, list(atm_ids)).items():
+                out[atm_id].update(extra)
             cur.close()
     except Exception as e:
         for f in out.values():
@@ -275,7 +386,8 @@ def _zabbix_facts(atm_id, client):
 def _db_facts(atm_id):
     """Read-only portal evidence. Missing DB is not fatal — the Zabbix half
     still gives a verdict, it just cannot cross-check the record."""
-    out = {'row': {}, 'state': '', 'last_seen': '', 'db_error': ''}
+    out = {'row': {}, 'state': '', 'last_seen': '', 'db_error': '',
+           'identity': None, 'ej': None, 'image_roots': []}
     try:
         from db import get_db
         with get_db() as conn:
@@ -291,6 +403,7 @@ def _db_facts(atm_id):
             if s:
                 out['state'] = s[0] or ''
                 out['last_seen'] = s[1].isoformat() if s[1] else ''
+            out.update(_read_onboarding(cur, [atm_id]).get(atm_id) or {})
             cur.close()
     except Exception as e:
         out['db_error'] = str(e)
@@ -495,7 +608,18 @@ def _result(atm_id, verdict, ok, checks, blockers, z, db, window_minutes):
                   'newest_data_age_seconds': z['newest_data_age_seconds'],
                   'interfaces': z['interfaces'],
                   'vendor': db['row'].get('vendor'), 'ip_address': db['row'].get('ip_address'),
-                  'state': db.get('state')},
+                  'state': db.get('state'),
+                  # Onboarding evidence: the fleet report turns these into the
+                  # identity / EJ / image stages. Missing keys mean the report
+                  # could not evaluate the stage, never that the ATM is broken.
+                  'ej_hostname': (db['row'] or {}).get('ej_hostname') or '',
+                  'identity': db.get('identity'),
+                  'ej': db.get('ej'),
+                  'approved_image_roots': db.get('image_roots') or [],
+                  'identity_unavailable': db.get('identity_unavailable') or '',
+                  'ej_unavailable': db.get('ej_unavailable') or '',
+                  'image_roots_unavailable': db.get('image_roots_unavailable') or '',
+                  'onboarding_error': db.get('db_error') or ''},
     }
 
 

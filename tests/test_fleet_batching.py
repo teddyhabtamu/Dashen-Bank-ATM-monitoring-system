@@ -200,7 +200,9 @@ def test_db_snapshot_returns_a_row_for_every_requested_atm():
         close=lambda: None))
     out = verify._db_snapshot(['ATM-0001'])
     assert set(out) == {'ATM-0001'}
-    assert set(out['ATM-0001']) == {'row', 'state', 'last_seen', 'db_error'}
+    assert set(out['ATM-0001']) == {
+        'row', 'state', 'last_seen', 'db_error',
+        'identity', 'ej', 'image_roots'}
 
 
 def test_fleet_falls_back_rather_than_failing_the_page():

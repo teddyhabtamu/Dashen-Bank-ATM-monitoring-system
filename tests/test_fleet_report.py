@@ -241,3 +241,51 @@ def test_timestamps_are_labelled_in_the_timezone_they_are_shown_in():
     assert fr.format_eat('2026-10-15T18:38:48+00:00') == '2026-10-15 21:38 EAT'
     assert fr.format_eat(None) == ''
     assert fr.format_eat('nonsense') == 'nonsense'
+
+
+# ── onboarding is more than telemetry ─────────────────────────────────────
+def test_a_reporting_atm_with_no_identity_still_needs_action():
+    """The fleet page used to call a host healthy the moment one item arrived.
+    An ATM with no identity, no journal and no approved image root is not
+    onboarded, even when telemetry is perfect."""
+    r = v('ATM-NOIDENT')
+    r['facts'].update({
+        'ej_hostname': '',
+        'identity': None,
+        'ej': None,
+        'approved_image_roots': [],
+    })
+    row = fr.summarise([r])[0]
+    assert row['status'] == 'reporting', 'telemetry itself is still healthy'
+    assert row['onboarding_status'] != 'complete'
+    assert row['needs_action'] is True
+    assert 'agent profile' in fr.recommend_next_action(row)
+
+
+def test_onboarding_stages_are_exposed_for_the_fleet_table():
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    r = v('ATM-STAGES')
+    r['facts'].update({
+        'ej_hostname': 'TESTMACHINE',
+        'identity': {'reported_at': now.isoformat(),
+                     'terminal_id': 'TID006', 'conflicts': [],
+                     'image_roots': ['C:\\images']},
+        'ej': {'journal_date': (now + timedelta(hours=3)).date().isoformat(),
+               'parse_errors': 0},
+        'approved_image_roots': ['C:\\images'],
+    })
+    row = fr.summarise([r])[0]
+    assert set(row['stages']) == {
+        'provisioning', 'reporting', 'identity', 'ej', 'images'}
+    assert row['onboarding_status'] == 'complete'
+    assert row['needs_action'] is False
+
+
+def test_a_healthy_atm_without_onboarding_evidence_is_not_invented_as_broken():
+    """The legacy v() facts carry no identity/EJ keys. That means 'not
+    evaluated', not 'the box has no identity'."""
+    row = fr.summarise([v('ATM-LEGACY')])[0]
+    assert row['needs_action'] is False
+    assert fr.recommend_next_action(row) == 'No action needed.'
+    assert row['stages']['identity']['status'] == 'unknown'

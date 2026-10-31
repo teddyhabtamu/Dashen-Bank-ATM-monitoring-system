@@ -392,6 +392,12 @@ def onboard_fleet():
         rows = list(rows)
     elif mode == 'healthy':
         rows = [r for r in rows if not r.get('needs_action')]
+    elif mode in ('identity', 'ej', 'images', 'provisioning', 'reporting'):
+        # One stage at a time: "show me every ATM whose EJ is not flowing".
+        # Unknown is not a failure - it means the sweep could not evaluate it.
+        rows = [r for r in rows
+                if (((r.get('stages') or {}).get(mode) or {}).get('status')
+                    not in ('ok', 'unknown'))]
     else:
         rows = [r for r in rows if r.get('needs_action')]
     q = (request.args.get('q') or '').strip().lower()
@@ -446,7 +452,9 @@ def onboard_fleet_csv():
     if not cached:
         return Response('atm_id,status,needs_action,vendor,ip_address,'
                         'items_reporting,items_total,provisioning_action,'
-                        'planned_changes,blocker\n',
+                        'planned_changes,blocker,onboarding_status,'
+                        'identity_status,identity_detail,ej_status,ej_detail,'
+                        'images_status,images_detail\n',
                         mimetype='text/csv',
                         headers={'Content-Disposition':
                                  'attachment; filename=fleet_report.csv'})

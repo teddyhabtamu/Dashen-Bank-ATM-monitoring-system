@@ -1,7 +1,9 @@
 # ADR: ATM onboarding — durable provisioning and automatic identity
 
-> **Status:** Accepted, 2026-10-31. First increment implemented on `uat-prep`.
-> **Scope:** Zabbix host creation and `atm.identity` transport. EJ auto-enable
+> **Status:** Accepted, 2026-10-31. Provisioning, `atm.identity` transport and
+> the fleet onboarding state are implemented on `uat-prep`.
+> **Scope:** Zabbix host creation, `atm.identity` transport, and the per-ATM
+> rollup of provisioning / reporting / identity / EJ / images. EJ auto-enable
 > and image reapply remain follow-ups (see "Next").
 
 ## Context
@@ -88,9 +90,29 @@ a human.
 Terminal ID, vendor and model are never auto-healed. Image roots remain a
 human approval. Those are control boundaries, not missing automation.
 
+### 4. The fleet page answers five stages, not one
+
+`onboarding_state.py` turns the evidence into one verdict per ATM:
+
+| Stage | Ready when |
+|---|---|
+| Provisioning | the Zabbix host exists and the dry-run plan has no pending change |
+| Reporting | the vendor's authoritative telemetry is fresh |
+| Identity | `atm.identity` is under 24h old and has no high/medium conflict |
+| EJ | an EJ hostname is set and the latest parsed journal is from today or yesterday |
+| Images | every image root the box reported is in the approved allow-list |
+
+The overall status is the worst stage, and the **next action** is the first
+stage that is not ready in that order. `unknown` means the sweep could not
+evaluate a stage; it never sends a technician to a box. A reporting ATM with
+no identity, journal or approved image root is therefore *not* green. This is
+the rule that keeps "healthy" honest during a 1,202-ATM rollout.
+
 ## Consequences
 
 - A saved ATM can no longer silently lack a Zabbix host.
+- The fleet page shows provisioning, reporting, identity, EJ and images per
+  ATM, with one next action and a filter for each stage.
 - The Agent setup page shows **Synced / Retrying / Needs registry change** and
   a **Retry provisioning now** button.
 - Identity appears without a paste; the Agent page shows its source and age.
@@ -108,16 +130,17 @@ human approval. Those are control boundaries, not missing automation.
 
 ## Next
 
-1. **Onboarding state machine.** Combine provisioning, reporting, identity,
-   EJ and image readiness into one per-ATM status with one next action. The
-   Agent page already has the pieces; the fleet page needs the rollup.
-2. **EJ completion.** The empty-hostname case is seeded automatically. Still
-   needed: pull/ingest status per ATM, and a review action for a hostname that
-   conflicts with an existing registry value. EJ is server-side: once the
-   registry is valid, the existing puller needs no ATM revisit.
-3. **Images.** Approval changes the agent profile, so a reapply is required.
-   Show "profile stale", verify probe hashes after reapply, and check the
-   bridge/sample read. Do not build a bespoke push channel yet.
+1. ~~**Onboarding state machine.**~~ Done: `onboarding_state.py` combines the
+   five stages into one status and one next action on the fleet page.
+2. **EJ completion.** The empty-hostname case is seeded automatically. The
+   fleet stage now shows pull/ingest status per ATM. Still needed: a review
+   action for a hostname that conflicts with an existing registry value. EJ is
+   server-side: once the registry is valid, the existing puller needs no ATM
+   revisit.
+3. **Images.** The fleet stage now shows approval state. Approval changes the
+   agent profile, so a reapply is still required. Show "profile stale", verify
+   probe hashes after reapply, and check the bridge/sample read. Do not build a
+   bespoke push channel yet.
 4. **Policy refresh channel.** Only if reapply friction proves real. It needs
    client authentication, TLS, code signing and audit; it is a larger security
    surface than the current manual reapply.

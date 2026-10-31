@@ -14,10 +14,21 @@
 .next{font-size:11px;color:#012169;font-weight:600}
 td.status{white-space:nowrap}
 td.atm{white-space:nowrap;font-weight:600}
+td.atm .sub{display:block;font-size:10px;color:#94A3B8;font-weight:500;margin-top:2px}
+td.stage{white-space:nowrap;vertical-align:top}
+td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:190px;overflow:hidden;text-overflow:ellipsis}
+.badge.ok{background:rgba(5,150,105,.1);color:#059669}
+.badge.warn{background:rgba(217,119,6,.1);color:#D97706}
+.badge.bad{background:rgba(220,38,38,.08);color:#DC2626}
+.badge.muted{background:#F1F5F9;color:#64748B}
+.table-wrap{overflow-x:auto}
 .empty{padding:44px 20px;text-align:center;color:#64748B}
 .spin{animation:spin 1s linear infinite}
 @media(max-width:768px){ .fleet-summary{grid-template-columns:repeat(2,1fr)} }
 {% endblock %}
+{% macro stage_badge(status, label, detail='') -%}
+<span class="badge {{ {'ok':'ok','pending':'warn','stale':'warn','review':'warn','blocked':'bad','unknown':'muted','complete':'ok','in_progress':'warn'}.get(status, 'muted') }}"{% if detail %} title="{{ detail }}"{% endif %}>{{ label }}</span>
+{%- endmacro %}
 {% block body %}
 <div class="page-header">
   <div class="page-header-icon"><i data-lucide="activity"></i></div>
@@ -110,9 +121,12 @@ td.atm{white-space:nowrap;font-weight:600}
 <div class="card">
   <div class="fleet-summary">
     <div class="fleet-tile"><div class="n">{{ counts.get('total', 0) }}</div><div class="l">ATMs checked</div></div>
-    <div class="fleet-tile good"><div class="n">{{ counts.get('healthy', 0) }}</div><div class="l">Healthy</div></div>
+    <div class="fleet-tile good"><div class="n">{{ counts.get('onboarded', 0) }}</div><div class="l">Onboarded</div></div>
     <div class="fleet-tile bad"><div class="n">{{ counts.get('needs_action', 0) }}</div><div class="l">Need action</div></div>
     <div class="fleet-tile"><div class="n">{{ counts.get('reporting', 0) }}</div><div class="l">Reporting</div></div>
+    <div class="fleet-tile"><div class="n">{{ counts.get('identity_ready', 0) }}</div><div class="l">Identity ready</div></div>
+    <div class="fleet-tile"><div class="n">{{ counts.get('ej_ready', 0) }}</div><div class="l">EJ flowing</div></div>
+    <div class="fleet-tile"><div class="n">{{ counts.get('images_ready', 0) }}</div><div class="l">Images approved</div></div>
     <div class="fleet-tile warn"><div class="n">{{ counts.get('not_provisioned', 0) }}</div><div class="l">Not provisioned</div></div>
     <div class="fleet-tile bad"><div class="n">{{ counts.get('failed', 0) }}</div><div class="l">Failed</div></div>
     <div class="fleet-tile warn"><div class="n">{{ counts.get('review', 0) }}</div><div class="l">Needs review</div></div>
@@ -123,7 +137,10 @@ td.atm{white-space:nowrap;font-weight:600}
   <div class="filters">
     <a class="btn {{ 'btn-primary' if filter_mode == 'action' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=action">Needs action</a>
     <a class="btn {{ 'btn-primary' if filter_mode == 'all' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=all">All</a>
-    <a class="btn {{ 'btn-primary' if filter_mode == 'healthy' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=healthy">Healthy</a>
+    <a class="btn {{ 'btn-primary' if filter_mode == 'healthy' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=healthy">Onboarded</a>
+    <a class="btn {{ 'btn-primary' if filter_mode == 'identity' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=identity">Identity</a>
+    <a class="btn {{ 'btn-primary' if filter_mode == 'ej' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=ej">EJ</a>
+    <a class="btn {{ 'btn-primary' if filter_mode == 'images' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=images">Images</a>
     <form method="get" action="/admin/onboard/fleet" style="display:flex;gap:8px;align-items:center">
       <input type="hidden" name="filter" value="{{ filter_mode }}">
       <input type="text" name="q" id="fleetSearch" aria-label="Search fleet" value="{{ q }}" placeholder="ATM ID, vendor or IP"
@@ -133,37 +150,46 @@ td.atm{white-space:nowrap;font-weight:600}
     <span class="sp">Generated {{ cached.generated_label if cached else '' }} · cached {{ ttl }} min</span>
   </div>
   {% if rows %}
+  <div class="table-wrap">
   <table>
     <thead>
-      <tr><th>ATM</th><th>Status</th><th>Vendor</th><th>IP address</th><th>Items</th>
-          <th>Provisioning</th><th>What is wrong</th><th>Next action</th></tr>
+      <tr><th>ATM</th><th>Onboarding</th><th>Reporting</th><th>Provisioning</th>
+          <th>Identity</th><th>EJ</th><th>Images</th>
+          <th>What is wrong</th><th>Next action</th></tr>
     </thead>
     <tbody>
       {% for r in rows %}
+      {% set s = r.stages or {} %}
       <tr>
-        <td class="atm"><a href="/atms/{{ r.atm_id }}">{{ r.atm_id }}</a></td>
-        <td class="status">
-          <span class="badge {{ 'active' if r.status == 'reporting' else 'inactive' if r.status in ('failed','provisioned_not_reporting') else 'TIMEOUT' }}">{{ r.status_label }}</span>
-        </td>
-        <td>{{ r.vendor or '—' }}</td>
-        <td>{{ r.ip or '—' }}</td>
-        <td>{{ r.items_reporting if r.items_reporting is not none else '—' }}{% if r.items_total %} / {{ r.items_total }}{% endif %}</td>
-        <td>{{ r.plan_action or '—' }}{% if r.changes %}<br><span class="next">{{ r.changes|join(', ') }}</span>{% endif %}</td>
-        <td>{{ r.blocker or '—' }}</td>
+        <td class="atm"><a href="/atms/{{ r.atm_id }}">{{ r.atm_id }}</a>
+          <span class="sub">{{ r.vendor or '—' }} · {{ r.ip or 'no IP' }}</span></td>
+        <td class="status">{{ stage_badge(r.onboarding_status, r.onboarding_label) }}</td>
+        <td class="status">{{ stage_badge(r.status, r.status_label) }}</td>
+        {% for key in ('provisioning', 'identity', 'ej', 'images') %}
+        {% set st = s.get(key) or {} %}
+        <td class="stage">{{ stage_badge(st.get('status', 'unknown'), st.get('label', 'Unknown'), st.get('detail', '')) }}
+          {% if st.get('detail') %}<span class="d">{{ st.get('detail') }}</span>{% endif %}</td>
+        {% endfor %}
+        <td>{{ r.problem or r.blocker or '—' }}</td>
         <td class="next">{{ r.next_action or '—' }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% else %}
   <div class="empty">
     <i data-lucide="circle-check" style="width:28px;height:28px;color:#059669;margin-bottom:8px"></i>
     <div style="font-weight:600;color:#0F172A">
-      {% if filter_mode == 'action' %}Nothing needs action{% else %}No ATMs match this filter{% endif %}
+      {% if filter_mode == 'action' %}Nothing needs action
+      {% elif filter_mode in ('identity', 'ej', 'images', 'provisioning', 'reporting') %}This stage is ready across the fleet
+      {% else %}No ATMs match this filter{% endif %}
     </div>
     <div style="font-size:12px;margin-top:6px">
       {% if filter_mode == 'action' %}
-        Every ATM in this view is provisioned and reporting.
+        Every ATM in this view is fully onboarded.
+      {% elif filter_mode in ('identity', 'ej', 'images', 'provisioning', 'reporting') %}
+        Every ATM whose {{ filter_mode }} stage could be evaluated is ready.
       {% else %}
         Try a different filter or clear the search.
       {% endif %}
