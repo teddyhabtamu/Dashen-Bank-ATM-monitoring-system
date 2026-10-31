@@ -659,6 +659,7 @@ from hardware_view import (build_hardware, build_part_rows, build_device_rows,
 
 
 FIELDS = [
+    ('terminal_id', 'Terminal ID',  'text',   20),
     ('atm_id',      'ATM ID',       'text',   20),
     ('atm_name',    'Name',         'text',   100),
     ('branch',      'Branch',       'text',   100),
@@ -667,7 +668,6 @@ FIELDS = [
     ('region',      'Region',       'text',   100),
     ('latitude',    'Latitude',     'number', None),
     ('longitude',   'Longitude',    'number', None),
-    ('terminal_id', 'Terminal ID',  'text',   20),
     ('vendor',      'Vendor',       'text',   50),
     ('model',       'Model',        'text',   50),
     ('install_date','Install Date', 'date',   None),
@@ -750,7 +750,8 @@ def atm_list():
                                s.state_changed_at
                         {from_sql}
                         {list_where}
-                        ORDER BY l.atm_id LIMIT %s OFFSET %s""",
+                        ORDER BY COALESCE(NULLIF(l.terminal_id, ''), l.atm_id), l.atm_id
+                        LIMIT %s OFFSET %s""",
                     list_params + [per_page, (page - 1) * per_page])
 
         cols = [d[0] for d in cur.description]
@@ -1704,17 +1705,17 @@ def atm_csv_template():
     required/optional column set so it can never drift from validation."""
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(['atm_id', 'atm_name', 'branch', 'district', 'city', 'region',
-                'latitude', 'longitude', 'terminal_id', 'vendor', 'model',
+    w.writerow(['terminal_id', 'atm_id', 'atm_name', 'branch', 'district', 'city', 'region',
+                'latitude', 'longitude', 'vendor', 'model',
                 'install_date', 'status',
                 'ip_address', 'snmp_community', 'snmp_version', 'ej_log_format',
                 'ej_hostname'])
-    w.writerow(['ATM-1001', 'Bole Medhanialem ATM', 'Bole Medhanialem Branch', 'Bole',
-                'Addis Ababa', 'Addis Ababa', '8.9950', '38.7896', 'TID10001',
+    w.writerow(['TID10001', 'ATM-1001', 'Bole Medhanialem ATM', 'Bole Medhanialem Branch', 'Bole',
+                'Addis Ababa', 'Addis Ababa', '8.9950', '38.7896',
                 'NCR', 'SelfServ 22', '2023-03-15', 'active',
                 '192.0.2.101', 'CHANGE_ME', '2', 'NCR_APTRA', 'BOLENATM01'])
-    w.writerow(['ATM-1002', 'Piassa ATM', 'Piassa Branch', 'Arada',
-                'Addis Ababa', 'Addis Ababa', '9.0356', '38.7521', 'TID10002',
+    w.writerow(['TID10002', 'ATM-1002', 'Piassa ATM', 'Piassa Branch', 'Arada',
+                'Addis Ababa', 'Addis Ababa', '9.0356', '38.7521',
                 'GRG', 'H68N', '2022-11-02', 'active',
                 '192.0.2.102', 'CHANGE_ME', '2', 'GRG', ''])
     log_action('EXPORT', 'ATM import template downloaded')

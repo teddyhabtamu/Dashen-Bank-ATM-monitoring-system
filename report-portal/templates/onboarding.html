@@ -168,7 +168,8 @@ details.wstep.pending>summary{opacity:.55}
     </div>
     {% endmacro %}
     <div class="form-grid">
-    {{ fld('atm_id', 'ATM ID', 'ATM-0107', True) }}
+    {{ fld('terminal_id', 'Terminal ID', 'TID-UAT-107', True, 'The bank’s real ATM ID (ISO 8583 field 41). Search and reports use this first.') }}
+    {{ fld('atm_id', 'ATM ID (monitoring key)', 'ATM-0107', True, 'Internal key and Zabbix host name; not the terminal ID.') }}
     {{ fld('atm_name', 'ATM name (optional)', '4 Kilo Branch ATM 3') }}
     {{ fld('branch', 'Branch', '4 Kilo Building BRANCH', True) }}
     <div class="form-group{% if errors.get('district') %} error{% endif %}">
@@ -183,7 +184,6 @@ details.wstep.pending>summary{opacity:.55}
     {{ fld('region', 'Region', 'Addis Ababa') }}
     {{ fld('latitude', 'Latitude (optional)', '9.0050') }}
     {{ fld('longitude', 'Longitude (optional)', '38.7896') }}
-    {{ fld('terminal_id', 'Terminal ID', 'TID-UAT-107', True, 'Must match the switch record for this ATM.') }}
     <div class="form-group{% if errors.get('vendor') %} error{% endif %}">
       <label for="vendorSel">Vendor <span class="required">*</span></label>
       <select name="vendor" id="vendorSel">

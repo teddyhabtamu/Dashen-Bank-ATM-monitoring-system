@@ -183,6 +183,11 @@ Rules:
   the newest EJ header (`ej-header`, high confidence) or vendor configuration
   (`vendor-config`), but it is evidence: a mismatch is shown for review and
   never auto-overwrites the registry.
+- **The UI leads with `terminal_id`.** The ATM list, the fleet report, their
+  search boxes and sort order, the detail page and the onboarding form show
+  the terminal ID first; `atm_id` stays visible as the secondary “ATM ID
+  (system)” key so support can still find the Zabbix host. The bulk import
+  template also lists `terminal_id` before `atm_id`.
 - **`ej_hostname` is not the terminal ID.** NCR journals use the filename host
   tag; GRG may use the computer name. The puller needs it; the switch does not.
 - **A new ATM needs both.** Get the TID from the ATM team, then assign the
@@ -191,7 +196,8 @@ Rules:
 **TID → ATM ID lookup**
 
 1. Portal → **ATMs** → search box: type the TID. The list searches `atm_id`,
-   `atm_name`, `terminal_id`, branch, district, city and region.
+   `atm_name`, `terminal_id`, branch, district, city and region. The first
+   column is the terminal ID; the internal `atm_id` is the small line under it.
 2. **Fleet health** → search box: type the TID; the row shows `TID …` under
    the ATM ID.
 3. **Agent setup → Reported identity** shows the TID the box reports, its

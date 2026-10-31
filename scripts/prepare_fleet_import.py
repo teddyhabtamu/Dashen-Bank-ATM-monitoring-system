@@ -126,8 +126,8 @@ MODEL_BY_VENDOR = {
 }
 
 CSV_FIELDS = [
-    'atm_id', 'atm_name', 'branch', 'district', 'city', 'region',
-    'latitude', 'longitude', 'terminal_id', 'vendor', 'model',
+    'terminal_id', 'atm_id', 'atm_name', 'branch', 'district', 'city', 'region',
+    'latitude', 'longitude', 'vendor', 'model',
     'install_date', 'status', 'ip_address', 'snmp_community',
     'snmp_version', 'ej_log_format', 'ej_hostname',
 ]
@@ -435,7 +435,8 @@ def write_report(path, summary, csv_path, details_path, excel_path):
         '| `city`, `region` | Derived from the district. These are **test placeholders**, not bank records. |',
         '| `model` | Approved default per vendor: NCR `SelfServ 34`, GRG `AD2600`. |',
         '| `branch` | Owner branch, normalised to the portal `… BRANCH` convention. Missing values use the ATM name. |',
-        '| `atm_id` | Stable test key `<prefix>-<workbook No>`, e.g. `TST-0001`. |',
+        '| `terminal_id` | Preserved from the workbook. This is the bank’s real ATM ID and the primary UI/search key. |',
+        '| `atm_id` | Internal monitoring/Zabbix key: `<prefix>-<workbook No>`, e.g. `TST-0001`. Shown under the terminal ID in the portal. |',
         '| `ip_address` | `synthetic` mode uses RFC 2544 `198.18.0.0/15`; `real` mode preserves workbook IPs and fills only gaps. Public addresses are quarantined unless `--allow-public-ips` is set. |',
         '| `ej_log_format` | `NCR_APTRA` for NCR, `GRG` for GRG. |',
         '| `snmp_community` | `--snmp-community` value (default `public`). Polling will fail where the real community differs. |',

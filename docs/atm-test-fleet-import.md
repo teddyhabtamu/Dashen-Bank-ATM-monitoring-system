@@ -73,6 +73,10 @@ must not be committed.
 
 Portal → **ATMs** → **Import CSV** → choose the generated file.
 
+The ATM list leads with the **Terminal ID**; the generated `TST-…` value is the
+small **ATM ID** line underneath it. Search and sort also use the terminal ID,
+so the ATM team can work with the IDs it already knows.
+
 Confirm:
 
 - `imported` equals the prepared row count.

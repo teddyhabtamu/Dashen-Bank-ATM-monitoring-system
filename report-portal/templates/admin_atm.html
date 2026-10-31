@@ -104,6 +104,7 @@ body { background: #F0F2F6; color: #0F172A; }
 .atm-card { background:#fff; border-radius:10px; border:1px solid #EEF1F6; box-shadow:0 1px 3px rgba(1,33,105,.04); padding:16px; margin-bottom:10px; }
 .atm-card-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
 .atm-card-id { font-size:15px; font-weight:700; color:#012169; }
+.atm-card-sub { font-size:10px; color:#94A3B8; margin-top:2px; }
 .atm-card-info { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
 .atm-card-detail { }
 .atm-card-label { font-size:9px; font-weight:600; color:#94A3B8; text-transform:uppercase; letter-spacing:.3px; }
@@ -140,6 +141,8 @@ tr.retired:hover td{background:#F1F5F9}
 .dd-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #94A3B8; font-weight: 600; }
 .atm-detail-grid > div > span:last-child { font-size: 13px; color: #0F172A; }
 .row-toggle { background: none; border: none; cursor: pointer; color: #94A3B8; font-size: 12px; padding: 2px 4px; margin-right: 4px; transition: transform .15s; line-height: 1; }
+.atm-tid { font-weight: 700; color: #0F172A; letter-spacing: .01em; }
+.atm-system-id { font-size: 10px; color: #94A3B8; margin-left: 18px; margin-top: 2px; }
 tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
 .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 4px 0 20px; }
 .summary-card { background: #fff; border: 1px solid #EEF1F6; border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(15,23,42,.04); }
@@ -176,7 +179,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
     <h2>Registered ATMs ({{ atm_count }})</h2>
     <div style="display:flex;gap:8px;align-items:center">
       <form method="get" action="/atms" id="searchForm" style="display:flex;gap:6px;align-items:center" onsubmit="event.preventDefault(); applyFilter();">
-        <input type="text" name="search" id="atmSearch" aria-label="Search ATMs" placeholder="Search ATM ID, terminal ID, branch…" value="{{ search }}" maxlength="100"
+        <input type="text" name="search" id="atmSearch" aria-label="Search ATMs" placeholder="Search terminal ID, ATM ID, branch…" value="{{ search }}" maxlength="100"
                style="padding:7px 12px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;width:220px;transition:border-color .2s"
                onfocus="this.style.borderColor='#012169'" onblur="this.style.borderColor='#E4E9F1'">
         <button type="submit" class="btn btn-outline" style="padding:7px 12px" onclick="event.preventDefault(); applyFilter();"><i data-lucide="search" style="width:14px;height:14px"></i></button>
@@ -231,7 +234,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
         {% if session.get('role') in ('admin', 'operator') %}
         <th style="width:36px;padding:8px 6px;text-align:center"><input type="checkbox" id="selectAll" aria-label="Select all ATMs" onchange="toggleSelectAll()" style="cursor:pointer;width:15px;height:15px"></th>
         {% endif %}
-        <th>ATM ID</th><th>Name</th><th>Branch</th><th>City</th><th>Vendor</th><th>Model</th>
+        <th>Terminal ID</th><th>Name</th><th>Branch</th><th>City</th><th>Vendor</th><th>Model</th>
          <th>Monitored</th><th title="Live Zabbix state when available; otherwise last known state.">Current State</th><th>Last Seen</th>{% if session.get('role') in ('admin', 'operator') %}<th></th>{% endif %}
       </tr></thead>
       <tbody>
@@ -242,7 +245,9 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
             <td style="padding:8px 6px;text-align:center"><input type="checkbox" class="row-checkbox" id="rowCheck{{ d.atm_id }}" aria-label="Select ATM {{ d.atm_id }}" value="{{ d.atm_id }}" onchange="updateSelection()" style="cursor:pointer;width:15px;height:15px"></td>
             {% endif %}
             <td>
-              <button type="button" class="row-toggle" onclick="toggleRowDetail(this)" title="Show details" aria-label="Show details">&#9656;</button>{{ d.atm_id }}
+              <button type="button" class="row-toggle" onclick="toggleRowDetail(this)" title="Show details" aria-label="Show details">&#9656;</button>
+              <span class="atm-tid">{{ d.terminal_id or '—' }}</span>
+              <div class="atm-system-id" title="Internal monitoring key and Zabbix host name">ATM ID: {{ d.atm_id }}</div>
             </td>
             <td>{{ d.atm_name or '—' }}</td>
             <td>{{ d.branch or '—' }}</td>
@@ -282,9 +287,10 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
           <tr class="atm-detail-row" data-atm-id="{{ d.atm_id }}">
             <td colspan="10">
               <div class="atm-detail-grid">
+                <div><span class="dd-lbl">Terminal ID</span><span>{{ d.terminal_id or '—' }}</span></div>
+                <div><span class="dd-lbl">ATM ID (system)</span><span>{{ d.atm_id }}</span></div>
                 <div><span class="dd-lbl">District</span><span>{{ d.district or '—' }}</span></div>
                 <div><span class="dd-lbl">Region</span><span>{{ d.region or '—' }}</span></div>
-                <div><span class="dd-lbl">Terminal ID</span><span>{{ d.terminal_id or '—' }}</span></div>
                 <div><span class="dd-lbl">Latitude</span><span>{{ d.latitude or '—' }}</span></div>
                 <div><span class="dd-lbl">Longitude</span><span>{{ d.longitude or '—' }}</span></div>
                 <div><span class="dd-lbl">Install Date</span><span>{{ d.install_date or '—' }}</span></div>
@@ -316,7 +322,10 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
             {% if session.get('role') in ('admin', 'operator') %}
             <input type="checkbox" class="row-checkbox" id="rowCheckMobile{{ d.atm_id }}" aria-label="Select ATM {{ d.atm_id }}" value="{{ d.atm_id }}" onchange="updateSelection()" style="cursor:pointer;width:16px;height:16px;flex-shrink:0">
             {% endif %}
-            <div class="atm-card-id">{{ d.atm_id }}</div>
+            <div>
+              <div class="atm-card-id">{{ d.terminal_id or d.atm_id }}</div>
+              <div class="atm-card-sub" title="Internal monitoring key and Zabbix host name">ATM ID: {{ d.atm_id }}</div>
+            </div>
           </div>
           {% if status != 'active' %}
           <span class="retired-tag" title="Retired — excluded from the monitored fleet">Retired</span>
@@ -347,7 +356,6 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
           <i data-lucide="chevron-down"></i> More Details
         </div>
         <div class="atm-card-details">
-          <span class="atm-card-meta-item"><span class="atm-card-label">Terminal</span> {{ d.terminal_id or '—' }}</span>
            <span class="atm-card-meta-item"><span class="atm-card-label">Vendor</span>
              <span style="background:{{ '#cce5ff' if d.vendor == 'NCR' else '#e2d9f3' }};padding:2px 8px;border-radius:10px;font-size:11px">{{ d.vendor or '—' }}</span>
            </span>
@@ -447,6 +455,11 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
             {% else %}
               <input type="text" name="{{ name }}" id="field-{{ name }}" maxlength="{{ maxlen or '' }}" required>
             {% endif %}
+            {% if name == 'atm_id' %}
+            <div style="font-size:10px;color:#94A3B8;margin-top:2px;line-height:1.5">Internal monitoring key and Zabbix host name. The ATM team’s identifier is the Terminal ID.</div>
+            {% elif name == 'terminal_id' %}
+            <div style="font-size:10px;color:#94A3B8;margin-top:2px;line-height:1.5">The bank’s real ATM ID (ISO 8583 field 41). Search and reports show this first.</div>
+            {% endif %}
             <span class="field-error" id="error-{{ name }}"></span>
           </div>
         {% endfor %}
@@ -481,8 +494,9 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
     </div>
     <div id="importStepFile" style="padding:36px 32px;text-align:center">
       <p style="font-size:14px;color:#475569;margin:0 0 8px;line-height:1.6">
-        Upload a CSV file with columns: <code>atm_id, branch, district, city, region, latitude, longitude, terminal_id, vendor, model, install_date, status</code>
+        Upload a CSV file with columns: <code>terminal_id, atm_id, branch, district, city, region, latitude, longitude, vendor, model, install_date, status</code>
         (optional: <code>atm_name, ip_address, snmp_community, snmp_version, ej_log_format</code>).
+        <strong>Terminal ID</strong> is the bank’s ATM identifier; <code>atm_id</code> is the internal monitoring key and Zabbix host name.
         Existing ATMs with matching IDs will be updated (blank network fields keep existing values).
       </p>
       <a href="/atms/template" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#012169;font-weight:500;text-decoration:none;margin-bottom:24px">
@@ -1122,9 +1136,9 @@ function renderPreviewTable(fileName){
   THEAD.innerHTML = '';
   TBODY.innerHTML = '';
 
-  var COLS = ['atm_id','atm_name','branch','district','city','region','latitude','longitude','terminal_id','vendor','model','install_date','status','ip_address','snmp_community','snmp_version','ej_log_format'];
-  var LABELS = ['ATM ID','Name','Branch','District','City','Region','Lat','Lng','Terminal ID','Vendor','Model','Install Date','Status','IP Address','SNMP Community','SNMP Ver','EJ Format'];
-  var COL_WIDTHS = ['80px','90px','90px','80px','80px','80px','60px','60px','85px','65px','75px','80px','60px','90px','90px','60px','80px'];
+  var COLS = ['terminal_id','atm_id','atm_name','branch','district','city','region','latitude','longitude','vendor','model','install_date','status','ip_address','snmp_community','snmp_version','ej_log_format'];
+  var LABELS = ['Terminal ID','ATM ID','Name','Branch','District','City','Region','Lat','Lng','Vendor','Model','Install Date','Status','IP Address','SNMP Community','SNMP Ver','EJ Format'];
+  var COL_WIDTHS = ['85px','80px','90px','90px','80px','80px','80px','60px','60px','65px','75px','80px','60px','90px','90px','60px','80px'];
 
   // ── COLGROUP (locks column widths) ──
   var tableEl = THEAD.parentNode;
@@ -1244,7 +1258,7 @@ function uploadImport(){
   var spn = btn.querySelector('svg');
   if(spn) spn.style.animation = 'spin 1s linear infinite';
 
-  var COLS = ['atm_id','atm_name','branch','district','city','region','latitude','longitude','terminal_id','vendor','model','install_date','status','ip_address','snmp_community','snmp_version','ej_log_format'];
+  var COLS = ['terminal_id','atm_id','atm_name','branch','district','city','region','latitude','longitude','vendor','model','install_date','status','ip_address','snmp_community','snmp_version','ej_log_format'];
   var csvLines = [COLS.join(',')];
   for(var i = 0; i < _importValidRows.length; i++){
     csvLines.push(COLS.map(function(c){ return (_importValidRows[i][c] || ''); }).join(','));

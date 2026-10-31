@@ -87,8 +87,8 @@ table.txn tbody tr:hover{background:#EEF2FF}
 <div class="page-header">
   <div class="page-header-icon"><i data-lucide="banknote"></i></div>
   <div>
-    <h1 class="page-title">{{ atm.atm_name or atm.atm_id }}</h1>
-    <p class="page-subtitle">{{ atm.atm_id }} · {{ atm.branch }}{% if atm.city %} · {{ atm.city }}{% endif %}</p>
+    <h1 class="page-title">{{ atm.atm_name or atm.terminal_id or atm.atm_id }}</h1>
+    <p class="page-subtitle">TID {{ atm.terminal_id or '—' }} · ATM ID {{ atm.atm_id }} · {{ atm.branch }}{% if atm.city %} · {{ atm.city }}{% endif %}</p>
     <div class="badge-row">
       {% set st = atm.current_state or 'UNKNOWN' %}
       {% set is_retired = (atm.status or 'active') != 'active' %}
@@ -156,7 +156,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
             <!-- screen -->
             <rect x="44" y="74" width="232" height="92" rx="12" fill="url(#screenGrad)" stroke="#334155" stroke-width="1"/>
             <circle cx="252" cy="88" r="4" fill="{{ st | state_colour }}"/>
-            <text x="160" y="106" fill="#FFFFFF" font-size="16" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">{{ atm.atm_id }}</text>
+            <text x="160" y="106" fill="#FFFFFF" font-size="16" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">{{ atm.terminal_id or atm.atm_id }}</text>
             {% set st = atm.current_state or 'UNKNOWN' %}
             {% set stink = st | state_ink %}
             <text x="160" y="130" fill="{{ stink }}" font-size="12" font-weight="600" text-anchor="middle" font-family="Inter,sans-serif">{{ st | state_label }}</text>
@@ -201,8 +201,8 @@ table.txn tbody tr:hover{background:#EEF2FF}
         <div class="card-header"><h2>ATM Information</h2></div>
         <div class="card-body">
           <div class="kv-grid">
-            <div class="kv"><span class="k">ATM ID</span><span class="v">{{ atm.atm_id }}</span></div>
             <div class="kv"><span class="k">Terminal ID</span><span class="v">{{ atm.terminal_id or '—' }}</span></div>
+            <div class="kv"><span class="k">ATM ID (system)</span><span class="v">{{ atm.atm_id }}</span></div>
             <div class="kv"><span class="k">District</span><span class="v">{{ atm.district or '—' }}</span></div>
             <div class="kv"><span class="k">City</span><span class="v">{{ atm.city or '—' }}</span></div>
             <div class="kv"><span class="k">Region</span><span class="v">{{ atm.region or '—' }}</span></div>
