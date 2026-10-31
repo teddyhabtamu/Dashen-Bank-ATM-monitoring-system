@@ -46,11 +46,16 @@ jobs:
       - name: Install the test runner
         run: "python -m pip install --only-binary :all: pytest==9.1.1"
 
-      - name: Confirm pwsh is on PATH for the Python tests
-        run: pwsh -NoProfile -Command "$PSVersionTable.PSVersion.ToString()"
+      - name: Confirm pwsh is available to the Python tests
+        shell: pwsh
+        run: $PSVersionTable.PSVersion.ToString()
 
       - name: Exercise the installer against rendered profiles
-        run: python -m pytest tests/test_agent_installer.py tests/test_agent_installer_contract.py -v
+        run: python -m pytest tests/test_agent_installer.py tests/test_agent_installer_contract.py -v --junitxml=pytest-results.xml
+
+      - name: Publish failing tests as annotations
+        if: failure()
+        run: python tests/ci_annotate_junit.py pytest-results.xml
 
       - name: Cache the pinned agent MSI
         uses: actions/cache@v4
