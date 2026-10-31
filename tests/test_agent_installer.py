@@ -77,6 +77,43 @@ def test_both_scripts_parse():
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
+def test_agent2_test_output_is_unwrapped_before_the_json_check():
+    """-t prints "<key> [<type>|<value>]", so a JSON user parameter arrives
+    wrapped. Treating the raw line as the value made every service-account
+    verification fail with an empty message."""
+    module = REPO / 'installer' / 'AtmInstall.psm1'
+    code = (
+        "Import-Module '%s' -Force; "
+        "$v = Get-AgentTestValue 'atm.identity [t|{\"ok\":true}]'; "
+        "if ($v -ne '{\"ok\":true}') { Write-Error ('unexpected value: ' + $v); exit 1 }; "
+        "$k = Get-AgentTestValue 'atm.image.info[abc] [t|{\"x\":[1,2]}]'; "
+        "if ($k -ne '{\"x\":[1,2]}') { Write-Error ('unexpected bracketed value: ' + $k); exit 1 }; "
+        "$u = Get-AgentTestValue 'atm.identity [m|ZBX_NOTSUPPORTED]'; "
+        "if ($u -ne 'ZBX_NOTSUPPORTED') { Write-Error ('unexpected unsupported value: ' + $u); exit 1 }"
+    ) % module
+    proc = subprocess.run([PWSH, '-NoProfile', '-Command', code],
+                          capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_a_failed_verification_names_the_failing_check():
+    """An empty failure message hid which check broke the install."""
+    module = REPO / 'installer' / 'AtmInstall.psm1'
+    code = (
+        "Import-Module '%s' -Force; "
+        "$r = @{ ok = $false; checks = @("
+        "@{ name = 'key:atm.identity'; ok = $false; detail = \"atm.identity [m|ZBX_NOTSUPPORTED]`nsecond line\" }, "
+        "@{ name = 'probe:atm-identity.ps1'; ok = $true; detail = 'hash matches' }) }; "
+        "$m = Get-VerificationFailureMessage $r; "
+        "if ($m -notlike '*key:atm.identity*') { Write-Error ('missing failing check: ' + $m); exit 1 }; "
+        "if ($m -like '*probe:atm-identity.ps1*') { Write-Error ('included passing check: ' + $m); exit 1 }; "
+        "if ($m.Contains(\"`n\")) { Write-Error 'detail was not collapsed to one line'; exit 1 }"
+    ) % module
+    proc = subprocess.run([PWSH, '-NoProfile', '-Command', code],
+                          capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
 def test_a_valid_profile_dry_run_plans_without_writing(tmp_path):
     profiles, monitor = _profiles(tmp_path)
     code, output = _run('-Profile', str(profiles / 'ncr.profile.json'),

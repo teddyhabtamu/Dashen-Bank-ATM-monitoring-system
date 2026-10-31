@@ -102,10 +102,11 @@ jobs:
 
       # The tests above prove the plan and the files. This proves the part a
       # bare runner can actually prove: the real MSI installs, the service is
-      # named as expected, the rendered config passes `-p`, TCP 10050 listens,
-      # and atm.identity runs as the service account. The parts/XFS probes are
-      # removed from the include because this runner has no ATM hardware; a
-      # failure here is an installer failure, not a missing cassette.
+      # named as expected, the rendered config passes `-t agent.ping`, TCP
+      # 10050 listens, and atm.identity runs as the service account. The
+      # parts/XFS probes are removed from the include because this runner has
+      # no ATM hardware; a failure here is an installer failure, not a missing
+      # cassette.
       - name: Render a hardware-free smoke profile
         shell: pwsh
         run: |
@@ -148,10 +149,24 @@ jobs:
             Write-Host "::error title=Agent smoke install failed ($code)::$tail"
             $exe = Join-Path $env:ProgramFiles 'Zabbix Agent 2\zabbix_agent2.exe'
             Write-Host '--- agent config test ---'
-            if (Test-Path $exe) { & $exe -c $conf -p 2>&1 | Write-Host }
+            if (Test-Path $exe) { & $exe -c $conf -t agent.ping 2>&1 | Write-Host }
             Write-Host '--- service configuration ---'
             & sc.exe qc 'Zabbix Agent 2' 2>&1 | Write-Host
             & sc.exe queryex 'Zabbix Agent 2' 2>&1 | Write-Host
+            $verifyDir = Join-Path $env:ProgramData 'AtmMonitor\verify'
+            if (Test-Path $verifyDir) {
+              Write-Host '--- verification evidence ---'
+              Get-ChildItem $verifyDir -File -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending |
+                Select-Object -First 6 |
+                ForEach-Object {
+                  Write-Host ('--- ' + $_.Name + ' ---')
+                  $content = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
+                  if ($content) {
+                    Write-Host $content.Substring(0, [Math]::Min(4000, $content.Length))
+                  }
+                }
+            }
             $agentLog = Join-Path $monitor 'logs\zabbix_agent2.log'
             if (Test-Path $agentLog) {
               Write-Host '--- agent log ---'

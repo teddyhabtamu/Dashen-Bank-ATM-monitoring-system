@@ -1139,18 +1139,33 @@ function Set-AgentService {
     $service.WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
 }
 
+function Get-AgentTestValue {
+    param([string]$Output)
+    # zabbix_agent2 -t prints "<key> [<type>|<value>]" (the key is padded to
+    # 46 columns), not the bare value. Probe values are one line, so match the
+    # result line and take the last "]" in case the value contains brackets.
+    $text = ([string]$Output).Trim()
+    if ($text -match '(?m)^[^\r\n]*?\[(?<type>[dmstu])\|(?<value>.*)\]$') {
+        return $Matches['value']
+    }
+    return $null
+}
+
 function Test-AgentConfig {
     param([string]$Exe, [string]$Conf)
-    # Agent 2 has no -T (that is the Agent 1 config-test flag). -p parses the
-    # configuration, prints the supported items and exits; a broken config
-    # makes it exit non-zero. The item list is truncated so a failure message
-    # stays readable.
-    $output = & $Exe -c $Conf -p 2>&1
+    # The pinned Agent 2 6.4 has no -T (that is the Agent 1 config-test flag).
+    # -t parses the configuration and evaluates one built-in item; -p would
+    # instead probe
+    # every known item, which takes minutes on a real ATM and runs user
+    # parameters. A broken config makes either flag exit non-zero.
+    $output = & $Exe -c $Conf -t agent.ping 2>&1
     $code = $LASTEXITCODE
     $text = (($output | ForEach-Object { [string]$_ }) -join "`n")
+    $value = Get-AgentTestValue $text
+    if ($null -ne $value) { $value = $value.Trim() }
     if ($text.Length -gt 2000) { $text = $text.Substring(0, 2000) + '...' }
     return @{
-        Ok       = ($code -eq 0)
+        Ok       = ($code -eq 0 -and $value -eq '1')
         ExitCode = $code
         Output   = $text
     }
@@ -1251,9 +1266,13 @@ function Invoke-SelfVerification {
             $output = & $agent.Exe -t $key -c $AgentConf 2>&1
             $code = $LASTEXITCODE
             $text = (($output | ForEach-Object { [string]$_ }) -join "`n").Trim()
-            $passed = ($code -eq 0 -and $text.Length -gt 1 -and
-                       $text -notmatch 'ZBX_NOTSUPPORTED' -and
-                       $text.TrimStart().StartsWith('{'))
+            # -t prints "<key> [<type>|<value>]"; checking the raw line for a
+            # leading "{" would fail even when the probe returned valid JSON.
+            $value = Get-AgentTestValue $text
+            $passed = ($code -eq 0 -and $null -ne $value -and
+                       $value.Length -gt 1 -and
+                       $value -notmatch 'ZBX_NOTSUPPORTED' -and
+                       $value.TrimStart().StartsWith('{'))
             $detail = $text
             if ($detail.Length -gt 300) { $detail = $detail.Substring(0, 300) + '...' }
             $checks += @{ name = "key:$key"; ok = $passed; detail = $detail }
@@ -1278,6 +1297,24 @@ function Invoke-SelfVerification {
         tested_at       = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
         checks          = $checks
     }
+}
+
+function Get-VerificationFailureMessage {
+    param($Result)
+    # A failed verification used to surface as an empty message, which hid the
+    # one check that actually broke. Name every failing check and keep the
+    # detail on one line so the installer log stays readable.
+    $failed = @($Result['checks'] | Where-Object { $_.ok -ne $true })
+    if ($failed.Count -eq 0) {
+        return 'verification returned ok=false without a failed check'
+    }
+    $parts = @()
+    foreach ($check in $failed) {
+        $detail = (([string]$check['detail']) -replace '\s+', ' ').Trim()
+        if ($detail.Length -gt 300) { $detail = $detail.Substring(0, 300) + '...' }
+        $parts += ([string]$check['name'] + ': ' + $detail)
+    }
+    return ('failed checks: ' + ($parts -join '; '))
 }
 
 function Invoke-ServiceAccountVerification {
@@ -1315,13 +1352,14 @@ function Invoke-ServiceAccountVerification {
     $taskName = 'AtmMonitorVerify-' + $id
     $outFile = Join-Path $work ('verify-' + $id + '.json')
     $wrapper = Join-Path $work ('verify-' + $id + '.cmd')
+    $wrapperLog = Join-Path $work ('verify-' + $id + '.log')
 
     $command = 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
         $ScriptPath + '" -VerifyOnly -Profile "' + $ProfilePath +
         '" -MonitorRoot "' + $MonitorRoot + '" -AgentConf "' + $AgentConf +
         '" -Out "' + $outFile + '"'
     if ($LogPath) { $command += ' -LogPath "' + $LogPath + '"' }
-    $command += ' >> "' + (Join-Path $work ('verify-' + $id + '.log')) + '" 2>&1'
+    $command += ' >> "' + $wrapperLog + '" 2>&1'
     $batch = "@echo off`r`n" + $command + "`r`nexit /b %ERRORLEVEL%`r`n"
     [System.IO.File]::WriteAllText($wrapper, $batch, [System.Text.Encoding]::Default)
 
@@ -1342,16 +1380,31 @@ function Invoke-ServiceAccountVerification {
         }
         if (-not (Test-Path -LiteralPath $outFile -PathType Leaf)) {
             $query = & schtasks.exe /Query /TN $taskName /FO LIST /V 2>&1
-            return @{
-                Ok      = $false
-                Status  = 'failed'
-                Message = ('service-account verification did not finish: ' +
-                           (($query | ForEach-Object { [string]$_ }) -join ' '))
+            $message = ('service-account verification did not finish: ' +
+                        (($query | ForEach-Object { [string]$_ }) -join ' '))
+            if (Test-Path -LiteralPath $wrapperLog) {
+                $lines = @(Get-Content -LiteralPath $wrapperLog -ErrorAction SilentlyContinue)
+                if ($lines.Count -gt 20) {
+                    $lines = $lines[($lines.Count - 20)..($lines.Count - 1)]
+                }
+                if ($lines.Count -gt 0) {
+                    $logTail = (($lines | ForEach-Object { [string]$_ }) -join ' ')
+                    $message = $message + '; log: ' + $logTail
+                }
             }
+            return @{ Ok = $false; Status = 'failed'; Message = $message }
         }
         $raw = [System.IO.File]::ReadAllText($outFile, [System.Text.Encoding]::UTF8)
         $result = ConvertFrom-JsonCompat $raw
-        $result['Status'] = 'passed'
+        if ($result['ok'] -eq $true) {
+            $result['Status'] = 'passed'
+        } else {
+            $result['Status'] = 'failed'
+            $result['Message'] = Get-VerificationFailureMessage $result
+            if ($LogPath) {
+                Write-Log ('service-account verification: ' + $result['Message']) 'ERROR' $LogPath
+            }
+        }
         return $result
     } finally {
         & schtasks.exe /Delete /TN $taskName /F 2>&1 | Out-Null
@@ -1527,7 +1580,9 @@ function Invoke-InstallPlan {
         } elseif ($verification.Status -eq 'skipped' -and $AllowUnverifiedServiceAccount) {
             $verificationStatus = 'skipped'
         } else {
-            throw ("service-account verification failed: " + [string]$verification.Message)
+            $message = [string]$verification.Message
+            if (-not $message) { $message = 'the verification returned no detail' }
+            throw ("service-account verification failed: " + $message)
         }
     }
 
@@ -1553,8 +1608,9 @@ Export-ModuleMember -Function @(
     'Read-InstallerState', 'Get-StatePath', 'Get-InstallPlan',
     'Write-TextFileAtomic', 'Copy-ProbeFile', 'Backup-PlanTargets',
     'Install-Agent2Msi', 'Stop-LegacyAgent', 'Set-AgentService',
-    'Test-AgentConfig', 'Test-TcpPort', 'Wait-TcpPort',
-    'Get-ServiceAccountName', 'Invoke-SelfVerification',
+    'Get-AgentTestValue', 'Test-AgentConfig', 'Test-TcpPort', 'Wait-TcpPort',
+    'Get-ServiceAccountName', 'Get-VerificationFailureMessage',
+    'Invoke-SelfVerification',
     'Invoke-ServiceAccountVerification', 'Write-InstallerState',
     'Invoke-InstallPlan', 'Test-ServerResolution', 'Test-IsAddressLiteral'
 )

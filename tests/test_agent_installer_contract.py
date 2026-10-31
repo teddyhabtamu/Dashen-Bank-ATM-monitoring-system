@@ -36,11 +36,14 @@ def test_the_build_script_pins_the_manifest_and_agent_msi():
 
 
 def test_the_config_check_uses_agent2_flags():
-    """Agent 2 has no -T; that is the Agent 1 config-test flag. Using it makes
-    every install fail with 'flag provided but not defined' before the service
-    is touched."""
+    """The pinned Agent 2 6.4 has no -T; that is the Agent 1 config-test flag.
+    Using it makes every install fail with 'flag provided but not defined'
+    before the service is touched. -p would probe every known item (minutes on
+    a real ATM and it runs user parameters); -t agent.ping parses the same
+    config and returns in milliseconds."""
     module = (INSTALLER / 'AtmInstall.psm1').read_text()
-    assert '& $Exe -c $Conf -p' in module
+    assert '& $Exe -c $Conf -t agent.ping' in module
+    assert '& $Exe -c $Conf -p' not in module
     assert '& $Exe -T' not in module
 
 
