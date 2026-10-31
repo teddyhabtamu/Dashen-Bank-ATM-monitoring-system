@@ -160,6 +160,11 @@ back.
 ## Network assumptions
 
 - The district proxy opens TCP 10050 to the ATM. The agent listens on 10050.
+- The Agent 2 MSI adds a local Windows Firewall exception for 10050. The
+  installer does not create or change firewall rules. If a bank GPO or endpoint
+  policy strips that exception, the proxy path is open but the box still
+  refuses the connection; check `netsh advfirewall firewall show rule
+  name=all` for a Zabbix rule.
 - `Server=` names the proxy. If the ATM cannot resolve that DNS name, the agent
   cannot match the proxy; the installer warns but does not rewrite the profile.
   Fix DNS or add a hosts entry at the proxy/DNS layer, not in the profile.

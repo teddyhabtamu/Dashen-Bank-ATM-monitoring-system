@@ -116,5 +116,31 @@ echo "-- status_map.json + cassette_capacity.json present --"
 [[ -f config/status_map.json ]] && ok "status_map.json present" || bad "config/status_map.json missing"
 [[ -f config/cassette_capacity.json ]] && ok "cassette_capacity.json present" || bad "config/cassette_capacity.json missing"
 
+echo "-- agent setup surface --"
+if docker exec report-portal test -f /app/agent_manifest.json 2>/dev/null; then
+  ok "portal container can see agent_manifest.json"
+else
+  echo "  [WARN] agent_manifest.json not visible in report-portal (rebuild or check the bind mount)"
+fi
+if grep -qE '^ATM_PROFILE_SECRET=.+' .env 2>/dev/null; then
+  ok "ATM_PROFILE_SECRET is set (profiles are signed)"
+else
+  echo "  [WARN] ATM_PROFILE_SECRET is empty — UAT profiles are unsigned; set it before production"
+fi
+if docker exec zabbix-db psql -U zabbix -d "$PORTAL_DB" -tAc \
+    "SELECT count(*) FROM information_schema.columns WHERE table_name='atm_locations' AND column_name='image_roots';" \
+    2>/dev/null | grep -q 1; then
+  ok "atm_locations.image_roots exists"
+else
+  echo "  [WARN] atm_locations.image_roots is missing — restart report-portal and check its DB role can ALTER TABLE (image roots will fail closed until then)"
+fi
+if docker exec zabbix-db psql -U zabbix -d "$PORTAL_DB" -tAc \
+    "SELECT count(*) FROM information_schema.tables WHERE table_name='atm_agent_identity';" \
+    2>/dev/null | grep -q 1; then
+  ok "atm_agent_identity table exists"
+else
+  echo "  [WARN] atm_agent_identity table is missing — restart report-portal after deploying"
+fi
+
 echo "== preflight $( [[ $fail -eq 0 ]] && echo PASS || echo FAILED ) =="
 exit $fail

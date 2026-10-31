@@ -18,6 +18,12 @@ registry automatically.
 - [ ] Zabbix host exists (`scripts/sync_atms_to_zabbix.py --apply`).
 - [ ] The district proxy can open TCP 10050 to the ATM; the rule is live, not
       just requested.
+- [ ] The ATM's local Windows Firewall allows inbound TCP 10050. The Agent 2
+      MSI adds an exception by default, but a bank GPO or endpoint policy may
+      remove or override it. Check with
+      `netsh advfirewall firewall show rule name=all | findstr /i zabbix`
+      and confirm the port is reachable from the proxy, not only listening
+      locally.
 - [ ] The portal **Agent setup** page shows **ready** and the server is the
       district proxy.
 - [ ] The profile downloads and its hash matches the page.

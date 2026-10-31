@@ -102,6 +102,9 @@ wired by hand.
 - [ ] Put the profile next to `AtmMonitorSetup.exe` and run `/DRYRUN` first.
       The dry run prints every action and writes nothing. Then run it again
       without `/DRYRUN` and confirm the ATM id.
+- [ ] Confirm the ATM's local Windows Firewall allows inbound TCP 10050. The
+      Agent 2 MSI adds an exception, but a GPO or endpoint policy may strip it;
+      the district-proxy rule is not enough on its own.
 - [ ] The installer writes `C:\monitor`, installs/updates Zabbix Agent 2 6.4,
       writes the passive-only config, restarts the service, and verifies
       `atm.identity`/`atm.parts` as `SYSTEM`. A running Agent 1 needs
