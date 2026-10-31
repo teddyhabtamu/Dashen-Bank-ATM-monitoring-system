@@ -225,6 +225,15 @@ details.profile-file .code-block{border-radius:0 0 8px 8px;margin:0}
             <div class="kv"><span class="k">EJ hostname</span><span class="v mono">{{ identity.ej.hostname or '—' }}</span></div>
             <div class="kv"><span class="k">EJ source</span><span class="v">{{ identity.ej.hostname_source }}</span></div>
             <div class="kv"><span class="k">Agent version</span><span class="v">{{ identity.agent.version or '—' }}</span></div>
+            <div class="kv"><span class="k">Applied profile</span><span class="v">
+              {% if applied_profile_hash %}
+                <span class="mono" title="{{ applied_profile_hash }}">{{ applied_profile_hash[:16] }}…</span>
+                {% if profile_match %}<span class="badge ok">Current</span>
+                {% elif profile %}<span class="badge warn">Reapply needed</span>{% endif %}
+              {% else %}
+                <span class="badge warn">Not reported</span>
+              {% endif %}
+            </span></div>
             <div class="kv"><span class="k">Collected</span><span class="v">{{ identity.collected_at or '—' }}</span></div>
           </div>
 

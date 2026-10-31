@@ -228,6 +228,16 @@ def normalize(payload):
     if not isinstance(agent_raw, dict):
         raise IdentityError('agent must be an object')
 
+    # Optional since schema 1: an older probe simply omits it, and the fleet
+    # report then says "reapply the profile" instead of guessing. Keeping the
+    # schema at 1 is deliberate — a bump would reject every box still running
+    # the previous probe, which is the opposite of a safe rolling change.
+    profile_hash = _text(agent_raw.get('profile_hash'), 'agent.profile_hash', 64)
+    if profile_hash is not None:
+        profile_hash = profile_hash.lower()
+        if not _SHA256_RE.match(profile_hash):
+            raise IdentityError('agent.profile_hash is not a SHA-256')
+
     return {
         'schema': IDENTITY_SCHEMA,
         'collected_at': _iso(payload.get('collected_at'), 'collected_at'),
@@ -255,6 +265,8 @@ def normalize(payload):
         'agent': {
             'version': _text(agent_raw.get('version'), 'agent.version', 32),
             'config_hash': _text(agent_raw.get('config_hash'), 'agent.config_hash', 64),
+            'profile_hash': profile_hash,
+            'applied_at': _iso(agent_raw.get('applied_at'), 'agent.applied_at'),
         },
     }
 

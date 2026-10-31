@@ -133,6 +133,33 @@ def test_probe_hashes_must_be_sha256():
         normalize(payload)
 
 
+def test_agent_profile_hash_is_optional_and_normalised():
+    """An older probe omits it; the fleet then asks for a reapply instead of
+    inventing convergence. A reported hash is lowercase SHA-256 evidence."""
+    payload = identity()
+    assert normalize(payload)['agent']['profile_hash'] is None
+
+    payload['agent']['profile_hash'] = 'C' * 64
+    payload['agent']['applied_at'] = '2026-10-31T09:00:00Z'
+    got = normalize(payload)
+    assert got['agent']['profile_hash'] == 'c' * 64
+    assert got['agent']['applied_at'] == '2026-10-31T09:00:00Z'
+
+
+def test_a_malformed_agent_profile_hash_is_rejected():
+    payload = identity()
+    payload['agent']['profile_hash'] = 'not-a-hash'
+    with pytest.raises(IdentityError, match='profile_hash'):
+        normalize(payload)
+
+
+def test_agent_applied_at_must_be_iso8601():
+    payload = identity()
+    payload['agent']['applied_at'] = 'yesterday'
+    with pytest.raises(IdentityError, match='applied_at'):
+        normalize(payload)
+
+
 def test_parse_accepts_a_json_string_and_rejects_garbage():
     assert parse('{"schema": 1}')['schema'] == 1
     with pytest.raises(IdentityError, match='not valid JSON'):

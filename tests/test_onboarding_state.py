@@ -152,6 +152,47 @@ def test_approved_image_roots_are_ready():
     assert out['stages']['images']['status'] == 'ok'
 
 
+def test_images_are_pending_until_the_box_reports_its_applied_profile():
+    """An old probe cannot prove convergence. Approving a new root changes the
+    profile, and a box on the old one may report only roots that are already
+    approved — green without the folder the operator just approved."""
+    f = facts()
+    f['current_profile_hash'] = 'a' * 64
+    out = evaluate(row(), f)
+    assert out['stages']['images']['status'] == 'pending'
+    assert 'Reapply needed' in out['stages']['images']['detail']
+    assert 'reapply' in out['next_action'].lower()
+
+
+def test_a_matching_applied_profile_hash_is_ready():
+    f = facts(identity_value=identity(profile_hash='a' * 64))
+    f['current_profile_hash'] = 'a' * 64
+    out = evaluate(row(), f)
+    assert out['stages']['images']['status'] == 'ok'
+    assert out['status'] == 'complete'
+
+
+def test_an_older_applied_profile_needs_reapply_even_when_roots_match():
+    f = facts(identity_value=identity(profile_hash='b' * 64))
+    f['current_profile_hash'] = 'a' * 64
+    out = evaluate(row(), f)
+    assert out['stages']['images']['status'] == 'pending'
+    assert 'older agent profile' in out['stages']['images']['detail']
+
+
+def test_an_unapproved_root_outranks_a_stale_profile():
+    """Approve first, then reapply: the approval changes the profile the
+    technician must download, so asking for a reapply before approval would
+    send them to the box twice."""
+    f = facts(identity_value=identity(
+        profile_hash='b' * 64, image_roots=['D:\\new-images']),
+        roots=['C:\\approved'])
+    f['current_profile_hash'] = 'a' * 64
+    out = evaluate(row(), f)
+    assert out['stages']['images']['status'] == 'review'
+    assert 'Approve' in out['next_action']
+
+
 def test_no_reported_image_root_is_pending_not_approved():
     out = evaluate(row(), facts(identity_value=identity(image_roots=[])))
     assert out['stages']['images']['status'] == 'pending'

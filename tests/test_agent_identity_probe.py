@@ -43,7 +43,7 @@ def test_the_probe_reports_every_field_the_portal_normalises():
         assert key in SCRIPT, key
     for key in ('hostname', 'hostname_source', 'roots', 'newest_file', 'format'):
         assert key in SCRIPT, key
-    for key in ('sha256', 'version', 'config_hash'):
+    for key in ('sha256', 'version', 'config_hash', 'profile_hash', 'applied_at'):
         assert key in SCRIPT, key
 
 
@@ -74,10 +74,20 @@ def test_the_probe_uses_the_approved_roots_file_and_never_invents_roots():
     assert 'EJDATA' in SCRIPT
 
 
+def test_the_probe_reports_the_applied_profile_hash_from_installer_state():
+    """The portal can only prove convergence if the box names the profile it
+    actually applied. PowerShell 2.0 has no ConvertFrom-Json, so the probe
+    reads the two scalars with a regex from the installer's state file."""
+    assert 'atm-agent-state.json' in SCRIPT
+    assert 'Get-AppliedProfile' in SCRIPT
+    assert '"profile_hash"' in SCRIPT
+    assert 'ToLowerInvariant' in SCRIPT
+
+
 def test_the_probe_version_is_in_the_manifest_and_the_profile():
-    assert "$probe_version = '2026-10-30.1'" in SCRIPT
+    assert "$probe_version = '2026-10-31.1'" in SCRIPT
     entry = MANIFEST['files']['atm-identity.ps1']
-    assert entry['version'] == '2026-10-30.1'
+    assert entry['version'] == '2026-10-31.1'
     assert entry['dest'] == 'C:\\monitor\\atm-identity.ps1'
     assert entry['sha256'] == hashlib.sha256(PROBE.read_bytes()).hexdigest()
     assert 'UserParameter=atm.identity' in PROFILE
@@ -120,7 +130,12 @@ def test_a_probe_shaped_document_passes_the_portal_contract():
                 'version': '2026-10-30.1',
             },
         },
-        'agent': {'version': '6.4.0', 'config_hash': 'b' * 64},
+        'agent': {
+            'version': '6.4.0',
+            'config_hash': 'b' * 64,
+            'profile_hash': 'c' * 64,
+            'applied_at': '2026-10-31T09:00:00Z',
+        },
     }
     got = normalize(payload)
     assert got['vendor'] == 'NCR'
@@ -128,3 +143,5 @@ def test_a_probe_shaped_document_passes_the_portal_contract():
     assert got['terminal_confidence'] == 'high'
     assert got['images']['roots'] == ['E:\\pic']
     assert got['probes']['atm-identity.ps1']['version'] == '2026-10-30.1'
+    assert got['agent']['profile_hash'] == 'c' * 64
+    assert got['agent']['applied_at'] == '2026-10-31T09:00:00Z'

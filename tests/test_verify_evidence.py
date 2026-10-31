@@ -46,7 +46,8 @@ def test_identity_ej_and_roots_are_read_into_facts():
         identity=[('ATM-1', datetime(2026, 10, 31, 9, tzinfo=timezone.utc),
                    'TID006', 'TESTMACHINE',
                    [{'field': 'model', 'severity': 'low'}],
-                   ['C:\\images'], {'atm.parts': {'sha256': 'x'}})],
+                   ['C:\\images'], {'atm.parts': {'sha256': 'x'}},
+                   'A' * 64, '2026-10-31T09:00:00Z')],
         ej=[('ATM-1', date(2026, 10, 31), 2,
              datetime(2026, 10, 31, 9, 5, tzinfo=timezone.utc))],
         roots=[('ATM-1', ['C:\\images'])],
@@ -55,6 +56,8 @@ def test_identity_ej_and_roots_are_read_into_facts():
     assert out['identity']['terminal_id'] == 'TID006'
     assert out['identity']['image_roots'] == ['C:\\images']
     assert out['identity']['has_probes'] is True
+    assert out['identity']['profile_hash'] == 'a' * 64
+    assert out['identity']['applied_at'] == '2026-10-31T09:00:00Z'
     assert out['ej']['journal_date'] == '2026-10-31'
     assert out['ej']['parse_errors'] == 2
     assert out['image_roots'] == ['C:\\images']
@@ -83,3 +86,25 @@ def test_no_identity_row_is_none_not_an_error():
     assert out['ej'] is None
     assert not out.get('identity_unavailable')
     assert not out.get('ej_unavailable')
+
+
+def test_current_profile_hash_matches_the_profile_the_portal_hands_out():
+    """The fleet compares the box's applied hash with this value. It must be
+    the same deterministic profile the download route renders, not a lookalike
+    built from a different row shape."""
+    from agent_profile import build_profile, load_manifest
+
+    row = {
+        'atm_id': 'ATM-TEST-NCR', 'vendor': 'NCR', 'model': 'SelfServ 82',
+        'district': 'NAD', 'city': 'Addis Ababa', 'terminal_id': 'TID006',
+        'ej_hostname': 'TESTNCR', 'ej_log_format': 'ncr',
+        'image_roots': ['C:\\ISUITE\\ICAM\\Permit\\icamimages'],
+        'atm_name': 'Test NCR',
+    }
+    expected = build_profile(row, load_manifest())['profile_hash']
+    assert verify._current_profile_hash(row) == expected
+
+
+def test_current_profile_hash_is_empty_for_a_row_that_cannot_have_a_profile():
+    assert verify._current_profile_hash({'atm_id': 'ATM-1', 'vendor': 'WINCOR'}) == ''
+    assert verify._current_profile_hash({}) == ''

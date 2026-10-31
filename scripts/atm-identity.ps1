@@ -22,6 +22,7 @@
     * images.roots  — existing directories from C:\monitor\atm-image-roots.txt
     * probes        — SHA-256 and probe_version of each deployed probe
     * agent         — Zabbix agent file version and config hash
+    * agent.profile_hash — canonical hash of the profile the installer applied
     * serial        — BIOS serial number (asset evidence; never reconciled)
 
   Run it by hand first:
@@ -36,7 +37,7 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 # The manifest builder reads this exact assignment. Bump it whenever the
 # output contract changes; the portal compares it with the deployed copy.
-$probe_version = '2026-10-30.1'
+$probe_version = '2026-10-31.1'
 
 # PowerShell 2.0 has no $PSScriptRoot. Resolve the script folder once so the
 # roots and probes are read from beside this script regardless of the caller.
@@ -434,6 +435,27 @@ function Get-AgentInfo {
     return @{ version = $null; config_hash = $null }
 }
 
+function Get-AppliedProfile {
+    # The installer records the canonical hash of the profile it applied in
+    # atm-agent-state.json. PowerShell 2.0 has no ConvertFrom-Json, so
+    # read the two scalars with anchored regexes. A missing or malformed
+    # state file is null evidence, never an invented hash: the portal then
+    # says "reapply the profile" instead of claiming the box is current.
+    $out = @{ profile_hash = $null; applied_at = $null }
+    $path = Join-Path $Script:MonitorRoot 'atm-agent-state.json'
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $out }
+    $text = ''
+    try { $text = [IO.File]::ReadAllText($path) } catch { return $out }
+    $hash = [regex]::Match($text, '"profile_hash"\s*:\s*"([0-9a-fA-F]{64})"')
+    if ($hash.Success) {
+        $value = [string]$hash.Groups[1].Value
+        $out['profile_hash'] = $value.ToLowerInvariant()
+    }
+    $when = [regex]::Match($text, '"applied_at"\s*:\s*"([^"]{1,40})"')
+    if ($when.Success) { $out['applied_at'] = $when.Groups[1].Value }
+    return $out
+}
+
 function Get-IpAddresses {
     $out = @()
     try {
@@ -462,6 +484,11 @@ $serial = $null
 $bios = Get-ItemProperty -Path 'HKLM:\HARDWARE\DESCRIPTION\System\BIOS' -ErrorAction SilentlyContinue
 if ($bios) { $serial = [string]$bios.SystemSerialNumber }
 
+$appliedProfile = Get-AppliedProfile
+$agentInfo = Get-AgentInfo
+$agentInfo['profile_hash'] = $appliedProfile['profile_hash']
+$agentInfo['applied_at'] = $appliedProfile['applied_at']
+
 $document = @{
     schema = 1
     collected_at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
@@ -485,7 +512,7 @@ $document = @{
     }
     ip_addresses = @(Get-IpAddresses)
     probes = (Get-ProbeInfo)
-    agent = (Get-AgentInfo)
+    agent = $agentInfo
 }
 
 # Console.WriteLine, not Write-Output: the formatting pipeline wraps long

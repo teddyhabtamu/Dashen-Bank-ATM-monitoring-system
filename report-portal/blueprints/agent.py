@@ -121,6 +121,14 @@ def agent_page(atm_id):
         _payload, download_sha256 = _download_payload(profile)
     if profile and _secret():
         signature_valid = verify(profile, _secret())
+
+    applied_profile_hash = ''
+    profile_match = None
+    if identity:
+        applied_profile_hash = str(
+            (identity.get('agent') or {}).get('profile_hash') or '')
+        if profile and applied_profile_hash:
+            profile_match = applied_profile_hash == profile['profile_hash']
     return render_template(
         'agent.html',
         atm=atm,
@@ -131,6 +139,8 @@ def agent_page(atm_id):
         conflicts=conflict_rows,
         drift=drift,
         readiness=ready,
+        applied_profile_hash=applied_profile_hash,
+        profile_match=profile_match,
         signed=bool((profile or {}).get('signature')),
         signature_valid=signature_valid,
         download_sha256=download_sha256,

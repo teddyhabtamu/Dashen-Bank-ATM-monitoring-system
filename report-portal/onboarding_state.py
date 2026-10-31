@@ -279,6 +279,22 @@ def _images_stage(row, facts):
         return _stage('review', f'{len(unapproved)} root(s) need approval',
                       f'Approve the reported image root(s) on Agent setup, then '
                       f'reapply the profile on {ip}.')
+
+    # Approving a root changes the desired profile. If the box still runs the
+    # old one, every root it reports may already be approved while the new
+    # root is absent — a green Images stage that cannot serve the new folder.
+    # The applied hash is the only proof the box converged; no hash (old
+    # probe) is also "reapply needed", because it cannot prove anything.
+    applied_hash = str(identity.get('profile_hash') or '').strip().lower()
+    current_hash = str(facts.get('current_profile_hash') or '').strip().lower()
+    if current_hash and applied_hash != current_hash:
+        detail = ('Reapply needed: the box runs an older agent profile'
+                  if applied_hash else
+                  'Reapply needed: the box did not report an applied profile hash')
+        return _stage('pending', detail,
+                      f'Download and reapply the current agent profile on {ip}, '
+                      f'then recompute; the approved image roots are not on the '
+                      f'box until the profile is applied.')
     if observed:
         return _stage('ok', f'{len(observed)} root(s) approved')
     return _stage('pending', 'No image root reported',

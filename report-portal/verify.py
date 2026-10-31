@@ -212,7 +212,8 @@ def _read_onboarding(cur, atm_ids):
 
     rows, error = _safe_rows(cur, """
         SELECT atm_id, reported_at, terminal_id, ej_hostname, conflicts,
-               payload->'images'->'roots', payload->'probes'
+               payload->'images'->'roots', payload->'probes',
+               payload->'agent'->>'profile_hash', payload->'agent'->>'applied_at'
           FROM atm_agent_identity
          WHERE atm_id = ANY(%s)
     """, (ids,))
@@ -231,6 +232,8 @@ def _read_onboarding(cur, atm_ids):
             'conflicts': r[4] or [],
             'image_roots': [str(p) for p in (r[5] or [])],
             'has_probes': bool(r[6]),
+            'profile_hash': (r[7] or '').lower(),
+            'applied_at': r[8] or '',
         }
 
     # Same rule as the EJ Journal page: the latest journal date is the
@@ -292,13 +295,17 @@ def _db_snapshot(atm_ids):
         from db import get_db
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT atm_id, vendor, model, status, ip_address, ej_hostname "
+            cur.execute("SELECT atm_id, vendor, model, status, ip_address, ej_hostname, "
+                        "district, city, terminal_id, ej_log_format, atm_name "
                         "FROM atm_locations WHERE atm_id = ANY(%s)", (list(atm_ids),))
             for r in cur.fetchall():
                 if r[0] in out:
                     out[r[0]]['row'] = {'atm_id': r[0], 'vendor': r[1], 'model': r[2],
                                         'status': r[3], 'ip_address': r[4],
-                                        'ej_hostname': r[5]}
+                                        'ej_hostname': r[5], 'district': r[6],
+                                        'city': r[7], 'terminal_id': r[8],
+                                        'ej_log_format': r[9], 'atm_name': r[10],
+                                        'image_roots': []}
             cur.execute("SELECT atm_id, state, last_seen FROM atm_current_state "
                         "WHERE atm_id = ANY(%s)", (list(atm_ids),))
             for r in cur.fetchall():
@@ -307,6 +314,11 @@ def _db_snapshot(atm_ids):
                     out[r[0]]['last_seen'] = r[2].isoformat() if r[2] else ''
             for atm_id, extra in _read_onboarding(cur, list(atm_ids)).items():
                 out[atm_id].update(extra)
+                if out[atm_id].get('row'):
+                    # The profile hash must include the approved roots, but the
+                    # roots column is read in its own savepoint: a deployment
+                    # without it loses the image stage, not the fleet verdict.
+                    out[atm_id]['row']['image_roots'] = list(extra.get('image_roots') or [])
             cur.close()
     except Exception as e:
         for f in out.values():
@@ -392,18 +404,25 @@ def _db_facts(atm_id):
         from db import get_db
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT atm_id, vendor, model, status, ip_address, ej_hostname "
+            cur.execute("SELECT atm_id, vendor, model, status, ip_address, ej_hostname, "
+                        "district, city, terminal_id, ej_log_format, atm_name "
                         "FROM atm_locations WHERE atm_id = %s", (atm_id,))
             r = cur.fetchone()
             if r:
                 out['row'] = {'atm_id': r[0], 'vendor': r[1], 'model': r[2],
-                              'status': r[3], 'ip_address': r[4], 'ej_hostname': r[5]}
+                              'status': r[3], 'ip_address': r[4], 'ej_hostname': r[5],
+                              'district': r[6], 'city': r[7], 'terminal_id': r[8],
+                              'ej_log_format': r[9], 'atm_name': r[10],
+                              'image_roots': []}
             cur.execute("SELECT state, last_seen FROM atm_current_state WHERE atm_id = %s", (atm_id,))
             s = cur.fetchone()
             if s:
                 out['state'] = s[0] or ''
                 out['last_seen'] = s[1].isoformat() if s[1] else ''
-            out.update(_read_onboarding(cur, [atm_id]).get(atm_id) or {})
+            extra = _read_onboarding(cur, [atm_id]).get(atm_id) or {}
+            out.update(extra)
+            if out.get('row'):
+                out['row']['image_roots'] = list(extra.get('image_roots') or [])
             cur.close()
     except Exception as e:
         out['db_error'] = str(e)
@@ -595,6 +614,31 @@ def verify_atm(atm_id, window_minutes=15, client=None, db_facts=None,
     return _result(atm_id, verdict, ok, checks, blockers, z, db, window_minutes)
 
 
+_MANIFEST_CACHE = None
+
+
+def _current_profile_hash(row):
+    """Canonical hash of the profile the portal would hand out now.
+
+    The identity probe reports the hash the installer actually applied. The
+    two matching is the only evidence that the box runs the current approved
+    roots and probes, not an older subset that still looks approved. An
+    unavailable manifest is unknown evidence, never a false "stale".
+    """
+    global _MANIFEST_CACHE
+    if not row:
+        return ''
+    try:
+        from agent_profile import build_profile, load_manifest
+        if _MANIFEST_CACHE is None:
+            _MANIFEST_CACHE = load_manifest()
+        return build_profile(row, _MANIFEST_CACHE).get('profile_hash') or ''
+    except Exception as exc:  # noqa: BLE001 - evidence, not a hard failure
+        logger.warning('verify: current profile hash unavailable for %s: %s',
+                       row.get('atm_id'), exc)
+        return ''
+
+
 def _result(atm_id, verdict, ok, checks, blockers, z, db, window_minutes):
     return {
         'atm_id': atm_id, 'verdict': verdict, 'ok': ok,
@@ -616,6 +660,7 @@ def _result(atm_id, verdict, ok, checks, blockers, z, db, window_minutes):
                   'identity': db.get('identity'),
                   'ej': db.get('ej'),
                   'approved_image_roots': db.get('image_roots') or [],
+                  'current_profile_hash': _current_profile_hash(db.get('row')),
                   'identity_unavailable': db.get('identity_unavailable') or '',
                   'ej_unavailable': db.get('ej_unavailable') or '',
                   'image_roots_unavailable': db.get('image_roots_unavailable') or '',
