@@ -10,6 +10,7 @@ registry only changes through the registration form, deliberately.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -68,6 +69,18 @@ def _expected_probes(profile):
             for p in (profile or {}).get('probes') or []}
 
 
+def _download_payload(profile):
+    """The exact bytes the download route serves, and their SHA-256.
+
+    The canonical `profile_hash` is computed over sorted compact JSON, which
+    the installer cannot reproduce in Windows PowerShell. `/EXPECTEDHASH=`
+    therefore pins this raw hash instead; both are shown on the page so the
+    two values are never confused.
+    """
+    payload = json.dumps(profile, indent=2) + '\n'
+    return payload, hashlib.sha256(payload.encode('utf-8')).hexdigest()
+
+
 @bp.route('/atms/<atm_id>/agent')
 @login_required
 @role_required(ROLE_ADMIN)
@@ -88,6 +101,9 @@ def agent_page(atm_id):
         ready = readiness(identity, atm.get('image_roots') or [])
 
     signature_valid = None
+    download_sha256 = None
+    if profile:
+        _payload, download_sha256 = _download_payload(profile)
     if profile and _secret():
         signature_valid = verify(profile, _secret())
     return render_template(
@@ -102,6 +118,7 @@ def agent_page(atm_id):
         readiness=ready,
         signed=bool((profile or {}).get('signature')),
         signature_valid=signature_valid,
+        download_sha256=download_sha256,
     )
 
 
@@ -112,12 +129,14 @@ def agent_profile_download(atm_id):
     _atm_row, profile, error = _profile_for(atm_id)
     if error:
         return jsonify({'error': error, 'atm_id': atm_id}), 409
-    payload = json.dumps(profile, indent=2) + '\n'
+    payload, download_sha256 = _download_payload(profile)
     log_action('AGENT_PROFILE_DOWNLOAD',
-               f'{atm_id} hash={profile["profile_hash"][:16]} ready={profile["ready"]}')
+               f'{atm_id} hash={profile["profile_hash"][:16]} '
+               f'sha256={download_sha256[:16]} ready={profile["ready"]}')
     resp = Response(payload, mimetype='application/json')
     resp.headers['Content-Disposition'] = f'attachment; filename="{atm_id}.profile.json"'
-    resp.headers['X-Profile-Sha256'] = profile['profile_hash']
+    resp.headers['X-Profile-Sha256'] = download_sha256
+    resp.headers['X-Profile-Canonical-Sha256'] = profile['profile_hash']
     return resp
 
 

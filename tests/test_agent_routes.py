@@ -6,10 +6,10 @@ reject bad identity/root input without writing it.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import pathlib
 import sys
-from datetime import datetime, timezone
 
 import pytest
 from flask import Blueprint, Flask
@@ -37,9 +37,7 @@ ATM = {
     'image_roots': ['C:\\ATM\\images'],
 }
 
-PROFILE = build_profile(
-    ATM, load_manifest(), secret='test-secret',
-    now=datetime(2026, 10, 30, 12, 0, tzinfo=timezone.utc))
+PROFILE = build_profile(ATM, load_manifest(), secret='test-secret')
 PROBE = next(p for p in PROFILE['probes'] if p['name'] == 'ncr-xfs-probe.ps1')
 
 IDENTITY = parse({
@@ -149,6 +147,8 @@ def test_an_admin_can_open_the_agent_page(app):
     assert b'Desired state' in response.data
     assert b'Reported identity' in response.data
     assert b'atm-identity.ps1' in response.data
+    assert b'Download SHA-256' in response.data
+    assert b'/EXPECTEDHASH=' in response.data
 
 
 def test_a_missing_profile_and_identity_still_render(app, monkeypatch):
@@ -173,6 +173,17 @@ def test_anonymous_and_viewer_requests_are_refused(app):
     assert viewer.status_code == 403
 
 
+def test_the_download_hash_shown_on_the_page_matches_the_file(app):
+    with app.test_client() as client:
+        login(client)
+        page = client.get('/atms/ATM-TEST-NCR/agent')
+        download = client.get('/atms/ATM-TEST-NCR/agent/profile.json')
+    assert page.status_code == 200
+    assert download.status_code == 200
+    expected = hashlib.sha256(download.data).hexdigest().encode()
+    assert expected in page.data
+
+
 def test_profile_download_is_signed_and_logged(app, monkeypatch):
     logged = []
     monkeypatch.setattr(agent_mod, 'log_action',
@@ -181,7 +192,9 @@ def test_profile_download_is_signed_and_logged(app, monkeypatch):
         login(client)
         response = client.get('/atms/ATM-TEST-NCR/agent/profile.json')
     assert response.status_code == 200
-    assert response.headers['X-Profile-Sha256'] == PROFILE['profile_hash']
+    download_sha256 = hashlib.sha256(response.data).hexdigest()
+    assert response.headers['X-Profile-Sha256'] == download_sha256
+    assert response.headers['X-Profile-Canonical-Sha256'] == PROFILE['profile_hash']
     assert json.loads(response.data)['profile_hash'] == PROFILE['profile_hash']
     assert response.headers['Content-Disposition'].endswith(
         'filename="ATM-TEST-NCR.profile.json"')

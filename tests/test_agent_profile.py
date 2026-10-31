@@ -12,7 +12,6 @@ import json
 import pathlib
 import subprocess
 import sys
-from datetime import datetime, timezone
 
 import pytest
 
@@ -21,8 +20,6 @@ sys.path.insert(0, str(REPO / 'report-portal'))
 
 import agent_profile  # noqa: E402
 from agent_profile import ProfileError, build_profile, load_manifest, verify  # noqa: E402
-
-NOW = datetime(2026, 10, 30, 12, 0, tzinfo=timezone.utc)
 
 ATM = {
     'atm_id': 'ATM-TEST-NCR',
@@ -44,7 +41,6 @@ GRG = dict(ATM, atm_id='ATM-TEST-GRG', vendor='GRG', model='GRG H68N',
 
 def build(row=None, **kwargs):
     kwargs.setdefault('secret', 'test-secret')
-    kwargs.setdefault('now', NOW)
     return build_profile(row or ATM, load_manifest(), **kwargs)
 
 
@@ -106,6 +102,13 @@ def test_profile_is_deterministic_and_verifies():
     assert verify(first, 'wrong-secret') is False
 
 
+def test_profile_has_no_render_timestamp_so_the_download_hash_is_stable():
+    first = build()
+    second = build()
+    assert 'generated_at' not in first
+    assert json.dumps(first, indent=2) == json.dumps(second, indent=2)
+
+
 def test_tampering_with_the_body_breaks_the_signature():
     profile = build()
     profile['terminal_id'] = 'TID999'
@@ -162,6 +165,13 @@ def test_a_vendor_without_a_probe_set_gets_no_profile():
 def test_a_missing_manifest_is_an_actionable_error(tmp_path):
     with pytest.raises(ProfileError, match='build_agent_manifest'):
         load_manifest(tmp_path / 'missing.json')
+
+
+def test_the_agent_log_stays_beside_the_probes():
+    config = build()['agent']['config_text']
+    assert 'LogType=file' in config
+    assert 'LogFile=C:\\monitor\\logs\\zabbix_agent2.log' in config
+    assert 'DebugLevel=3' in config
 
 
 def test_the_profile_files_are_written_to_the_expected_windows_paths():

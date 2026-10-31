@@ -128,8 +128,10 @@ details.profile-file .code-block{border-radius:0 0 8px 8px;margin:0}
             <div class="kv"><span class="k">Server source</span><span class="v">{{ profile.agent.server_source }}</span></div>
             <div class="kv"><span class="k">Listen port</span><span class="v">{{ profile.agent.listen_port }}</span></div>
             <div class="kv"><span class="k">Timeout</span><span class="v">{{ profile.agent.timeout }} s</span></div>
-            <div class="kv"><span class="k">Generated</span><span class="v">{{ profile.generated_at }}</span></div>
-            <div class="kv"><span class="k">Profile hash</span><span class="v mono" title="{{ profile.profile_hash }}">{{ profile.profile_hash[:16] }}…</span></div>
+            <div class="kv"><span class="k">Canonical hash</span><span class="v mono" title="{{ profile.profile_hash }}">{{ profile.profile_hash[:16] }}…</span></div>
+            {% if download_sha256 %}
+            <div class="kv"><span class="k">Download SHA-256</span><span class="v mono" title="{{ download_sha256 }}">{{ download_sha256[:16] }}…</span></div>
+            {% endif %}
           </div>
 
           <div class="code-head">
@@ -320,6 +322,9 @@ details.profile-file .code-block{border-radius:0 0 8px 8px;margin:0}
           {% endif %}
           {% if profile and profile.signature %}
           <p class="agent-note" style="margin-top:10px;word-break:break-all"><span class="mono">{{ profile.signature }}</span></p>
+          {% endif %}
+          {% if download_sha256 %}
+          <p class="agent-note" style="margin-top:10px">Exact download SHA-256 (pass to the installer as <span class="mono">/EXPECTEDHASH=</span>):<br><span class="mono" style="word-break:break-all">{{ download_sha256 }}</span></p>
           {% endif %}
         </div>
       </div>

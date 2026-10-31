@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build report-portal/config/agent_manifest.json — the deployable file contract.
+"""Build report-portal/agent_manifest.json — the deployable file contract.
 
 Why this exists: the portal container has no copy of scripts/ (the Dockerfile
 copies only the portal), so it cannot hash the probe files at request time.
