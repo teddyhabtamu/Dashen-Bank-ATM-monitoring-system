@@ -146,6 +146,26 @@ jobs:
             $tail = ((Get-Content $log -Tail 40 -ErrorAction SilentlyContinue) -join ' | ')
             $tail = $tail.Substring(0, [Math]::Min(3000, $tail.Length))
             Write-Host "::error title=Agent smoke install failed ($code)::$tail"
+            $exe = Join-Path $env:ProgramFiles 'Zabbix Agent 2\zabbix_agent2.exe'
+            Write-Host '--- agent config test ---'
+            if (Test-Path $exe) { & $exe -T -c $conf 2>&1 | Write-Host }
+            Write-Host '--- service configuration ---'
+            & sc.exe qc 'Zabbix Agent 2' 2>&1 | Write-Host
+            & sc.exe queryex 'Zabbix Agent 2' 2>&1 | Write-Host
+            $agentLog = Join-Path $monitor 'logs\zabbix_agent2.log'
+            if (Test-Path $agentLog) {
+              Write-Host '--- agent log ---'
+              Get-Content $agentLog -Tail 50 | Write-Host
+            }
+            Write-Host '--- application events ---'
+            Get-WinEvent -FilterHashtable @{
+              LogName = 'Application'; StartTime = (Get-Date).AddMinutes(-10)
+            } -ErrorAction SilentlyContinue |
+              Where-Object { $_.Message -match 'Zabbix|zabbix' } |
+              Select-Object -First 10 |
+              ForEach-Object {
+                Write-Host ("{0} {1}: {2}" -f $_.TimeCreated, $_.ProviderName, $_.Message)
+              }
             exit $code
           }
 

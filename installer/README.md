@@ -130,7 +130,7 @@ Artifacts land in `installer/dist/`:
 - `C:\monitor\*.ps1` — the probes named in the profile, hash-checked.
 - `C:\Program Files\Zabbix Agent 2\zabbix_agent2.conf` — the full passive-only
   config from the profile (`Server=<proxy>`, `Hostname=<atm_id>`,
-  `Timeout=30`, `EnableRemoteCommands=0`, one `Include`).
+  `Timeout=30`, `DenyKey=system.run[*]`, one `Include`).
 - Zabbix Agent 2 6.4 service, startup type automatic.
 
 Every file it replaces is copied to `C:\monitor\backup\<timestamp>\` first.

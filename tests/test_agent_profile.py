@@ -174,6 +174,19 @@ def test_the_agent_log_stays_beside_the_probes():
     assert 'DebugLevel=3' in config
 
 
+def test_the_agent_config_uses_agent2_directives_only():
+    config = build()['agent']['config_text']
+    directives = {
+        line.split('=', 1)[0].strip()
+        for line in config.splitlines()
+        if '=' in line and not line.lstrip().startswith('#')
+    }
+    assert 'EnableRemoteCommands' not in directives
+    assert 'LogRemoteCommands' not in directives
+    assert 'DenyKey' in directives
+    assert 'DenyKey=system.run[*]' in config
+
+
 def test_the_profile_files_are_written_to_the_expected_windows_paths():
     profile = build()
     destinations = {f['dest'] for f in profile['files']}

@@ -231,6 +231,28 @@ def test_userparameters_in_the_main_config_are_refused(tmp_path):
     assert 'UserParameter' in _result(output)['error']
 
 
+def test_agent1_only_remote_command_directives_are_refused(tmp_path):
+    profiles, monitor = _profiles(tmp_path)
+    profile = json.loads((profiles / 'ncr.profile.json').read_text())
+    profile['agent']['config_text'] += 'EnableRemoteCommands=0\n'
+    bad = profiles / 'agent1-directive.profile.json'
+    bad.write_text(json.dumps(profile), encoding='utf-8')
+    code, output = _run('-Profile', str(bad), *_common(monitor), '-DryRun')
+    assert code == 10, output
+    assert 'EnableRemoteCommands' in _result(output)['error']
+
+
+def test_an_allowkey_that_permits_system_run_is_refused(tmp_path):
+    profiles, monitor = _profiles(tmp_path)
+    profile = json.loads((profiles / 'ncr.profile.json').read_text())
+    profile['agent']['config_text'] += 'AllowKey=system.run[*]\n'
+    bad = profiles / 'allowkey.profile.json'
+    bad.write_text(json.dumps(profile), encoding='utf-8')
+    code, output = _run('-Profile', str(bad), *_common(monitor), '-DryRun')
+    assert code == 10, output
+    assert 'AllowKey=system.run' in _result(output)['error']
+
+
 def test_unknown_userparameter_keys_in_the_include_are_refused(tmp_path):
     profiles, monitor = _profiles(tmp_path)
     profile = json.loads((profiles / 'ncr.profile.json').read_text())

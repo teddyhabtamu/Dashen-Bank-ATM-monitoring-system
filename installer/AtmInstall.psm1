@@ -549,9 +549,20 @@ function Test-ProfileDocument {
     } elseif ($includeDest -and $includeValues[0] -ne $includeDest) {
         Add-CheckError $result "agent config Include=$($includeValues[0]) does not match '$includeDest'"
     }
-    $remote = @(Get-ConfigLines $configText 'EnableRemoteCommands')
-    if ($remote.Count -gt 0 -and $remote[0] -eq '1') {
-        Add-CheckError $result 'agent config enables remote commands; this fleet forbids them'
+    # Agent 2 has no EnableRemoteCommands switch and no LogRemoteCommands
+    # directive. An unknown parameter makes the service exit at startup, and
+    # Start-Service only reports "cannot be started", so refuse it here where
+    # the reason is visible.
+    if (@(Get-ConfigLines $configText 'EnableRemoteCommands').Count -gt 0) {
+        Add-CheckError $result 'agent config contains EnableRemoteCommands; Agent 2 uses AllowKey/DenyKey and will not start with that directive'
+    }
+    if (@(Get-ConfigLines $configText 'LogRemoteCommands').Count -gt 0) {
+        Add-CheckError $result 'agent config contains the Agent 1 LogRemoteCommands directive; use Plugins.SystemRun.LogRemoteCommands or omit it'
+    }
+    foreach ($allow in @(Get-ConfigLines $configText 'AllowKey')) {
+        if ($allow -match '(?i)system\.run' -or $allow.Trim() -eq '*') {
+            Add-CheckError $result "agent config allows remote commands with AllowKey=$allow"
+        }
     }
 
     # ── probes ────────────────────────────────────────────────────────────
@@ -1480,16 +1491,18 @@ function Invoke-InstallPlan {
     }
 
     if (-not $NoService) {
+        $agent = Get-Agent2Info
+        if (-not $agent.Exe) { throw 'Zabbix Agent 2 is not installed after the apply step' }
+        # Test the config before touching the service. A bad directive then
+        # reports itself instead of surfacing as a bare Start-Service failure.
+        $configTest = Test-AgentConfig -Exe $agent.Exe -Conf $AgentConf
+        if (-not $configTest.Ok) {
+            throw ("agent config test failed: " + $configTest.Output)
+        }
         $serviceItem = $Plan.Items | Where-Object { $_.Kind -eq 'service' } | Select-Object -First 1
         if ($serviceItem) {
             if ($LogPath) { Write-Log ("service action: " + $serviceItem.Action) -LogPath $LogPath }
             Set-AgentService -Action $serviceItem.Action
-        }
-        $agent = Get-Agent2Info
-        if (-not $agent.Exe) { throw 'Zabbix Agent 2 is not installed after the apply step' }
-        $configTest = Test-AgentConfig -Exe $agent.Exe -Conf $AgentConf
-        if (-not $configTest.Ok) {
-            throw ("agent config test failed: " + $configTest.Output)
         }
         if (-not (Wait-TcpPort -Port $script:AgentPort -TimeoutSeconds 20)) {
             throw "nothing is listening on TCP $($script:AgentPort) after the restart"
