@@ -220,7 +220,8 @@ def _sample(rows, limit):
     return sorted(selected, key=lambda raw: _row_number(raw[0], 0))
 
 
-def build_rows(raw_rows, prefix='TST', ip_mode='synthetic', limit=0):
+def build_rows(raw_rows, prefix='TST', ip_mode='synthetic', limit=0,
+               snmp_community='public'):
     """Return (csv_rows, detail_rows, summary). Pure apart from validation."""
     prefix = clean(prefix).rstrip('-') or 'TST'
     if not re.match(r'^[A-Za-z0-9][A-Za-z0-9_-]*$', prefix):
@@ -339,7 +340,7 @@ def build_rows(raw_rows, prefix='TST', ip_mode='synthetic', limit=0):
             'install_date': '',
             'status': 'active',
             'ip_address': ip_value,
-            'snmp_community': 'public',
+            'snmp_community': snmp_community,
             'snmp_version': '2',
             'ej_log_format': 'NCR_APTRA' if vendor == 'NCR' else 'GRG',
             'ej_hostname': '',
@@ -428,7 +429,7 @@ def write_report(path, summary, csv_path, details_path, excel_path):
         '| `atm_id` | Stable test key `<prefix>-<workbook No>`, e.g. `TST-0001`. |',
         '| `ip_address` | `synthetic` mode uses RFC 2544 `198.18.0.0/15`; `real` mode preserves the workbook IP and fills only gaps. |',
         '| `ej_log_format` | `NCR_APTRA` for NCR, `GRG` for GRG. |',
-        '| `snmp_community` | `public` placeholder. Polling will fail where the real community differs. |',
+        '| `snmp_community` | `--snmp-community` value (default `public`). Polling will fail where the real community differs. |',
         '| `ej_hostname` | Left empty. EJ pullers skip these rows until a real hostname is known. |',
         '| `latitude`, `longitude`, `install_date` | Left empty. |',
         '',
@@ -478,6 +479,8 @@ def main(argv=None):
                         help='synthetic = RFC 2544 addresses; real = preserve workbook IPs')
     parser.add_argument('--limit', type=int, default=0,
                         help='Prepare a deterministic sample of N rows (0 = all)')
+    parser.add_argument('--snmp-community', default='public',
+                        help='SNMP community for the generated rows (default public)')
     parser.add_argument('--allow-errors', action='store_true',
                         help='Write the CSV even if portal validation fails')
     args = parser.parse_args(argv)
@@ -493,7 +496,8 @@ def main(argv=None):
     raw_rows = load_workbook_rows(Path(args.excel))
     try:
         csv_rows, details, summary = build_rows(
-            raw_rows, prefix=args.prefix, ip_mode=args.ip_mode, limit=args.limit)
+            raw_rows, prefix=args.prefix, ip_mode=args.ip_mode, limit=args.limit,
+            snmp_community=args.snmp_community)
     except ValueError as exc:
         print(f'error: {exc}', file=sys.stderr)
         return 2

@@ -165,6 +165,13 @@ def test_a_validation_error_blocks_import_ready_status(tmp_path):
     assert 'terminal_id' in details[0]['validation_errors']
 
 
+def test_custom_snmp_community_is_carried_into_every_row(tmp_path):
+    rows, _details, _summary = prep.build_rows(
+        raw_rows(tmp_path, base_rows()), prefix='TST', ip_mode='synthetic',
+        snmp_community='dashen_sim')
+    assert {r['snmp_community'] for r in rows} == {'dashen_sim'}
+
+
 def test_generated_csv_has_the_portal_required_columns(tmp_path):
     rows, details, summary = prep.build_rows(
         raw_rows(tmp_path, base_rows()), prefix='TST', ip_mode='synthetic')

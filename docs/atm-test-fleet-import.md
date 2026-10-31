@@ -18,7 +18,7 @@ district and vendor string. The portal import also requires `atm_id`, `city`,
 | `model` | Approved default: NCR `SelfServ 34`, GRG `AD2600` |
 | `branch` | Owner branch, normalised to `… BRANCH`; missing values use the ATM name |
 | `status` | `active` |
-| `snmp_community` | `public` placeholder; real polling may fail |
+| `snmp_community` | `--snmp-community` value, default `public`; real polling may fail |
 | `ej_log_format` | `NCR_APTRA` / `GRG` |
 | `ej_hostname`, `latitude`, `longitude`, `install_date` | Left empty |
 
@@ -36,6 +36,9 @@ python3 scripts/prepare_fleet_import.py --ip-mode real
 
 # Small representative pilot (mixed vendors/districts).
 python3 scripts/prepare_fleet_import.py --ip-mode synthetic --limit 50
+
+# Match the lab SNMP community instead of the `public` placeholder.
+python3 scripts/prepare_fleet_import.py --ip-mode synthetic --snmp-community dashen_sim
 ```
 
 Outputs:
