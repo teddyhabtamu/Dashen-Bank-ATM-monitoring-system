@@ -839,6 +839,25 @@ class BridgeHandler(BaseHTTPRequestHandler):
             'message': exc.public,
         })
 
+    def _drain_body(self) -> None:
+        """Consume a bounded request body we are refusing.
+
+        A 401 followed by an immediate close can make the client's sendall
+        fail with BrokenPipe before it reads the refusal. Draining the body
+        first is both correct HTTP and the difference between a deterministic
+        refusal and a race. Oversized/unknown lengths are not read: closing is
+        the safe answer there.
+        """
+        try:
+            length = int(self.headers.get('Content-Length', '0') or '0')
+        except ValueError:
+            return
+        if 0 < length <= MAX_BODY:
+            try:
+                self.rfile.read(length)
+            except Exception:  # noqa: BLE001 - refusing anyway
+                pass
+
     def _read_json(self) -> dict:
         try:
             length = int(self.headers.get('Content-Length', '0') or '0')
@@ -888,6 +907,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
     def _dispatch(self) -> None:
         if not self._authorized():
+            self._drain_body()
             self._send_json(401, {
                 'error': 'unauthorized',
                 'message': 'The image bridge token is missing or invalid.',
