@@ -35,6 +35,9 @@ services:
       ZBX_VALUECACHESIZE: "${ZBX_VALUECACHESIZE:-256M}"
       ZBX_HISTORYCACHESIZE: "${ZBX_HISTORYCACHESIZE:-64M}"
       ZBX_TRENDCACHESIZE: "${ZBX_TRENDCACHESIZE:-32M}"
+      # Match the SNMP timeout tuned on UAT-01; kept in the repo so a pull
+      # no longer conflicts with the server's local compose edit.
+      ZBX_TIMEOUT: "${ZBX_TIMEOUT:-15}"
     shm_size: "${ZBX_SHM_SIZE:-1g}"
     ports:
       - "10051:10051"
