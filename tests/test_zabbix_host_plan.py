@@ -332,13 +332,32 @@ def test_active_live_host_is_not_stolen_even_with_registry(monkeypatch):
     assert plans[0]['action'] == 'create'
 
 
-def test_changed_ip_updates_the_interface_only(monkeypatch):
+def test_changed_ip_updates_both_interfaces(monkeypatch):
+    """The agent interface carries WMI/XFS, so it must move with the SNMP one.
+
+    Leaving it stale made the Zabbix host list show the old IP while the
+    portal showed the new one.
+    """
     install(monkeypatch, FakeZabbix(hosts={'ATM-0001': existing()}))
     _, plans = zs.plan_hosts([row(ip_address='10.41.30.6')])
-    assert plans[0]['changes'] == ['interface/community']
-    assert plans[0]['params']['interfaces'][0]['interfaceid'] == '9'
-    assert plans[0]['params']['interfaces'][0]['ip'] == '10.41.30.6'
+    assert plans[0]['changes'] == ['interface/community', 'agent interface IP']
+    by_type = {str(i['type']): i for i in plans[0]['params']['interfaces']}
+    assert by_type['2']['interfaceid'] == '9'
+    assert by_type['2']['ip'] == '10.41.30.6'
+    assert by_type['1']['interfaceid'] == '10'
+    assert by_type['1']['ip'] == '10.41.30.6'
     assert 'hostid' in plans[0]['params']
+
+
+def test_stale_agent_ip_is_repaired_without_touching_snmp(monkeypatch):
+    cur = existing(interfaces=[snmp_if(ip='10.41.30.6'),
+                               agent_if(ip='10.41.30.5')])
+    install(monkeypatch, FakeZabbix(hosts={'ATM-0001': cur}))
+    _, plans = zs.plan_hosts([row(ip_address='10.41.30.6')])
+    assert plans[0]['changes'] == ['agent interface IP']
+    by_type = {str(i['type']): i for i in plans[0]['params']['interfaces']}
+    assert by_type['1']['ip'] == '10.41.30.6'
+    assert by_type['2']['ip'] == '10.41.30.6'
 
 
 def test_changing_snmp_community_keeps_the_agent_interface(monkeypatch):

@@ -272,65 +272,61 @@ def _plan_update(a, cur, tids, groups, create_groups):
         want_version = int(a.get("snmp_version") or "2")
     except (ValueError, TypeError):
         want_version = 2
+    want_ip = (a.get("ip_address") or "").strip()
     ifaces = cur.get("interfaces") or []
     snmp = next((i for i in ifaces if str(i.get("type")) == "2"), None)
-    has_agent = any(str(i.get("type")) == "1" for i in ifaces)
-    if vendor in ("NCR", "GRG") and not has_agent:
-        # Additive: keep every existing interface exactly as it is and append
-        # the agent row, so we never rewrite a field a human tuned by hand.
-        # GRG needs it too when the XFS/Agent templates are linked; without it
-        # every agent item (XFS and identity) stays unsupported.
-        upd["interfaces"] = [{"interfaceid": i["interfaceid"], "type": i.get("type", "2"),
-                              "main": i.get("main", "1"), "useip": i.get("useip", "1"),
-                              "ip": i.get("ip"), "dns": i.get("dns", ""),
-                              "port": i.get("port", SNMP_PORT),
-                              **({"details": i.get("details")} if i.get("details") else {})}
-                             for i in ifaces if i.get("interfaceid")] + \
-                            [_agent_interface((a.get("ip_address") or "").strip())]
-        changed.append("agent interface")
+    agent = next((i for i in ifaces if str(i.get("type")) == "1"), None)
+    add_agent = vendor in ("NCR", "GRG") and agent is None
+    snmp_differs = False
+    effective_community = ""
     if snmp:
         det = snmp.get("details") or {}
-        want_ip = (a.get("ip_address") or "").strip()
         # Keep the Zabbix community when the portal has no real one yet.
         effective_community = portal_community or det.get("community") or ""
         community_differs = bool(portal_community) and \
             det.get("community") != portal_community
-        if (snmp.get("ip") != want_ip
-                or community_differs
-                or str(det.get("version")) != str(want_version)):
-            if "interfaces" not in upd:   # do not clobber an agent-interface append
-                # host.update REPLACES the whole interface set. Sending only
-                # the SNMP row deletes every other row, and Zabbix refuses
-                # with "Interface is linked to item" when the omitted row is
-                # the agent interface carrying the GRG XFS items. Echo every
-                # existing row back and change only the one that needs it.
-                upd["interfaces"] = []
-                for iface in ifaces:
-                    if not iface.get("interfaceid"):
-                        continue
-                    row = {
-                        "interfaceid": iface["interfaceid"],
-                        "type": iface.get("type", "2"),
-                        "main": iface.get("main", "1"),
-                        "useip": iface.get("useip", "1"),
-                        "ip": iface.get("ip"),
-                        "dns": iface.get("dns", ""),
-                        "port": iface.get("port", SNMP_PORT),
-                    }
-                    if iface.get("details"):
-                        row["details"] = iface["details"]
-                    if iface["interfaceid"] == snmp["interfaceid"]:
-                        row["ip"] = want_ip
-                        row["details"] = {"version": want_version, "bulk": 0,
-                                          "community": effective_community}
-                    upd["interfaces"].append(row)
-            else:
-                for i in upd["interfaces"]:
-                    if i.get("interfaceid") == snmp["interfaceid"]:
-                        i["ip"] = want_ip
-                        i["details"] = {"version": want_version, "bulk": 0,
-                                        "community": effective_community}
+        snmp_differs = (snmp.get("ip") != want_ip
+                        or community_differs
+                        or str(det.get("version")) != str(want_version))
+    # The agent interface carries WMI/XFS/identity items. It used to be added
+    # only when missing; an adopted host from an earlier import therefore kept
+    # its old agent IP forever, while the portal showed the new one. Reconcile
+    # both interfaces in one host.update (the API replaces the whole set).
+    agent_differs = bool(agent and want_ip
+                         and (agent.get("ip") or "") != want_ip)
+    if add_agent or snmp_differs or agent_differs:
+        rows = []
+        for iface in ifaces:
+            if not iface.get("interfaceid"):
+                continue
+            row = {
+                "interfaceid": iface["interfaceid"],
+                "type": iface.get("type", "2"),
+                "main": iface.get("main", "1"),
+                "useip": iface.get("useip", "1"),
+                "ip": iface.get("ip"),
+                "dns": iface.get("dns", ""),
+                "port": iface.get("port", SNMP_PORT),
+            }
+            if iface.get("details"):
+                row["details"] = iface["details"]
+            if snmp and iface["interfaceid"] == snmp["interfaceid"]:
+                row["ip"] = want_ip
+                row["details"] = {"version": want_version, "bulk": 0,
+                                  "community": effective_community}
+            if agent and iface["interfaceid"] == agent["interfaceid"] \
+                    and agent_differs:
+                row["ip"] = want_ip
+            rows.append(row)
+        if add_agent:
+            rows.append(_agent_interface(want_ip))
+        upd["interfaces"] = rows
+        if add_agent:
+            changed.append("agent interface")
+        if snmp_differs:
             changed.append("interface/community")
+        if agent_differs:
+            changed.append("agent interface IP")
     have_macros = {m.get("macro"): m.get("value") for m in (cur.get("macros") or [])}
     if have_macros.get("{$ATM_VENDOR}") != vendor:
         upd["macros"] = [{"macro": "{$ATM_VENDOR}", "value": vendor}]
