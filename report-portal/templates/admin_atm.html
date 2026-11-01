@@ -960,6 +960,7 @@ function selectImportFile(file){
           }
         }
         var terminalMap = data.terminal_matches || {};
+        var ambiguousMap = data.terminal_ambiguous || {};
         for(var i = 0; i < _importRows.length; i++){
           var aid = _importRows[i].atm_id;
           var tid = (_importRows[i].terminal_id || '').toUpperCase();
@@ -967,15 +968,22 @@ function selectImportFile(file){
           // row that already owns the terminal ID, exactly like the server.
           _importRows[i]._exists = aid ? !!existingMap[aid]
                                        : !!(tid && terminalMap[tid]);
+          _importRows[i]._ambiguous = !!(tid && ambiguousMap[tid]);
         }
         renderPreviewTable(file.name);
       })
       .catch(function(){
-        for(var i = 0; i < _importRows.length; i++) _importRows[i]._exists = false;
+        for(var i = 0; i < _importRows.length; i++){
+          _importRows[i]._exists = false;
+          _importRows[i]._ambiguous = false;
+        }
         renderPreviewTable(file.name);
       });
     } else {
-      for(var i = 0; i < _importRows.length; i++) _importRows[i]._exists = false;
+      for(var i = 0; i < _importRows.length; i++){
+        _importRows[i]._exists = false;
+        _importRows[i]._ambiguous = false;
+      }
       renderPreviewTable(file.name);
     }
   };
@@ -1110,6 +1118,9 @@ function renderPreviewTable(fileName){
   for(var i = 0; i < _importRows.length; i++){
     var row = _importRows[i];
     var errs = validateRow(row);
+    if(row._ambiguous && !errs.terminal_id){
+      errs.terminal_id = 'Matches multiple registered ATMs; resolve the duplicate first';
+    }
     // Mirror the server: only an otherwise valid row reserves a TID/atm_id,
     // so a later corrected row can still import.
     if(Object.keys(errs).length === 0){

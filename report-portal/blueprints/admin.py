@@ -682,20 +682,29 @@ FIELDS = [
 
 
 def registry_key_index(cur):
-    """Return (terminal_id -> atm_id, set of used atm_ids) from the registry.
+    """Return (terminal_id -> atm_id, used atm_ids, ambiguous terminal IDs).
 
     One query per save/import, not one per row: a 1,200-row import must not
     issue 1,200 lookups just to allocate keys.
+
+    A terminal ID registered on more than one ATM is ambiguous. A TID-only
+    import must not guess which row to update: on UAT, PATMT003 was present on
+    both a 4 Kilo test ATM and the real Megenagna row, and the importer
+    silently overwrote the first one by atm_id order. Ambiguous keys are
+    therefore excluded from the lookup map and reported separately so the
+    caller can refuse the row instead of clobbering a test asset.
     """
     cur.execute("SELECT atm_id, terminal_id FROM atm_locations ORDER BY atm_id")
-    existing = {}
+    owners = {}
     used = set()
     for atm_id, terminal_id in cur.fetchall():
         if atm_id:
             used.add(atm_id)
         if terminal_id:
-            existing.setdefault(terminal_key(terminal_id), atm_id)
-    return existing, used
+            owners.setdefault(terminal_key(terminal_id), []).append(atm_id)
+    existing = {key: ids[0] for key, ids in owners.items() if len(ids) == 1}
+    ambiguous = {key: ids for key, ids in owners.items() if len(ids) > 1}
+    return existing, used, ambiguous
 
 
 def assign_atm_id(data):
@@ -703,7 +712,8 @@ def assign_atm_id(data):
 
     The terminal ID is the bank's key; the monitoring key is derived from it.
     An existing terminal ID keeps its registered atm_id, so a TID-only
-    re-import or edit updates the same row. Raises on DB failure.
+    re-import or edit updates the same row. Raises on DB failure or when the
+    terminal ID is registered to more than one ATM (ambiguous identity).
     """
     current = (data.get('atm_id') or '').strip()
     if current:
@@ -714,8 +724,13 @@ def assign_atm_id(data):
         return None
     with get_db() as conn:
         cur = conn.cursor()
-        existing, used = registry_key_index(cur)
+        existing, used, ambiguous = registry_key_index(cur)
         cur.close()
+    key = terminal_key(terminal_id)
+    if key in ambiguous:
+        raise ValueError(
+            f'Terminal ID {terminal_id} is registered to multiple ATMs '
+            f'({", ".join(ambiguous[key])}). Resolve the duplicate before saving.')
     data['atm_id'] = choose_atm_id(terminal_id, used, existing)
     return data['atm_id']
 
@@ -1302,9 +1317,10 @@ def save_atm_record(data, source='registration'):
             assign_atm_id(data)
         except Exception as e:
             logger.warning('ATM ID allocation failed: %s', e)
+            message = (str(e) if isinstance(e, ValueError)
+                       else 'Could not generate an ATM ID. Check the database and try again.')
             return {'ok': False,
-                    'errors': {'_general': 'Could not generate an ATM ID. '
-                                           'Check the database and try again.'},
+                    'errors': {'_general': message},
                     'audit_detail': '', 'atm_id': None, 'created': False}
     errors = _validate(data)
     if errors:
@@ -1594,9 +1610,11 @@ def atm_check():
     terminal_ids = [str(t).strip().upper()
                     for t in (data.get('terminal_ids') or []) if str(t).strip()]
     if not ids and not terminal_ids:
-        return jsonify({'existing': [], 'terminal_matches': {}})
+        return jsonify({'existing': [], 'terminal_matches': {},
+                        'terminal_ambiguous': {}})
     existing = []
     terminal_matches = {}
+    terminal_owners = {}
     with get_db() as conn:
         cur = conn.cursor()
         if ids:
@@ -1605,10 +1623,16 @@ def atm_check():
             existing = [r[0] for r in cur.fetchall()]
         if terminal_ids:
             cur.execute("SELECT UPPER(TRIM(terminal_id)), atm_id FROM atm_locations "
-                        "WHERE UPPER(TRIM(terminal_id)) = ANY(%s)", (terminal_ids,))
-            terminal_matches = {tid: atm_id for tid, atm_id in cur.fetchall()}
+                        "WHERE UPPER(TRIM(terminal_id)) = ANY(%s) ORDER BY atm_id",
+                        (terminal_ids,))
+            for tid, atm_id in cur.fetchall():
+                terminal_matches.setdefault(tid, atm_id)
+                terminal_owners.setdefault(tid, []).append(atm_id)
         cur.close()
-    return jsonify({'existing': existing, 'terminal_matches': terminal_matches})
+    terminal_ambiguous = {tid: owners for tid, owners in terminal_owners.items()
+                          if len(owners) > 1}
+    return jsonify({'existing': existing, 'terminal_matches': terminal_matches,
+                    'terminal_ambiguous': terminal_ambiguous})
 
 
 @bp.route('/cash')
@@ -1813,7 +1837,7 @@ def atm_import():
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            existing_by_terminal, used_ids = registry_key_index(cur)
+            existing_by_terminal, used_ids, ambiguous_terminals = registry_key_index(cur)
             cur.close()
     except Exception as e:
         logger.warning('ATM import registry read failed: %s', e)
@@ -1839,6 +1863,17 @@ def atm_import():
         row['terminal_id'] = terminal_id
         terminal = terminal_key(terminal_id)
         label = row.get('atm_id') or terminal_id or '?'
+        if not row['atm_id'] and terminal in ambiguous_terminals:
+            # The registry already has two rows claiming this terminal. Choosing
+            # one silently is how a TID-only import overwrote the 4 Kilo test
+            # ATM on UAT; refuse the row until a human resolves the duplicate.
+            errors.append({
+                'line': line, 'atm_id': label,
+                'errors': {'terminal_id':
+                           'Terminal ID matches multiple registered ATMs ('
+                           + ', '.join(ambiguous_terminals[terminal])
+                           + '); resolve the duplicate before importing'}})
+            continue
         if not row['atm_id'] and terminal:
             try:
                 row['atm_id'] = choose_atm_id(terminal_id, used_ids,
