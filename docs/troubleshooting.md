@@ -390,6 +390,12 @@ If the host is low on RAM, lower the values together (keep
 Check with `free -h` before choosing. Shared memory must cover every cache:
 raising `ZBX_CACHESIZE` without raising `shm_size` fails the same way.
 
+Agent items can still look stale after the cache fix because the default
+**5 pollers** cannot keep up with 1,200 hosts and 31 SNMP checks per NCR host.
+The compose file now starts 50 pollers (`ZBX_STARTPOLLERS`) and 10 unreachable
+pollers, which is a safe start on the 31G UAT host. Check `nproc` and the
+Zabbix queue before going much higher.
+
 ### "Host with the same visible name ... already exists" after re-import
 
 Zabbix allows only one host per visible name. Re-importing an ATM with a new

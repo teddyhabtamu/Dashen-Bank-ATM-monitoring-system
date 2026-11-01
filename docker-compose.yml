@@ -35,6 +35,12 @@ services:
       ZBX_VALUECACHESIZE: "${ZBX_VALUECACHESIZE:-256M}"
       ZBX_HISTORYCACHESIZE: "${ZBX_HISTORYCACHESIZE:-64M}"
       ZBX_TRENDCACHESIZE: "${ZBX_TRENDCACHESIZE:-32M}"
+      # Five pollers (the 6.4 default) cannot keep up with 1,200 hosts: the
+      # NCR template alone has 31 SNMP checks per host every 10-30s, so the
+      # agent items can sit behind the queue for hours. 50 is a safe start on
+      # the 31G UAT host; tune with ZBX_STARTPOLLERS in .env.
+      ZBX_STARTPOLLERS: "${ZBX_STARTPOLLERS:-50}"
+      ZBX_STARTPOLLERSUNREACHABLE: "${ZBX_STARTPOLLERSUNREACHABLE:-10}"
       # Match the SNMP timeout tuned on UAT-01; kept in the repo so a pull
       # no longer conflicts with the server's local compose edit.
       ZBX_TIMEOUT: "${ZBX_TIMEOUT:-15}"
