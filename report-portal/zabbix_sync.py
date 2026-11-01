@@ -527,6 +527,26 @@ def _build_plans(atm_dicts, create_groups=True, max_batch=MAX_BATCH,
                     logger.info(
                         "adopting Zabbix host %s (%r, status=%s) for %s after re-import",
                         cand.get("host"), cand.get("name"), cand.get("status"), host)
+                elif cand is not None:
+                    # The visible name is taken by a host we must not touch.
+                    # host.create would only echo Zabbix's generic "already
+                    # exists", which gives the operator nothing to act on.
+                    owner = cand_host or "an unknown host"
+                    state = ("disabled" if str(cand.get("status")) == "1"
+                             else "enabled")
+                    if live_atm_ids is not None and cand_host in live_atm_ids:
+                        why = (f'Zabbix host "{want_name}" belongs to live ATM '
+                               f'{owner} ({state}); two portal ATMs share this '
+                               f'visible name - rename one or delete the stale row')
+                    else:
+                        why = (f'Zabbix host "{want_name}" ({owner}, {state}) '
+                               f'already uses this visible name and could not '
+                               f'be verified as an orphan; disable or rename '
+                               f'that host, or rename this ATM')
+                    plans.append({"atm_id": host, "action": "conflict",
+                                  "params": None, "changes": [],
+                                  "pending_groups": [], "error": why})
+                    continue
             if cur:
                 upd, changed = _plan_update(a, cur, tids, groups, create_groups)
                 if adopted:
@@ -564,6 +584,9 @@ def _summarise(plans):
             summary["updated"] += 1
         elif act == "no_ip":
             summary["no_ip"] += 1
+            summary["details"].append({"atm_id": p["atm_id"], "error": p["error"]})
+        elif act == "conflict":
+            summary["failed"] += 1
             summary["details"].append({"atm_id": p["atm_id"], "error": p["error"]})
         elif act in ("skipped", "blank"):
             summary["skipped"] += 1
@@ -617,6 +640,13 @@ def _sync(atm_dicts, live_atm_ids=None):
                    "error": p.get("error") or ""}
             if act == "no_ip":
                 summary["no_ip"] += 1
+                summary["details"].append({"atm_id": host, "error": rec["error"]})
+                applied.append(rec)
+                continue
+            if act == "conflict":
+                # Not an API failure: the name is held by a host we must not
+                # steal. Retrying would never help until a human resolves it.
+                summary["failed"] += 1
                 summary["details"].append({"atm_id": host, "error": rec["error"]})
                 applied.append(rec)
                 continue

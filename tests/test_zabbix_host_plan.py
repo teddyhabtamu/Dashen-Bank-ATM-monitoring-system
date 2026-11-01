@@ -297,10 +297,26 @@ def test_active_host_is_not_stolen_by_visible_name(monkeypatch):
     old = existing(host='TST-0001', status='0')
     install(monkeypatch, FakeZabbix(hosts={'TST-0001': old}))
 
-    _, plans = zs.plan_hosts([row(atm_id='ATM-0001')])
+    summary, plans = zs.plan_hosts([row(atm_id='ATM-0001')])
 
-    assert plans[0]['action'] == 'create'
-    assert plans[0]['params']['host'] == 'ATM-0001'
+    assert plans[0]['action'] == 'conflict'
+    assert 'could not be verified as an orphan' in plans[0]['error']
+    assert summary['failed'] == 1
+
+
+def test_conflicting_host_is_never_written(monkeypatch):
+    """A conflict must fail the ATM without a host.create attempt. The old
+    path let Zabbix reject the write and surfaced only "already exists"."""
+    old = existing(host='ATM-OTHER', status='0')
+    fake = install(monkeypatch, FakeZabbix(hosts={'ATM-OTHER': old}))
+
+    out = zs.sync_hosts([row(atm_id='ATM-0001')],
+                        live_atm_ids={'ATM-0001', 'ATM-OTHER'})
+
+    assert out['failed'] == 1
+    assert out['details'][0]['atm_id'] == 'ATM-0001'
+    assert 'ATM-OTHER' in out['details'][0]['error']
+    assert 'host.create' not in fake.methods()
 
 
 def test_active_orphan_is_adopted_when_the_registry_is_known(monkeypatch):
@@ -329,7 +345,8 @@ def test_active_live_host_is_not_stolen_even_with_registry(monkeypatch):
     _, plans = zs.plan_hosts(
         [row(atm_id='ATM-0001')], live_atm_ids={'ATM-0001', 'ATM-OTHER'})
 
-    assert plans[0]['action'] == 'create'
+    assert plans[0]['action'] == 'conflict'
+    assert 'belongs to live ATM ATM-OTHER' in plans[0]['error']
 
 
 def test_changed_ip_updates_both_interfaces(monkeypatch):

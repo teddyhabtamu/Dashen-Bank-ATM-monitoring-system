@@ -354,6 +354,81 @@ nothing. Use `docker compose up -d --force-recreate <service>` for
 script-only changes (`--build` only matters for Dockerfile/dependency
 changes).
 
+### "Zabbix server is restarting: out of memory ... increase CacheSize"
+
+Seen after importing the full ~1,200-ATM fleet. The configuration syncer
+cannot fit the fleet into the image's default 32M configuration cache and
+exits; Docker restarts it, so the web UI says "Zabbix server is not running"
+even though the container briefly starts.
+
+```text
+[file:dbconfig.c,line:114] __zbx_shmem_malloc(): out of memory (requested 40 bytes)
+[file:dbconfig.c,line:114] __zbx_shmem_malloc(): please increase CacheSize configuration parameter
+One child process died ... Exiting ...
+```
+
+`docker-compose.yml` now sizes the caches for the fleet:
+
+```yaml
+ZBX_CACHESIZE: "512M"
+ZBX_VALUECACHESIZE: "256M"
+ZBX_HISTORYCACHESIZE: "64M"
+ZBX_TRENDCACHESIZE: "32M"
+shm_size: "1g"
+```
+
+Apply it and confirm the server stays up:
+
+```bash
+docker compose up -d zabbix-server
+docker compose ps zabbix-server        # Up, not Restarting
+docker compose logs --tail=40 zabbix-server
+```
+
+If the host is low on RAM, lower the values together (keep
+`shm_size` larger than the sum) rather than leaving the default cache.
+Check with `free -h` before choosing. Shared memory must cover every cache:
+raising `ZBX_CACHESIZE` without raising `shm_size` fails the same way.
+
+### "Host with the same visible name ... already exists" after re-import
+
+Zabbix allows only one host per visible name. Re-importing an ATM with a new
+`atm_id` normally re-adopts the old **disabled** host by name. This error now
+means the name belongs to a host the sync must not steal. The message names
+the owning technical host, for example:
+
+```text
+TST-0040: Zabbix host "Arada shopping Center" belongs to live ATM
+ATM-PAGRL001 (enabled); two portal ATMs share this visible name -
+rename one or delete the stale row
+```
+
+Find the duplicate rows:
+
+```sql
+SELECT atm_name, count(*) AS rows, array_agg(atm_id ORDER BY atm_id) AS atm_ids
+FROM atm_locations
+GROUP BY atm_name
+HAVING count(*) > 1
+ORDER BY rows DESC;
+```
+
+Inspect the two candidates:
+
+```sql
+SELECT atm_id, terminal_id, atm_name, status, ip_address, updated_at
+FROM atm_locations
+WHERE atm_name = 'Arada shopping Center';
+```
+
+Keep the row whose `terminal_id` matches the real switch/ATM record (the
+`TST-` row is normally the stale test-fleet one). Delete the stale ATM in
+the portal, not with raw SQL, so the Zabbix host is disabled and the
+provisioning state is updated. Then sync the remaining row again.
+
+If both rows are genuinely different ATMs, rename one `atm_name` so the
+visible names are unique.
+
 ### "Cash watcher logs `fetch <ATM> failed: 0`"
 
 Fixed in `b75eeb0` (JSON-RPC envelope unwrap). If you see it again, the

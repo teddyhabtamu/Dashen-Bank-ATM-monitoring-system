@@ -21,8 +21,8 @@ def test_a_created_or_skipped_host_is_synced():
         assert message is None
 
 
-def test_no_ip_and_review_are_blocked_not_retried():
-    for action in ('no_ip', 'review'):
+def test_no_ip_review_and_conflict_are_blocked_not_retried():
+    for action in ('no_ip', 'review', 'conflict'):
         status, message = ps.status_for_action(action, 'registry needs a fix')
         assert status == 'blocked'
         assert message == 'registry needs a fix'

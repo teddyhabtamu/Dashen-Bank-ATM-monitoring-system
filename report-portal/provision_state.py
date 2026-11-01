@@ -53,7 +53,7 @@ STALE_SYNC_SECONDS = 900
 
 SYNCED_ACTIONS = frozenset(('create', 'update', 'skipped', 'reenabled',
                             'macros_fixed'))
-BLOCKED_ACTIONS = frozenset(('no_ip', 'review'))
+BLOCKED_ACTIONS = frozenset(('no_ip', 'review', 'conflict'))
 
 
 def init_provision_state_table():
@@ -104,9 +104,13 @@ def status_for_action(action, error=''):
     if action in SYNCED_ACTIONS:
         return 'synced', None
     if action in BLOCKED_ACTIONS:
-        return 'blocked', (error or (
-            'No IP address is recorded for this ATM.'
-            if action == 'no_ip' else 'This ATM needs engineer review.'))
+        default = 'This ATM needs engineer review.'
+        if action == 'no_ip':
+            default = 'No IP address is recorded for this ATM.'
+        elif action == 'conflict':
+            default = ('A Zabbix host with the same visible name already '
+                       'exists; rename one ATM or remove the stale row.')
+        return 'blocked', (error or default)
     return 'retry', (error or 'Zabbix provisioning failed.')
 
 

@@ -26,6 +26,16 @@ services:
       POSTGRES_DB: "zabbix"
       POSTGRES_USER: "zabbix"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      # Zabbix 6.4 ships a 32M configuration cache. A ~1,200-host fleet with
+      # the ATM templates needs far more; the configuration syncer dies with
+      # "out of memory (requested 40 bytes) ... please increase CacheSize"
+      # and the container restart-loops. Shared memory must cover every cache,
+      # so shm_size is raised with them (Docker's default /dev/shm is 64M).
+      ZBX_CACHESIZE: "${ZBX_CACHESIZE:-512M}"
+      ZBX_VALUECACHESIZE: "${ZBX_VALUECACHESIZE:-256M}"
+      ZBX_HISTORYCACHESIZE: "${ZBX_HISTORYCACHESIZE:-64M}"
+      ZBX_TRENDCACHESIZE: "${ZBX_TRENDCACHESIZE:-32M}"
+    shm_size: "${ZBX_SHM_SIZE:-1g}"
     ports:
       - "10051:10051"
     depends_on:

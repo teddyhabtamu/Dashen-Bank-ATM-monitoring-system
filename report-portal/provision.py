@@ -108,7 +108,7 @@ def provision_atms(atm_ids=None, dry_run=True, actor='', active_only=False,
         {'dry_run', 'actor', 'ok', 'summary', 'results', 'review', 'error'}
 
     results[i] = {'atm_id', 'action', 'changes', 'error', 'pending_groups'}
-      action is one of: create, update, skipped, no_ip, review, failed
+      action is one of: create, update, skipped, no_ip, conflict, review, failed
 
     Default is dry_run=True on purpose: a caller has to opt in to writing.
     """
