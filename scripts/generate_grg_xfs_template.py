@@ -84,6 +84,7 @@ def build_template():
     _el(m, "type", "ZABBIX_AGENT")
     _el(m, "key", master_key)
     _el(m, "delay", "1m")
+    _el(m, "timeout", "15s")
     _el(m, "history", "7d")
     _el(m, "trends", "0")
     _el(m, "value_type", "TEXT")

@@ -329,13 +329,16 @@ def main():
     for iname, key, vtype, js_code, vm_name, units, desc in wanted_items():
         vmid = vm_ids.get(vm_name) if vm_name else None
         if js_code is None:
-            # Master item
+            # Master item. The probe opens five XFS services and normally
+            # takes 3-4s, so Zabbix's 3s item default freezes the last value.
             if key in have:
                 mid = have[key]['itemid']
+                call('item.update', {'itemid': mid, 'timeout': '15s'}, auth)
             else:
                 item_payload = {
                     'name': iname, 'key_': key, 'hostid': tid,
                     'type': 0, 'value_type': 4, 'delay': '1m',
+                    'timeout': '15s',
                     'history': '7d', 'trends': '0', 'description': desc
                 }
                 mid = call('item.create', item_payload, auth)['itemids'][0]

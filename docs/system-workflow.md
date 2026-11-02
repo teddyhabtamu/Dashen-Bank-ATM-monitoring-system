@@ -521,6 +521,13 @@ is not enough.
    debounced persisted state as authoritative and does not recompute the badge
    from a single raw snapshot.
 
+> **Timeout note.** `atm.xfs.cdm` and `atm.parts` run PowerShell probes that
+> open several devices. A normal GRG run measured 3.69s, while Zabbix items
+> default to a 3s timeout — the item then keeps its last value forever and the
+> portal correctly reports `UNKNOWN`. Both masters need an item timeout of at
+> least 15s (the compose file sets the server global to 15s); the ATM agent must
+> also allow the probe to finish.
+>
 > **Fleet-size note.** The 15s cadence is intended for the UAT test fleet. The
 > current state manager makes three Zabbix API calls per ATM, so a 1,201-host
 > fleet at 15s would be roughly 3,600 calls per cycle. Batch the host/item
