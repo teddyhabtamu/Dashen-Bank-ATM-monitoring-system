@@ -557,6 +557,22 @@ is not enough.
 > attempted and failing. `nextcheck = 0` means the item is disabled or not
 > scheduled.
 >
+> **Force the state masters now.** `scripts/refresh_state_items.py` uses
+> `task.create` type 6 ("Execute now") on `atm.xfs.cdm` and `atm.parts`, waits
+> for the stored `lastclock` to move, and with `--queue` prints the same
+> backlog counts plus the target items' schedule:
+>
+> ```bash
+> docker compose cp scripts/refresh_state_items.py report-portal:/tmp/
+> docker compose exec -T report-portal python3 /tmp/refresh_state_items.py \
+>   ATM-TEST-GRG ATM-TEST-NCR --queue
+> ```
+>
+> If the script queues the checks but the masters stay stale, the poller queue
+> is saturated and no amount of timeout tuning will help. Find the hosts
+> contributing the backlog in the `--queue` output and disable or remove the
+> stale ones first.
+>
 > **Fleet-size note.** The 15s cadence is intended for the UAT test fleet. The
 > current state manager makes three Zabbix API calls per ATM, so a 1,201-host
 > fleet at 15s would be roughly 3,600 calls per cycle. Batch the host/item
