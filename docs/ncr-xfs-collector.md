@@ -47,7 +47,9 @@ On the ATM:
 - `C:\Program Files\Common Files\NCR\msxfs.dll` on the system `PATH`
   (confirmed on the test core)
 - Zabbix agent `Timeout` at least 30 seconds; the probe opens several XFS
-  services and the default 3 seconds is too short
+  services and the default 3 seconds is too short. The Zabbix server/proxy
+  global `Timeout` must also be at least 15 seconds (Zabbix 6.4 has no
+  per-item timeout for agent checks); the compose file sets `ZBX_TIMEOUT=15`
 - the agent service account has XFS access (`LocalSystem` was verified)
 
 ## Deploy

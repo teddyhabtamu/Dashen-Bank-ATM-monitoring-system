@@ -129,7 +129,6 @@ def main():
     _el(master, "type", "ZABBIX_AGENT")
     _el(master, "key", "atm.parts")
     _el(master, "delay", "1m")
-    _el(master, "timeout", "15s")
     _el(master, "history", "7d")
     _el(master, "trends", "0")
     _el(master, "value_type", "TEXT")

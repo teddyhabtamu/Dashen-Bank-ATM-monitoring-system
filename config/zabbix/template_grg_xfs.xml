@@ -25,7 +25,6 @@
                     <type>ZABBIX_AGENT</type>
                     <key>atm.xfs.cdm</key>
                     <delay>1m</delay>
-                    <timeout>15s</timeout>
                     <history>7d</history>
                     <trends>0</trends>
                     <value_type>TEXT</value_type>

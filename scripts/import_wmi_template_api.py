@@ -223,9 +223,9 @@ def main():
                 # Keep an existing deployment in step with the state pipeline:
                 # a 5-minute WMI tree made a real NCR fault take up to six
                 # minutes to reach the portal. The WMI query also needs more
-                # than Zabbix's 3s item default.
-                call('item.update', {'itemid': mid, 'delay': '1m',
-                                     'timeout': '15s'}, auth)
+                # than Zabbix's 3s default; the server/proxy global Timeout
+                # covers it (compose sets ZBX_TIMEOUT=15).
+                call('item.update', {'itemid': mid, 'delay': '1m'}, auth)
                 continue
             tree, obj, leaf = field
             # Converge every dependent to the JavaScript step (see above):
@@ -241,7 +241,6 @@ def main():
             mid = call('item.create', {
                 'name': iname, 'key_': key, 'hostid': tid,
                 'type': 0, 'value_type': 4, 'delay': '1m',
-                'timeout': '15s',
                 'history': '7d', 'trends': '0'}, auth)['itemids'][0]
         else:
             tree, obj, leaf = field

@@ -1,14 +1,24 @@
 #!/usr/bin/env python3
-"""Set the polling cadence and timeout of the two ATM state masters in Zabbix.
+"""Set the polling cadence of the two ATM state masters in Zabbix.
 
 The state pipeline can only be as fast as the item that carries the evidence:
 
   * GRG XFS: ``atm.xfs.cdm`` on "Dashen Bank ATM Hardware - GRG XFS"
   * NCR WMI: ``atm.parts`` on "Dashen Bank ATM WMI Parts"
 
-Both run a PowerShell probe that opens several devices. The Zabbix item default
-of 3s is shorter than a normal run (measured 3.69s on UAT) and silently leaves
-the last value frozen. This sets the item timeout as well as the delay.
+Both run a PowerShell probe that opens several devices. Zabbix 6.4 does not
+allow a per-item timeout for Zabbix agent checks: the item Timeout field is
+only editable for HTTP agent and Script items, and ``item.update`` on an agent
+item with a different timeout is rejected with ``value must be "3s"``. The
+check timeout is therefore controlled by the Zabbix server/proxy global
+``Timeout``:
+
+    docker compose exec -T zabbix-server \\
+        grep -nE '^[[:space:]]*Timeout[[:space:]]*=' /etc/zabbix/zabbix_server.conf
+
+It must be at least 15s (the compose file sets ``ZBX_TIMEOUT=15``). The ATM
+agent's own ``Timeout`` must also be large enough; the portal agent profile
+sets ``Timeout=30``.
 
 Changing the template in this repository does not change a running Zabbix.
 Run this once after deploying (or after re-importing either template):
@@ -16,12 +26,8 @@ Run this once after deploying (or after re-importing either template):
     docker compose cp scripts/set_state_item_delays.py report-portal:/tmp/
     docker compose exec -T report-portal python3 /tmp/set_state_item_delays.py
 
-The Zabbix server/proxy global "Timeout for item checks" must also be at least
-15s, matching the compose default. The item-level timeout cannot exceed the
-global maximum.
-
-It is idempotent and only updates the master item. It does not create, delete
-or relink anything.
+It is idempotent and only updates the master item delay. It does not create,
+delete or relink anything.
 
 Environment (the report-portal container already has these):
     ZABBIX_URL or ZBX_URL, ZABBIX_USER or ZBX_USER, ZABBIX_PASS or ZBX_PASS
@@ -62,7 +68,7 @@ def call(method, params, auth=None):
     return body.get("result")
 
 
-def set_item(template_name, item_key, delay, item_timeout, auth):
+def set_delay(template_name, item_key, delay, auth):
     templates = call("template.get", {
         "output": ["templateid", "host"],
         "filter": {"host": [template_name]},
@@ -80,19 +86,10 @@ def set_item(template_name, item_key, delay, item_timeout, auth):
         print("  %-46s item %s not found; skipped" % (template_name, item_key))
         return False
     item = items[0]
-    payload = {"itemid": item["itemid"], "delay": delay, "timeout": item_timeout}
-    try:
-        call("item.update", payload, auth)
-    except RuntimeError as exc:
-        text = str(exc).lower()
-        if "timeout" not in text:
-            raise
-        print("  %-46s item timeout rejected: %s" % (template_name, exc))
-        print("      raising the delay only; raise the global Timeout first")
-        call("item.update", {"itemid": item["itemid"], "delay": delay}, auth)
-    print("  %-46s %s: delay %s -> %s, timeout %s -> %s" % (
+    call("item.update", {"itemid": item["itemid"], "delay": delay}, auth)
+    print("  %-46s %s: delay %s -> %s (timeout %s is server-global)" % (
         template_name, item_key, item.get("delay"), delay,
-        item.get("timeout"), item_timeout))
+        item.get("timeout") or "-"))
     return True
 
 
@@ -102,23 +99,21 @@ def main():
                         help="NCR atm.parts delay (default: 1m)")
     parser.add_argument("--xfs-delay", default="1m",
                         help="GRG atm.xfs.cdm delay (default: 1m)")
-    parser.add_argument("--timeout", default="15s",
-                        help="item timeout for both masters (default: 15s)")
     parser.add_argument("--skip-wmi", action="store_true")
     parser.add_argument("--skip-xfs", action="store_true")
     args = parser.parse_args()
 
     auth = call("user.login", {"username": _USER, "password": _PASS})
-    print("Updating state item cadence via %s" % _URL)
+    print("Updating state item delays via %s" % _URL)
     changed = 0
     if not args.skip_wmi:
-        changed += bool(set_item(WMI_TEMPLATE, WMI_KEY, args.wmi_delay,
-                                 args.timeout, auth))
+        changed += bool(set_delay(WMI_TEMPLATE, WMI_KEY, args.wmi_delay, auth))
     if not args.skip_xfs:
-        changed += bool(set_item(XFS_TEMPLATE, XFS_KEY, args.xfs_delay,
-                                 args.timeout, auth))
+        changed += bool(set_delay(XFS_TEMPLATE, XFS_KEY, args.xfs_delay, auth))
     call("user.logout", [], auth)
     print("Done: %d item(s) updated." % changed)
+    print("Agent check timeout is the Zabbix server/proxy global Timeout; "
+          "verify it is >= 15s.")
     return 0
 
 
