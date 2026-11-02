@@ -218,22 +218,29 @@ def show_queue(item_ids, db_name):
             _runtime_columns(cur)
         cur.execute("SELECT count(*) FROM hosts WHERE status = 0")
         enabled_hosts = cur.fetchone()[0]
+        # A host can be disabled while its items keep status=0.  The server
+        # does not poll those items, so joining only on item status would
+        # report a huge backlog that is not actually in the poller queue.
+        host_join = "JOIN hosts h ON h.hostid = i.hostid AND h.status = 0"
         cur.execute("""
-            SELECT count(*) FROM items i %s
+            SELECT count(*) FROM items i
+              %s %s
              WHERE i.status = 0 AND %s = 0
-        """ % (join_sql, state_sql))
+        """ % (host_join, join_sql, state_sql))
         enabled_items = cur.fetchone()[0]
         cur.execute("""
-            SELECT count(*) FROM items i %s
+            SELECT count(*) FROM items i
+              %s %s
              WHERE i.status = 0 AND %s = 0 AND %s > 0
                AND %s < extract(epoch FROM now()) - 120
-        """ % (join_sql, state_sql, next_sql, next_sql))
+        """ % (host_join, join_sql, state_sql, next_sql, next_sql))
         overdue = cur.fetchone()[0]
         cur.execute("""
-            SELECT count(*) FROM items i %s
+            SELECT count(*) FROM items i
+              %s %s
              WHERE i.status = 0 AND %s = 0 AND i.type <> 18
                AND %s = 0
-        """ % (join_sql, state_sql, next_sql))
+        """ % (host_join, join_sql, state_sql, next_sql))
         unscheduled = cur.fetchone()[0]
 
         print("\n=== Queue ===")
@@ -244,7 +251,7 @@ def show_queue(item_ids, db_name):
             SELECT h.host, count(*) AS overdue,
                    min(to_timestamp(%s)) AS oldest
               FROM items i %s
-              JOIN hosts h ON h.hostid = i.hostid
+              JOIN hosts h ON h.hostid = i.hostid AND h.status = 0
              WHERE i.status = 0 AND %s = 0 AND %s > 0
                AND %s < extract(epoch FROM now()) - 120
              GROUP BY h.host
