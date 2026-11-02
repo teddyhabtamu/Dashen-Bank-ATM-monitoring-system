@@ -399,7 +399,10 @@ def test_ej_journal_detail_has_raw_view_and_download_links():
 def test_fleet_table_says_counts_are_latest_file_only():
     template = (ROOT / 'report-portal' / 'templates' / 'ej_journal.html').read_text()
     assert 'Latest journal file per ATM' in template
-    assert 'period totals above' in template
+    # The table is current health, not a period count; the period total lives
+    # in the activity strip above it.
+    assert 'Health is current' in template
+    assert 'independent of the activity period' in template
 
 
 def test_raw_view_uses_the_light_portal_surface():

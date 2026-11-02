@@ -1,23 +1,40 @@
 {% extends "base.html" %}
-{% from "_evidence_ui.html" import status_chip, kpi, empty_state %}
+{% from "_evidence_ui.html" import status_chip, empty_state %}
 {% block title %}EJ Journal — ATM Monitoring{% endblock %}
 {% block extra_style %}{% include "_ej_journal_style.html" %}{% endblock %}
+
+{% macro etb(value) -%}
+{%- set v = value|float -%}
+{%- if v >= 1000000000 -%}ETB {{ '%.2f'|format(v / 1000000000) }}B
+{%- elif v >= 1000000 -%}ETB {{ '%.2f'|format(v / 1000000) }}M
+{%- else -%}ETB {{ '{:,.2f}'.format(v) }}
+{%- endif -%}
+{%- endmacro %}
+
 {% block body %}
-<div class="page-header">
+<div class="page-header ej-page-header">
   <div class="page-header-icon"><i data-lucide="book-open"></i></div>
   <div>
-    <h1 class="page-title">EJ Journal</h1>
+    <div class="ej-title-line">
+      <h1 class="page-title">EJ Journal</h1>
+      <span class="ej-readonly" title="Parsed journals stay in reconciliation staging and never enter atm_transactions automatically">
+        <i data-lucide="shield-check"></i> Read-only staging
+      </span>
+    </div>
     <p class="page-subtitle">
-      Fleet view of journals parsed into reconciliation staging.
-      Latest journal file per ATM · period totals above.
-      Not used by KPIs, reports, cash forecasts or anomalies.
+      Journal files parsed for reconciliation. Nothing here is used by KPIs,
+      reports, cash forecasts or anomalies until it is explicitly promoted.
     </p>
   </div>
   <div class="page-actions">
-    <label class="ev-live" title="Reload every 120 seconds while this tab is visible">
-      <input id="evLive" type="checkbox" checked> Live
+    <span class="ej-updated">Updated {{ last_updated }} EAT</span>
+    <label class="ej-live" title="Reload this page every 120 seconds while the tab is visible">
+      <input id="evLive" type="checkbox" checked>
+      <span class="ej-live-track" aria-hidden="true"><span class="ej-live-thumb"></span></span>
+      <span>Live</span>
     </label>
-    <a class="btn btn-outline" href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, page=page) }}">
+    <a class="btn btn-outline ej-refresh"
+       href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, view=view, page=page, per_page=per_page) }}">
       <i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Refresh
     </a>
   </div>
@@ -28,26 +45,18 @@
 <div class="banner banner-error"><strong>Staging schema missing.</strong> {{ setup_error }}</div>
 {% endif %}
 
-<div class="ev-page-note">
-  <i data-lucide="shield-check"></i>
-  <span><b>Read-only staging.</b> Parsed journals are held for reconciliation and never enter the official
-    <span class="mono">atm_transactions</span> table until explicitly promoted.
-    <span class="mono">no_receipt</span> sessions are counted as evidence, never turned into transactions.</span>
-  <span class="ev-note-tail">
-    <span class="ev-faint">Updated {{ last_updated }}</span>
-  </span>
-</div>
-
-<form method="get" action="/ej-journal" class="ej-filters" role="search">
-  <div class="fg">
-    <label for="ej-days">Period</label>
+<form method="get" action="/ej-journal" class="ej-filter-bar" role="search" aria-label="Filter journal fleet">
+  <input type="hidden" name="view" value="{{ view }}">
+  <input type="hidden" name="per_page" value="{{ per_page }}">
+  <div class="ej-filter">
+    <label for="ej-days">Activity period</label>
     <select id="ej-days" name="days">
       {% for d in [1, 7, 30, 90] %}
       <option value="{{ d }}"{% if days == d %} selected{% endif %}>Last {{ d }} day{% if d != 1 %}s{% endif %}</option>
       {% endfor %}
     </select>
   </div>
-  <div class="fg">
+  <div class="ej-filter">
     <label for="ej-vendor">Vendor</label>
     <select id="ej-vendor" name="vendor">
       <option value="">All vendors</option>
@@ -55,12 +64,18 @@
       <option value="GRG"{% if vendor == 'GRG' %} selected{% endif %}>GRG</option>
     </select>
   </div>
-  <div class="fg">
+  <div class="ej-filter ej-filter-search">
     <label for="ej-q">ATM or branch</label>
-    <input id="ej-q" type="search" name="q" value="{{ q }}" placeholder="Search ATM ID or branch">
+    <div class="ej-search-input">
+      <i data-lucide="search" aria-hidden="true"></i>
+      <input id="ej-q" type="search" name="q" value="{{ q }}"
+             placeholder="Search ATM ID or branch" autocomplete="off">
+    </div>
   </div>
-  <div class="actions">
-    <button class="btn btn-primary" type="submit"><i data-lucide="filter" style="width:14px;height:14px"></i> Apply</button>
+  <div class="ej-filter-actions">
+    <button class="btn btn-primary" type="submit">
+      <i data-lucide="filter" style="width:13px;height:13px"></i> Apply
+    </button>
     <a class="btn btn-outline" href="/ej-journal">Reset</a>
   </div>
 </form>
@@ -68,147 +83,304 @@
 {% set h = summary.get('health') or {} %}
 {% set health_total = h.get('total') or 0 %}
 {% set health_base = health_total if health_total else 1 %}
-<div class="ev-kpi-grid">
-  {{ kpi('Active ATMs', summary.get('active_atms', 0), 'in the selected fleet') }}
-  {{ kpi('Reporting ATMs', summary.get('reporting_atms', 0), 'ATMs with at least one journal') }}
-  {{ kpi('Parse failures', summary.get('parse_errors', 0), 'files that failed to parse', 'bad' if summary.get('parse_errors', 0) else 'good') }}
-  {{ kpi('Stale', h.get('stale', 0), 'no journal for 2+ days', 'warn' if h.get('stale', 0) else 'good') }}
-</div>
-
-<div class="ev-health-card">
-  <div class="ev-health-head">
-    <span><b>Fleet health</b> · {{ health_total }} active ATM{% if health_total != 1 %}s{% endif %}</span>
-    <span>{{ h.get('ok', 0) }} healthy · {{ h.get('stale', 0) }} stale · {{ h.get('error', 0) }} parse error{% if h.get('error', 0) != 1 %}s{% endif %}</span>
+{% set healthy = h.get('ok', 0) or 0 %}
+{% set stale = h.get('stale', 0) or 0 %}
+{% set errors = h.get('error', 0) or 0 %}
+{% set no_data = h.get('no_data', 0) or 0 %}
+{% set reporting = healthy + stale %}
+{% set coverage = reporting / health_base * 100 %}
+<section class="ej-health" aria-labelledby="ej-health-title">
+  <div class="ej-health-top">
+    <div class="ej-health-main">
+      <h2 id="ej-health-title" class="ej-eyebrow">Fleet health</h2>
+      <div class="ej-coverage">
+        <strong>{{ '%.1f'|format(coverage) }}%</strong>
+        <span>journal coverage</span>
+      </div>
+      <p>
+        <b>{{ '{:,}'.format(reporting) }}</b> of
+        <b>{{ '{:,}'.format(health_total) }}</b> active ATM{% if health_total != 1 %}s{% endif %}
+        have a journal in staging.{% if no_data %}
+        <b>{{ '{:,}'.format(no_data) }}</b> have no EJ data yet.{% endif %}
+      </p>
+    </div>
+    <div class="ej-health-stats">
+      <a class="ej-hstat is-ok{% if not healthy %} is-zero{% endif %}{% if view == 'healthy' %} is-active{% endif %}"
+         href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, view='healthy', page=1, per_page=per_page) }}"
+         title="Current journal: newest file is today or yesterday and parsed cleanly">
+        <span class="ej-hstat-label"><i class="ej-hstat-dot" aria-hidden="true"></i>Healthy</span>
+        <strong class="ej-hstat-value">{{ '{:,}'.format(healthy) }}</strong>
+        <span class="ej-hstat-pct">{{ '%.1f'|format(healthy / health_base * 100) }}% of fleet</span>
+      </a>
+      <a class="ej-hstat is-stale{% if not stale %} is-zero{% endif %}{% if view == 'stale' %} is-active{% endif %}"
+         href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, view='stale', page=1, per_page=per_page) }}"
+         title="Newest journal file is two or more days old">
+        <span class="ej-hstat-label"><i class="ej-hstat-dot" aria-hidden="true"></i>Stale</span>
+        <strong class="ej-hstat-value">{{ '{:,}'.format(stale) }}</strong>
+        <span class="ej-hstat-pct">{{ '%.1f'|format(stale / health_base * 100) }}% of fleet</span>
+      </a>
+      <a class="ej-hstat is-error{% if not errors %} is-zero{% endif %}{% if view == 'error' %} is-active{% endif %}"
+         href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, view='error', page=1, per_page=per_page) }}"
+         title="At least one file for the newest journal date failed to parse">
+        <span class="ej-hstat-label"><i class="ej-hstat-dot" aria-hidden="true"></i>Parse error</span>
+        <strong class="ej-hstat-value">{{ '{:,}'.format(errors) }}</strong>
+        <span class="ej-hstat-pct">{{ '%.1f'|format(errors / health_base * 100) }}% of fleet</span>
+      </a>
+      <a class="ej-hstat is-none{% if not no_data %} is-zero{% endif %}{% if view == 'no_data' %} is-active{% endif %}"
+         href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, view='no_data', page=1, per_page=per_page) }}"
+         title="No journal file has ever been ingested for this ATM">
+        <span class="ej-hstat-label"><i class="ej-hstat-dot" aria-hidden="true"></i>No data</span>
+        <strong class="ej-hstat-value">{{ '{:,}'.format(no_data) }}</strong>
+        <span class="ej-hstat-pct">{{ '%.1f'|format(no_data / health_base * 100) }}% of fleet</span>
+      </a>
+    </div>
   </div>
-  <div class="ev-health" role="img"
-       aria-label="{{ h.get('ok', 0) }} healthy, {{ h.get('stale', 0) }} stale, {{ h.get('error', 0) }} parse errors, {{ h.get('no_data', 0) }} no data">
-    <span class="ev-health-ok" style="width:{{ ((h.get('ok', 0) / health_base) * 100)|round(1) }}%"></span>
-    <span class="ev-health-stale" style="width:{{ ((h.get('stale', 0) / health_base) * 100)|round(1) }}%"></span>
-    <span class="ev-health-error" style="width:{{ ((h.get('error', 0) / health_base) * 100)|round(1) }}%"></span>
-    <span class="ev-health-none" style="width:{{ ((h.get('no_data', 0) / health_base) * 100)|round(1) }}%"></span>
+  <div class="ej-health-bar" role="img"
+       aria-label="{{ healthy }} healthy, {{ stale }} stale, {{ errors }} parse errors, {{ no_data }} with no data">
+    {% if healthy %}<span class="ej-health-seg is-ok" style="width:{{ (healthy / health_base * 100)|round(2) }}%" title="{{ healthy }} healthy"></span>{% endif %}
+    {% if stale %}<span class="ej-health-seg is-stale" style="width:{{ (stale / health_base * 100)|round(2) }}%" title="{{ stale }} stale"></span>{% endif %}
+    {% if errors %}<span class="ej-health-seg is-error" style="width:{{ (errors / health_base * 100)|round(2) }}%" title="{{ errors }} parse errors"></span>{% endif %}
+    {% if no_data %}<span class="ej-health-seg is-none" style="width:{{ (no_data / health_base * 100)|round(2) }}%" title="{{ no_data }} with no data"></span>{% endif %}
   </div>
-  <div class="ev-health-legend">
-    <span><i class="ev-health-ok"></i>Healthy <b>{{ h.get('ok', 0) }}</b></span>
-    <span><i class="ev-health-stale"></i>Stale <b>{{ h.get('stale', 0) }}</b></span>
-    <span><i class="ev-health-error"></i>Parse error <b>{{ h.get('error', 0) }}</b></span>
-    <span><i class="ev-health-none"></i>No data <b>{{ h.get('no_data', 0) }}</b></span>
+  <div class="ej-health-foot">
+    <span>Current state, independent of the activity period. This is not an agent-reachability check.</span>
+    <a href="#about-ej">How health is calculated</a>
   </div>
-</div>
-
-<div class="ev-page-note" style="margin-bottom:16px">
-  <i data-lucide="activity"></i>
-  <span><b>Period activity</b> · {{ '{:,}'.format(summary.get('staged', 0)) }} parsed transactions ·
-    ETB {{ '{:,.2f}'.format(summary.get('approved_amount', 0)|float) }} approved ·
-    ETB {{ '{:,.2f}'.format(summary.get('dispensed', 0)|float) }} dispensed evidence</span>
-</div>
+</section>
 
 {% set attention = summary.get('parse_errors', 0) + summary.get('unmapped_files', 0) + summary.get('unmapped_txns', 0) + summary.get('no_cash_evidence', 0) %}
 {% if attention %}
-<div class="ev-attention">
-  <span class="ev-attention-label"><i data-lucide="alert-triangle" style="width:14px;height:14px"></i> Needs attention</span>
-  {% if summary.get('parse_errors', 0) %}
-  <a class="ev-attention-item" href="#attention-files"><b>{{ summary.get('parse_errors') }}</b> parse failure{% if summary.get('parse_errors') != 1 %}s{% endif %}</a>
-  {% endif %}
-  {% if summary.get('unmapped_files', 0) %}
-  <a class="ev-attention-item" href="#attention-files"><b>{{ summary.get('unmapped_files') }}</b> file{% if summary.get('unmapped_files') != 1 %}s{% endif %} not linked to an ATM</a>
-  {% endif %}
-  {% if summary.get('unmapped_txns', 0) %}
-  <span class="ev-attention-item"><b>{{ summary.get('unmapped_txns') }}</b> parsed row{% if summary.get('unmapped_txns') != 1 %}s{% endif %} without an ATM</span>
-  {% endif %}
-  {% if summary.get('no_cash_evidence', 0) %}
-  <span class="ev-attention-item"><b>{{ summary.get('no_cash_evidence') }}</b> approved without cash evidence</span>
+<div class="ej-alert" role="status">
+  <span class="ej-alert-icon" aria-hidden="true"><i data-lucide="alert-triangle"></i></span>
+  <div class="ej-alert-body">
+    <strong>Needs attention <span class="ej-alert-period">· last {{ days }} day{% if days != 1 %}s{% endif %}</span></strong>
+    <div class="ej-alert-items">
+      {% if summary.get('parse_errors', 0) %}
+      <a href="#attention-files"><b>{{ summary.get('parse_errors') }}</b> parse failure{% if summary.get('parse_errors') != 1 %}s{% endif %}</a>
+      {% endif %}
+      {% if summary.get('unmapped_files', 0) %}
+      <a href="#attention-files"><b>{{ summary.get('unmapped_files') }}</b> file{% if summary.get('unmapped_files') != 1 %}s{% endif %} not linked to an ATM</a>
+      {% endif %}
+      {% if summary.get('unmapped_txns', 0) %}
+      <span><b>{{ summary.get('unmapped_txns') }}</b> parsed row{% if summary.get('unmapped_txns') != 1 %}s{% endif %} without an ATM</span>
+      {% endif %}
+      {% if summary.get('no_cash_evidence', 0) %}
+      <span><b>{{ summary.get('no_cash_evidence') }}</b> approved without cash evidence</span>
+      {% endif %}
+    </div>
+  </div>
+  {% if attention_files %}
+  <a class="ej-alert-action" href="#attention-files">Review files <i data-lucide="arrow-down"></i></a>
   {% endif %}
 </div>
 {% endif %}
 
-<div class="ev-card">
+<section class="ej-activity" aria-labelledby="ej-activity-title">
+  <div class="ej-activity-head">
+    <div>
+      <h2 id="ej-activity-title" class="ej-eyebrow">Activity</h2>
+      <span class="ej-activity-period">Last {{ days }} day{% if days != 1 %}s{% endif %}</span>
+    </div>
+    <span class="ej-activity-scope">Journal files dated in this period</span>
+  </div>
+  <div class="ej-metrics">
+    <div class="ej-metric">
+      <span class="ej-metric-label">ATMs reporting</span>
+      <strong class="ej-metric-value">{{ '{:,}'.format(summary.get('reporting_atms', 0)) }}</strong>
+      <span class="ej-metric-sub">of {{ '{:,}'.format(summary.get('active_atms', 0)) }} active</span>
+    </div>
+    <div class="ej-metric">
+      <span class="ej-metric-label">Journal files</span>
+      <strong class="ej-metric-value">{{ '{:,}'.format(summary.get('files', 0)) }}</strong>
+      <span class="ej-metric-sub">parsed into staging</span>
+    </div>
+    <div class="ej-metric">
+      <span class="ej-metric-label">Transactions parsed</span>
+      <strong class="ej-metric-value">{{ '{:,}'.format(summary.get('staged', 0)) }}</strong>
+      <span class="ej-metric-sub">{{ '{:,}'.format(summary.get('approved', 0)) }} approved</span>
+    </div>
+    <div class="ej-metric">
+      <span class="ej-metric-label">Approved value</span>
+      <strong class="ej-metric-value is-money"
+              title="ETB {{ '{:,.2f}'.format(summary.get('approved_amount', 0)|float) }}">{{ etb(summary.get('approved_amount', 0)) }}</strong>
+      <span class="ej-metric-sub">journal evidence</span>
+    </div>
+    <div class="ej-metric">
+      <span class="ej-metric-label">Dispensed evidence</span>
+      <strong class="ej-metric-value is-money"
+              title="ETB {{ '{:,.2f}'.format(summary.get('dispensed', 0)|float) }}">{{ etb(summary.get('dispensed', 0)) }}</strong>
+      <span class="ej-metric-sub">cash counted from notes</span>
+    </div>
+  </div>
+</section>
+
+<section class="ev-card ej-status-card" aria-labelledby="ej-table-title">
   <div class="ev-card-head">
     <div>
-      <h2>ATM EJ status</h2>
-      <div class="ev-card-sub">Latest journal file per ATM · period totals above · sorted by exceptions, then newest journal</div>
+      <h2 id="ej-table-title">ATM journal status</h2>
+      <p class="ev-card-sub">Latest journal file per ATM · one row per active ATM · exceptions first</p>
     </div>
-    <span class="ev-faint" style="font-size:11px">{{ total }} ATM{% if total != 1 %}s{% endif %}</span>
+    <span class="ej-status-scope">Health is current</span>
   </div>
-  <div class="ev-table-wrap">
-    <table class="ev-table">
+  <nav class="ej-health-tabs" aria-label="Filter ATMs by health">
+    <a class="ev-tab" href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, view='all', page=1, per_page=per_page) }}"{% if view == 'all' %} aria-current="page"{% endif %}>All <span class="ev-tab-count">{{ '{:,}'.format(health_total) }}</span></a>
+    <a class="ev-tab" href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, view='healthy', page=1, per_page=per_page) }}"{% if view == 'healthy' %} aria-current="page"{% endif %}>Healthy <span class="ev-tab-count">{{ '{:,}'.format(healthy) }}</span></a>
+    <a class="ev-tab" href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, view='stale', page=1, per_page=per_page) }}"{% if view == 'stale' %} aria-current="page"{% endif %}>Stale <span class="ev-tab-count">{{ '{:,}'.format(stale) }}</span></a>
+    <a class="ev-tab" href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, view='error', page=1, per_page=per_page) }}"{% if view == 'error' %} aria-current="page"{% endif %}>Parse errors <span class="ev-tab-count">{{ '{:,}'.format(errors) }}</span></a>
+    <a class="ev-tab" href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, view='no_data', page=1, per_page=per_page) }}"{% if view == 'no_data' %} aria-current="page"{% endif %}>No data <span class="ev-tab-count">{{ '{:,}'.format(no_data) }}</span></a>
+  </nav>
+  <div class="ej-scroll-hint"><i data-lucide="move-horizontal" aria-hidden="true"></i> Swipe sideways for journal and sessions</div>
+  <div class="ej-scroll-wrap" tabindex="0" role="region" aria-label="ATM journal status table">
+    <table class="ev-table ej-status-table" aria-labelledby="ej-table-title">
       <thead>
         <tr>
-          <th>ATM</th>
-          <th>Vendor</th>
-          <th>Latest journal</th>
-          <th>Sessions</th>
-          <th>Health</th>
-          <th aria-label="Open"></th>
+          <th scope="col">ATM</th>
+          <th scope="col">Health</th>
+          <th scope="col">Latest journal</th>
+          <th scope="col">Sessions</th>
+          <th scope="col"><span class="ej-sr-only">Open</span></th>
         </tr>
       </thead>
       <tbody>
         {% for r in rows %}
+        {% set sess = r.sessions or 0 %}
+        {% set completed = r.completed or 0 %}
+        {% set declined = r.declined or 0 %}
+        {% set unknown = r.unknown or 0 %}
+        {% set accounted = completed + declined + unknown %}
+        {% set other = sess - accounted if sess > accounted else 0 %}
+        {# The table is current, so an old row can sit outside the activity
+           period. Open its drill-down at the smallest allowed period that
+           still covers the latest file. #}
+        {% set age = (today - r.journal_date).days if r.journal_date else 0 %}
+        {% set detail_days = days %}
+        {% if age >= 30 and detail_days < 90 %}{% set detail_days = 90 %}
+        {% elif age >= 7 and detail_days < 30 %}{% set detail_days = 30 %}
+        {% elif age >= 1 and detail_days < 7 %}{% set detail_days = 7 %}
+        {% endif %}
         <tr>
           <td>
-            <div class="ev-atm-cell">
-              <a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=r.atm_id, days=days) }}">{{ r.atm_id }}</a>
-              <span class="ev-sub">{{ r.branch or 'Unknown branch' }}</span>
+            <div class="ej-atm">
+              <div class="ej-atm-top">
+                <a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=r.atm_id, days=detail_days) }}">{{ r.atm_id }}</a>
+                <span class="ej-vendor{% if r.vendor == 'NCR' %} is-ncr{% elif r.vendor == 'GRG' %} is-grg{% endif %}">{{ r.vendor or '—' }}</span>
+              </div>
+              <span class="ej-atm-branch">{{ r.branch or 'Unknown branch' }}</span>
             </div>
-          </td>
-          <td>{{ r.vendor or '—' }}</td>
-          <td>
-            {% if r.journal_date and r.journal_date != '—' %}
-            <span class="mono">{{ r.journal_date }}</span>
-            <span class="ev-sub">file date · ingested {{ r.parsed_at }}</span>
-            {% else %}
-            <span class="ev-faint">No journal</span>
-            {% endif %}
-          </td>
-          <td class="ev-session-cell">
-            <strong>{{ r.sessions }}</strong>
-            <span class="ev-sub">{{ r.completed }} completed · {{ r.declined }} declined{% if r.unknown %} · {{ r.unknown }} unknown{% endif %}{% if r.no_receipt %} · {{ r.no_receipt }} no receipt{% endif %}</span>
           </td>
           <td>
             {{ status_chip(r.status) }}
             {% if r.parse_errors %}
-            <span class="ev-sub" style="color:#B42318">{{ r.parse_errors }} file{% if r.parse_errors != 1 %}s{% endif %} failed</span>
+            <span class="ej-health-note">{{ r.parse_errors }} file{% if r.parse_errors != 1 %}s{% endif %} failed</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if r.journal_date %}
+            <span class="ej-when{% if r.status == 'stale' %} is-stale{% endif %}">
+              {%- if age <= 0 -%}Today
+              {%- elif age == 1 -%}Yesterday
+              {%- elif age <= 14 -%}{{ age }} days ago
+              {%- else -%}{{ r.journal_date.strftime('%d %b %Y') }}
+              {%- endif -%}
+            </span>
+            <span class="ej-when-sub" title="File date {{ r.journal_date.strftime('%d %b %Y') }} · ingested {{ r.parsed_at }} EAT">
+              {{ r.journal_date.strftime('%d %b %Y') }} · ingested {{ r.parsed_at }}
+            </span>
+            {% else %}
+            <span class="ej-muted">No journal</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if sess %}
+            <strong class="ej-session-count">{{ '{:,}'.format(sess) }}</strong>
+            <div class="ej-session-bar" aria-hidden="true">
+              {% if completed %}<span class="ej-session-seg is-completed" style="flex:{{ completed }}"></span>{% endif %}
+              {% if declined %}<span class="ej-session-seg is-declined" style="flex:{{ declined }}"></span>{% endif %}
+              {% if unknown %}<span class="ej-session-seg is-unknown" style="flex:{{ unknown }}"></span>{% endif %}
+              {% if other %}<span class="ej-session-seg is-other" style="flex:{{ other }}"></span>{% endif %}
+            </div>
+            <span class="ej-session-sub" title="{{ completed }} completed · {{ declined }} declined{% if unknown %} · {{ unknown }} unknown{% endif %}{% if r.no_receipt %} · {{ r.no_receipt }} no receipt{% endif %}">
+              {{ completed }} completed · {{ declined }} declined{% if unknown %} · {{ unknown }} unknown{% endif %}{% if r.no_receipt %} · {{ r.no_receipt }} no receipt{% endif %}
+            </span>
+            {% else %}
+            <span class="ej-muted" title="No session records in the latest journal">—</span>
             {% endif %}
           </td>
           <td class="ev-actions-cell">
-            <a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=r.atm_id, days=days) }}"
-               title="Open {{ r.atm_id }}" aria-label="Open {{ r.atm_id }}">
-              <i data-lucide="chevron-right" class="ev-row-chevron"></i>
+            <a class="ej-open" href="{{ url_for('ej_journal.ej_journal_detail', atm_id=r.atm_id, days=detail_days) }}"
+               title="Open journal for {{ r.atm_id }}" aria-label="Open journal for {{ r.atm_id }}">
+              <i data-lucide="chevron-right"></i>
             </a>
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="ej-empty">No active ATMs match this filter.</td></tr>
+        <tr>
+          <td colspan="5">
+            {{ empty_state('search-x', 'No ATMs in this view',
+                 'No ATMs match the selected health state, vendor or search. Reset the filters to see the full fleet.',
+                 '/ej-journal', 'Reset filters') }}
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  <p style="margin:0;padding:10px 16px 4px;font-size:11px;color:#64748B">
-    <strong>Stale</strong> means the newest journal file is two or more days old. The date comes from the file name,
-    not from the last transaction inside it; NCR can keep writing to a file named with an older bank date. Stale is
-    not an agent-reachability check: an ATM can be <strong>Reporting</strong> in Fleet onboarding health and still
-    have no new EJ file. An ATM that is out of service, or has had no transactions, can legitimately have no new
-    journal.
-  </p>
-  {% if total_pages > 1 %}
-  <div class="pager">
-    {% if page > 1 %}<a href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, page=page-1) }}">Previous</a>{% else %}<span class="off">Previous</span>{% endif %}
-    <span>Page {{ page }} of {{ total_pages }} · {{ total }} ATM(s)</span>
-    {% if page < total_pages %}<a href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, page=page+1) }}">Next</a>{% else %}<span class="off">Next</span>{% endif %}
-  </div>
-  {% endif %}
-</div>
-
-{% if attention_files %}
-<div class="ev-card" id="attention-files">
-  <div class="ev-card-head">
-    <div>
-      <h2>Files needing attention</h2>
-      <div class="ev-card-sub">Parse errors and files that could not be linked to an ATM</div>
+  <div class="ej-table-foot">
+    <span class="ej-range">
+      {% if total %}Showing <b>{{ '{:,}'.format(start_index) }}–{{ '{:,}'.format(end_index) }}</b> of <b>{{ '{:,}'.format(total) }}</b>
+      {% else %}No ATMs{% endif %}
+    </span>
+    <form method="get" action="/ej-journal" class="ej-page-size">
+      <input type="hidden" name="days" value="{{ days }}">
+      <input type="hidden" name="view" value="{{ view }}">
+      {% if vendor %}<input type="hidden" name="vendor" value="{{ vendor }}">{% endif %}
+      {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+      <label for="ej-per-page">Rows</label>
+      <select id="ej-per-page" name="per_page" data-native onchange="this.form.submit()">
+        {% for n in page_sizes %}<option value="{{ n }}"{% if n == per_page %} selected{% endif %}>{{ n }}</option>{% endfor %}
+      </select>
+    </form>
+    <div class="ej-pager" role="navigation" aria-label="Pagination">
+      {% if page > 1 %}
+      <a class="ej-page-link" rel="prev" href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, view=view, page=page-1, per_page=per_page) }}">
+        <i data-lucide="chevron-left"></i> Previous
+      </a>
+      {% else %}
+      <span class="ej-page-link is-disabled"><i data-lucide="chevron-left"></i> Previous</span>
+      {% endif %}
+      <span class="ej-page-count">Page <b>{{ page }}</b> of {{ total_pages }}</span>
+      {% if page < total_pages %}
+      <a class="ej-page-link" rel="next" href="{{ url_for('ej_journal.ej_journal', days=days, vendor=vendor, q=q, view=view, page=page+1, per_page=per_page) }}">
+        Next <i data-lucide="chevron-right"></i>
+      </a>
+      {% else %}
+      <span class="ej-page-link is-disabled">Next <i data-lucide="chevron-right"></i></span>
+      {% endif %}
     </div>
   </div>
-  <div class="ev-table-wrap">
-    <table class="ev-table">
-      <thead><tr><th>Parsed (EAT)</th><th>File</th><th>ATM / host</th><th>Journal date</th><th>Status</th><th>Error</th></tr></thead>
+</section>
+
+{% if attention_files %}
+<section class="ev-card ej-attention-card" id="attention-files" aria-labelledby="attention-files-title">
+  <div class="ev-card-head">
+    <div>
+      <h2 id="attention-files-title">Files needing attention</h2>
+      <p class="ev-card-sub">Parse errors and files that could not be linked to an ATM in this period · newest first</p>
+    </div>
+    <span class="ej-status-scope">{{ attention_files|length }} shown</span>
+  </div>
+  <div class="ej-scroll-wrap" tabindex="0" role="region" aria-label="Files needing attention table">
+    <table class="ev-table" aria-labelledby="attention-files-title">
+      <thead>
+        <tr>
+          <th scope="col">Parsed (EAT)</th>
+          <th scope="col">File</th>
+          <th scope="col">ATM / host</th>
+          <th scope="col">Journal date</th>
+          <th scope="col">Status</th>
+          <th scope="col">Error</th>
+        </tr>
+      </thead>
       <tbody>
         {% for f in attention_files %}
         <tr>
@@ -216,15 +388,38 @@
           <td class="mono" title="{{ f.file_path }}">{{ f.file_path.split('/')[-1] }}</td>
           <td>{{ f.hostname or 'Not linked' }}</td>
           <td class="mono">{{ f.journal_date }}</td>
-          <td><span class="ev-chip ev-status ev-status-{{ 'error' if f.status == 'error' else 'stale' }}"><span class="ev-dot"></span>{{ f.status }}</span></td>
-          <td style="color:#B42318">{{ f.error or 'No ATM mapping' }}</td>
+          <td>
+            {% if f.status == 'error' %}
+              {{ status_chip('error') }}
+            {% else %}
+              <span class="ev-chip ev-status ev-status-stale"><span class="ev-dot" aria-hidden="true"></span>Unmapped</span>
+            {% endif %}
+          </td>
+          <td class="ej-error-text">{{ f.error or 'No ATM mapping' }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-</div>
+</section>
 {% endif %}
+
+<details class="ej-about" id="about-ej">
+  <summary><i data-lucide="info" aria-hidden="true"></i> About this page and how health is calculated</summary>
+  <div class="ej-about-body">
+    <p><b>Read-only staging.</b> Parsed journals are held for reconciliation and never enter the official
+      <span class="mono">atm_transactions</span> table until explicitly promoted.
+      <span class="mono">no_receipt</span> sessions are counted as evidence, never turned into transactions.</p>
+    <p><b>Healthy</b> — every file for the newest journal date parsed, and that file date is today or yesterday.</p>
+    <p><b>Stale</b> — no parse errors, but the newest file is two or more days old. This uses the file-name date,
+      not the last transaction inside it; NCR can keep writing to a file named with an older bank date.</p>
+    <p><b>Parse error</b> — at least one file for the newest journal date failed to parse.</p>
+    <p><b>No data</b> — no journal file has ever been ingested for this ATM.</p>
+    <p>Health is current and is not limited by the activity period. It is not an agent-reachability check:
+      an ATM can be <b>Reporting</b> in Fleet onboarding health and still have no new EJ file. An ATM that is
+      out of service, or has had no transactions, can legitimately have no new journal.</p>
+  </div>
+</details>
 
 </div>
 {% endblock %}
@@ -237,6 +432,14 @@
   var live = true;
   try { live = localStorage.getItem(key) !== 'off'; } catch (e) { live = true; }
   if (box) box.checked = live;
+
+  var about = document.getElementById('about-ej');
+  if (about) {
+    if (window.location.hash === '#about-ej') about.open = true;
+    document.querySelectorAll('a[href="#about-ej"]').forEach(function (link) {
+      link.addEventListener('click', function () { about.open = true; });
+    });
+  }
 
   function schedule() {
     if (timer) clearTimeout(timer);

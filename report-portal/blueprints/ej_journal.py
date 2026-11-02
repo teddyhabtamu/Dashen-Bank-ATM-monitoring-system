@@ -29,8 +29,10 @@ logger = logging.getLogger(__name__)
 
 bp = Blueprint('ej_journal', __name__)
 EAT = timezone(timedelta(hours=3))
-PAGE_SIZE = 25
+PAGE_SIZES = (25, 50, 100)
+DEFAULT_PAGE_SIZE = 50
 TXN_PAGE_SIZE = 50
+VIEWS = ('all', 'healthy', 'stale', 'error', 'no_data')
 
 
 def _now_eat():
@@ -54,6 +56,19 @@ def _page(raw):
         return max(1, int(raw))
     except (TypeError, ValueError):
         return 1
+
+
+def _per_page(raw):
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_PAGE_SIZE
+    return value if value in PAGE_SIZES else DEFAULT_PAGE_SIZE
+
+
+def _view(raw):
+    value = (raw or 'all').strip().lower().replace('-', '_')
+    return value if value in VIEWS else 'all'
 
 
 def _bounds(days):
@@ -178,6 +193,12 @@ def _fleet_summary(cur, since, since_utc, until_utc, vendor, q):
     if vendor:
         p_clauses.append('UPPER(vendor) = %s')
         p_params.append(vendor)
+    if q:
+        pattern = f'%{q}%'
+        p_clauses.append(
+            "atm_id IN (SELECT atm_id FROM atm_locations "
+            "WHERE atm_id ILIKE %s OR COALESCE(branch, '') ILIKE %s)")
+        p_params.extend([pattern, pattern])
 
     cur.execute(f"""
         SELECT count(*) AS files,
@@ -260,13 +281,19 @@ def _fleet_summary(cur, since, since_utc, until_utc, vendor, q):
     return summary
 
 
-def _attention_files(cur, since, vendor):
+def _attention_files(cur, since, vendor, q):
     clauses = ["COALESCE(journal_date, parsed_at::date) >= %s",
                "(status = 'error' OR atm_id IS NULL)"]
     params = [since]
     if vendor:
         clauses.append('UPPER(vendor) = %s')
         params.append(vendor)
+    if q:
+        pattern = f'%{q}%'
+        clauses.append(
+            "atm_id IN (SELECT atm_id FROM atm_locations "
+            "WHERE atm_id ILIKE %s OR COALESCE(branch, '') ILIKE %s)")
+        params.extend([pattern, pattern])
     cur.execute(f"""
         SELECT file_path, hostname, journal_date, parsed_at, status, error
           FROM ej_parse_runs
@@ -297,7 +324,9 @@ def ej_journal():
     if vendor not in ('NCR', 'GRG'):
         vendor = ''
     q = (request.args.get('q') or '').strip()[:64]
+    view = _view(request.args.get('view'))
     page = _page(request.args.get('page'))
+    per_page = _per_page(request.args.get('per_page'))
     since, today, (since_utc, until_utc) = _bounds(days)
     total = 0
     total_pages = 1
@@ -307,18 +336,35 @@ def ej_journal():
             cur = conn.cursor()
             summary = _fleet_summary(cur, since, since_utc, until_utc, vendor, q)
             summary['health'] = _fleet_health(cur, today, vendor, q)
-            attention_files = _attention_files(cur, since, vendor)
+            attention_files = _attention_files(cur, since, vendor, q)
 
             clauses, params = _filter_sql(vendor, q, 'a')
             where = ["LOWER(COALESCE(a.status, 'active')) = 'active'"]
             where.extend(clauses)
-            base_params = [since] + params
+
+            # The table health tabs mirror _fleet_health's classification
+            # exactly: a parse error wins over a date-based state.
+            view_params = []
+            stale_before = today - timedelta(days=1)
+            if view == 'healthy':
+                where.append("COALESCE(agg.parse_errors, 0) = 0 "
+                             "AND agg.journal_date >= %s")
+                view_params.append(stale_before)
+            elif view == 'stale':
+                where.append("COALESCE(agg.parse_errors, 0) = 0 "
+                             "AND agg.journal_date < %s")
+                view_params.append(stale_before)
+            elif view == 'error':
+                where.append("COALESCE(agg.parse_errors, 0) > 0")
+            elif view == 'no_data':
+                where.append("COALESCE(agg.parse_errors, 0) = 0 "
+                             "AND agg.journal_date IS NULL")
+
             sql = f"""
                 WITH latest AS (
                     SELECT atm_id, MAX(journal_date) AS journal_date
                       FROM ej_parse_runs
                      WHERE atm_id IS NOT NULL
-                       AND COALESCE(journal_date, parsed_at::date) >= %s
                      GROUP BY atm_id
                 ), agg AS (
                     SELECT p.atm_id, p.journal_date,
@@ -354,13 +400,15 @@ def ej_journal():
                           a.atm_id
                  LIMIT %s OFFSET %s
             """
-            query_params = base_params + [PAGE_SIZE, (page - 1) * PAGE_SIZE]
+            query_params = params + view_params + [
+                per_page, (page - 1) * per_page,
+            ]
             cur.execute(sql, query_params)
             raw_rows = cur.fetchall()
 
             if not raw_rows and page > 1:
                 page = 1
-                cur.execute(sql, base_params + [PAGE_SIZE, 0])
+                cur.execute(sql, params + view_params + [per_page, 0])
                 raw_rows = cur.fetchall()
 
             rows = [{
@@ -379,7 +427,7 @@ def ej_journal():
             for row in rows:
                 row['status'] = _status(row, today)
             total = raw_rows[0][11] if raw_rows else 0
-            total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+            total_pages = max(1, (total + per_page - 1) // per_page)
             cur.close()
     except Exception as exc:  # noqa: BLE001 - a missing migration must not 500
         logger.warning('EJ fleet page unavailable: %s', exc)
@@ -398,9 +446,15 @@ def ej_journal():
         days=days,
         vendor=vendor,
         q=q,
+        view=view,
         page=page,
+        per_page=per_page,
+        page_sizes=PAGE_SIZES,
         total=total,
         total_pages=total_pages,
+        start_index=(page - 1) * per_page + 1 if total else 0,
+        end_index=min(page * per_page, total),
+        today=today,
         last_updated=_now_eat().strftime('%H:%M'),
     )
 
