@@ -10,8 +10,12 @@ the other half of the picture:
   * host interface types and ``available`` verdicts
   * whether the host is behind a proxy
   * each state item's last clock, delay, timeout, enabled/unsupported state
-  * the item's next scheduled check (an overdue master is not being polled)
   * the item error text, which is where a timeout or a bad UserParameter shows
+
+Zabbix 6.4 does not expose ``nextcheck`` through the API, so a stale item that
+is enabled and not in maintenance needs one direct database query to tell
+"not scheduled" from "scheduled but not completing". See the queue query in
+``docs/system-workflow.md``.
 
 Run it inside the portal container (it already has the Zabbix env):
 
@@ -76,22 +80,6 @@ def _age(clock, now):
     return max(0, int(now - clock)) if clock else None
 
 
-def _schedule(item, now):
-    """Return a short text describing when the item is next due."""
-    if (item.get("delay") or "0") == "0":
-        return ""
-    try:
-        nextcheck = int(item.get("nextcheck") or 0)
-    except (TypeError, ValueError):
-        nextcheck = 0
-    if not nextcheck:
-        return ""
-    delta = int(nextcheck - now)
-    if delta < -60:
-        return "OVERDUE=%ds" % -delta
-    return "next=%+ds" % delta
-
-
 def describe_item(item, now, expected_interface=None):
     key = item.get("key_", "")
     age = _age(item.get("lastclock"), now)
@@ -108,10 +96,10 @@ def describe_item(item, now, expected_interface=None):
             flags.append("WRONG-IFACE")
     age_text = "never" if age is None else "%ss" % age
     item_type = int(item.get("type") or 0)
-    print("  %-44s age=%-8s type=%-12s delay=%-6s timeout=%-4s %-14s %s" % (
+    print("  %-44s age=%-8s type=%-12s delay=%-6s timeout=%-4s %s" % (
         key, age_text, ITEM_TYPES.get(item_type, str(item_type)),
         item.get("delay") or "-", item.get("timeout") or "-",
-        _schedule(item, now), " ".join(flags)))
+        " ".join(flags)))
     error = (item.get("error") or "").strip()
     if error:
         print("      error: %s" % error.replace("\n", " ")[:300])
@@ -119,45 +107,6 @@ def describe_item(item, now, expected_interface=None):
     if value not in (None, ""):
         text = str(value).replace("\n", " ")
         print("      value: %s" % text[:180])
-
-
-def show_queue(auth, now, limit=15):
-    """Print the oldest items that are past their next scheduled check.
-
-    If the ATM masters appear here, Zabbix is not ignoring them: its pollers
-    are behind, usually because unreachable synthetic/test hosts are consuming
-    every poller with slow SNMP or agent timeouts.
-    """
-    items = call("item.get", {
-        "output": ["itemid", "key_", "nextcheck", "delay", "lastclock",
-                   "status", "state"],
-        "selectHosts": ["host"],
-        "filter": {"status": 0},
-        "sortfield": "nextcheck",
-        "sortorder": "ASC",
-        "limit": 500,
-    }, auth) or []
-    overdue = []
-    for item in items:
-        try:
-            nextcheck = int(item.get("nextcheck") or 0)
-        except (TypeError, ValueError):
-            continue
-        if nextcheck and nextcheck < now - 60:
-            overdue.append(item)
-    overdue.sort(key=lambda entry: int(entry["nextcheck"]))
-    print("\n=== Oldest due items (Zabbix poller queue) ===")
-    if not overdue:
-        print("  none (all enabled items are within 60s of their due time)")
-        return
-    for item in overdue[:limit]:
-        host = (item.get("hosts") or [{}])[0].get("host", "?")
-        age = _age(item.get("lastclock"), now)
-        print("  %-28s %-42s delay=%-5s overdue=%ss age=%s" % (
-            str(host)[:28], str(item.get("key_", ""))[:42],
-            item.get("delay") or "-",
-            int(now - int(item["nextcheck"])),
-            "never" if age is None else "%ss" % age))
 
 
 def active_maintenances(maintenances, host, now):
@@ -184,9 +133,6 @@ def main():
     parser.add_argument("hosts", nargs="*",
                         default=["ATM-TEST-GRG", "ATM-TEST-NCR"],
                         help="Zabbix technical host names")
-    parser.add_argument("--queue", action="store_true",
-                        help="also show the oldest overdue items in Zabbix's "
-                             "poller queue")
     args = parser.parse_args()
 
     auth = call("user.login", {"username": USER, "password": PASSWORD})
@@ -252,8 +198,7 @@ def main():
 
         items = call("item.get", {
             "output": ["key_", "lastclock", "lastvalue", "status", "state",
-                       "error", "delay", "timeout", "type", "nextcheck",
-                       "interfaceid"],
+                       "error", "delay", "timeout", "type", "interfaceid"],
             "hostids": [host["hostid"]],
             "search": {"key_": "atm."},
             "sortfield": "key_",
@@ -276,9 +221,6 @@ def main():
             elif item_type == 20:
                 expected = snmp_interface
             describe_item(item, now, expected)
-
-    if args.queue:
-        show_queue(auth, now)
 
     call("user.logout", [], auth)
     return 0

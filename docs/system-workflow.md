@@ -536,6 +536,27 @@ is not enough.
 > `docker compose up -d --force-recreate zabbix-server` so the entrypoint
 > rewrites the config.
 >
+> **Stale-item check.** Zabbix 6.4 does not expose `nextcheck` through the
+> API. If a master is enabled, not in maintenance, and still stale, query the
+> Zabbix database directly:
+>
+> ```sql
+> SELECT h.host, i.key_, i.status, i.state, i.delay, i.timeout,
+>        to_timestamp(i.lastclock) AS last_seen,
+>        to_timestamp(i.nextcheck) AS next_check,
+>        i.interfaceid, left(i.error, 160) AS error
+> FROM items i
+> JOIN hosts h ON h.hostid = i.hostid
+> WHERE h.host IN ('ATM-TEST-GRG', 'ATM-TEST-NCR')
+>   AND i.key_ IN ('atm.xfs.cdm', 'atm.parts')
+> ORDER BY h.host, i.key_;
+> ```
+>
+> `nextcheck` far in the past with an old `lastclock` means the poller queue is
+> behind. `nextcheck` current with an old `lastclock` means the check is being
+> attempted and failing. `nextcheck = 0` means the item is disabled or not
+> scheduled.
+>
 > **Fleet-size note.** The 15s cadence is intended for the UAT test fleet. The
 > current state manager makes three Zabbix API calls per ATM, so a 1,201-host
 > fleet at 15s would be roughly 3,600 calls per cycle. Batch the host/item
