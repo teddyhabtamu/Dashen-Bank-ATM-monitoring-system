@@ -223,7 +223,10 @@ def _tickets(token):
             headers={'App-Token': GLPI_APP_TOKEN, 'Session-Token': token},
             timeout=12,
         )
-        if r.status_code == 200:
+        # GLPI answers 206 Partial Content when a range is requested and the
+        # instance holds more rows than that range covers. The body is still
+        # the requested page of tickets, not an error.
+        if r.status_code in (200, 206):
             return r.json()
         logger.warning('GLPI Ticket.list status=%s', r.status_code)
     except Exception as e:
