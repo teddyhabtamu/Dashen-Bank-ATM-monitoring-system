@@ -134,6 +134,38 @@ def test_sync_bounds_cannot_blank_a_manually_picked_date():
     assert fn.index('if (s) reportStart.value = s;') > fn.index("startPicker.set('maxDate'")
 
 
+def test_every_report_card_has_a_description():
+    """A card with no body next to a card with a paragraph reads unfinished."""
+    assert PAGE.count('class="card-desc"') == 7
+    assert PAGE.count('class="card-note"') == 1
+
+
+def test_report_titles_drop_the_redundant_suffix():
+    for title in ('Daily ATM Outage', 'Transaction Summary', 'Cash Levels',
+                  'Errors &amp; Incidents', 'ATM Performance',
+                  'Vendor Performance', 'ATM Availability'):
+        assert f'<h3>{title}</h3>' in PAGE
+    assert 'Vendor Performance Report</h3>' not in PAGE
+
+
+def test_card_actions_bottom_align_across_a_row():
+    assert '.card-body-inner { display: flex; flex-direction: column; flex: 1; }' in PAGE
+    actions = PAGE[PAGE.index('.card-actions {'):PAGE.index('}', PAGE.index('.card-actions {'))]
+    assert 'margin-top: auto;' in actions
+
+
+def test_date_presets_show_which_one_is_active():
+    assert '.range-chip.active {' in PAGE
+    assert 'setActivePreset(this);' in PAGE
+    assert 'clearActivePreset(); syncPickerBounds();' in PAGE
+    assert 'aria-pressed' in PAGE
+
+
+def test_the_page_links_to_scheduled_reports():
+    assert 'href="/admin/schedules"' in PAGE
+    assert 'Schedule reports' in PAGE
+
+
 def test_reports_page_uses_a_shared_custom_picker():
     assert (PORTAL / 'static' / 'flatpickr.min.js').is_file()
     assert (PORTAL / 'static' / 'flatpickr.min.css').is_file()

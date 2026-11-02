@@ -51,8 +51,11 @@
 .range-field input:focus { outline:none; border-color:var(--dashen-navy); box-shadow:0 0 0 3px rgba(1,33,105,.06); }
 .range-sep { font-size:12px; color:var(--text-tertiary); padding-bottom:10px; }
 .range-presets { display:flex; gap:6px; flex-wrap:wrap; padding-bottom:2px; }
-.range-chip { background:#F1F5F9; border:1px solid transparent; color:var(--text-secondary); font-size:11px; font-weight:600; padding:7px 10px; border-radius:100px; cursor:pointer; font-family:inherit; }
+.range-chip { background:#F1F5F9; border:1px solid transparent; color:var(--text-secondary); font-size:11px; font-weight:600; padding:7px 10px; border-radius:100px; cursor:pointer; font-family:inherit; transition:background .15s, color .15s, border-color .15s, box-shadow .15s; }
 .range-chip:hover { background:#EEF2FF; color:var(--dashen-navy); }
+.range-chip.active { background:var(--dashen-navy); border-color:var(--dashen-navy); color:#fff; box-shadow:0 2px 8px rgba(1,33,105,.18); }
+.range-chip.active:hover { background:var(--dashen-blue); border-color:var(--dashen-blue); color:#fff; }
+.range-chip:focus-visible { outline:2px solid var(--dashen-navy); outline-offset:2px; }
 .range-label { width:100%; font-size:11px; font-weight:600; color:var(--dashen-navy); margin-top:4px; }
 .range-error { width:100%; display:none; font-size:11px; color:#DC2626; font-weight:600; }
 .range-error.show { display:block; }
@@ -67,7 +70,7 @@
 .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
 /* ── REPORT CARDS ── */
-.reports-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 22px; }
+.reports-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; }
 .report-card {
   background: var(--card);
   border-radius: var(--radius);
@@ -86,7 +89,10 @@
 }
 .report-card:hover .card-accent { background: var(--dashen-gold); opacity: 1; }
 .card-content { padding: 24px 26px; flex: 1; display: flex; flex-direction: column; }
-.card-header { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
+.card-body-inner { display: flex; flex-direction: column; flex: 1; }
+.card-header { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.card-desc { font-size:12px; color:#64748B; line-height:1.55; margin:0 0 16px; }
+.card-note { font-size:11px; color:#94A3B8; margin:-8px 0 16px; }
 .card-icon {
   width: 42px; height: 42px; border-radius: var(--radius-sm);
   display: flex; align-items: center; justify-content: center;
@@ -99,7 +105,7 @@
 .card-header h3 { font-size: 15px; font-weight: 700; color: var(--text-primary); margin: 0; letter-spacing: -0.1px; }
 
 /* ── CUSTOM SELECT (portal white variant) ── */
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: auto; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 0; }
 .form-group.full { grid-column: 1 / -1; }
 .form-group label { font-size: 10px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.7px; }
 .custom-select { position: relative; font-family: inherit; width: 100%; }
@@ -114,11 +120,11 @@
 
 /* ── BUTTONS & FOOTER ── */
 .card-actions {
-  padding: 16px 26px 20px;
-  background: #FAFBFC;
+  padding: 16px 0 0;
+  margin-top: auto;
+  background: transparent;
   border-top: 1px solid var(--border-light);
   display: flex; flex-wrap: wrap; gap: 8px;
-  border-radius: 0 0 var(--radius) var(--radius);
 }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 14px; border-radius: var(--radius-xs); border: 1px solid transparent; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit; text-decoration: none; line-height: 1; transition: all var(--transition); }
 .btn i { width: 14px; height: 14px; }
@@ -156,7 +162,6 @@
 }
 @media(min-width:769px){
   .report-card .card-header .accordion-chevron { display:none; }
-  .report-card .card-body-inner { display:block !important; }
 }
 
 {% endblock %}
@@ -166,6 +171,9 @@
   <div>
     <h1 class="page-title">Reports</h1>
     <p class="page-subtitle">Downloadable management and operational reports.</p>
+  </div>
+  <div class="page-actions">
+    <a href="/admin/schedules" class="btn btn-outline"><i data-lucide="calendar"></i> Schedule reports</a>
   </div>
 </div>
 
@@ -188,11 +196,11 @@
         <input type="text" id="report-end" class="flatpickr-range" readonly value="{{ default_end }}" autocomplete="off">
       </div>
       <div class="range-presets">
-        <button type="button" class="range-chip" data-range="today">Today</button>
-        <button type="button" class="range-chip" data-range="7d">7 days</button>
-        <button type="button" class="range-chip" data-range="30d">30 days</button>
-        <button type="button" class="range-chip" data-range="this-month">This month</button>
-        <button type="button" class="range-chip" data-range="last-month">Last month</button>
+        <button type="button" class="range-chip" data-range="today" aria-pressed="false">Today</button>
+        <button type="button" class="range-chip" data-range="7d" aria-pressed="false">7 days</button>
+        <button type="button" class="range-chip" data-range="30d" aria-pressed="false">30 days</button>
+        <button type="button" class="range-chip" data-range="this-month" aria-pressed="false">This month</button>
+        <button type="button" class="range-chip" data-range="last-month" aria-pressed="false">Last month</button>
       </div>
       <div class="range-label" id="range-label"></div>
       <div class="range-error" id="range-error" role="alert"></div>
@@ -241,8 +249,8 @@
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
         <div class="card-body-inner">
-          <p style="font-size:12px;color:#64748B;margin-bottom:8px">One row per down ATM — location, outage days and suspected cause filled automatically (confirmed from the GLPI ticket where one is linked); the team verifies and completes the rest.</p>
-          <p style="font-size:11px;color:#94A3B8;margin-bottom:12px">Current snapshot — the reporting period above does not apply.</p>
+          <p class="card-desc">One row per down ATM with location, outage days and suspected cause; confirmed from the linked GLPI ticket where available.</p>
+          <p class="card-note">Current snapshot — the reporting period does not apply.</p>
           <div class="card-actions">
             <button class="btn btn-primary" onclick="gen('outage','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
             <button class="btn btn-outline" onclick="gen('outage','pdf')"><i data-lucide="file-text"></i> PDF</button>
@@ -265,6 +273,7 @@
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
         <div class="card-body-inner">
+          <p class="card-desc">Approved, declined and error volumes with value totals for the selected period.</p>
           <div class="form-grid">
             <div class="form-group full">
               <label for="txn-atm">ATM</label>
@@ -293,10 +302,11 @@
       <div class="card-content">
         <div class="card-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
           <div class="card-icon"><i data-lucide="coins" style="width:22px;height:22px;"></i></div>
-          <h3>Cash Level Report</h3>
+          <h3>Cash Levels</h3>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
         <div class="card-body-inner">
+          <p class="card-desc">Current cassette levels and low or empty cash warnings across the fleet.</p>
           <div class="card-actions">
             <button class="btn btn-primary" onclick="gen('cash','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
             <button class="btn btn-outline" onclick="gen('cash','pdf')"><i data-lucide="file-text"></i> PDF</button>
@@ -315,10 +325,11 @@
       <div class="card-content">
         <div class="card-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
           <div class="card-icon"><i data-lucide="alert-triangle" style="width:22px;height:22px;"></i></div>
-          <h3>Error &amp; Incident Report</h3>
+          <h3>Errors &amp; Incidents</h3>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
         <div class="card-body-inner">
+          <p class="card-desc">Fault codes and failed transactions grouped by type and ATM.</p>
           <div class="card-actions">
             <button class="btn btn-primary" onclick="gen('error','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
             <button class="btn btn-outline" onclick="gen('error','pdf')"><i data-lucide="file-text"></i> PDF</button>
@@ -337,10 +348,11 @@
       <div class="card-content">
         <div class="card-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
           <div class="card-icon"><i data-lucide="zap" style="width:22px;height:22px;"></i></div>
-          <h3>ATM Performance Report</h3>
+          <h3>ATM Performance</h3>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
         <div class="card-body-inner">
+          <p class="card-desc">Transaction throughput, response time and uptime indicators by ATM.</p>
           <div class="card-actions">
             <button class="btn btn-primary" onclick="gen('performance','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
             <button class="btn btn-outline" onclick="gen('performance','pdf')"><i data-lucide="file-text"></i> PDF</button>
@@ -359,10 +371,11 @@
       <div class="card-content">
         <div class="card-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
           <div class="card-icon"><i data-lucide="layers" style="width:22px;height:22px;"></i></div>
-          <h3>Vendor Performance Report</h3>
+          <h3>Vendor Performance</h3>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
         <div class="card-body-inner">
+          <p class="card-desc">Compare NCR and GRG fleets on volume, success rate and faults.</p>
           <div class="card-actions">
             <button class="btn btn-primary" onclick="gen('vendor','excel')"><i data-lucide="file-spreadsheet"></i> Excel</button>
             <button class="btn btn-outline" onclick="gen('vendor','pdf')"><i data-lucide="file-text"></i> PDF</button>
@@ -381,10 +394,11 @@
       <div class="card-content">
         <div class="card-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
           <div class="card-icon"><i data-lucide="gauge" style="width:22px;height:22px;"></i></div>
-          <h3>ATM Availability Report</h3>
+          <h3>ATM Availability</h3>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </div>
         <div class="card-body-inner">
+          <p class="card-desc">Uptime and SLA coverage for each ATM over the selected period.</p>
           <div class="form-grid">
             <div class="form-group full">
               <label for="avail-atm">ATM</label>
@@ -452,6 +466,15 @@ function prevMonthRange(iso) {
   var end = new Date(Date.UTC(y, m - 1, 0));
   return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)];
 }
+function presetRange(kind, today) {
+  var start = today;
+  var end = today;
+  if (kind === '7d') start = addDays(today, -6);
+  else if (kind === '30d') start = addDays(today, -29);
+  else if (kind === 'this-month') start = today.slice(0, 7) + '-01';
+  else if (kind === 'last-month') { var r = prevMonthRange(today); start = r[0]; end = r[1]; }
+  return [start, end];
+}
 function fmtReportDate(iso) {
   return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', {
     day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC'
@@ -508,6 +531,27 @@ function refreshRangeLabel() {
   rangeLabel.textContent = (s && e)
     ? fmtReportDate(s) + ' \u2013 ' + fmtReportDate(e) + ' (EAT)' : '';
 }
+function setActivePreset(btn) {
+  document.querySelectorAll('.range-chip').forEach(function(chip){
+    var on = chip === btn;
+    chip.classList.toggle('active', on);
+    chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}
+function clearActivePreset() { setActivePreset(null); }
+function markMatchingPreset() {
+  var today = eatToday();
+  var order = ['today', '7d', '30d', 'this-month', 'last-month'];
+  for (var i = 0; i < order.length; i++) {
+    var r = presetRange(order[i], today);
+    if (r[0] === reportStart.value && r[1] === reportEnd.value) {
+      setActivePreset(document.querySelector(
+        '.range-chip[data-range="' + order[i] + '"]'));
+      return;
+    }
+  }
+  clearActivePreset();
+}
 function setReportRange(start, end) {
   // Bounds first, then the dates. Setting a date while the old bound is
   // still active makes flatpickr drop it and clear the input: clicking
@@ -531,27 +575,22 @@ if (typeof flatpickr !== 'undefined') {
   startPicker = flatpickr(reportStart, {
     dateFormat: 'Y-m-d', maxDate: eatToday(), disableMobile: true,
     allowInput: false, monthSelectorType: 'static',
-    onChange: function(){ syncPickerBounds(); refreshRangeLabel(); validateRange(false); }
+    onChange: function(){ clearActivePreset(); syncPickerBounds(); refreshRangeLabel(); validateRange(false); }
   });
   endPicker = flatpickr(reportEnd, {
     dateFormat: 'Y-m-d', maxDate: eatToday(), disableMobile: true,
     allowInput: false, monthSelectorType: 'static',
-    onChange: function(){ syncPickerBounds(); refreshRangeLabel(); validateRange(false); }
+    onChange: function(){ clearActivePreset(); syncPickerBounds(); refreshRangeLabel(); validateRange(false); }
   });
 }
 syncPickerBounds();
 refreshRangeLabel();
+markMatchingPreset();
 document.querySelectorAll('.range-chip').forEach(function(btn){
   btn.addEventListener('click', function(){
-    var kind = this.getAttribute('data-range');
-    var today = eatToday();
-    var start = today;
-    var end = today;
-    if (kind === '7d') start = addDays(today, -6);
-    else if (kind === '30d') start = addDays(today, -29);
-    else if (kind === 'this-month') start = today.slice(0, 7) + '-01';
-    else if (kind === 'last-month') { var r = prevMonthRange(today); start = r[0]; end = r[1]; }
-    setReportRange(start, end);
+    var r = presetRange(this.getAttribute('data-range'), eatToday());
+    setReportRange(r[0], r[1]);
+    setActivePreset(this);
   });
 });
 
