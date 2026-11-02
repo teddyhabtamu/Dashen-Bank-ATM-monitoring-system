@@ -47,6 +47,36 @@ EAT = timezone(timedelta(hours=3))
 _cache = {'ts': 0.0, 'hosts': None, 'problems': None, 'maintenances': None}
 CACHE_TTL = 20.0
 
+# Both tables are paged server-side. The host sweep already returns the whole
+# fleet; slicing before rendering keeps 1,200 rows out of the DOM and out of
+# the 20s live payload. Problems used to stop at 100; the higher fetch cap
+# makes the rest reachable by pagination instead of silently hiding them.
+MC_PAGE_SIZES = (25, 50, 100)
+MC_DEFAULT_PAGE_SIZE = 50
+PROBLEM_FETCH_LIMIT = 5000
+
+
+def _mc_per_page():
+    try:
+        per_page = int(request.args.get('per_page', MC_DEFAULT_PAGE_SIZE))
+    except (TypeError, ValueError):
+        per_page = MC_DEFAULT_PAGE_SIZE
+    return per_page if per_page in MC_PAGE_SIZES else MC_DEFAULT_PAGE_SIZE
+
+
+def _mc_page(rows, arg, per_page):
+    """(slice, page, pages, start, end) with the page clamped to real bounds."""
+    try:
+        page = max(1, int(request.args.get(arg, 1)))
+    except (TypeError, ValueError):
+        page = 1
+    total = len(rows)
+    pages = max(1, -(-total // per_page))
+    page = min(page, pages)
+    start = (page - 1) * per_page
+    end = min(start + per_page, total)
+    return rows[start:end], page, pages, start, end
+
 
 def _cached_zabbix():
     """Return (hosts, problems, maintenances) raw rows, at most every CACHE_TTL."""
@@ -130,7 +160,7 @@ def _problem_get(auth):
         # eventids grow with time so DESC is newest-first.
         'sortfield': 'eventid',
         'sortorder': 'DESC',
-        'limit': 100,
+        'limit': PROBLEM_FETCH_LIMIT,
     }
     res = _zbx_call('problem.get', params, auth)
     if res is None:
@@ -186,7 +216,12 @@ def _fmt_short(clock):
 def center():
     severity = request.args.get('severity', '').strip()
     ack = request.args.get('ack', '').strip()  # '' | 'no' | 'yes'
-    summary, problems, hosts, error, at_cap = _collect(severity, ack)
+    per_page = _mc_per_page()
+    summary, all_problems, all_hosts, error, at_cap = _collect(severity, ack)
+    problems, ppage, ppages, prob_start, prob_end = _mc_page(
+        all_problems, 'ppage', per_page)
+    hosts, hpage, hpages, host_start, host_end = _mc_page(
+        all_hosts, 'hpage', per_page)
     # The duration list is rendered from the same table the route validates
     # against, so the UI cannot offer a value the backend will reject.
     from problem_actions import SUPPRESS_LABELS
@@ -194,6 +229,13 @@ def center():
     keys = ('30', '120', '480', '1440', '0') if is_admin else ('30', '120', '480', '1440')
     return render_template('monitoring_center.html',
                            problems=problems, hosts=hosts, summary=summary,
+                           problem_total=len(all_problems),
+                           host_total=len(all_hosts),
+                           ppage=ppage, ppages=ppages,
+                           prob_start=prob_start, prob_end=prob_end,
+                           hpage=hpage, hpages=hpages,
+                           host_start=host_start, host_end=host_end,
+                           per_page=per_page, page_sizes=MC_PAGE_SIZES,
                            severities=SEVERITIES, sev_colors=SEV_COLORS,
                            f_severity=severity, f_ack=ack, error=error,
                            at_cap=at_cap,
@@ -325,14 +367,22 @@ def problem_bulk_action(action):
 @login_required
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def api_live():
-    """Pollable twin of center() for the 30s autosync (same shaping)."""
+    """Pollable twin of center() for the 20s autosync (same shaping + pages)."""
     severity = request.args.get('severity', '').strip()
     ack = request.args.get('ack', '').strip()
-    summary, problems, hosts, error, at_cap = _collect(severity, ack)
+    per_page = _mc_per_page()
+    summary, all_problems, all_hosts, error, at_cap = _collect(severity, ack)
+    problems, ppage, ppages, _ps, _pe = _mc_page(all_problems, 'ppage', per_page)
+    hosts, hpage, hpages, _hs, _he = _mc_page(all_hosts, 'hpage', per_page)
     for p in problems:
         p['sev_color'] = SEV_COLORS.get(p['severity'], '#97AAB3')
     return jsonify({'summary': summary, 'problems': problems, 'hosts': hosts,
-                    'error': error, 'at_cap': at_cap})
+                    'error': error, 'at_cap': at_cap,
+                    'problem_total': len(all_problems),
+                    'host_total': len(all_hosts),
+                    'ppage': ppage, 'ppages': ppages,
+                    'hpage': hpage, 'hpages': hpages,
+                    'per_page': per_page})
 
 
 def _collect(severity, ack):
@@ -440,4 +490,5 @@ def _collect(severity, ack):
                 p['host'] = tmap[p['objectid']]
     summary['problems'] = len(all_problems)
     summary['unacked'] = sum(1 for p in all_problems if not p['acknowledged'])
-    return summary, problems, hosts, error, len(raw_problems) >= 100
+    return (summary, problems, hosts, error,
+            len(raw_problems) >= PROBLEM_FETCH_LIMIT)

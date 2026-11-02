@@ -11,6 +11,13 @@
 .stat-card.prob .num{color:#D97706}
 .mc-table{width:100%;border-collapse:collapse;font-size:12px}
 .mc-table th{text-align:left;padding:10px 12px;background:#FAFBFC;color:#64748B;font-weight:700;font-size:11px;border-bottom:1px solid #EEF1F6;white-space:nowrap}
+.mc-pager{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #EEF1F6;flex-wrap:wrap;background:#fff}
+.mc-pager .mc-range{font-size:11px;color:#64748B}
+.mc-pager .mc-page{font-size:11px;color:#64748B;font-weight:600;margin-left:auto}
+.mc-page-btn{padding:5px 10px;font-size:11px}
+.mc-page-btn.disabled{opacity:.45;pointer-events:none}
+.mc-page-size{display:flex;align-items:center;gap:7px;font-size:11px;color:#64748B}
+.mc-page-size select{padding:5px 8px;border:1px solid #E4E9F1;border-radius:6px;font-size:11px;font-family:inherit;background:#fff}
 .mc-table td{padding:10px 12px;border-bottom:1px solid #F1F5F9;vertical-align:top}
 .mc-table tr:last-child td{border-bottom:none}
 .sev{display:inline-block;padding:2px 10px;border-radius:100px;font-size:10px;font-weight:700;color:#fff;white-space:nowrap}
@@ -56,6 +63,18 @@
 .empty-row td{text-align:center;color:#94A3B8;padding:22px !important}
 @media(max-width:768px){.mc-table-wrap{overflow-x:auto}}
 {% endblock %}
+{% macro mc_pager(kind, page, pages, total, start, end, prev_url, next_url) -%}
+<div class="mc-pager" data-pager="{{ kind }}">
+  <span class="mc-range" data-pager-range>{% if total %}Showing {{ start + 1 }}–{{ end }} of {{ total }}{% else %}No rows{% endif %}</span>
+  <span class="mc-page" data-pager-page>Page {{ page }} of {{ pages }}</span>
+  <a class="btn btn-outline mc-page-btn {% if page <= 1 %}disabled{% endif %}"
+     data-pager-prev href="{% if page > 1 %}{{ prev_url }}{% else %}#{% endif %}"
+     {% if page <= 1 %}aria-disabled="true" tabindex="-1"{% endif %}>&larr; Prev</a>
+  <a class="btn btn-outline mc-page-btn {% if page >= pages %}disabled{% endif %}"
+     data-pager-next href="{% if page < pages %}{{ next_url }}{% else %}#{% endif %}"
+     {% if page >= pages %}aria-disabled="true" tabindex="-1"{% endif %}>Next &rarr;</a>
+</div>
+{%- endmacro %}
 {% block body %}
 <div class="page-header">
   <div class="page-header-icon"><i data-lucide="activity"></i></div>
@@ -64,7 +83,17 @@
     <p class="page-subtitle">Live host states and active problems from Zabbix — no second login.</p>
     <span id="liveStamp" style="font-size:11px;color:#64748B;font-weight:600"></span>
   </div>
-  <a href="{{ zabbix_ui_url }}" target="_blank" rel="noopener" class="btn-live btn-outline"><i data-lucide="external-link"></i> Open in Zabbix</a>
+  <div class="page-actions">
+    <form method="get" action="/monitoring" class="mc-page-size">
+      <input type="hidden" name="severity" value="{{ f_severity }}">
+      <input type="hidden" name="ack" value="{{ f_ack }}">
+      <label for="mcPerPage">Rows per page</label>
+      <select id="mcPerPage" name="per_page" onchange="this.form.submit()">
+        {% for n in page_sizes %}<option value="{{ n }}" {% if n == per_page %}selected{% endif %}>{{ n }}</option>{% endfor %}
+      </select>
+    </form>
+    <a href="{{ zabbix_ui_url }}" target="_blank" rel="noopener" class="btn-live btn-outline"><i data-lucide="external-link"></i> Open in Zabbix</a>
+  </div>
 </div>
 <div class="page-content">
 
@@ -80,8 +109,10 @@
 
   <div class="card" style="margin-bottom:16px">
     <div class="card-header">
-      <h2>Active Problems (<span id="mcProbCount">{{ problems|length }}</span>){% if at_cap %} — latest 100{% endif %}</h2>
+      <h2>Active Problems (<span id="mcProbCount">{{ problem_total }}</span>){% if at_cap %} — capped at {{ problem_total }}{% endif %}</h2>
       <form method="get" action="/monitoring" class="filter-row">
+        <input type="hidden" name="per_page" value="{{ per_page }}">
+        <input type="hidden" name="hpage" value="{{ hpage }}">
         <select name="severity" id="mcSeverity" aria-label="Severity" onchange="this.form.submit()">
           <option value="">All Severities</option>
           {% for sid, sname in severities.items() %}
@@ -94,10 +125,13 @@
           <option value="yes" {% if f_ack == 'yes' %}selected{% endif %}>Acknowledged</option>
         </select>
         {% if f_severity or f_ack %}
-        <a href="/monitoring" class="btn btn-outline" style="font-size:11px">Clear</a>
+        <a href="{{ url_for('monitoring.center', per_page=per_page, hpage=hpage) }}" class="btn btn-outline" style="font-size:11px">Clear</a>
         {% endif %}
       </form>
     </div>
+    {% set prob_prev = url_for('monitoring.center', severity=f_severity, ack=f_ack, per_page=per_page, ppage=ppage-1, hpage=hpage) %}
+    {% set prob_next = url_for('monitoring.center', severity=f_severity, ack=f_ack, per_page=per_page, ppage=ppage+1, hpage=hpage) %}
+    {{ mc_pager('problems', ppage, ppages, problem_total, prob_start, prob_end, prob_prev, prob_next) }}
     {% if can_act %}
     <div class="mc-bulkbar" id="mcBulkBar" hidden>
       <span id="mcBulkCount">0 selected</span>
@@ -153,10 +187,14 @@
         </tbody>
       </table>
     </div>
+    {{ mc_pager('problems', ppage, ppages, problem_total, prob_start, prob_end, prob_prev, prob_next) }}
   </div>
 
   <div class="card">
-    <div class="card-header"><h2>Hosts ({{ hosts|length }})</h2></div>
+    <div class="card-header"><h2>Hosts (<span id="mcHostCount">{{ host_total }}</span>)</h2></div>
+    {% set host_prev = url_for('monitoring.center', severity=f_severity, ack=f_ack, per_page=per_page, ppage=ppage, hpage=hpage-1) %}
+    {% set host_next = url_for('monitoring.center', severity=f_severity, ack=f_ack, per_page=per_page, ppage=ppage, hpage=hpage+1) %}
+    {{ mc_pager('hosts', hpage, hpages, host_total, host_start, host_end, host_prev, host_next) }}
     <div class="mc-table-wrap">
       <table class="mc-table">
         <thead><tr><th>Host</th><th>Name</th><th>IP</th><th>Groups</th><th>Maintenance</th><th>State</th></tr></thead>
@@ -180,6 +218,7 @@
         </tbody>
       </table>
     </div>
+    {{ mc_pager('hosts', hpage, hpages, host_total, host_start, host_end, host_prev, host_next) }}
   </div>
 
 </div>
@@ -508,6 +547,49 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
     if(ok){ el.textContent = 'Live · updated ' + new Date().toLocaleTimeString('en-ET',{hour12:false}); el.style.color = ''; }
     else { el.textContent = 'Update failed — retrying…'; el.style.color = '#DC2626'; }
   }
+  function pagerHref(kind, target, d){
+    var q = new URLSearchParams(window.location.search);
+    q.set('per_page', d.per_page || 50);
+    if(kind === 'problems'){
+      q.set('ppage', String(target));
+      q.set('hpage', String(d.hpage || 1));
+    } else {
+      q.set('hpage', String(target));
+      q.set('ppage', String(d.ppage || 1));
+    }
+    return '/monitoring?' + q.toString();
+  }
+  function updatePagers(d){
+    function apply(kind, page, pages, total){
+      var per = d.per_page || 50;
+      var start = total ? (page - 1) * per : 0;
+      var end = Math.min(page * per, total);
+      document.querySelectorAll('[data-pager="' + kind + '"]').forEach(function(node){
+        var range = node.querySelector('[data-pager-range]');
+        if(range) range.textContent = total ? ('Showing ' + (start + 1) + '–' + end + ' of ' + total) : 'No rows';
+        var num = node.querySelector('[data-pager-page]');
+        if(num) num.textContent = 'Page ' + page + ' of ' + pages;
+        var prev = node.querySelector('[data-pager-prev]');
+        var next = node.querySelector('[data-pager-next]');
+        if(prev){
+          var pOff = page <= 1;
+          prev.href = pOff ? '#' : pagerHref(kind, page - 1, d);
+          prev.classList.toggle('disabled', pOff);
+          prev.setAttribute('aria-disabled', pOff ? 'true' : 'false');
+          if(pOff) prev.setAttribute('tabindex', '-1'); else prev.removeAttribute('tabindex');
+        }
+        if(next){
+          var nOff = page >= pages;
+          next.href = nOff ? '#' : pagerHref(kind, page + 1, d);
+          next.classList.toggle('disabled', nOff);
+          next.setAttribute('aria-disabled', nOff ? 'true' : 'false');
+          if(nOff) next.setAttribute('tabindex', '-1'); else next.removeAttribute('tabindex');
+        }
+      });
+    }
+    apply('problems', d.ppage || 1, d.ppages || 1, d.problem_total || 0);
+    apply('hosts', d.hpage || 1, d.hpages || 1, d.host_total || 0);
+  }
   async function tick(){
     t0 = Date.now();
     if(busy || document.hidden){ schedule(); return; }
@@ -522,7 +604,8 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
       var s = d.summary || {};
       setNum('mcHosts', s.hosts); setNum('mcUp', s.up); setNum('mcDown', s.down);
       setNum('mcProbs', s.problems); setNum('mcUnacked', s.unacked);
-      setNum('mcProbCount', (d.problems || []).length);
+      setNum('mcProbCount', d.problem_total);
+      setNum('mcHostCount', d.host_total);
       var pb = document.getElementById('probBody');
       if(pb){
         if(window.mcCloseKebab) window.mcCloseKebab();
@@ -581,6 +664,7 @@ var MC_CAN_ACT = {{ 'true' if can_act else 'false' }};
             '</td><td style="font-family:monospace">' + esc(h.ip) + '</td><td style="font-size:11px;color:#64748B">' + esc(h.groups) + '</td><td>' + mt + '</td><td>' + st + '</td></tr>';
         }).join('') || '<tr class="empty-row"><td colspan="6">No monitored hosts found.</td></tr>';
       }
+      updatePagers(d);
       var eb = document.getElementById('mcErr');
       if(eb) eb.style.display = 'none';
       fails = 0; stamp(true);
