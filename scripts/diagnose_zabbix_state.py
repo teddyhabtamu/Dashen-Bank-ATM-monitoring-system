@@ -35,6 +35,8 @@ _id = 0
 INTERFACE_TYPES = {0: "unknown", 1: "agent", 2: "snmp", 3: "ipmi", 4: "jmx"}
 AVAILABILITY = {0: "unknown", 1: "available", 2: "unavailable"}
 ITEM_STATE = {0: "normal", 1: "not supported"}
+ITEM_TYPES = {0: "agent", 7: "agent-active", 18: "dependent",
+              4: "snmp-v1", 5: "snmp-v2", 6: "snmp-v3"}
 
 
 def call(method, params, auth=None):
@@ -70,9 +72,11 @@ def describe_item(item, now):
     if state:
         flags.append(ITEM_STATE.get(state, "state %s" % state))
     age_text = "never" if age is None else "%ss" % age
-    print("  %-44s age=%-8s delay=%-6s timeout=%-4s %s" % (
-        key, age_text, item.get("delay") or "-",
-        item.get("timeout") or "-", " ".join(flags)))
+    item_type = int(item.get("type") or 0)
+    print("  %-44s age=%-8s type=%-12s delay=%-6s timeout=%-4s %s" % (
+        key, age_text, ITEM_TYPES.get(item_type, str(item_type)),
+        item.get("delay") or "-", item.get("timeout") or "-",
+        " ".join(flags)))
     error = (item.get("error") or "").strip()
     if error:
         print("      error: %s" % error.replace("\n", " ")[:300])
@@ -119,7 +123,7 @@ def main():
 
         items = call("item.get", {
             "output": ["key_", "lastclock", "lastvalue", "status", "state",
-                       "error", "delay", "timeout"],
+                       "error", "delay", "timeout", "type"],
             "hostids": [host["hostid"]],
             "search": {"key_": "atm."},
             "sortfield": "key_",
