@@ -21,10 +21,49 @@ td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:
 .badge.warn{background:rgba(217,119,6,.1);color:#D97706}
 .badge.bad{background:rgba(220,38,38,.08);color:#DC2626}
 .badge.muted{background:#F1F5F9;color:#64748B}
-.table-wrap{overflow-x:auto}
+
+/* Wide-table pattern: a bounded viewport with sticky header and a frozen
+   identifier column. The horizontal scrollbar then lives inside this box,
+   not at the bottom of 1,200 rows. The mirrored scrollbar above the table
+   makes sideways movement reachable without scrolling down first. */
+.table-toolbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid #EEF1F6;background:#fff}
+.table-toolbar .count{font-size:12px;color:#64748B}
+.table-toolbar .count strong{color:#0F172A}
+.table-toolbar .scroll-tip{display:flex;align-items:center;gap:6px;font-size:11px;color:#94A3B8}
+.table-toolbar .page-size{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:11px;color:#64748B}
+.table-toolbar .page-size select{padding:5px 8px;border:1px solid #E4E9F1;border-radius:6px;font-size:11px;font-family:inherit;background:#fff}
+.fleet-scroll-top{overflow-x:auto;overflow-y:hidden;height:16px;background:#FAFBFC;border-bottom:1px solid #EEF1F6;scrollbar-width:thin}
+.fleet-scroll-top>div{height:1px}
+.fleet-scroll-top.is-hidden{display:none}
+.fleet-table-wrap{overflow:auto;max-height:62vh;min-height:280px;position:relative;background:#fff;outline:none}
+.fleet-table-wrap:focus-visible{box-shadow:inset 0 0 0 2px rgba(1,33,105,.25)}
+.fleet-table{width:100%;border-collapse:separate;border-spacing:0;min-width:1180px}
+.fleet-table th{position:sticky;top:0;z-index:3;background:#012169;color:#fff;font-weight:600;padding:10px 12px;text-align:left;white-space:nowrap;border-bottom:1px solid #001a52}
+.fleet-table td{padding:8px 12px;border-bottom:1px solid #EEF1F6;vertical-align:top}
+.fleet-table tbody tr:nth-child(even){background:#F8FAFC}
+.fleet-table tbody tr:hover{background:#EEF2FF}
+.fleet-table th:first-child,.fleet-table td:first-child{position:sticky;left:0;z-index:2;background:#fff;box-shadow:1px 0 0 #EEF1F6,8px 0 12px -10px rgba(15,23,42,.35)}
+.fleet-table thead th:first-child{z-index:4;background:#012169;box-shadow:1px 0 0 rgba(255,255,255,.15),8px 0 12px -10px rgba(0,0,0,.35)}
+.fleet-table tbody tr:nth-child(even) td:first-child{background:#F8FAFC}
+.fleet-table tbody tr:hover td:first-child{background:#EEF2FF}
+.fleet-table td.atm{min-width:220px;max-width:280px}
+.fleet-table td.atm .sub{max-width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fleet-table td.stage .d{max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fleet-table td.issue,.fleet-table td.next{max-width:300px;min-width:220px}
+.fleet-table .clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.fleet-pager{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:12px 20px;border-top:1px solid #EEF1F6;flex-wrap:wrap}
+.fleet-pager .page{font-size:11px;color:#64748B;font-weight:600;margin-right:auto}
+.fleet-pager .btn{padding:6px 12px;font-size:11px}
+.fleet-pager .btn.disabled{opacity:.45;pointer-events:none}
 .empty{padding:44px 20px;text-align:center;color:#64748B}
 .spin{animation:spin 1s linear infinite}
-@media(max-width:768px){ .fleet-summary{grid-template-columns:repeat(2,1fr)} }
+@media(max-width:768px){ .fleet-summary{grid-template-columns:repeat(2,1fr)}
+  .fleet-table-wrap{max-height:58vh}
+  .fleet-table{min-width:980px}
+  .fleet-pager{justify-content:center}
+  .fleet-pager .page{margin-right:0;width:100%;text-align:center}
+  .table-toolbar .page-size{margin-left:0}
+}
 {% endblock %}
 {% macro stage_badge(status, label, detail='') -%}
 <span class="badge {{ {'ok':'ok','pending':'warn','stale':'warn','review':'warn','blocked':'bad','unknown':'muted','complete':'ok','in_progress':'warn'}.get(status, 'muted') }}"{% if detail %} title="{{ detail }}"{% endif %}>{{ label }}</span>
@@ -136,14 +175,15 @@ td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:
 
 <div class="card">
   <div class="filters">
-    <a class="btn {{ 'btn-primary' if filter_mode == 'action' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=action">Needs action</a>
-    <a class="btn {{ 'btn-primary' if filter_mode == 'all' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=all">All</a>
-    <a class="btn {{ 'btn-primary' if filter_mode == 'healthy' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=healthy">Onboarded</a>
-    <a class="btn {{ 'btn-primary' if filter_mode == 'identity' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=identity">Identity</a>
-    <a class="btn {{ 'btn-primary' if filter_mode == 'ej' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=ej">EJ</a>
-    <a class="btn {{ 'btn-primary' if filter_mode == 'images' else 'btn-outline' }}" href="/admin/onboard/fleet?filter=images">Images</a>
+    <a class="btn {{ 'btn-primary' if filter_mode == 'action' else 'btn-outline' }}" href="{{ url_for('onboarding.onboard_fleet', filter='action', q=q, per_page=per_page) }}">Needs action</a>
+    <a class="btn {{ 'btn-primary' if filter_mode == 'all' else 'btn-outline' }}" href="{{ url_for('onboarding.onboard_fleet', filter='all', q=q, per_page=per_page) }}">All</a>
+    <a class="btn {{ 'btn-primary' if filter_mode == 'healthy' else 'btn-outline' }}" href="{{ url_for('onboarding.onboard_fleet', filter='healthy', q=q, per_page=per_page) }}">Onboarded</a>
+    <a class="btn {{ 'btn-primary' if filter_mode == 'identity' else 'btn-outline' }}" href="{{ url_for('onboarding.onboard_fleet', filter='identity', q=q, per_page=per_page) }}">Identity</a>
+    <a class="btn {{ 'btn-primary' if filter_mode == 'ej' else 'btn-outline' }}" href="{{ url_for('onboarding.onboard_fleet', filter='ej', q=q, per_page=per_page) }}">EJ</a>
+    <a class="btn {{ 'btn-primary' if filter_mode == 'images' else 'btn-outline' }}" href="{{ url_for('onboarding.onboard_fleet', filter='images', q=q, per_page=per_page) }}">Images</a>
     <form method="get" action="/admin/onboard/fleet" style="display:flex;gap:8px;align-items:center">
       <input type="hidden" name="filter" value="{{ filter_mode }}">
+      <input type="hidden" name="per_page" value="{{ per_page }}">
       <input type="text" name="q" id="fleetSearch" aria-label="Search fleet" value="{{ q }}"
              placeholder="Terminal ID, ATM ID, vendor or IP"
              style="padding:7px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;width:240px">
@@ -152,19 +192,32 @@ td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:
     <span class="sp">Generated {{ cached.generated_label if cached else '' }} · cached {{ ttl }} min</span>
   </div>
   {% if rows %}
-  <div class="table-wrap">
-  <table>
+  <div class="table-toolbar">
+    <div class="count">Showing <strong>{{ start_index + 1 }}–{{ end_index }}</strong> of <strong>{{ total }}</strong> ATMs</div>
+    <span class="scroll-tip"><i data-lucide="move-horizontal" style="width:13px;height:13px"></i> Scroll sideways for every stage column</span>
+    <form method="get" action="/admin/onboard/fleet" class="page-size">
+      <input type="hidden" name="filter" value="{{ filter_mode }}">
+      {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+      <label for="fleetPerPage">Rows per page</label>
+      <select id="fleetPerPage" name="per_page" onchange="this.form.submit()">
+        {% for n in page_sizes %}<option value="{{ n }}" {% if n == per_page %}selected{% endif %}>{{ n }}</option>{% endfor %}
+      </select>
+    </form>
+  </div>
+  <div class="fleet-scroll-top" id="fleetScrollTop" aria-hidden="true"><div id="fleetScrollTopInner"></div></div>
+  <div class="fleet-table-wrap" id="fleetTableWrap" tabindex="0" role="region" aria-label="Fleet health table — scroll sideways for all columns">
+  <table class="fleet-table" id="fleetTable">
     <thead>
-      <tr><th>ATM</th><th>State</th><th>Onboarding</th><th>Reporting</th><th>Provisioning</th>
-          <th>Identity</th><th>EJ</th><th>Images</th>
-          <th>What is wrong</th><th>Next action</th></tr>
+      <tr><th scope="col">ATM</th><th scope="col">State</th><th scope="col">Onboarding</th><th scope="col">Reporting</th><th scope="col">Provisioning</th>
+          <th scope="col">Identity</th><th scope="col">EJ</th><th scope="col">Images</th>
+          <th scope="col">What is wrong</th><th scope="col">Next action</th></tr>
     </thead>
     <tbody>
       {% for r in rows %}
       {% set s = r.stages or {} %}
       <tr>
         <td class="atm"><a href="/atms/{{ r.atm_id }}">{{ r.terminal_id or r.atm_id }}</a>
-          <span class="sub">ATM ID {{ r.atm_id }} · {{ r.vendor or '—' }} · {{ r.ip or 'no IP' }}</span></td>
+          <span class="sub" title="ATM ID {{ r.atm_id }} · {{ r.vendor or '—' }} · {{ r.ip or 'no IP' }}">ATM ID {{ r.atm_id }} · {{ r.vendor or '—' }} · {{ r.ip or 'no IP' }}</span></td>
         <td class="status">
           {% if r.state %}<span class="state-pill" style="background:{{ r.state | state_colour }};color:{{ r.state | state_ink }}">{{ r.state | state_label }}</span>
           {% else %}<span class="sub">—</span>{% endif %}
@@ -174,15 +227,16 @@ td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:
         {% for key in ('provisioning', 'identity', 'ej', 'images') %}
         {% set st = s.get(key) or {} %}
         <td class="stage">{{ stage_badge(st.get('status', 'unknown'), st.get('label', 'Unknown'), st.get('detail', '')) }}
-          {% if st.get('detail') %}<span class="d">{{ st.get('detail') }}</span>{% endif %}</td>
+          {% if st.get('detail') %}<span class="d" title="{{ st.get('detail') }}">{{ st.get('detail') }}</span>{% endif %}</td>
         {% endfor %}
-        <td>{{ r.problem or r.blocker or '—' }}</td>
-        <td class="next">{{ r.next_action or '—' }}</td>
+        <td class="issue"><div class="clamp" title="{{ r.problem or r.blocker or '' }}">{{ r.problem or r.blocker or '—' }}</div></td>
+        <td class="next"><div class="clamp" title="{{ r.next_action or '' }}">{{ r.next_action or '—' }}</div></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   </div>
+  {% include '_fleet_pager.html' %}
   {% else %}
   <div class="empty">
     <i data-lucide="circle-check" style="width:28px;height:28px;color:#059669;margin-bottom:8px"></i>
@@ -229,6 +283,31 @@ td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:
   if(n >= 40) return;
   sessionStorage.setItem(KEY, String(n + 1));
   setTimeout(function(){ window.location.reload(); }, 3000);
+})();
+// Wide-table ergonomics: mirror the table's horizontal scrollbar above the
+// table, so reaching the last stage column never means scrolling to the
+// bottom of the page first. The bar hides itself when the table fits.
+(function(){
+  var wrap = document.getElementById('fleetTableWrap');
+  var top = document.getElementById('fleetScrollTop');
+  var inner = document.getElementById('fleetScrollTopInner');
+  var table = document.getElementById('fleetTable');
+  if(!wrap || !top || !inner || !table) return;
+  function measure(){
+    inner.style.width = table.scrollWidth + 'px';
+    var hidden = table.scrollWidth <= wrap.clientWidth + 1;
+    top.classList.toggle('is-hidden', hidden);
+    if(!hidden && top.scrollLeft !== wrap.scrollLeft) top.scrollLeft = wrap.scrollLeft;
+  }
+  top.addEventListener('scroll', function(){
+    if(wrap.scrollLeft !== top.scrollLeft) wrap.scrollLeft = top.scrollLeft;
+  }, {passive:true});
+  wrap.addEventListener('scroll', function(){
+    if(top.scrollLeft !== wrap.scrollLeft) top.scrollLeft = wrap.scrollLeft;
+  }, {passive:true});
+  window.addEventListener('resize', measure);
+  if(window.ResizeObserver) new ResizeObserver(measure).observe(table);
+  measure();
 })();
 </script>
 {% endblock %}

@@ -277,6 +277,39 @@ def onboard_stage():
 
 
 # ── Phase 4c: fleet page ─────────────────────────────────────────────────
+# The table is a page at a time. 1,201 rows made every filter click render a
+# very tall page, and the horizontal scrollbar lived below all of it. Page
+# sizes are explicit so a bookmarked URL cannot ask for 100,000 rows.
+FLEET_PAGE_SIZES = (25, 50, 100)
+FLEET_DEFAULT_PAGE_SIZE = 50
+
+
+def _fleet_page(total):
+    """Requested page/per_page → template context, clamped to real bounds."""
+    try:
+        per_page = int(request.args.get('per_page', FLEET_DEFAULT_PAGE_SIZE))
+    except (TypeError, ValueError):
+        per_page = FLEET_DEFAULT_PAGE_SIZE
+    if per_page not in FLEET_PAGE_SIZES:
+        per_page = FLEET_DEFAULT_PAGE_SIZE
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (TypeError, ValueError):
+        page = 1
+    total_pages = max(1, -(-total // per_page))
+    page = min(page, total_pages)
+    start = (page - 1) * per_page
+    return {
+        'page': page,
+        'total_pages': total_pages,
+        'per_page': per_page,
+        'total': total,
+        'start_index': start,
+        'end_index': min(start + per_page, total),
+        'page_sizes': FLEET_PAGE_SIZES,
+    }
+
+
 # Verifying 1,202 ATMs is a Zabbix sweep per ATM. That cannot run inside a
 # request, so it is computed in the background and served from a shared cache
 # (fleet_store) that every gunicorn worker can read.
@@ -365,6 +398,7 @@ def onboard_fleet():
     except Exception as e:
         logger.warning('fleet cache table unavailable: %s', e)
     cached = load_any(db=_db_conn)
+    page_ctx = _fleet_page(0)
     # A claim whose heartbeat stopped is not a running sweep: the process that
     # took it was restarted or killed. This page used to call that "recomputing"
     # forever, for two reasons that compounded: running was read from the error
@@ -386,7 +420,8 @@ def onboard_fleet():
                                counts=cached.get('counts') or {}, rows=[],
                                ttl=ttl, failed=cached.get('error'),
                                filter_mode=request.args.get('filter', 'action'),
-                               q=(request.args.get('q') or '').strip())
+                               q=(request.args.get('q') or '').strip(),
+                               **page_ctx)
     if not cached or not cached.get('rows'):
         # Nothing to show yet: claim the sweep (cross-process) and compute.
         if claim_run(db=_db_conn):
@@ -394,7 +429,8 @@ def onboard_fleet():
         return render_template('fleet.html', cached=None, computing=True,
                                counts={}, rows=[], ttl=ttl, failed='',
                                filter_mode=request.args.get('filter', 'action'),
-                               q=(request.args.get('q') or '').strip())
+                               q=(request.args.get('q') or '').strip(),
+                               **page_ctx)
     cached['generated_label'] = format_eat(cached.get('generated_at'))
     rows = cached['rows']
     mode = request.args.get('filter', 'action')
@@ -417,6 +453,8 @@ def onboard_fleet():
                 or q in str(r.get('terminal_id', '')).lower()
                 or q in str(r.get('ip', '')).lower()
                 or q in str(r.get('vendor', '')).lower()]
+    page_ctx = _fleet_page(len(rows))
+    rows = rows[page_ctx['start_index']:page_ctx['end_index']]
     # computing means "nothing to show yet, wait for the first sweep". A
     # recompute over an existing report is NOT that: the template already has a
     # separate branch (cached.running) that keeps the table and shows a banner.
@@ -429,7 +467,8 @@ def onboard_fleet():
                            counts=cached['counts'], rows=rows, ttl=ttl,
                            failed=(cached.get('error') if cached.get('failed') else ''),
                            filter_mode=mode,
-                           q=(request.args.get('q') or '').strip())
+                           q=(request.args.get('q') or '').strip(),
+                           **page_ctx)
 
 
 @bp.route('/onboard/fleet/refresh', methods=['POST'])
