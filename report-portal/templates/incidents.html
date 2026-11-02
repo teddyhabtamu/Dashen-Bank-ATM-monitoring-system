@@ -35,7 +35,13 @@
 .t-match{padding:7px 10px;border-radius:6px;font-size:12px;cursor:pointer}
 .t-match:hover{background:#EEF2FF}
 .empty-row td{text-align:center;color:#94A3B8;padding:22px !important}
-@media(max-width:768px){.inc-table-wrap{overflow-x:auto}}
+.range{font-size:11px;color:#64748B;font-weight:600}
+.pagination{display:flex;align-items:center;justify-content:center;gap:8px;padding:16px 24px;border-top:1px solid #EEF1F6}
+.pagination .btn{padding:6px 12px;font-size:11px}
+.pagination .current{font-size:12px;color:#64748B;font-weight:600}
+@media(max-width:768px){.inc-table-wrap{overflow-x:auto}
+  .pagination{flex-wrap:wrap;gap:6px;padding:10px 14px}
+  .pagination .btn{flex:1;justify-content:center;padding:8px 10px !important;font-size:11px !important;min-height:40px}}
 {% endblock %}
 {% block body %}
 <div class="page-header">
@@ -53,9 +59,9 @@
   {% endif %}
 
   <div class="stat-row">
-    <div class="stat-card open"><div class="num">{{ counts.open }}</div><div class="lbl">Open{% if at_cap %} · latest 100{% endif %}</div></div>
-    <div class="stat-card"><div class="num">{{ counts.pending }}</div><div class="lbl">Pending{% if at_cap %} · latest 100{% endif %}</div></div>
-    <div class="stat-card solved"><div class="num">{{ counts.solved }}</div><div class="lbl">Solved / Closed{% if at_cap %} · latest 100{% endif %}</div></div>
+    <div class="stat-card open"><div class="num">{{ counts.open }}</div><div class="lbl">Open{% if counts_scoped %} · this page{% endif %}</div></div>
+    <div class="stat-card"><div class="num">{{ counts.pending }}</div><div class="lbl">Pending{% if counts_scoped %} · this page{% endif %}</div></div>
+    <div class="stat-card solved"><div class="num">{{ counts.solved }}</div><div class="lbl">Solved / Closed{% if counts_scoped %} · this page{% endif %}</div></div>
   </div>
 
   <div class="tab-bar">
@@ -66,7 +72,12 @@
   </div>
 
   <div class="card">
-    <div class="card-header"><h2>Tickets ({{ tickets|length }})</h2></div>
+    <div class="card-header">
+      <h2>Tickets ({{ total }})</h2>
+      {% if tickets %}
+      <span class="range">Showing {{ (page - 1) * per_page + 1 }}–{{ (page - 1) * per_page + tickets|length }} of {{ total }}</span>
+      {% endif %}
+    </div>
     <div class="inc-table-wrap">
       <table class="inc-table">
         <thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Priority</th><th>Category</th><th>Requester</th><th>Assignee</th><th>Created</th><th>Updated</th>{% if session.get('role') in ('admin', 'operator') %}<th>Actions</th>{% endif %}</tr></thead>
@@ -94,6 +105,17 @@
         </tbody>
       </table>
     </div>
+    {% if total_pages > 1 %}
+    <div class="pagination">
+      {% if page > 1 %}
+      <a href="?page={{ page - 1 }}{% if f_status %}&status={{ f_status }}{% endif %}" class="btn btn-outline">&larr; Prev</a>
+      {% endif %}
+      <span class="current">Page {{ page }} of {{ total_pages }}</span>
+      {% if page < total_pages %}
+      <a href="?page={{ page + 1 }}{% if f_status %}&status={{ f_status }}{% endif %}" class="btn btn-outline">Next &rarr;</a>
+      {% endif %}
+    </div>
+    {% endif %}
   </div>
 
 </div>

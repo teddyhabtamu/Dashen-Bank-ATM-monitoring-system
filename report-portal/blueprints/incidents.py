@@ -45,6 +45,14 @@ EAT = timezone(timedelta(hours=3))
 # (session open, list, close). 60s TTL; filters apply per request.
 _cache = {'ts': 0.0, 'tickets': None}
 CACHE_TTL = 60.0
+
+# The board is paginated through GLPI's search engine. A page is 50 rows:
+# the assignee column costs one Ticket_User call per row, so a 1,000-ticket
+# list in one request would fan out into 1,000+ GLPI calls per page view.
+TICKETS_PER_PAGE = 50
+_search_cache = {}          # (status, page) -> (fetched_at, rows, total)
+_counts_cache = {'ts': 0.0, 'data': None}
+
 # Per-ticket detail cache (same TTL): the detail view fans out to 10+
 # sequential GLPI calls (ticket, followups, solutions, tasks, user labels,
 # per-message documents). Shared across users — entries hold no per-user
@@ -219,7 +227,13 @@ def _tickets(token):
     try:
         r = requests.get(
             f'{GLPI_URL}/apirest.php/Ticket/',
-            params={'range': '0-99', 'order': 'DESC', 'expand_dropdowns': 'true'},
+            params={
+                'range': '0-99',
+                'sort': 'date_mod',    # latest activity, not ticket title
+                'order': 'DESC',
+                'expand_dropdowns': 'true',
+                'get_hateoas': '0',
+            },
             headers={'App-Token': GLPI_APP_TOKEN, 'Session-Token': token},
             timeout=12,
         )
@@ -234,8 +248,173 @@ def _tickets(token):
     return None
 
 
+_STATUS_VALUES = {'open': (1, 2, 3), 'pending': (4,), 'solved': (5, 6)}
+
+
+def _status_criteria(status):
+    """GLPI search criteria for one portal tab. Unknown status = all tickets.
+
+    GLPI only offers the special values ``notold`` (which includes Pending)
+    and ``old`` for status, so the portal's three-way split is expressed as
+    explicit equals/OR pairs on search option 12 (status).
+    """
+    values = _STATUS_VALUES.get(status)
+    if not values:
+        return {}
+    params = {}
+    for i, value in enumerate(values):
+        prefix = f'criteria[{i}]'
+        if i:
+            params[f'{prefix}[link]'] = 'OR'
+        params[f'{prefix}[field]'] = '12'
+        params[f'{prefix}[searchtype]'] = 'equals'
+        params[f'{prefix}[value]'] = str(value)
+    return params
+
+
+def _search_ticket_ids(token, status, start, limit):
+    """(ids, total) for one page of the filtered ticket list.
+
+    The search engine reports the full match count in ``totalcount`` while
+    returning only the requested range, so the board can paginate without
+    downloading every ticket.
+    """
+    params = {
+        'range': f'{start}-{start + limit - 1}',
+        'sort': '19',             # date_mod: newest activity first
+        'order': 'DESC',
+        'forcedisplay[0]': '2',   # ticket id
+    }
+    params.update(_status_criteria(status))
+    try:
+        r = requests.get(
+            f'{GLPI_URL}/apirest.php/search/Ticket',
+            params=params,
+            headers={'App-Token': GLPI_APP_TOKEN, 'Session-Token': token},
+            timeout=12,
+        )
+        if r.status_code not in (200, 206):
+            logger.warning('GLPI Ticket.search status=%s', r.status_code)
+            return None, 0
+        body = r.json()
+    except Exception as e:
+        logger.warning('GLPI Ticket.search failed: %s', e)
+        return None, 0
+
+    rows = body.get('data') if isinstance(body, dict) else body
+    if isinstance(rows, dict):
+        rows = list(rows.values())
+    ids = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        value = row.get('2', row.get(2))
+        if value is None:
+            value = row.get('Ticket.id')
+        try:
+            ids.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    try:
+        total = int((body or {}).get('totalcount') or 0) if isinstance(body, dict) else 0
+    except (TypeError, ValueError):
+        total = 0
+    if total <= 0 and ids:
+        total = start + len(ids)
+    return ids, total
+
+
+def _tickets_by_ids(token, ids):
+    """Full ticket rows for one page, in the order the search returned them."""
+    if not ids:
+        return []
+    params = {'expand_dropdowns': 'true', 'get_hateoas': '0'}
+    for i, tid in enumerate(ids):
+        params[f'items[{i}][itemtype]'] = 'Ticket'
+        params[f'items[{i}][items_id]'] = str(tid)
+    try:
+        r = requests.get(
+            f'{GLPI_URL}/apirest.php/getMultipleItems',
+            params=params,
+            headers={'App-Token': GLPI_APP_TOKEN, 'Session-Token': token},
+            timeout=20,
+        )
+        if r.status_code != 200:
+            logger.warning('GLPI getMultipleItems status=%s', r.status_code)
+            return None
+        rows = r.json()
+    except Exception as e:
+        logger.warning('GLPI getMultipleItems failed: %s', e)
+        return None
+    if isinstance(rows, dict):
+        rows = [rows]
+    if not isinstance(rows, list):
+        return None
+    by_id = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            by_id[int(row.get('id'))] = row
+        except (TypeError, ValueError):
+            continue
+    return [by_id[tid] for tid in ids if tid in by_id]
+
+
+def _cached_ticket_page(status, page):
+    """(rows, total) for one filtered page; stale data survives a hiccup."""
+    key = (status, page)
+    now = time.time()
+    hit = _search_cache.get(key)
+    if hit and now - hit[0] < CACHE_TTL:
+        return hit[1], hit[2]
+    token = _session()
+    if not token:
+        return (hit[1], hit[2]) if hit else (None, 0)
+    try:
+        start = (page - 1) * TICKETS_PER_PAGE
+        ids, total = _search_ticket_ids(token, status, start, TICKETS_PER_PAGE)
+        if ids is None:
+            return (hit[1], hit[2]) if hit else (None, 0)
+        rows = _tickets_by_ids(token, ids)
+        if rows is None:
+            return (hit[1], hit[2]) if hit else (None, 0)
+        _search_cache[key] = (now, rows, total)
+        return rows, total
+    finally:
+        _close(token)
+
+
+def _ticket_counts():
+    """Exact Open/Pending/Solved totals, cached for CACHE_TTL.
+
+    A range of 0-0 asks GLPI for the count without downloading the rows.
+    None means "cannot tell", so the caller falls back to page-local counts
+    instead of showing a confident zero.
+    """
+    now = time.time()
+    if _counts_cache['data'] is not None and now - _counts_cache['ts'] < CACHE_TTL:
+        return _counts_cache['data']
+    token = _session()
+    if not token:
+        return None
+    try:
+        counts = {}
+        for key in _STATUS_VALUES:
+            ids, total = _search_ticket_ids(token, key, 0, 1)
+            if ids is None:
+                return None
+            counts[key] = total
+    finally:
+        _close(token)
+    _counts_cache.update(ts=now, data=counts)
+    return counts
+
+
 def _invalidate_cache():
     _cache.update(ts=0.0, tickets=None)
+    _search_cache.clear()
+    _counts_cache.update(ts=0.0, data=None)
     _unread_cache.clear()
 
 
@@ -725,52 +904,77 @@ def _user_brief(token, users_id, cache):
 @role_required(ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN)
 def board():
     status = request.args.get('status', '').strip()
+    if status not in ('', 'open', 'pending', 'solved'):
+        status = ''
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (TypeError, ValueError):
+        page = 1
     error = None
     tickets = []
     counts = {'open': 0, 'pending': 0, 'solved': 0}
 
-    raw = _cached_tickets()
+    # Exact totals first: they clamp page numbers before the range request
+    # (GLPI refuses a start beyond the last row) and keep the KPI cards
+    # honest across the whole instance, not just the visible page.
+    exact_counts = _ticket_counts()
+    counts_scoped = exact_counts is None
+    if exact_counts:
+        counts = exact_counts
+        filter_total = {
+            '': sum(exact_counts.values()),
+            'open': exact_counts['open'],
+            'pending': exact_counts['pending'],
+            'solved': exact_counts['solved'],
+        }[status]
+        total_pages = max(1, -(-filter_total // TICKETS_PER_PAGE))
+        page = min(page, total_pages)
+    else:
+        total_pages = None
+
+    raw, total = _cached_ticket_page(status, page)
+    if raw is None and page > 1:
+        page = 1
+        raw, total = _cached_ticket_page(status, page)
     if raw is None:
         error = ('Cannot reach the GLPI API — check GLPI_APP_TOKEN / GLPI_USER / '
                  'GLPI_API_PASSWORD and that the API client is enabled.')
         raw = []
-    else:
-        for t in raw:
-            try:
-                st = int(t.get('status', 0))
-            except (TypeError, ValueError):
-                st = 0
+        total = 0
+    if total_pages is None:
+        total_pages = max(1, -(-total // TICKETS_PER_PAGE))
+
+    for t in raw:
+        try:
+            st = int(t.get('status', 0))
+        except (TypeError, ValueError):
+            st = 0
+        if counts_scoped:
             if st in (1, 2, 3):
                 counts['open'] += 1
             elif st == 4:
                 counts['pending'] += 1
             elif st in (5, 6):
                 counts['solved'] += 1
-            if status == 'open' and st not in (1, 2, 3):
-                continue
-            if status == 'pending' and st != 4:
-                continue
-            if status == 'solved' and st not in (5, 6):
-                continue
-            try:
-                pr = int(t.get('priority', 0))
-            except (TypeError, ValueError):
-                pr = 0
-            tickets.append({
-                'id': t.get('id'),
-                'title': t.get('name') or '(no title)',
-                'status': STATUS_NAMES.get(st, str(st)),
-                'status_n': st,
-                'priority': PRIORITY_NAMES.get(pr, str(pr) if pr else '—'),
-                'priority_n': pr,
-                'category': t.get('itilcategories_id') or '—',
-                'requester': t.get('users_id_recipient') or '—',
-                'created': _fmt_ts(t.get('date_creation')),
-                'updated': _fmt_ts(t.get('date_mod')),
-                'unread': False,
-                'last_by': '',
-                '_updater': t.get('users_id_lastupdater'),
-            })
+        try:
+            pr = int(t.get('priority', 0))
+        except (TypeError, ValueError):
+            pr = 0
+        tickets.append({
+            'id': t.get('id'),
+            'title': t.get('name') or '(no title)',
+            'status': STATUS_NAMES.get(st, str(st)),
+            'status_n': st,
+            'priority': PRIORITY_NAMES.get(pr, str(pr) if pr else '—'),
+            'priority_n': pr,
+            'category': t.get('itilcategories_id') or '—',
+            'requester': t.get('users_id_recipient') or '—',
+            'created': _fmt_ts(t.get('date_creation')),
+            'updated': _fmt_ts(t.get('date_mod')),
+            'unread': False,
+            'last_by': '',
+            '_updater': t.get('users_id_lastupdater'),
+        })
 
     # Unread = GLPI moved since this user last saw the ticket (detail open
     # or own action marks it seen, so only *others'* activity lights up).
@@ -853,7 +1057,10 @@ def board():
             x.setdefault('assignee_pic', '')
 
     return render_template('incidents.html', tickets=tickets, counts=counts,
-                           f_status=status, error=error, at_cap=len(raw) >= 100,
+                           f_status=status, error=error, page=page,
+                           total=total, total_pages=total_pages,
+                           per_page=TICKETS_PER_PAGE,
+                           counts_scoped=counts_scoped,
                            unread_count=unread_count)
 
 
