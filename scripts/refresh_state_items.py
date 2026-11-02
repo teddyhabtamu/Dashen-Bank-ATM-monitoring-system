@@ -120,6 +120,35 @@ def print_targets(hosts, now):
                 (item.get("error") or "").replace("\n", " ")[:120]))
 
 
+def _runtime_columns(cur):
+    """Return SQL expressions for the item runtime fields.
+
+    Zabbix keeps ``state``/``nextcheck``/``lastclock`` in ``item_rtdata`` in
+    some schema versions and in ``items`` in others.  Query the catalog instead
+    of assuming one layout, so the diagnostic works on both.
+    """
+    cur.execute("""
+        SELECT table_name, column_name
+          FROM information_schema.columns
+         WHERE table_schema = current_schema()
+           AND table_name IN ('items', 'item_rtdata')
+    """)
+    columns = {}
+    for table, column in cur.fetchall():
+        columns.setdefault(table, set()).add(column)
+    item_columns = columns.get("items", set())
+    runtime_columns = columns.get("item_rtdata", set())
+
+    if {"state", "nextcheck", "lastclock"} <= item_columns:
+        return ("", "i.state", "i.nextcheck", "i.lastclock", "i.error")
+    if {"state", "nextcheck", "lastclock"} <= runtime_columns:
+        return ("LEFT JOIN item_rtdata r ON r.itemid = i.itemid",
+                "COALESCE(r.state, 0)", "r.nextcheck", "r.lastclock",
+                "r.error")
+    raise RuntimeError("cannot find state/nextcheck/lastclock on items "
+                       "or item_rtdata")
+
+
 def show_queue(item_ids, db_name):
     """Print the Zabbix poller backlog straight from the database."""
     try:
@@ -141,21 +170,26 @@ def show_queue(item_ids, db_name):
         return
     try:
         cur = conn.cursor()
+        join_sql, state_sql, next_sql, last_sql, error_sql = \
+            _runtime_columns(cur)
         cur.execute("SELECT count(*) FROM hosts WHERE status = 0")
         enabled_hosts = cur.fetchone()[0]
-        cur.execute("SELECT count(*) FROM items WHERE status = 0 AND state = 0")
+        cur.execute("""
+            SELECT count(*) FROM items i %s
+             WHERE i.status = 0 AND %s = 0
+        """ % (join_sql, state_sql))
         enabled_items = cur.fetchone()[0]
         cur.execute("""
-            SELECT count(*) FROM items
-             WHERE status = 0 AND state = 0 AND nextcheck > 0
-               AND nextcheck < extract(epoch FROM now()) - 120
-        """)
+            SELECT count(*) FROM items i %s
+             WHERE i.status = 0 AND %s = 0 AND %s > 0
+               AND %s < extract(epoch FROM now()) - 120
+        """ % (join_sql, state_sql, next_sql, next_sql))
         overdue = cur.fetchone()[0]
         cur.execute("""
-            SELECT count(*) FROM items
-             WHERE status = 0 AND state = 0 AND type <> 18
-               AND nextcheck = 0
-        """)
+            SELECT count(*) FROM items i %s
+             WHERE i.status = 0 AND %s = 0 AND i.type <> 18
+               AND %s = 0
+        """ % (join_sql, state_sql, next_sql))
         unscheduled = cur.fetchone()[0]
 
         print("\n=== Queue ===")
@@ -164,15 +198,15 @@ def show_queue(item_ids, db_name):
 
         cur.execute("""
             SELECT h.host, count(*) AS overdue,
-                   min(to_timestamp(i.lastclock)) AS oldest
-              FROM items i
+                   min(to_timestamp(%s)) AS oldest
+              FROM items i %s
               JOIN hosts h ON h.hostid = i.hostid
-             WHERE i.status = 0 AND i.state = 0 AND i.nextcheck > 0
-               AND i.nextcheck < extract(epoch FROM now()) - 120
+             WHERE i.status = 0 AND %s = 0 AND %s > 0
+               AND %s < extract(epoch FROM now()) - 120
              GROUP BY h.host
              ORDER BY overdue DESC
              LIMIT 15
-        """)
+        """ % (last_sql, join_sql, state_sql, next_sql, next_sql))
         rows = cur.fetchall()
         if rows:
             print("  hosts with the largest overdue backlog:")
@@ -184,15 +218,16 @@ def show_queue(item_ids, db_name):
 
         if item_ids:
             cur.execute("""
-                SELECT h.host, i.key_, i.status, i.state, i.delay,
-                       to_timestamp(i.lastclock) AS last_seen,
-                       to_timestamp(i.nextcheck) AS next_check,
-                       i.interfaceid, left(i.error, 160) AS error
-                  FROM items i
+                SELECT h.host, i.key_, i.status, %s, i.delay,
+                       to_timestamp(%s) AS last_seen,
+                       to_timestamp(%s) AS next_check,
+                       i.interfaceid, left(%s, 160) AS error
+                  FROM items i %s
                   JOIN hosts h ON h.hostid = i.hostid
-                 WHERE i.itemid = ANY(%s)
+                 WHERE i.itemid = ANY(%%s)
                  ORDER BY h.host, i.key_
-            """, (list(item_ids),))
+            """ % (state_sql, last_sql, next_sql, error_sql, join_sql),
+                (list(item_ids),))
             rows = cur.fetchall()
             if rows:
                 print("  target schedule:")

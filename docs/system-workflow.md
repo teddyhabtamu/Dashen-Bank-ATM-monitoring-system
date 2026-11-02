@@ -541,16 +541,21 @@ is not enough.
 > Zabbix database directly:
 >
 > ```sql
-> SELECT h.host, i.key_, i.status, i.state, i.delay, i.timeout,
->        to_timestamp(i.lastclock) AS last_seen,
->        to_timestamp(i.nextcheck) AS next_check,
->        i.interfaceid, left(i.error, 160) AS error
+> SELECT h.host, i.key_, i.status, r.state, i.delay, i.timeout,
+>        to_timestamp(r.lastclock) AS last_seen,
+>        to_timestamp(r.nextcheck) AS next_check,
+>        i.interfaceid, left(r.error, 160) AS error
 > FROM items i
 > JOIN hosts h ON h.hostid = i.hostid
+> LEFT JOIN item_rtdata r ON r.itemid = i.itemid
 > WHERE h.host IN ('ATM-TEST-GRG', 'ATM-TEST-NCR')
 >   AND i.key_ IN ('atm.xfs.cdm', 'atm.parts')
 > ORDER BY h.host, i.key_;
 > ```
+>
+> Zabbix 6.4 keeps the runtime fields in `item_rtdata`; `items` holds the
+> configuration. A query against `items.state` or `items.nextcheck` fails with
+> `column "state" does not exist`. Use the join above.
 >
 > `nextcheck` far in the past with an old `lastclock` means the poller queue is
 > behind. `nextcheck` current with an old `lastclock` means the check is being
