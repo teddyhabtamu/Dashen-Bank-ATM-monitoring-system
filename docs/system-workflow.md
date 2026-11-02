@@ -505,23 +505,42 @@ is not enough.
 
 1. Zabbix polls each ATM’s SNMP and agent items.
 2. Triggers evaluate thresholds and create problems.
-3. `state-manager` polls Zabbix every 30 seconds for each active ATM:
+3. `state-manager` polls Zabbix every 15 seconds for each active ATM:
    - vendor status keys
    - cassette levels
    - XFS keys
    - `atm.parts` and `atm.part.*` for NCR WMI
-   - agent interface availability
-4. It debounces a new state for 3 consecutive polls before writing it.
+   - the **agent** interface availability for XFS/WMI hosts; the **SNMP**
+     interface only for legacy SNMP state
+4. It debounces a new state for 2 consecutive polls before writing it (~30s
+   after Zabbix receives the change; one unlucky poll is still rejected).
 5. It updates `atm_current_state` and closes/opens `atm_state_history` segments.
 6. Portal pages and Grafana read the state; the portal shows the eight NetXMS
-   states with matching colours.
+   states with matching colours. While `atm_current_state.updated_at` is less
+   than `STATE_MANAGER_FRESH_SECONDS` old (default 120s), the portal treats the
+   debounced persisted state as authoritative and does not recompute the badge
+   from a single raw snapshot.
+
+> **Fleet-size note.** The 15s cadence is intended for the UAT test fleet. The
+> current state manager makes three Zabbix API calls per ATM, so a 1,201-host
+> fleet at 15s would be roughly 3,600 calls per cycle. Batch the host/item
+> reads before using this cadence in production.
 
 State rules:
 
-- `availability == 2` → `UNREACHABLE`
-- `availability == 1` and no usable telemetry → `UNKNOWN` (collector may be missing)
+- Fresh telemetry from the state's own source → interpret the device values.
+  A current XFS/WMI reading is stronger evidence than a lagging
+  `interface.available` flag; this is what stops a healthy GRG from reading
+  "Agent Disconnected" because its unused SNMP interface is down.
+- Stale/absent telemetry **and** the relevant interface `available == 2` →
+  `UNREACHABLE`
+- Stale/absent telemetry and no positive transport verdict → `UNKNOWN`;
+  absence of telemetry is not proof the machine is down.
 - Zabbix API failure → leave the last known state unchanged, do not invent an outage
 - Registered but absent in Zabbix → `NOT_PROVISIONED`
+- The GRG probe's `CheckPrinter` is an auxiliary device. Its hardware error is
+  shown in the hardware panel but does not by itself make the ATM
+  `HARDWARE_FAULT`; only a service identified as the receipt printer does.
 
 ### 6.2 EJ search and journal
 

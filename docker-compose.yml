@@ -229,6 +229,11 @@ services:
       ATM_IMAGE_BRIDGE_TOKEN: "${ATM_IMAGE_BRIDGE_TOKEN:-}"
       BASE_URL: "${BASE_URL:-http://localhost:8888}"
       ES_HOST: "${DATA_VM_IP}:9200"
+      # How long the portal trusts the state manager's persisted state before
+      # falling back to a live Zabbix recomputation. Keep this comfortably
+      # above the state-manager poll interval (15s) so a short API outage does
+      # not hand the badge back to unconfirmed raw telemetry.
+      STATE_MANAGER_FRESH_SECONDS: "${STATE_MANAGER_FRESH_SECONDS:-120}"
       ES_INDEX: "atm-ej-live-*,atm-electronic-journal"
       ADMIN_USER: "${ADMIN_USER}"
       ADMIN_PASS: "${ADMIN_PASS}"
@@ -410,7 +415,12 @@ services:
       ZBX_URL: "http://zabbix-web:8080/api_jsonrpc.php"
       ZBX_USER: "${ZBX_USER:-Admin}"
       ZBX_PASS: "${ZBX_PASS}"
-      STATE_POLL_INTERVAL: "30"
+      # 15s poll + 2 consecutive readings settles a real change in ~30s while
+      # still rejecting a single unlucky Zabbix poll. The old 30s x 3 took
+      # 90s before the portal was even allowed to write the new state.
+      STATE_POLL_INTERVAL: "${STATE_POLL_INTERVAL:-15}"
+      STATE_CONFIRMATIONS: "${STATE_CONFIRMATIONS:-2}"
+      STATE_DEBUG: "${STATE_DEBUG:-}"
     depends_on:
       - postgres
     logging:

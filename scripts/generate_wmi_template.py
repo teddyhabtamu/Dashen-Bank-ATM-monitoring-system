@@ -128,7 +128,7 @@ def main():
     _el(master, "name", "ATM Parts — full WMI tree")
     _el(master, "type", "ZABBIX_AGENT")
     _el(master, "key", "atm.parts")
-    _el(master, "delay", "5m")
+    _el(master, "delay", "1m")
     _el(master, "history", "7d")
     _el(master, "trends", "0")
     _el(master, "value_type", "TEXT")

@@ -71,3 +71,20 @@ def test_registry_overlay_uses_a_fresh_snapshot(monkeypatch):
     out = admin.batch_fetch_live_states(
         [{'atm_id': 'ATM-TEST-GRG', 'vendor': 'GRG'}])
     assert out['ATM-TEST-GRG'][0] == 'IN_SERVICE'
+
+
+def test_a_live_state_manager_check_wins_over_raw_recompute(monkeypatch):
+    """The persisted state is already debounced by the state manager.
+
+    Recomputing from one fresh-but-unconfirmed snapshot bypassed the
+    confirmation window and made the badge flicker. While the state manager is
+    reporting, the portal must leave its committed state alone.
+    """
+    monkeypatch.setattr(admin, 'ENABLE_SIMULATORS', False)
+    monkeypatch.setattr(admin, 'fetch_zabbix_snapshot',
+                        lambda atm_id: snapshot(XFS_METRICS, 30))
+    out = admin.batch_fetch_live_states([
+        {'atm_id': 'ATM-TEST-GRG', 'vendor': 'GRG',
+         'state_checked_recently': True},
+    ])
+    assert out == {}, 'do not bypass the debounced persisted state'

@@ -53,9 +53,10 @@ def sm():
     mod._pending.clear()
 
 
-def test_default_requires_three_consecutive_readings(sm):
-    assert sm.STATE_CONFIRMATIONS == 3, (
-        'two is not enough to survive a single unlucky poll; one is no debounce')
+def test_default_requires_two_consecutive_readings(sm):
+    assert sm.STATE_CONFIRMATIONS == 2, (
+        'one is no debounce; two rejects a single unlucky poll and settles '
+        'a real change within the 30s operator budget')
 
 
 def test_a_single_sighting_is_never_believed(sm):
@@ -64,19 +65,20 @@ def test_a_single_sighting_is_never_believed(sm):
     assert seen == 1
 
 
-def test_two_sightings_still_not_enough(sm):
+def test_two_sightings_settle(sm):
     sm._debounced('ATM-1', 'IN_SERVICE', 'UNREACHABLE')
     ok, seen = sm._debounced('ATM-1', 'IN_SERVICE', 'UNREACHABLE')
-    assert ok is False
+    assert ok is True
     assert seen == 2
 
 
-def test_three_sightings_settle(sm):
+def test_a_settled_candidate_does_not_need_a_third_poll(sm):
+    committed = 'IN_SERVICE'
     for _ in range(2):
-        sm._debounced('ATM-1', 'IN_SERVICE', 'UNREACHABLE')
-    ok, seen = sm._debounced('ATM-1', 'IN_SERVICE', 'UNREACHABLE')
-    assert ok is True
-    assert seen == 3
+        settled, _ = sm._debounced('ATM-1', committed, 'UNREACHABLE')
+        if settled:
+            committed = 'UNREACHABLE'
+    assert committed == 'UNREACHABLE'
 
 
 def test_flapping_is_suppressed_entirely(sm):

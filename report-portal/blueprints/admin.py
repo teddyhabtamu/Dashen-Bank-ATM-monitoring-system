@@ -14,6 +14,10 @@ from evidence import raw_info
 from state_summary import merge_live_in_service
 from helpers import STATE_ORDER, state_label, state_colour
 from scheduler import REPORT_TYPE_LABELS
+from zabbix_modules.state_freshness import (
+    item_delay_seconds as _item_delay_seconds,
+    source_freshness,
+)
 from zabbix_modules.xfs_metrics import DISPENSE_UNITS, is_xfs, normalize
 from log_safety import safe_log
 from net_url import service_url
@@ -385,17 +389,12 @@ def fetch_agent_status(atm_id):
     )
 
 
-def _item_delay_seconds(value):
-    """Zabbix item delay ('30s', '1m', '5m', '1m/1m') -> seconds."""
-    match = re.match(r'\s*(\d+)\s*([smhd]?)', str(value or ''))
-    if not match:
-        return 60
-    number = int(match.group(1))
-    unit = match.group(2) or 's'
-    return max(1, number * {'s': 1, 'm': 60, 'h': 3600, 'd': 86400}[unit])
-
-
-STATE_SOURCE_KEYS = ('atm.status', 'atm.net.link', 'atm.cash.cassette1')
+STATE_MANAGER_FRESH_SECONDS = int(
+    os.environ.get('STATE_MANAGER_FRESH_SECONDS', '120'))
+STATE_MANAGER_FRESH_SQL = (
+    "(s.updated_at > NOW() - INTERVAL '%d seconds')"
+    % STATE_MANAGER_FRESH_SECONDS
+)
 
 
 def _state_source_freshness(snapshot, now=None):
@@ -409,23 +408,10 @@ def _state_source_freshness(snapshot, now=None):
     """
     if not snapshot:
         return None, None
-    metrics = snapshot.get('metrics') or {}
-    clocks = snapshot.get('clocks') or {}
-    delays = snapshot.get('delays') or {}
-    if is_xfs(metrics):
-        keys = [k for k in metrics if str(k).startswith('atm.xfs.')]
-    elif metrics.get('atm.parts') not in (None, ''):
-        keys = ['atm.parts']
-    else:
-        keys = [k for k in STATE_SOURCE_KEYS if metrics.get(k) not in (None, '')]
-    seen = [(clocks.get(k) or 0, delays.get(k)) for k in keys]
-    seen = [(clock, delay) for clock, delay in seen if clock]
-    if not seen:
-        return None, None
-    newest = max(clock for clock, _delay in seen)
-    cadence = max(_item_delay_seconds(delay) for _clock, delay in seen)
-    allowed = min(900, max(120, int(cadence * 2.5) + 60))
-    return max(0, int((now or time.time()) - newest)), allowed
+    return source_freshness(snapshot.get('metrics') or {},
+                            snapshot.get('clocks') or {},
+                            snapshot.get('delays') or {},
+                            now=now)
 
 
 def live_state_is_current(snapshot, now=None):
@@ -561,6 +547,13 @@ def batch_fetch_live_states(atms):
     def fetch_one(atm):
         atm_id = atm['atm_id']
         vendor = atm.get('vendor', 'NCR')
+        # The state manager is the authority while it is alive. Recomputing a
+        # fresh-but-raw state here bypassed its confirmation window, so a
+        # single transient part error made the UI flip while the persisted
+        # state was still deliberately holding. Use the live overlay only as a
+        # fallback when the state manager itself has gone quiet.
+        if atm.get('state_checked_recently'):
+            return (atm_id, None, None)
         if ENABLE_SIMULATORS:
             port = atm.get('sim_port')
             if not port:
@@ -802,7 +795,8 @@ def atm_list():
         page = min(page, total_pages)
 
         cur.execute(f"""SELECT l.*, s.state, s.last_seen AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa' as last_seen,
-                               s.state_changed_at
+                               s.state_changed_at,
+                               COALESCE({STATE_MANAGER_FRESH_SQL}, FALSE) AS state_checked_recently
                         {from_sql}
                         {list_where}
                         ORDER BY COALESCE(NULLIF(l.terminal_id, ''), l.atm_id), l.atm_id
@@ -847,6 +841,11 @@ def atm_list():
     live_states = batch_fetch_live_states(atms)
     for atm in atms:
         atm['stored_state'] = atm.get('state')
+        if atm.get('state_checked_recently'):
+            # Debounced state from the state manager; do not override it with
+            # an unconfirmed raw recomputation. The badge is stable on purpose.
+            atm['live'] = False
+            continue
         ls = live_states.get(atm['atm_id'])
         if ls:
             atm['state'] = ls[0]
@@ -956,11 +955,12 @@ def atm_detail(atm_id):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute("""
+            cur.execute(f"""
                 SELECT l.*,
                     COALESCE(s.state, 'UNKNOWN') as current_state,
                     s.state_changed_at,
-                    s.last_seen AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa' as last_seen
+                    s.last_seen AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Addis_Ababa' as last_seen,
+                    COALESCE({STATE_MANAGER_FRESH_SQL}, FALSE) AS state_checked_recently
                 FROM atm_locations l
                 LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id
                 WHERE l.atm_id = %s
@@ -1000,13 +1000,17 @@ def atm_detail(atm_id):
         # to disagree.
         data_stale = snapshot_is_stale(hw_source, agent_status)
 
-        # Override current_state with live data for consistency
-        if metrics and not data_stale:
+        # The state manager owns the badge while it is alive: its confirmation
+        # window is what stops a single transient part error from flipping the
+        # UI. Recompute from raw telemetry only as a fallback when the state
+        # manager itself has gone quiet.
+        if (metrics and not data_stale
+                and not atm.get('state_checked_recently')):
             live_state = determine_live_state(vendor, metrics)
             if live_state:
                 atm['current_state'] = live_state
                 atm['live'] = True
-        elif 'live' not in atm:
+        else:
             atm['live'] = False
         atm['data_stale'] = data_stale
 

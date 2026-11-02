@@ -11,7 +11,8 @@ helpers always did this; the SNMP branch did not, and it produced the portal's
 oldest lie — four red "Fault" chips on ATMs nobody had ever measured.
 """
 
-from zabbix_modules.xfs_metrics import DISPENSE_UNITS, is_xfs
+from zabbix_modules.xfs_metrics import (DISPENSE_UNITS, is_receipt_printer,
+                                        is_xfs, xfs_service)
 
 
 def _wmi_chip(m, *part_names):
@@ -300,6 +301,11 @@ def _xfs_hardware(m):
     if printer == 'unknown':
         printer = _worst(_wmi_chip(m, 'Print Head', 'Paper'),
                          _wmi_dev(m, 'RPNT-01-UsbThermal'))
+    # The GRG probe opens CheckPrinter, not the customer receipt printer. Do
+    # not mislabel its fault as the receipt printer's, and do not let the
+    # label hide which physical device the chip describes.
+    printer_name = ('Printer' if is_receipt_printer(xfs_service(m, 'ptr'))
+                    else 'Check printer')
     pin = _xfs_device_chip(m, 'atm.xfs.pin.device_status')
     if pin == 'unknown':
         pin = _wmi_chip(m, 'PinPad')
@@ -318,7 +324,7 @@ def _xfs_hardware(m):
         ('Cabinet door', _xfs_door_chip(m, 'atm.xfs.siu.cabinet_door')),
         ('Tamper', _xfs_alarm_chip(m, 'atm.xfs.siu.tamper')),
         ('Card reader', card),
-        ('Printer', printer),
+        (printer_name, printer),
         ('PIN pad', pin),
         ('Reject bin', reject),
         ('Network', network),

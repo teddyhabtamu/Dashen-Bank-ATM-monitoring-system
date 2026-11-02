@@ -47,8 +47,8 @@ dashboards, alerts, and reports stay the same. See
 ┌─────────────────────────────────────────────────────────────┐
 │  COLLECTION & STORAGE                                       │
 │                                                             │
-│  Zabbix server    → polls hardware status every 30s         │
-│  state-manager    → polls sims, updates atm_current_state   │
+│  Zabbix server    → polls hardware status (per-item cadence)│
+│  state-manager    → polls Zabbix, updates atm_current_state │
 │  Filebeat         → ships EJ logs to OpenSearch             │
 │  PostgreSQL       → stores transactions + ATM locations     │
 └─────────────────────────────────────────────────────────────┘
@@ -82,7 +82,7 @@ dashboards, alerts, and reports stay the same. See
 | Container | What it does | Reads from | Writes to | Polled/used by |
 |---|---|---|---|---|
 | `atm-sim-engine` | Simulates ATM hardware (cassettes, doors, printers, cameras, sensors) for **every** ATM in `atm_locations`, each on its own HTTP port. Serves NCR- or GRG-shaped OIDs based on the ATM's vendor (non-GRG → NCR schema). Ports are assigned per ATM from the `1161-2500` range (code defaults `SIM_PORT_MIN`/`SIM_PORT_MAX` in `simulators/common.py`) | `atm_locations` (fleet + each ATM's `sim_port`, `vendor`) | Nothing persistent — in-memory state per ATM | Zabbix (HTTP agent items, every 30s), `state-manager` |
-| `state-manager` | Polls each simulated ATM every ~30s and keeps the `atm_current_state` table fresh so Grafana/the portal show live state (IN_SERVICE, faults, etc.) | `atm-sim-engine` HTTP + `atm_locations` | `atm_current_state` table | Grafana, Report Portal |
+| `state-manager` | Polls Zabbix every 15s and keeps the `atm_current_state` table fresh with a debounced operator state (IN_SERVICE, faults, etc.). Fresh XFS/WMI telemetry beats a lagging interface flag; only the transport that carries the state is consulted. | Zabbix API + `atm_locations` | `atm_current_state`, `atm_state_history` | Grafana, Report Portal |
 | `zabbix-server` | Polls all monitoring items, evaluates triggers, fires alerts | HTTP from `atm-sim-engine`, Zabbix Agent on host (ATM-001) | `zabbix-db` (PostgreSQL) | Grafana (via Zabbix data source), GLPI (via webhook) |
 | `zabbix-web` | Web UI for Zabbix configuration | `zabbix-db` | — | Browser (port 8080) |
 | Zabbix Agent (on host, not containerized) | Represents ATM-001 as a "local machine"; reports real laptop uptime/memory | Host OS | Sent to `zabbix-server` | Zabbix (active/passive checks) |

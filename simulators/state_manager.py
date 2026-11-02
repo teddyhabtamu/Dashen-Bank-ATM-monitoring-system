@@ -10,7 +10,8 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 from zabbix_modules.status_rules import interpret_state
-from zabbix_modules.xfs_metrics import XFS_STATE_KEYS, normalize
+from zabbix_modules.state_freshness import source_freshness
+from zabbix_modules.xfs_metrics import XFS_STATE_KEYS, is_xfs, normalize
 
 DB_HOST = os.environ.get('DB_HOST', 'postgres')
 DB_NAME = os.environ.get('DB_NAME', 'zabbix')
@@ -21,7 +22,8 @@ ZABBIX_URL = os.environ.get('ZBX_URL') or os.environ.get('ZABBIX_URL', 'http://z
 ZABBIX_USER = os.environ.get('ZBX_USER') or os.environ.get('ZABBIX_USER', 'Admin')
 ZABBIX_PASS = os.environ.get('ZBX_PASS') or os.environ.get('ZABBIX_PASS', 'zabbix')
 
-POLL_INTERVAL = int(os.environ.get('STATE_POLL_INTERVAL', '30'))
+POLL_INTERVAL = int(os.environ.get('STATE_POLL_INTERVAL', '15'))
+STATE_DEBUG = os.environ.get('STATE_DEBUG', '').lower() in ('1', 'true', 'yes', 'on')
 
 STATE_KEYS = [
     'atm.status', 'atm.cash.cassette1', 'atm.cash.cassette2',
@@ -76,12 +78,24 @@ def zbx_call(method, params, auth):
         return None
 
 
-def _fresh_values(items):
-    # Zabbix reports lastvalue "0" for items that never collected — use
-    # lastclock to tell those apart from genuine zeros, otherwise a dataless
-    # host reads OUT_OF_CASH instead of UNREACHABLE.
-    return {it['key_']: (it.get('lastvalue') if str(it.get('lastclock')) != '0' else None)
-            for it in items}
+def _fresh_meta(items):
+    """Split Zabbix items into values, clocks and delays.
+
+    Zabbix reports lastvalue "0" for items that never collected — use
+    lastclock to tell those apart from genuine zeros, otherwise a dataless
+    host reads OUT_OF_CASH instead of UNREACHABLE.
+    """
+    values, clocks, delays = {}, {}, {}
+    for item in items:
+        key = item['key_']
+        try:
+            clock = int(item.get('lastclock') or 0)
+        except (TypeError, ValueError):
+            clock = 0
+        values[key] = item.get('lastvalue') if clock else None
+        clocks[key] = clock
+        delays[key] = item.get('delay')
+    return values, clocks, delays
 
 
 # Sentinel: the Zabbix API could not answer. Distinct from "no data" and from
@@ -90,58 +104,134 @@ def _fresh_values(items):
 # tool crying wolf about itself, which is worse than reporting nothing.
 FETCH_FAILED = object()
 
+AGENT_INTERFACE = 1
+SNMP_INTERFACE = 2
+
+
+def _interface_availability(interfaces, interface_type):
+    """Zabbix's verdict for one interface type (1 up, 2 down, 0 unknown)."""
+    for iface in interfaces or ():
+        try:
+            if int(iface.get('type', -1)) != interface_type:
+                continue
+        except (TypeError, ValueError):
+            continue
+        value = iface.get('available')
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _relevant_availability(metrics, interfaces):
+    """Pick the transport that actually carries the state, never the first one.
+
+    A host usually has two interfaces: SNMP (type 2) and Zabbix agent (type 1).
+    The old code took whichever interface Zabbix happened to return first and
+    treated its ``available`` flag as proof the whole ATM was down. On the GRG
+    test host the SNMP interface can be unavailable while the XFS agent is
+    delivering fresh data, which is exactly how a healthy ATM became
+    "Agent Disconnected".
+
+    Returns ``(relevant, agent, snmp)`` so diagnostics can show both verdicts.
+    """
+    agent = _interface_availability(interfaces, AGENT_INTERFACE)
+    snmp = _interface_availability(interfaces, SNMP_INTERFACE)
+
+    if is_xfs(metrics) or (metrics or {}).get('atm.parts') not in (None, ''):
+        # GRG XFS and NCR WMI both ride the Zabbix agent.
+        chosen = agent if agent is not None else snmp
+        return chosen, agent, snmp
+
+    has_snmp_values = any((metrics or {}).get(key) not in (None, '')
+                          for key in ('atm.status', 'atm.net.link',
+                                      'atm.cash.cassette1'))
+    if has_snmp_values:
+        chosen = snmp if snmp is not None else agent
+        return chosen, agent, snmp
+
+    # No telemetry yet: prefer an interface that is demonstrably up. If both
+    # are down, either verdict proves the machine is unreachable.
+    if agent == 1 and snmp != 1:
+        return agent, agent, snmp
+    if snmp == 1 and agent != 1:
+        return snmp, agent, snmp
+    if agent == 2 and snmp != 2:
+        return snmp, agent, snmp
+    if snmp == 2 and agent != 2:
+        return agent, agent, snmp
+    return (agent if agent is not None else snmp), agent, snmp
+
 
 def fetch_host_metrics(auth, host):
-    """Return a metrics dict, None if the host is not in Zabbix, or FETCH_FAILED.
+    """Return ``(metrics, availability, source_age, source_allowed)``.
 
-    Also returns the agent interface availability Zabbix reports for the host, so
-    reachability comes from positive evidence rather than from the absence of
-    telemetry. interface.available: 1 available, 2 unavailable, 0 unknown.
+    ``metrics`` is None when the host is not in Zabbix and FETCH_FAILED when
+    the API did not answer.  ``availability`` is the verdict for the interface
+    that actually carries the state source (agent for XFS/WMI, SNMP for the
+    legacy OIDs).  ``source_age``/``source_allowed`` say whether the values are
+    still inside their own polling budget; a stale snapshot is not evidence of
+    the current state.
     """
     hosts = zbx_call('host.get',
-                     {'output': ['hostid'], 'selectInterfaces': ['available'],
+                     {'output': ['hostid'],
+                      'selectInterfaces': ['type', 'available', 'main', 'port'],
                       'filter': {'host': [host]}}, auth)
     if hosts is None:
-        return FETCH_FAILED, None
+        return FETCH_FAILED, None, None, None
     if not hosts:
-        return None, None
-    avail = None
-    for iface in hosts[0].get('interfaces') or []:
-        if iface.get('available') is not None:
-            avail = int(iface['available'])
-            break
+        return None, None, None, None
+    interfaces = hosts[0].get('interfaces') or []
     hostid = hosts[0]['hostid']
-    items = zbx_call('item.get', {'output': ['key_', 'lastvalue', 'lastclock'], 'hostids': [hostid],
+    items = zbx_call('item.get', {'output': ['key_', 'lastvalue', 'lastclock', 'delay'],
+                                  'hostids': [hostid],
                                   'filter': {'key_': STATE_KEYS}}, auth)
     if items is None:
-        return FETCH_FAILED, avail
-    merged = _fresh_values(items)
+        return FETCH_FAILED, None, None, None
+    merged, clocks, delays = _fresh_meta(items)
     # WMI (NCR agent) path: master + per-part dependents. `search` is
     # substring-based — 'atm.part.' matches dependents, never 'atm.parts'.
-    wmi = zbx_call('item.get', {'output': ['key_', 'lastvalue', 'lastclock'], 'hostids': [hostid],
+    wmi = zbx_call('item.get', {'output': ['key_', 'lastvalue', 'lastclock', 'delay'],
+                                'hostids': [hostid],
                                 'filter': {'key_': ['atm.parts']}}, auth) or []
-    deps = zbx_call('item.get', {'output': ['key_', 'lastvalue', 'lastclock'], 'hostids': [hostid],
+    deps = zbx_call('item.get', {'output': ['key_', 'lastvalue', 'lastclock', 'delay'],
+                                 'hostids': [hostid],
                                  'search': {'key_': 'atm.part.'}}, auth) or []
-    merged.update(_fresh_values(wmi + deps))
-    return normalize(merged), avail
+    wmi_values, wmi_clocks, wmi_delays = _fresh_meta(wmi + deps)
+    merged.update(wmi_values)
+    clocks.update(wmi_clocks)
+    delays.update(wmi_delays)
+    availability, _agent, _snmp = _relevant_availability(merged, interfaces)
+    age, allowed = source_freshness(merged, clocks, delays)
+    return normalize(merged), availability, age, allowed
 
 
-def determine_state(m, vendor='NCR', availability=None):
+def determine_state(m, vendor='NCR', availability=None, source_current=True):
     """State for a host Zabbix knows about.
 
-    availability is Zabbix's own agent-interface verdict. Only value 2
-    (unavailable) is treated as proof the machine is down. When Zabbix says the
-    agent is fine but no usable telemetry has arrived, the honest answer is
-    UNKNOWN - the collector may simply not be installed yet - not UNREACHABLE.
+    Fresh telemetry wins over the transport flag: ``interface.available``
+    records whichever poll most recently succeeded and can lag or describe the
+    SNMP interface while the agent is fine.  When the source is not current,
+    only a positive "unavailable" verdict is proof of an outage; absent or
+    stale telemetry is UNKNOWN, not UNREACHABLE.
     """
+    if source_current and m:
+        return interpret_state(vendor, m)
     if availability == 2:
         return 'UNREACHABLE'
-    if availability == 1 and not m:
+    if availability == 1:
         return 'UNKNOWN'
-    return interpret_state(vendor, m)
+    # No positive transport verdict. Do not turn "we have not measured this"
+    # into "the machine is down".
+    return 'UNKNOWN'
 
 
-# A state must be seen this many times in a row before it is believed.
+# A state must be seen this many times in a row before it is believed. Two
+# readings at the 15s poll settle a real change in ~30s; a single unlucky poll
+# is still rejected.
 #
 # Seen live on UAT 2026-10-17: ATM-TEST-NCR alternated UNREACHABLE ->
 # HARDWARE_FAULT -> UNREACHABLE on every 30s poll, for 24 hours. Zabbix's
@@ -153,7 +243,7 @@ def determine_state(m, vendor='NCR', availability=None):
 # number becomes meaningless - it churns the dashboard, and once triggers follow
 # state changes it pages someone every 30 seconds, which is how alerts get
 # ignored. Debouncing belongs here, once, rather than in every trigger.
-STATE_CONFIRMATIONS = int(os.environ.get('STATE_CONFIRMATIONS', '3'))
+STATE_CONFIRMATIONS = int(os.environ.get('STATE_CONFIRMATIONS', '2'))
 _pending = {}          # atm_id -> [candidate_state, consecutive_count]
 
 
@@ -187,7 +277,7 @@ def update_states(auth):
 
     results = []
     for atm_id, vendor in atms:
-        m, avail = fetch_host_metrics(auth, atm_id)
+        m, avail, source_age, source_allowed = fetch_host_metrics(auth, atm_id)
         if m is FETCH_FAILED:
             # Our monitoring path is broken, not the ATM. Leave the last known
             # state untouched rather than overwrite a healthy machine with an
@@ -199,7 +289,15 @@ def update_states(auth):
             # Registered here, absent in Zabbix: a provisioning gap, not an outage.
             state = 'NOT_PROVISIONED'
         else:
-            state = determine_state(m, vendor, avail)
+            source_current = (source_age is not None
+                              and source_allowed is not None
+                              and source_age <= source_allowed)
+            state = determine_state(m, vendor, avail,
+                                    source_current=source_current)
+            if STATE_DEBUG:
+                print(f"[STATE READ] {atm_id}: source {source_age}s/"
+                      f"{source_allowed}s current={source_current} "
+                      f"transport={avail} candidate={state}")
         results.append((atm_id, vendor or 'NCR', state))
 
     conn = get_db()

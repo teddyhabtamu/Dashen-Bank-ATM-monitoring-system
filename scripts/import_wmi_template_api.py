@@ -220,6 +220,10 @@ def main():
         if key in have:
             if field is None:
                 mid = have[key]['itemid']
+                # Keep an existing deployment in step with the state pipeline:
+                # a 5-minute WMI tree made a real NCR fault take up to six
+                # minutes to reach the portal even after this change.
+                call('item.update', {'itemid': mid, 'delay': '1m'}, auth)
                 continue
             tree, obj, leaf = field
             # Converge every dependent to the JavaScript step (see above):
@@ -234,7 +238,7 @@ def main():
         if field is None:
             mid = call('item.create', {
                 'name': iname, 'key_': key, 'hostid': tid,
-                'type': 0, 'value_type': 4, 'delay': '5m',
+                'type': 0, 'value_type': 4, 'delay': '1m',
                 'history': '7d', 'trends': '0'}, auth)['itemids'][0]
         else:
             tree, obj, leaf = field

@@ -23,6 +23,8 @@ from reportlab.lib.enums import TA_CENTER
 
 bp = Blueprint('report', __name__)
 EAT = timezone(timedelta(hours=3))
+STATE_MANAGER_FRESH_SECONDS = int(
+    os.environ.get('STATE_MANAGER_FRESH_SECONDS', '120'))
 
 
 def _window():
@@ -229,11 +231,14 @@ def api_charts():
         # doughnut. Fetch the fleet, then overlay live state below.
         STATUS_ATMS = """
             SELECT l.atm_id, COALESCE(l.vendor, 'NCR') as vendor,
-                   COALESCE(s.state, 'UNKNOWN') as state
+                   COALESCE(s.state, 'UNKNOWN') as state,
+                   COALESCE(s.updated_at > NOW() - INTERVAL
+                            '{fresh} seconds',
+                            FALSE) as state_checked_recently
             FROM atm_locations l
             LEFT JOIN atm_current_state s ON l.atm_id = s.atm_id
             WHERE LOWER(COALESCE(l.status, 'active')) = 'active'
-        """
+        """.format(fresh=STATE_MANAGER_FRESH_SECONDS)
         VENDOR = """
             SELECT COALESCE(l.vendor, 'Unknown') as vendor,
                 ROUND(100.0*SUM(CASE WHEN t.status='APPROVED' THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),1) as rate
@@ -271,11 +276,12 @@ def api_charts():
             try:
                 from blueprints.admin import batch_fetch_live_states
                 live = batch_fetch_live_states(
-                    [{'atm_id': r[0], 'vendor': r[1]} for r in status_atms])
+                    [{'atm_id': r[0], 'vendor': r[1],
+                      'state_checked_recently': r[3]} for r in status_atms])
             except Exception as e:
                 print(f"[CHARTS] live status overlay failed: {e!r}")
             counts = {}
-            for atm_id, _vendor, stored in status_atms:
+            for atm_id, _vendor, stored, _checked in status_atms:
                 hit = live.get(atm_id)
                 state = hit[0] if hit else (stored or 'UNKNOWN')
                 counts[state] = counts.get(state, 0) + 1

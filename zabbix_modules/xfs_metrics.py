@@ -9,6 +9,8 @@ reading can never be mistaken for zero.
 Stdlib only. No Zabbix, database or Flask imports.
 """
 
+import json
+
 XFS_MASTER_KEY = 'atm.xfs.cdm'
 XFS_PREFIX = 'atm.xfs.'
 
@@ -42,6 +44,39 @@ STATUS_SENTINELS = frozenset((-1, 255, 65535))
 def is_xfs(metrics):
     """True when the metrics dict came from the GRG XFS collector."""
     return any(str(k).startswith(XFS_PREFIX) for k in (metrics or {}))
+
+
+def xfs_service(metrics, class_key):
+    """Logical XFS service name for a class (``ptr``, ``idc``, ...).
+
+    The master ``atm.xfs.cdm`` item carries the probe's full JSON, including
+    which logical service answered.  That matters for the printer: the GRG
+    probe opens ``CheckPrinter``, which is not the receipt printer that serves
+    customers, so its hardware error must not put the whole ATM out of service.
+    """
+    raw = (metrics or {}).get(XFS_MASTER_KEY)
+    if not isinstance(raw, str) or not raw.strip():
+        return ''
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError):
+        return ''
+    node = payload.get(class_key) if isinstance(payload, dict) else None
+    if not isinstance(node, dict):
+        return ''
+    return str(node.get('service') or '').strip()
+
+
+def is_receipt_printer(service):
+    """True when a PTR service is the customer receipt printer.
+
+    An empty/unknown service keeps the historical mapping so old snapshots and
+    tests without the master JSON do not silently lose the printer reading.
+    """
+    name = str(service or '').strip().lower()
+    if not name:
+        return True
+    return 'receipt' in name or name in ('ptr', 'rptr')
 
 
 def _int(value, missing=()):
@@ -127,8 +162,14 @@ def normalize(metrics):
 
     ptr_device = _int(out.get('atm.xfs.ptr.device_status'), STATUS_SENTINELS)
     ptr_paper = _int(out.get('atm.xfs.ptr.paper_status'), STATUS_SENTINELS)
+    ptr_service = xfs_service(out, 'ptr')
     if ptr_device is not None:
-        out['atm.printer.receipt'] = 1 if _device_online(ptr_device) else 2
+        if is_receipt_printer(ptr_service):
+            out['atm.printer.receipt'] = 1 if _device_online(ptr_device) else 2
+        else:
+            # A check/journal printer is an auxiliary device. Its fault is
+            # shown in the hardware panel, but it is not an ATM outage.
+            out['atm.printer.check'] = 1 if _device_online(ptr_device) else 2
     if ptr_paper == 2:
         out['atm.printer.paper'] = 2
     elif ptr_paper in (0, 1):

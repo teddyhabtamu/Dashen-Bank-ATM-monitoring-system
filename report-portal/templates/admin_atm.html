@@ -165,7 +165,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
 
 <div class="summary-grid">
   <div class="summary-card"><div class="sc-val">{{ summary.registered }}</div><div class="sc-lbl">Registered ATMs</div></div>
-  <div class="summary-card"><div class="sc-val" style="color:#059669">{{ summary.in_service }}</div><div class="sc-lbl" title="Live Zabbix state for ATMs shown on this page; last known state for the rest.">In Service</div></div>
+  <div class="summary-card"><div class="sc-val" style="color:#059669">{{ summary.in_service }}</div><div class="sc-lbl" title="Debounced current state from the state manager. Live Zabbix telemetry is used only while the state manager is not reporting.">In Service</div></div>
   <div class="summary-card"><div class="sc-val" style="color:#1D4ED8">{{ summary.ncr }}</div><div class="sc-lbl">NCR ATMs</div></div>
   <div class="summary-card"><div class="sc-val" style="color:#7C3AED">{{ summary.grg }}</div><div class="sc-lbl">GRG ATMs</div></div>
 </div>
@@ -235,7 +235,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
         <th style="width:36px;padding:8px 6px;text-align:center"><input type="checkbox" id="selectAll" aria-label="Select all ATMs" onchange="toggleSelectAll()" style="cursor:pointer;width:15px;height:15px"></th>
         {% endif %}
         <th>Terminal ID</th><th>Name</th><th>Branch</th><th>City</th><th>Vendor</th><th>Model</th>
-         <th>Monitored</th><th title="Live Zabbix state when available; otherwise last known state.">Current State</th><th>Last Seen</th>{% if session.get('role') in ('admin', 'operator') %}<th></th>{% endif %}
+         <th>Monitored</th><th title="Debounced state from the state manager. A live Zabbix recomputation is used only when the state manager is not reporting.">Current State</th><th>State Checked</th>{% if session.get('role') in ('admin', 'operator') %}<th></th>{% endif %}
       </tr></thead>
       <tbody>
         {% if atms %}
@@ -362,7 +362,7 @@ tr.expanded .row-toggle { transform: rotate(90deg); color: #012169; }
           <span class="atm-card-meta-item"><span class="atm-card-label">Model</span> {{ d.model or '—' }}</span>
            <span class="atm-card-meta-item"><span class="atm-card-label">Install</span> {{ d.install_date or '—' }}</span>
            <span class="atm-card-meta-item"><span class="atm-card-label">State</span> {% if (d.status or 'active') != 'active' %}<span style="color:#64748B;font-weight:600">Retired</span>{% elif d.state %}<span class="state-pill" style="background:{{ d.state | state_colour }};color:{{ d.state | state_ink }}">{{ d.state | state_label }}</span>{% else %}—{% endif %}</span>
-           <span class="atm-card-meta-item"><span class="atm-card-label">Last Seen</span> {{ d.last_seen.strftime('%Y-%m-%d %H:%M') if d.last_seen else '—' }}</span>
+           <span class="atm-card-meta-item"><span class="atm-card-label">State Checked</span> {{ d.last_seen.strftime('%Y-%m-%d %H:%M') if d.last_seen else '—' }}</span>
           {% if d.latitude and d.longitude %}
           <span class="atm-card-meta-item"><span class="atm-card-label">Coords</span> {{ d.latitude }}, {{ d.longitude }}</span>
           {% endif %}
@@ -1579,6 +1579,35 @@ function escapeHtml(str){
 document.addEventListener('keydown', function(e){
   if(e.key === 'Escape'){ closeModal(); closeDeleteModal(); closeImportModal(); closeBulkDeleteModal(); }
 });
+
+// The state manager runs every 15s and the badge is deliberately debounced.
+// Without this, an operator had to reload the page to see a confirmed change
+// land - which is why a state that was already correct looked "slow".
+(function(){
+  var REFRESH_MS = 30000;
+  var SCROLL_KEY = 'atms:scroll';
+  if('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  try {
+    var saved = sessionStorage.getItem(SCROLL_KEY);
+    if(saved !== null){
+      sessionStorage.removeItem(SCROLL_KEY);
+      window.scrollTo(0, parseInt(saved, 10) || 0);
+    }
+  } catch(e) {}
+
+  function busy(){
+    if(document.hidden) return true;
+    if(document.querySelector('.modal-overlay.show, .kebab-menu.show, .cust-drop.show')) return true;
+    var el = document.activeElement;
+    return !!(el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+  }
+
+  setInterval(function(){
+    if(busy()) return;
+    try { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY)); } catch(e) {}
+    location.reload();
+  }, REFRESH_MS);
+})();
 initCustomSelects();
 initFlatpickr();
 </script>
