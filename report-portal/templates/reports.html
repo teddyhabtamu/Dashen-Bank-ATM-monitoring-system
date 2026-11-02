@@ -472,6 +472,12 @@ function syncPickerBounds() {
     endPicker.set('minDate', s || null);
     endPicker.set('maxDate', today);
   }
+  // flatpickr's set() filters the selection against the new bound and
+  // rewrites the input from whatever survives. The field values are the
+  // source of truth on this page, so put them back: an inverted range must
+  // read as "start must be on or before end", not as a blank field.
+  if (s) reportStart.value = s;
+  if (e) reportEnd.value = e;
 }
 function rangeDays() {
   var s = reportStart.value;
@@ -503,11 +509,21 @@ function refreshRangeLabel() {
     ? fmtReportDate(s) + ' \u2013 ' + fmtReportDate(e) + ' (EAT)' : '';
 }
 function setReportRange(start, end) {
+  // Bounds first, then the dates. Setting a date while the old bound is
+  // still active makes flatpickr drop it and clear the input: clicking
+  // "Today" after "Last month" used to lose the start date this way.
+  var today = eatToday();
+  if (startPicker) startPicker.set('maxDate', end || today);
+  if (endPicker) {
+    endPicker.set('minDate', start || null);
+    endPicker.set('maxDate', today);
+  }
   if (startPicker) startPicker.setDate(start, false);
   if (endPicker) endPicker.setDate(end, false);
+  // The pickers rewrite their inputs from their own selection; the preset
+  // is authoritative, so write the values last.
   reportStart.value = start;
   reportEnd.value = end;
-  syncPickerBounds();
   refreshRangeLabel();
   validateRange(false);
 }

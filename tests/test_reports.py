@@ -109,6 +109,31 @@ def test_a_select_populated_after_boot_gains_the_search_box():
     assert "searchInput.placeholder='Search…'" in BASE
 
 
+def test_range_presets_apply_bounds_before_dates():
+    """Clicking Today after Last month used to blank the start date.
+
+    flatpickr filters a date against the *old* maxDate and rewrites the input
+    when it falls outside. Bounds must therefore move first; the values are
+    written last so the pickers cannot clear them.
+    """
+    start = PAGE.index('function setReportRange(start, end) {')
+    fn = PAGE[start:PAGE.index('if (typeof flatpickr', start)]
+
+    assert fn.index("startPicker.set('maxDate'") < fn.index('startPicker.setDate')
+    assert fn.index("endPicker.set('minDate'") < fn.index('endPicker.setDate')
+    assert fn.rindex('reportStart.value = start') > fn.index('startPicker.setDate')
+    assert fn.rindex('reportEnd.value = end') > fn.index('endPicker.setDate')
+
+
+def test_sync_bounds_cannot_blank_a_manually_picked_date():
+    start = PAGE.index('function syncPickerBounds() {')
+    fn = PAGE[start:PAGE.index('function rangeDays()', start)]
+
+    assert 'if (s) reportStart.value = s;' in fn
+    assert 'if (e) reportEnd.value = e;' in fn
+    assert fn.index('if (s) reportStart.value = s;') > fn.index("startPicker.set('maxDate'")
+
+
 def test_reports_page_uses_a_shared_custom_picker():
     assert (PORTAL / 'static' / 'flatpickr.min.js').is_file()
     assert (PORTAL / 'static' / 'flatpickr.min.css').is_file()
