@@ -121,6 +121,45 @@ def describe_item(item, now, expected_interface=None):
         print("      value: %s" % text[:180])
 
 
+def show_queue(auth, now, limit=15):
+    """Print the oldest items that are past their next scheduled check.
+
+    If the ATM masters appear here, Zabbix is not ignoring them: its pollers
+    are behind, usually because unreachable synthetic/test hosts are consuming
+    every poller with slow SNMP or agent timeouts.
+    """
+    items = call("item.get", {
+        "output": ["itemid", "key_", "nextcheck", "delay", "lastclock",
+                   "status", "state"],
+        "selectHosts": ["host"],
+        "filter": {"status": 0},
+        "sortfield": "nextcheck",
+        "sortorder": "ASC",
+        "limit": 500,
+    }, auth) or []
+    overdue = []
+    for item in items:
+        try:
+            nextcheck = int(item.get("nextcheck") or 0)
+        except (TypeError, ValueError):
+            continue
+        if nextcheck and nextcheck < now - 60:
+            overdue.append(item)
+    overdue.sort(key=lambda entry: int(entry["nextcheck"]))
+    print("\n=== Oldest due items (Zabbix poller queue) ===")
+    if not overdue:
+        print("  none (all enabled items are within 60s of their due time)")
+        return
+    for item in overdue[:limit]:
+        host = (item.get("hosts") or [{}])[0].get("host", "?")
+        age = _age(item.get("lastclock"), now)
+        print("  %-28s %-42s delay=%-5s overdue=%ss age=%s" % (
+            str(host)[:28], str(item.get("key_", ""))[:42],
+            item.get("delay") or "-",
+            int(now - int(item["nextcheck"])),
+            "never" if age is None else "%ss" % age))
+
+
 def active_maintenances(maintenances, host, now):
     host_id = str(host.get("hostid"))
     group_ids = {str(g.get("groupid")) for g in host.get("hostgroups") or []}
@@ -145,6 +184,9 @@ def main():
     parser.add_argument("hosts", nargs="*",
                         default=["ATM-TEST-GRG", "ATM-TEST-NCR"],
                         help="Zabbix technical host names")
+    parser.add_argument("--queue", action="store_true",
+                        help="also show the oldest overdue items in Zabbix's "
+                             "poller queue")
     args = parser.parse_args()
 
     auth = call("user.login", {"username": USER, "password": PASSWORD})
@@ -234,6 +276,9 @@ def main():
             elif item_type == 20:
                 expected = snmp_interface
             describe_item(item, now, expected)
+
+    if args.queue:
+        show_queue(auth, now)
 
     call("user.logout", [], auth)
     return 0
