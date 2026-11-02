@@ -874,9 +874,15 @@ def report_outage(fmt):
             LEFT JOIN fault_type_map f
                 ON f.raw_fault_code = e.error_code AND f.vendor = l.vendor
             LEFT JOIN LATERAL (
+                -- Bounded to 7 days on purpose: the only consumer is the
+                -- cash-out test, which only needs to know whether the last
+                -- withdrawal is older than 48h.  Without the bound this
+                -- scanned each ATM's entire history and blew the 30s
+                -- statement timeout once the fleet passed ~1,100 ATMs.
                 SELECT t.recorded_at FROM atm_transactions_visible t
                 WHERE t.atm_id = s.atm_id AND t.status = 'APPROVED'
                   AND t.txn_type = 'WITHDRAWAL'
+                  AND t.recorded_at >= NOW() - INTERVAL '7 days'
                 ORDER BY t.recorded_at DESC LIMIT 1
             ) w ON true
             WHERE l.status = 'active' AND s.state <> 'IN_SERVICE'

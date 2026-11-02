@@ -446,6 +446,24 @@ The portal caches Zabbix for 60s and serves stale on hiccups by design.
 Check `docker logs report-portal --tail 20` for `Zabbix fetch exceeded`
 warnings; verify `zabbix-web` answers: `curl http://localhost:8080/api_jsonrpc.php`.
 
+### "Scheduled Daily ATM Outage report fails with statement timeout"
+
+`QueryCanceled: canceling statement due to statement timeout` on
+`/report/outage/pdf?atm=all` means the two per-ATM lookups (latest ERROR and
+latest approved WITHDRAWAL) are scanning too much history as the fleet grows.
+The report now bounds both to 7 days. Apply the supporting index once — it is
+built `CONCURRENTLY`, so the portal keeps serving while it runs:
+
+```bash
+cd /data/atm-monitoring
+docker compose exec -T report-portal python3 - < scripts/add_perf_indexes.py
+```
+
+Then restart the portal and use **Schedule Reports → Send now** to confirm.
+The script prints each index name and its size; the expected new index is
+`idx_atm_txn_atm_status_type_time` on
+`atm_transactions (atm_id, status, txn_type, recorded_at DESC)`.
+
 ---
 
 ## Where to Look for More Detail

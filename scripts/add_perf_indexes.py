@@ -5,6 +5,9 @@ Adds composite indexes the per-ATM time-window queries need at 1300-ATM
 scale (fleet table, KPI ranking, fault lists, availability trend):
 
   idx_atm_txn_atm_recorded   ON atm_transactions (atm_id, recorded_at DESC)
+  idx_atm_txn_atm_status_type_time
+                            ON atm_transactions (atm_id, status, txn_type,
+                                                 recorded_at DESC)
   idx_state_hist_atm_started ON atm_state_history (atm_id, started_at DESC)
 
 CONCURRENTLY = zero write locks (safe on the live UAT DB), hence autocommit
@@ -14,7 +17,6 @@ transaction blocks). IF NOT EXISTS = re-runnable.
 Usage: python3 scripts/add_perf_indexes.py   (uses DB_HOST/DB_NAME/DB_USER/DB_PASS)
 """
 import os, sys
-import sys
 import time
 
 import psycopg2
@@ -23,6 +25,13 @@ INDEXES = [
     ("idx_atm_txn_atm_recorded",
      "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_atm_txn_atm_recorded "
      "ON atm_transactions (atm_id, recorded_at DESC)"),
+    # The daily outage report looks up the latest ERROR and the latest
+    # approved WITHDRAWAL for every down ATM.  With only (atm_id,
+    # recorded_at) the planner walks the whole window per ATM; this index
+    # seeks straight to the status (and txn_type) and walks time backwards.
+    ("idx_atm_txn_atm_status_type_time",
+     "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_atm_txn_atm_status_type_time "
+     "ON atm_transactions (atm_id, status, txn_type, recorded_at DESC)"),
     ("idx_state_hist_atm_started",
      "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_state_hist_atm_started "
      "ON atm_state_history (atm_id, started_at DESC)"),
@@ -45,7 +54,7 @@ def _require_db_name():
             'DB_NAME is not set, so this cannot tell which database to work on.\n'
             'Run it inside a container that has it:\n'
             '    docker exec -i report-portal python3 - < scripts/add_perf_indexes.py\n'
-            'or set DB_NAME explicitly. Refusing to assume.\n' % NAME)
+            'or set DB_NAME explicitly. Refusing to assume.\n')
         sys.exit(2)
     return name
 
@@ -65,10 +74,17 @@ def main():
                 t0 = time.time()
                 cur.execute(ddl)
                 print(f'{name}: ensured in {time.time() - t0:.1f}s')
+            # New indexes are usable immediately, but the planner's column
+            # correlation stats predate them. Refresh once so the outage
+            # report picks the new path without waiting for autoanalyze.
+            t0 = time.time()
+            cur.execute("ANALYZE atm_transactions")
+            print(f'atm_transactions: analyzed in {time.time() - t0:.1f}s')
             cur.execute(
                 "SELECT indexname, pg_size_pretty(pg_relation_size(indexrelid)) "
                 "FROM pg_stat_user_indexes WHERE schemaname = 'public' "
-                "AND indexname IN ('idx_atm_txn_atm_recorded', 'idx_state_hist_atm_started') "
+                "AND indexname IN ('idx_atm_txn_atm_recorded', "
+                "'idx_atm_txn_atm_status_type_time', 'idx_state_hist_atm_started') "
                 "ORDER BY 1")
             for indexname, size in cur.fetchall():
                 print(f'{indexname}: {size}')

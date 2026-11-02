@@ -59,6 +59,30 @@ def test_outage_is_still_a_current_snapshot():
     assert "period='Current snapshot'" in ROUTES
 
 
+def test_outage_report_bounds_both_per_atm_lookups():
+    """Each down ATM used to scan its whole transaction history twice.
+
+    With ~1,200 imported ATMs that exceeded the 30s statement timeout, so the
+    scheduled Daily ATM Outage PDF failed every run. Both laterals must stay
+    inside a time window the (atm_id, recorded_at) index can serve.
+    """
+    start = ROUTES.index('def report_outage(fmt):')
+    block = ROUTES[start:ROUTES.index('headers = [', start)]
+
+    assert block.count("NOW() - INTERVAL '7 days'") == 2
+    err = block.index("t.status = 'ERROR'")
+    wd = block.index("t.status = 'APPROVED'")
+    assert 'NOW() - INTERVAL' in block[err:wd]
+    assert 'NOW() - INTERVAL' in block[wd:block.index(') w ON true', wd)]
+
+
+def test_outage_report_has_a_matching_composite_index():
+    script = (REPO / 'scripts' / 'add_perf_indexes.py').read_text()
+    assert 'idx_atm_txn_atm_status_type_time' in script
+    assert 'ON atm_transactions (atm_id, status, txn_type, recorded_at DESC)' in script
+    assert 'CREATE INDEX CONCURRENTLY' in script
+
+
 def test_reports_page_uses_a_shared_custom_picker():
     assert (PORTAL / 'static' / 'flatpickr.min.js').is_file()
     assert (PORTAL / 'static' / 'flatpickr.min.css').is_file()
