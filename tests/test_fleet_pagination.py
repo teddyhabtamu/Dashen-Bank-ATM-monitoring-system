@@ -113,6 +113,16 @@ def test_the_template_has_the_wide_table_contract():
     assert 'fleet-table' in html
     assert 'Rows per page' in html
     assert 'Showing' in html
+    assert 'id="fleetScrollControls"' in html
+
+
+def test_problem_and_next_action_stay_left_of_the_stage_matrix():
+    """The actionable columns used to sit after eight status columns, so
+    they were the first thing hidden by the horizontal scroll."""
+    html = _render()
+    assert html.index('Problem / next action') < html.index('Onboarding')
+    assert 'issue-text' in html
+    assert 'next-text' in html
 
 
 def test_pager_links_preserve_filter_search_and_page_size():

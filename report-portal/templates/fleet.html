@@ -11,12 +11,10 @@
 .fleet-tile.good .n{color:#059669}
 .filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:14px 20px;border-bottom:1px solid #EEF1F6}
 .filters .sp{margin-left:auto;font-size:11px;color:#94A3B8}
-.next{font-size:11px;color:#012169;font-weight:600}
 td.status{white-space:nowrap}
 td.atm{white-space:nowrap;font-weight:600}
 td.atm .sub{display:block;font-size:10px;color:#94A3B8;font-weight:500;margin-top:2px}
 td.stage{white-space:nowrap;vertical-align:top}
-td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:190px;overflow:hidden;text-overflow:ellipsis}
 .badge.ok{background:rgba(5,150,105,.1);color:#059669}
 .badge.warn{background:rgba(217,119,6,.1);color:#D97706}
 .badge.bad{background:rgba(220,38,38,.08);color:#DC2626}
@@ -30,6 +28,7 @@ td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:
 .table-toolbar .count{font-size:12px;color:#64748B}
 .table-toolbar .count strong{color:#0F172A}
 .table-toolbar .scroll-tip{display:flex;align-items:center;gap:6px;font-size:11px;color:#94A3B8}
+.table-toolbar .scroll-tip.is-hidden{display:none}
 .table-toolbar .page-size{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:11px;color:#64748B}
 .table-toolbar .page-size select{padding:5px 8px;border:1px solid #E4E9F1;border-radius:6px;font-size:11px;font-family:inherit;background:#fff}
 .fleet-scroll-top{overflow-x:auto;overflow-y:hidden;height:16px;background:#FAFBFC;border-bottom:1px solid #EEF1F6;scrollbar-width:thin}
@@ -48,9 +47,14 @@ td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:
 .fleet-table tbody tr:hover td:first-child{background:#EEF2FF}
 .fleet-table td.atm{min-width:220px;max-width:280px}
 .fleet-table td.atm .sub{max-width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fleet-table td.stage .d{max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fleet-table td.issue,.fleet-table td.next{max-width:300px;min-width:220px}
-.fleet-table .clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.fleet-table td.issue{min-width:260px;max-width:330px}
+.fleet-table .issue-text{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:#334155;line-height:1.35}
+.fleet-table .next-text{display:block;margin-top:3px;color:#012169;font-weight:600;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scroll-controls{display:flex;gap:4px}
+.scroll-controls.is-hidden{display:none}
+.scroll-btn{width:26px;height:24px;border:1px solid #E4E9F1;border-radius:6px;background:#fff;color:#475569;font-size:12px;line-height:1;cursor:pointer}
+.scroll-btn:hover{border-color:#012169;color:#012169}
+.scroll-btn:disabled{opacity:.35;cursor:default}
 .fleet-pager{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:12px 20px;border-top:1px solid #EEF1F6;flex-wrap:wrap}
 .fleet-pager .page{font-size:11px;color:#64748B;font-weight:600;margin-right:auto}
 .fleet-pager .btn{padding:6px 12px;font-size:11px}
@@ -194,7 +198,11 @@ td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:
   {% if rows %}
   <div class="table-toolbar">
     <div class="count">Showing <strong>{{ start_index + 1 }}–{{ end_index }}</strong> of <strong>{{ total }}</strong> ATMs</div>
-    <span class="scroll-tip"><i data-lucide="move-horizontal" style="width:13px;height:13px"></i> Scroll sideways for every stage column</span>
+    <span class="scroll-tip is-hidden" id="fleetScrollHint"><i data-lucide="move-horizontal" style="width:13px;height:13px"></i> Scroll sideways for every stage column</span>
+    <div class="scroll-controls is-hidden" id="fleetScrollControls">
+      <button type="button" class="scroll-btn" id="fleetScrollLeft" aria-label="Scroll table left" title="Scroll left">←</button>
+      <button type="button" class="scroll-btn" id="fleetScrollRight" aria-label="Scroll table right" title="Scroll right">→</button>
+    </div>
     <form method="get" action="/admin/onboard/fleet" class="page-size">
       <input type="hidden" name="filter" value="{{ filter_mode }}">
       {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
@@ -204,13 +212,12 @@ td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:
       </select>
     </form>
   </div>
-  <div class="fleet-scroll-top" id="fleetScrollTop" aria-hidden="true"><div id="fleetScrollTopInner"></div></div>
+  <div class="fleet-scroll-top is-hidden" id="fleetScrollTop" aria-hidden="true"><div id="fleetScrollTopInner"></div></div>
   <div class="fleet-table-wrap" id="fleetTableWrap" tabindex="0" role="region" aria-label="Fleet health table — scroll sideways for all columns">
   <table class="fleet-table" id="fleetTable">
     <thead>
-      <tr><th scope="col">ATM</th><th scope="col">State</th><th scope="col">Onboarding</th><th scope="col">Reporting</th><th scope="col">Provisioning</th>
-          <th scope="col">Identity</th><th scope="col">EJ</th><th scope="col">Images</th>
-          <th scope="col">What is wrong</th><th scope="col">Next action</th></tr>
+      <tr><th scope="col">ATM</th><th scope="col">State</th><th scope="col">Problem / next action</th><th scope="col">Onboarding</th><th scope="col">Reporting</th><th scope="col">Provisioning</th>
+          <th scope="col">Identity</th><th scope="col">EJ</th><th scope="col">Images</th></tr>
     </thead>
     <tbody>
       {% for r in rows %}
@@ -222,15 +229,16 @@ td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:
           {% if r.state %}<span class="state-pill" style="background:{{ r.state | state_colour }};color:{{ r.state | state_ink }}">{{ r.state | state_label }}</span>
           {% else %}<span class="sub">—</span>{% endif %}
         </td>
+        <td class="issue">
+          <div class="issue-text" title="{{ r.problem or r.blocker or '' }}">{{ r.problem or r.blocker or '—' }}</div>
+          <div class="next-text" title="{{ r.next_action or '' }}"><span aria-hidden="true">→</span> {{ r.next_action or '—' }}</div>
+        </td>
         <td class="status">{{ stage_badge(r.onboarding_status, r.onboarding_label) }}</td>
         <td class="status">{{ stage_badge(r.status, r.status_label) }}</td>
         {% for key in ('provisioning', 'identity', 'ej', 'images') %}
         {% set st = s.get(key) or {} %}
-        <td class="stage">{{ stage_badge(st.get('status', 'unknown'), st.get('label', 'Unknown'), st.get('detail', '')) }}
-          {% if st.get('detail') %}<span class="d" title="{{ st.get('detail') }}">{{ st.get('detail') }}</span>{% endif %}</td>
+        <td class="stage">{{ stage_badge(st.get('status', 'unknown'), st.get('label', 'Unknown'), st.get('detail', '')) }}</td>
         {% endfor %}
-        <td class="issue"><div class="clamp" title="{{ r.problem or r.blocker or '' }}">{{ r.problem or r.blocker or '—' }}</div></td>
-        <td class="next"><div class="clamp" title="{{ r.next_action or '' }}">{{ r.next_action or '—' }}</div></td>
       </tr>
       {% endfor %}
     </tbody>
@@ -292,19 +300,39 @@ td.stage .d{display:block;font-size:10px;color:#94A3B8;margin-top:2px;max-width:
   var top = document.getElementById('fleetScrollTop');
   var inner = document.getElementById('fleetScrollTopInner');
   var table = document.getElementById('fleetTable');
+  var controls = document.getElementById('fleetScrollControls');
+  var hint = document.getElementById('fleetScrollHint');
+  var left = document.getElementById('fleetScrollLeft');
+  var right = document.getElementById('fleetScrollRight');
   if(!wrap || !top || !inner || !table) return;
-  function measure(){
-    inner.style.width = table.scrollWidth + 'px';
+  function updateControls(){
     var hidden = table.scrollWidth <= wrap.clientWidth + 1;
     top.classList.toggle('is-hidden', hidden);
-    if(!hidden && top.scrollLeft !== wrap.scrollLeft) top.scrollLeft = wrap.scrollLeft;
+    if(controls) controls.classList.toggle('is-hidden', hidden);
+    if(hint) hint.classList.toggle('is-hidden', hidden);
+    if(left) left.disabled = hidden || wrap.scrollLeft <= 0;
+    if(right) right.disabled = hidden || wrap.scrollLeft + wrap.clientWidth >= table.scrollWidth - 1;
+  }
+  function measure(){
+    inner.style.width = table.scrollWidth + 'px';
+    updateControls();
+    if(!top.classList.contains('is-hidden') && top.scrollLeft !== wrap.scrollLeft){
+      top.scrollLeft = wrap.scrollLeft;
+    }
   }
   top.addEventListener('scroll', function(){
     if(wrap.scrollLeft !== top.scrollLeft) wrap.scrollLeft = top.scrollLeft;
   }, {passive:true});
   wrap.addEventListener('scroll', function(){
     if(top.scrollLeft !== wrap.scrollLeft) top.scrollLeft = wrap.scrollLeft;
+    updateControls();
   }, {passive:true});
+  if(left) left.addEventListener('click', function(){
+    wrap.scrollBy({left:-Math.max(240, wrap.clientWidth * .6), behavior:'smooth'});
+  });
+  if(right) right.addEventListener('click', function(){
+    wrap.scrollBy({left:Math.max(240, wrap.clientWidth * .6), behavior:'smooth'});
+  });
   window.addEventListener('resize', measure);
   if(window.ResizeObserver) new ResizeObserver(measure).observe(table);
   measure();
