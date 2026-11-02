@@ -833,6 +833,17 @@ function custApplyFilter(sel){
   });
   c.empty.style.display = visible ? 'none' : 'block';
 }
+// A dropdown lives inside its card's stacking context. Without raising the
+// card while the list is open, the next card paints over the list as soon as
+// the pointer leaves the trigger (reports grid, 2026-11-02).
+function custRaise(sel, on){
+  var card = sel && sel.closest && sel.closest('.report-card');
+  if(card) card.classList.toggle('select-open', !!on);
+}
+function custLowerAll(){
+  document.querySelectorAll('.report-card.select-open')
+    .forEach(function(c){ c.classList.remove('select-open'); });
+}
 function custEnsureSearch(sel){
   var c = sel && sel._cust;
   if(!c || c.search || sel.length <= 6) return;
@@ -879,6 +890,7 @@ function refreshCustomSelect(sel){
         o.classList.add('sel');
         c.trig.classList.remove('open');
         c.drop.classList.remove('show');
+        custRaise(sel, false);
         sel.dispatchEvent(new Event('change'));
       });
       c.drop.appendChild(o);
@@ -915,16 +927,18 @@ function initCustomSelects(){
         var already=drop.classList.contains('show');
         document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});
         document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')});
+        custLowerAll();
         if(!already){
           var rect=trig.getBoundingClientRect();
           if(window.innerHeight-rect.bottom<180){drop.classList.add('up');trig.classList.add('up')}
           else{drop.classList.remove('up');trig.classList.remove('up')}
           drop.classList.add('show'); trig.classList.add('open');
+          custRaise(sel, true);
         }
       });
       trig.addEventListener('keydown',function(e){
         if(e.key==='Enter'||e.key===' '){e.preventDefault();trig.click();}
-        else if(e.key==='Escape'){drop.classList.remove('show');trig.classList.remove('open');trig.focus();}
+        else if(e.key==='Escape'){drop.classList.remove('show');trig.classList.remove('open');custRaise(sel, false);trig.focus();}
       });
     }catch(err){
       // Never let one bad select break the rest of the page: drop the
@@ -936,6 +950,7 @@ function initCustomSelects(){
   document.addEventListener('click',function(){
     document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});
     document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')});
+    custLowerAll();
   });
 }
 initCustomSelects();

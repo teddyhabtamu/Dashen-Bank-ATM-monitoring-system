@@ -166,6 +166,17 @@ def test_the_page_links_to_scheduled_reports():
     assert 'Schedule reports' in PAGE
 
 
+def test_an_open_dropdown_keeps_its_card_above_the_next_one():
+    """The shared select list is inside the card's stacking context.
+
+    Without raising the card while the list is open, the next card painted
+    over the lower options as soon as the pointer left the trigger.
+    """
+    assert '.report-card.select-open' in PAGE
+    assert 'custRaise(sel, true);' in BASE
+    assert 'custLowerAll();' in BASE
+
+
 def test_reports_page_uses_a_shared_custom_picker():
     assert (PORTAL / 'static' / 'flatpickr.min.js').is_file()
     assert (PORTAL / 'static' / 'flatpickr.min.css').is_file()
