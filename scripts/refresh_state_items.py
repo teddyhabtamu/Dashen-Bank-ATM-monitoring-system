@@ -25,6 +25,7 @@ environment:
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.request
@@ -44,7 +45,12 @@ MASTER_KEYS = (
     "atm.parts",         # NCR WMI master
 )
 
-FRESH_SECONDS = 120
+# Keep this in step with zabbix_modules/state_freshness.py.  A 1m item gets
+# 210s (two missed polls plus slack), not 120s; using a lower number here would
+# report a healthy but busy poller as stale and send the operator chasing a
+# state-manager bug that is not there.
+MIN_BUDGET_SECONDS = 120
+MAX_BUDGET_SECONDS = 900
 _id = 0
 
 
@@ -77,6 +83,28 @@ def age(clock, now):
 def age_text(clock, now):
     value = age(clock, now)
     return "never" if value is None else "%ss" % value
+
+
+def item_delay_seconds(value):
+    """Zabbix item delay ('30s', '1m', '5m', '1m/1m') -> seconds."""
+    match = re.match(r'\s*(\d+)\s*([smhd]?)', str(value or ''))
+    if not match:
+        return 60
+    number = int(match.group(1))
+    unit = match.group(2) or 's'
+    return max(1, number * {'s': 1, 'm': 60, 'h': 3600, 'd': 86400}[unit])
+
+
+def budget_seconds(delay):
+    """How old an item may be before the state manager calls it stale."""
+    cadence = item_delay_seconds(delay)
+    return min(MAX_BUDGET_SECONDS,
+               max(MIN_BUDGET_SECONDS, int(cadence * 2.5) + 60))
+
+
+def within_budget(item, now):
+    value = age(item.get("lastclock"), now)
+    return value is not None and value <= budget_seconds(item.get("delay"))
 
 
 def load_hosts(auth, names):
@@ -114,39 +142,55 @@ def print_targets(hosts, now):
             print("  no enabled, supported master item")
             continue
         for item in items:
-            print("  %-24s age=%-8s delay=%-5s iface=%-4s %s" % (
+            budget = budget_seconds(item.get("delay"))
+            print("  %-24s age=%-8s budget=%-5ss delay=%-5s iface=%-4s %s" % (
                 item.get("key_"), age_text(item.get("lastclock"), now),
-                item.get("delay") or "-", item.get("interfaceid") or "-",
+                budget, item.get("delay") or "-",
+                item.get("interfaceid") or "-",
                 (item.get("error") or "").replace("\n", " ")[:120]))
 
 
 def _runtime_columns(cur):
     """Return SQL expressions for the item runtime fields.
 
-    Zabbix keeps ``state``/``nextcheck``/``lastclock`` in ``item_rtdata`` in
-    some schema versions and in ``items`` in others.  Query the catalog instead
-    of assuming one layout, so the diagnostic works on both.
+    Zabbix schema versions split these fields differently: some put all of
+    them on ``items``, some put all on ``item_rtdata``, and some split them
+    (configuration on ``items``, runtime on ``item_rtdata``).  Query the
+    catalog and build one expression per field instead of assuming a layout.
     """
     cur.execute("""
-        SELECT table_name, column_name
+        SELECT column_name, table_name
           FROM information_schema.columns
          WHERE table_schema = current_schema()
            AND table_name IN ('items', 'item_rtdata')
+           AND column_name IN ('state', 'nextcheck', 'lastclock', 'error')
     """)
-    columns = {}
-    for table, column in cur.fetchall():
-        columns.setdefault(table, set()).add(column)
-    item_columns = columns.get("items", set())
-    runtime_columns = columns.get("item_rtdata", set())
+    found = {}
+    for column, table in cur.fetchall():
+        # item_rtdata is the runtime table; prefer it when both exist.
+        if column not in found or table == "item_rtdata":
+            found[column] = table
 
-    if {"state", "nextcheck", "lastclock"} <= item_columns:
-        return ("", "i.state", "i.nextcheck", "i.lastclock", "i.error")
-    if {"state", "nextcheck", "lastclock"} <= runtime_columns:
-        return ("LEFT JOIN item_rtdata r ON r.itemid = i.itemid",
-                "COALESCE(r.state, 0)", "r.nextcheck", "r.lastclock",
-                "r.error")
-    raise RuntimeError("cannot find state/nextcheck/lastclock on items "
-                       "or item_rtdata")
+    missing = [c for c in ("state", "nextcheck", "lastclock")
+               if c not in found]
+    if missing:
+        raise RuntimeError(
+            "missing %s on items/item_rtdata (found: %s)" % (
+                ", ".join(missing), ", ".join(sorted(found)) or "none"))
+
+    join_sql = ("LEFT JOIN item_rtdata r ON r.itemid = i.itemid"
+                if "item_rtdata" in found.values() else "")
+
+    def expression(column):
+        table = found.get(column)
+        if table == "item_rtdata":
+            return "r.%s" % column
+        if table == "items":
+            return "i.%s" % column
+        return "NULL"
+
+    return (join_sql, expression("state"), expression("nextcheck"),
+            expression("lastclock"), expression("error"))
 
 
 def show_queue(item_ids, db_name):
@@ -254,24 +298,26 @@ def request_now(auth, items):
     return result.get("taskids") or []
 
 
-def wait_for_fresh(auth, item_ids, wait):
+def wait_for_fresh(auth, item_ids, wait, before_clocks):
     if not item_ids:
-        return {}, True
+        return {}, True, False
     deadline = time.time() + max(0, wait)
     latest = {}
     while True:
         items = call("item.get", {
-            "output": ["itemid", "key_", "lastclock"],
+            "output": ["itemid", "key_", "lastclock", "delay"],
             "itemids": list(item_ids),
         }, auth) or []
         latest = {i["itemid"]: i for i in items}
         now = time.time()
-        if all(age(i.get("lastclock"), now) is not None
-               and age(i.get("lastclock"), now) <= FRESH_SECONDS
-               for i in items):
-            return latest, True
+        if all(within_budget(i, now) for i in items):
+            moved = any(i.get("lastclock") != before_clocks.get(i["itemid"])
+                        for i in items)
+            return latest, True, moved
         if time.time() >= deadline:
-            return latest, False
+            moved = any(i.get("lastclock") != before_clocks.get(i["itemid"])
+                        for i in items)
+            return latest, False, moved
         time.sleep(2)
 
 
@@ -297,6 +343,7 @@ def main():
 
     items = [item for _host, host_items in hosts for item in host_items]
     item_ids = [item["itemid"] for item in items]
+    before_clocks = {item["itemid"]: item.get("lastclock") for item in items}
     if args.queue:
         show_queue(item_ids, args.db_name)
 
@@ -310,17 +357,21 @@ def main():
         print("  queued %s task(s); waiting up to %ss"
               % (len(task_ids), args.wait))
 
-    latest, fresh = wait_for_fresh(auth, item_ids, args.wait)
+    latest, fresh, moved = wait_for_fresh(
+        auth, item_ids, args.wait, before_clocks)
     now = time.time()
     print("\n=== State masters after ===")
     for item in items:
         current = latest.get(item["itemid"], {})
-        print("  %-24s age=%s" % (
+        budget = budget_seconds(item.get("delay"))
+        print("  %-24s age=%-8s budget=%ss" % (
             item.get("key_"),
-            age_text(current.get("lastclock"), now)))
+            age_text(current.get("lastclock"), now), budget))
     if items:
-        print("  %s" % ("FRESH" if fresh else
-                        "STILL STALE - the check was queued but did not run"))
+        print("  %s" % ("WITHIN BUDGET" if fresh else
+                        "OVERDUE - the state manager will treat this source "
+                        "as stale"))
+        print("  forced check moved lastclock: %s" % ("yes" if moved else "no"))
     call("user.logout", [], auth)
     return 0 if (fresh or not items) else 1
 
