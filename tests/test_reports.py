@@ -12,6 +12,7 @@ def _read(*parts):
 ROUTES = _read('routes.py')
 HELPERS = _read('helpers.py')
 PAGE = _read('templates', 'reports.html')
+BASE = _read('templates', 'base.html')
 PORTAL_BP = _read('blueprints', 'portal.py')
 
 
@@ -81,6 +82,31 @@ def test_outage_report_has_a_matching_composite_index():
     assert 'idx_atm_txn_atm_status_type_time' in script
     assert 'ON atm_transactions (atm_id, status, txn_type, recorded_at DESC)' in script
     assert 'CREATE INDEX CONCURRENTLY' in script
+
+
+def test_the_report_atm_pickers_are_labelled_atm_not_branch():
+    """The value sent to the backend is an ATM id, not a branch."""
+    assert '<label for="txn-atm">ATM</label>' in PAGE
+    assert '<label for="avail-atm">ATM</label>' in PAGE
+    assert PAGE.count('<option value="all" selected>All ATMs</option>') == 2
+
+
+def test_the_report_atm_list_goes_through_the_shared_searchable_select():
+    # The page used to rebuild .cust-opt by hand, which bypassed the shared
+    # enhancer and left the 1,200-item ATM list without a search box.
+    assert 'window.refreshCustomSelect(sel)' in PAGE
+    assert "drop.innerHTML = ''" not in PAGE
+
+
+def test_a_select_populated_after_boot_gains_the_search_box():
+    start = BASE.index('function refreshCustomSelect(sel){')
+    refresh = BASE[start:BASE.index('window.refreshCustomSelect = refreshCustomSelect;', start)]
+    assert 'custEnsureSearch(sel);' in refresh
+
+    start = BASE.index('function initCustomSelects(){')
+    init = BASE[start:BASE.index('initCustomSelects();', start)]
+    assert 'custEnsureSearch(sel);' in init
+    assert "searchInput.placeholder='Search…'" in BASE
 
 
 def test_reports_page_uses_a_shared_custom_picker():

@@ -267,10 +267,10 @@
         <div class="card-body-inner">
           <div class="form-grid">
             <div class="form-group full">
-              <label for="txn-atm">Branch</label>
+              <label for="txn-atm">ATM</label>
               <div class="custom-select">
                 <select id="txn-atm">
-                  <option value="all" selected>All Branches</option>
+                  <option value="all" selected>All ATMs</option>
                 </select>
               </div>
             </div>
@@ -387,10 +387,10 @@
         <div class="card-body-inner">
           <div class="form-grid">
             <div class="form-group full">
-              <label for="avail-atm">Branch</label>
+              <label for="avail-atm">ATM</label>
               <div class="custom-select">
                 <select id="avail-atm">
-                  <option value="all" selected>All Branches</option>
+                  <option value="all" selected>All ATMs</option>
                 </select>
               </div>
             </div>
@@ -418,31 +418,10 @@ function populateATMSelect(selectId, atms) {
   const sel = document.getElementById(selectId);
   while (sel.options.length > 1) sel.remove(1);
   atms.forEach(a => { sel.add(new Option(a.id + ' \u2014 ' + a.branch, a.id)); });
-  // Rebuild cust-select dropdown UI
-  const wrap = sel.closest('.cust-select');
-  if (!wrap) return;
-  const trig = wrap.querySelector('.cust-trigger');
-  const drop = wrap.querySelector('.cust-drop');
-  if (!trig || !drop) return;
-  trig.textContent = sel.options[0].text;
-  drop.innerHTML = '';
-  for (var i = 0; i < sel.length; i++) {
-    (function(idx) {
-      var o = document.createElement('div');
-      o.className = 'cust-opt' + (idx === sel.selectedIndex ? ' sel' : '');
-      o.textContent = sel.options[idx].text;
-      o.addEventListener('click', function() {
-        sel.selectedIndex = idx;
-        trig.textContent = sel.options[idx].text;
-        drop.querySelectorAll('.cust-opt').forEach(function(c){c.classList.remove('sel')});
-        o.classList.add('sel');
-        trig.classList.remove('open');
-        drop.classList.remove('show');
-        sel.dispatchEvent(new Event('change'));
-      });
-      drop.appendChild(o);
-    })(i);
-  }
+  // Rebuild through the shared enhancer so a long ATM list gets the same
+  // searchable dropdown as every other page (it was hand-built here, which
+  // skipped the search box entirely).
+  if (window.refreshCustomSelect) window.refreshCustomSelect(sel);
 }
 
 async function loadATMs() {

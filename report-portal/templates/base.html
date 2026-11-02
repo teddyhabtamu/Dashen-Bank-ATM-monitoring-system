@@ -833,9 +833,36 @@ function custApplyFilter(sel){
   });
   c.empty.style.display = visible ? 'none' : 'block';
 }
+function custEnsureSearch(sel){
+  var c = sel && sel._cust;
+  if(!c || c.search || sel.length <= 6) return;
+  c.drop.classList.add('has-search');
+  var searchWrap=document.createElement('div');
+  searchWrap.className='cust-search';
+  var searchInput=document.createElement('input');
+  searchInput.type='text';
+  searchInput.placeholder='Search…';
+  searchInput.setAttribute('autocomplete','off');
+  searchWrap.appendChild(searchInput);
+  c.drop.appendChild(searchWrap);
+  var emptyMsg=document.createElement('div');
+  emptyMsg.className='cust-empty';
+  emptyMsg.textContent='No matches';
+  c.drop.appendChild(emptyMsg);
+  c.search = searchInput;
+  c.empty = emptyMsg;
+  searchInput.addEventListener('click',function(e){e.stopPropagation();});
+  searchInput.addEventListener('input',function(){custApplyFilter(sel)});
+  c.trig.addEventListener('click',function(){
+    setTimeout(function(){ searchInput.value=''; custApplyFilter(sel); searchInput.focus(); }, 0);
+  });
+}
 function refreshCustomSelect(sel){
   var c = sel && sel._cust;
   if(!c) return false;                       // not enhanced (or data-native)
+  // A select enhanced while empty (reports load their ATM list afterwards)
+  // must gain the search box once it actually has options.
+  custEnsureSearch(sel);
   c.drop.querySelectorAll('.cust-opt').forEach(function(n){ n.remove(); });
   // Empty select (options filled later by the page) must not throw — that used
   // to abort the whole loop and leave later selects half-wrapped and blank.
@@ -881,28 +908,7 @@ function initCustomSelects(){
       wrap.appendChild(drop);
       var c = {wrap:wrap, trig:trig, drop:drop, search:null, empty:null};
       sel._cust = c;
-      if(sel.length>6){
-        drop.classList.add('has-search');
-        var searchWrap=document.createElement('div');
-        searchWrap.className='cust-search';
-        var searchInput=document.createElement('input');
-        searchInput.type='text';
-        searchInput.placeholder='Search…';
-        searchInput.setAttribute('autocomplete','off');
-        searchWrap.appendChild(searchInput);
-        drop.appendChild(searchWrap);
-        var emptyMsg=document.createElement('div');
-        emptyMsg.className='cust-empty';
-        emptyMsg.textContent='No matches';
-        drop.appendChild(emptyMsg);
-        c.search = searchInput;
-        c.empty = emptyMsg;
-        searchInput.addEventListener('click',function(e){e.stopPropagation();});
-        searchInput.addEventListener('input',function(){custApplyFilter(sel)});
-        trig.addEventListener('click',function(){
-          setTimeout(function(){ searchInput.value=''; custApplyFilter(sel); searchInput.focus(); }, 0);
-        });
-      }
+      custEnsureSearch(sel);
       refreshCustomSelect(sel);
       trig.addEventListener('click',function(e){
         e.stopPropagation();
