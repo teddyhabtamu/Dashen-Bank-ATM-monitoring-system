@@ -13,10 +13,13 @@ number that was half-derived is worse off than one told "cannot tell".
 """
 import json
 import logging
+import time
 from datetime import datetime, timedelta
 
-from cash_forecast import DEFAULT_WINDOW_DAYS, forecast
+from cash_forecast import CASH_TXN_TYPES, DEFAULT_WINDOW_DAYS, forecast
 from log_safety import safe_log
+from txn_sources import TRUSTED_SOURCES
+from zabbix_modules.state_freshness import freshness_budget_seconds
 from zabbix_modules.xfs_metrics import DISPENSE_UNITS, is_xfs
 
 logger = logging.getLogger(__name__)
@@ -64,13 +67,22 @@ def _xfs_denominations(metrics):
 def _cassette_notes(atm_id):
     """Notes and cash value per cassette, from the vault's Zabbix items.
 
-    Returns (levels, reason). An ATM with levels that were never collected gets
-    an empty list plus a reason - the forecast then says "unknown" instead of
-    reporting a zero balance, which would read as "already empty".
+    Returns (levels, reason, clock). ``clock`` is the epoch of the reading that
+    produced the levels. A stale reading is not used: the forecast falls back to
+    the cash ledger and says why, rather than presenting old counts as current.
+    An ATM with levels that were never collected gets an empty list plus a
+    reason - the forecast then says "unknown" instead of reporting a zero
+    balance, which would read as "already empty".
     """
     try:
-        from blueprints.admin import fetch_zabbix_metrics
-        metrics = fetch_zabbix_metrics(atm_id) or {}
+        from blueprints.admin import fetch_zabbix_snapshot
+        snapshot = fetch_zabbix_snapshot(atm_id)
+        if snapshot is None:
+            return ([], 'Zabbix did not return a cassette reading for this ATM '
+                    '(the host may be missing or the API unavailable).', 0)
+        metrics = snapshot.get('metrics') or {}
+        clocks = snapshot.get('clocks') or {}
+        delays = snapshot.get('delays') or {}
         vendor = _atm_vendor(atm_id)
         count = 4 if vendor == 'NCR' or is_xfs(metrics) else 3
         denoms = _xfs_denominations(metrics) if is_xfs(metrics) else {}
@@ -89,26 +101,59 @@ def _cassette_notes(atm_id):
                         'denomination': denom,
                         'value': notes * denom if denom else None})
         if not seen:
-            return [], 'No cassette levels are being collected for this ATM.'
+            return [], 'No cassette levels are being collected for this ATM.', 0
         if not out:
-            return [], 'Cassette levels came back unreadable.'
-        return out, ''
+            return [], 'Cassette levels came back unreadable.', 0
+
+        # The cassette counts are dependent items: their clock is the master's.
+        if is_xfs(metrics):
+            level_clock = int(clocks.get('atm.xfs.cdm') or 0)
+            delay = delays.get('atm.xfs.cdm') or '1m'
+        else:
+            level_clock = max(
+                int(clocks.get(f'atm.cash.cassette{n}') or 0)
+                for n in range(1, count + 1))
+            delay = delays.get('atm.cash.cassette1') or '1m'
+        if level_clock:
+            allowed = freshness_budget_seconds(delay)
+            age = max(0, int(time.time() - level_clock))
+            if age > allowed:
+                return [], (
+                    f'Cassette levels are {age // 60} min old; the last reading '
+                    f'is outside the {allowed}s freshness budget, so no forecast '
+                    'is made from it.'), level_clock
+        return out, '', level_clock
     except Exception as e:
         logger.warning('cash forecast: cassette levels failed for %s: %s', safe_log(atm_id), safe_log(e))  # NOSONAR: safe_log strips CR/LF
-        return [], f'Could not read cassette levels: {e}'
+        return [], f'Could not read cassette levels: {e}', 0
 
 
 def _withdrawals(atm_id, window_days):
+    """Successful cash movements from *trusted* sources only.
+
+    The visible view intentionally exposes demo sources while their demo window
+    is open.  A cash team must never be told to schedule a load from simulated
+    transactions, so the forecast asks for EJ/ISO8583 explicitly and filters to
+    cash-dispensing transaction types in SQL.
+    """
     try:
         with _db()() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT recorded_at, amount, status FROM atm_transactions_visible "
-                "WHERE atm_id = %s AND recorded_at >= NOW() - (%s || ' days')::interval "
-                "ORDER BY recorded_at",
-                (atm_id, str(int(window_days))))
-            rows = [{'recorded_at': r[0].strftime('%Y-%m-%d %H:%M:%S') if hasattr(r[0], 'strftime') else r[0],
-                     'amount': r[1], 'status': r[2]} for r in cur.fetchall()]
+                "SELECT t.recorded_at, t.amount, t.status, t.txn_type, t.source "
+                "FROM atm_transactions_visible t "
+                "WHERE t.atm_id = %s "
+                "  AND t.source = ANY(%s) "
+                "  AND upper(coalesce(t.txn_type, '')) = ANY(%s) "
+                "  AND t.recorded_at >= NOW() - (%s || ' days')::interval "
+                "ORDER BY t.recorded_at",
+                (atm_id, list(TRUSTED_SOURCES), list(CASH_TXN_TYPES),
+                 str(int(window_days))))
+            rows = [{'recorded_at': r[0].strftime('%Y-%m-%d %H:%M:%S')
+                     if hasattr(r[0], 'strftime') else r[0],
+                     'amount': r[1], 'status': r[2],
+                     'txn_type': r[3], 'source': r[4]}
+                    for r in cur.fetchall()]
             cur.close()
             return rows, ''
     except Exception as e:
@@ -138,7 +183,7 @@ def forecast_atm(atm_id, now=None, window_days=DEFAULT_WINDOW_DAYS):
     """Cash forecast for one ATM, with every shortfall reported."""
     now = now or datetime.now()
     problems = []
-    levels, why = _cassette_notes(atm_id)
+    levels, why, level_clock = _cassette_notes(atm_id)
     if why:
         problems.append(why)
     withdrawals, why = _withdrawals(atm_id, window_days)
@@ -152,6 +197,20 @@ def forecast_atm(atm_id, now=None, window_days=DEFAULT_WINDOW_DAYS):
     out['atm_id'] = atm_id
     out['window_days'] = window_days
     out['checked_at'] = now.strftime('%Y-%m-%d %H:%M')
+    if level_clock:
+        out['levels_checked_at'] = datetime.fromtimestamp(level_clock).strftime('%Y-%m-%d %H:%M')
+        out['levels_age_seconds'] = max(0, int(time.time() - level_clock))
+    # The page-wide banner already says demo data is on screen; repeat it on
+    # the cash card because this card can tell someone to send a CIT visit.
+    try:
+        from txn_sources import status_cached
+        _note, level = status_cached()
+        if level == 'demo':
+            out['demo_excluded'] = (
+                'Demo transactions are enabled but were excluded from this '
+                'forecast. The burn rate uses only EJ/ISO8583 data.')
+    except Exception:
+        pass
     # Every unreadable source, in one sentence. Two fields saying the same
     # thing in different words is how an operator stops trusting the card.
     if problems:

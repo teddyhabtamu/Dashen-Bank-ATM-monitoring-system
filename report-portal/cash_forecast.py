@@ -22,17 +22,36 @@ Design rules, all of them deliberate:
 Stdlib only, no Flask, no DB: the arithmetic is unit-tested, the caller does
 the I/O.
 """
+import os
 from datetime import datetime, timedelta
 
 MIN_SAMPLES = 20          # below this the number is a rumour
+MIN_CONFIDENCE_DAYS = 3   # a burst inside one afternoon is not a daily rate
 DEFAULT_WINDOW_DAYS = 14
 
 # Statuses that represent money actually leaving the cassette.
 WITHDRAWAL_STATUSES = ('approved', 'completed', 'success', 'settled', 'posted')
 
+# Transaction types that dispense cash from the cassette.  The simulator uses
+# the same set; a bank that treats TRANSFER as an account-to-account movement
+# can override the SQL filter with CASH_FORECAST_TXN_TYPES=WITHDRAWAL.
+# Defined here, not in cash_service, so the SQL filter and the in-memory guard
+# cannot drift apart.
+CASH_TXN_TYPES = tuple(
+    item.strip().upper()
+    for item in os.environ.get(
+        'CASH_FORECAST_TXN_TYPES',
+        'WITHDRAWAL,TRANSFER,CARDLESS_TXN').split(',')
+    if item.strip()) or ('WITHDRAWAL',)
+
 
 def _is_withdrawal(txn):
-    """Cash withdrawal that actually succeeded."""
+    """Cash withdrawal that actually succeeded.
+
+    ``txn_type`` is checked when present.  The SQL in cash_service already
+    filters to trusted cash types; this guard keeps a caller that forgets that
+    filter from counting a deposit or a balance inquiry as cash out.
+    """
     status = str(txn.get('status') or '').strip().lower()
     amount = txn.get('amount')
     try:
@@ -42,6 +61,9 @@ def _is_withdrawal(txn):
     if amount <= 0:
         return False
     if status and status not in WITHDRAWAL_STATUSES:
+        return False
+    txn_type = str(txn.get('txn_type') or '').strip().upper()
+    if txn_type and txn_type not in CASH_TXN_TYPES:
         return False
     return True
 
@@ -61,14 +83,28 @@ def burn_rate(withdrawals, now, window_days=DEFAULT_WINDOW_DAYS):
     stamps = [s for s in stamps if s]
     # Observed span: from the first withdrawal in the window to now. Using the
     # calendar window instead would understate the rate on a young record.
-    days = (now - min(stamps)).total_seconds() / 86400.0 if stamps else 0.0
-    days = max(days, 1.0)
-    confidence = ('low' if len(recent) < MIN_SAMPLES
-                  else 'medium' if len(recent) < MIN_SAMPLES * 5 else 'high')
-    return {'per_day': (total / days) if recent else None,
+    observed_days = ((now - min(stamps)).total_seconds() / 86400.0
+                     if stamps else 0.0)
+    # Keep the rate denominator at one day so a burst in the first hour does
+    # not divide by a tiny number, but report the real span separately so the
+    # UI can say "0.1 days of history" instead of hiding it.
+    rate_days = max(observed_days, 1.0)
+    if len(recent) < MIN_SAMPLES or observed_days < 1.0:
+        confidence = 'low'
+    elif (len(recent) < MIN_SAMPLES * 5
+          or observed_days < MIN_CONFIDENCE_DAYS):
+        confidence = 'medium'
+    else:
+        confidence = 'high'
+    if observed_days < 1:
+        span_label = f'{max(1, int(round(observed_days * 24)))} hour(s)'
+    else:
+        span_label = f'{observed_days:.1f} day(s)'
+    return {'per_day': (total / rate_days) if recent else None,
             'total': total, 'samples': len(recent),
-            'days_observed': round(days, 2), 'confidence': confidence,
-            'window_days': window_days}
+            'days_observed': round(observed_days, 2),
+            'rate_days': round(rate_days, 2), 'span_label': span_label,
+            'confidence': confidence, 'window_days': window_days}
 
 
 def _parse(value):
@@ -150,7 +186,9 @@ def forecast(cassettes, withdrawals, now, loads=None, window_days=DEFAULT_WINDOW
 
     rate = burn_rate(withdrawals, now, window_days)
 
-    base = {'per_day': None, 'confidence': rate['confidence'], 'samples': rate['samples'],
+    base = {'per_day': None, 'confidence': rate['confidence'],
+            'samples': rate['samples'], 'days_observed': rate['days_observed'],
+            'span_label': rate['span_label'],
             'total_notes': total_notes, 'total_value': total_value,
             'value_unit': 'ETB' if has_value else 'notes',
             'runway_days': None, 'depletes_at': None,
@@ -230,6 +268,7 @@ def forecast(cassettes, withdrawals, now, loads=None, window_days=DEFAULT_WINDOW
         per_cassette.append({'cassette': cassette, 'notes': notes,
                              'value': value_by_cassette.get(cassette),
                              'runway_days': round(c_runway, 1),
+                             'runway_hours': round(c_runway * 24, 1) if c_runway else 0.0,
                              'depletes_at': (now + timedelta(days=c_runway)).isoformat()
                              if c_runway else None})
 
@@ -248,8 +287,14 @@ def forecast(cassettes, withdrawals, now, loads=None, window_days=DEFAULT_WINDOW
         actions.append('The ledger says this ATM is already empty — check it on '
                        'the next CIT visit.')
     if rate['confidence'] == 'low':
-        actions.append(f'Low confidence: only {rate["samples"]} withdrawals — '
-                       'treat this as an indication, not a schedule.')
+        if rate['samples'] < MIN_SAMPLES:
+            why = f'only {rate["samples"]} withdrawals'
+        elif rate['days_observed'] < 1:
+            why = 'less than a day of history'
+        else:
+            why = f'only {rate["days_observed"]:.1f} days of history'
+        actions.append(f'Low confidence: {why} — treat this as an indication, '
+                       'not a schedule.')
 
     if level_detail:
         actions.insert(0, level_detail)

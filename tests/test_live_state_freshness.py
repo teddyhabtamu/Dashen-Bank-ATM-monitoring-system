@@ -15,6 +15,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'report-portal'))
 
 from blueprints import admin  # noqa: E402
+from zabbix_modules.state_freshness import freshness_budget_seconds  # noqa: E402
 
 XFS_METRICS = {
     'atm.xfs.cdm': '{}',
@@ -53,6 +54,14 @@ def test_snmp_core_is_judged_on_its_own_cadence():
 def test_no_clocks_means_not_current():
     assert admin.live_state_is_current(
         {'metrics': XFS_METRICS, 'clocks': {}, 'delays': {}}) is False
+
+
+def test_the_budget_is_two_missed_polls_plus_slack_and_is_capped():
+    """One shared budget, so the state chip and the cash card agree on stale."""
+    assert freshness_budget_seconds('30s') == 135
+    assert freshness_budget_seconds('1m') == 210
+    assert freshness_budget_seconds('5m') == 810
+    assert freshness_budget_seconds('1h') == 900
 
 
 def test_registry_overlay_skips_a_stale_snapshot(monkeypatch):

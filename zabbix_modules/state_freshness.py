@@ -36,6 +36,19 @@ def item_delay_seconds(value):
     return max(1, number * {'s': 1, 'm': 60, 'h': 3600, 'd': 86400}[unit])
 
 
+def freshness_budget_seconds(delay):
+    """How long a value polled at `delay` stays usable.
+
+    Two missed polls plus a minute of slack, bounded so a fast item is not
+    declared dead immediately and a slow one does not hide an outage for an
+    hour.  Shared by the state badge and the cash forecast so both call the
+    same reading stale at the same moment.
+    """
+    return min(MAX_ALLOWED_SECONDS,
+               max(MIN_ALLOWED_SECONDS,
+                   int(item_delay_seconds(delay) * 2.5) + 60))
+
+
 def source_keys(metrics):
     """Keys whose values actually drive the state for this host.
 
@@ -70,9 +83,8 @@ def source_freshness(metrics, clocks, delays, now=None):
     newest = max(clock for clock, _delay in seen)
     cadences = [item_delay_seconds(delay) for _clock, delay in seen]
     cadence = max([value for value in cadences if value > 0] or [60])
-    allowed = min(MAX_ALLOWED_SECONDS,
-                  max(MIN_ALLOWED_SECONDS, int(cadence * 2.5) + 60))
-    return max(0, int((now or time.time()) - newest)), allowed
+    return (max(0, int((now or time.time()) - newest)),
+            freshness_budget_seconds(cadence))
 
 
 def source_is_current(metrics, clocks, delays, now=None):

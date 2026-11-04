@@ -7,6 +7,7 @@ test below is one of those two mistakes.
 import json
 import os
 import sys
+import time
 from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'report-portal'))
@@ -315,3 +316,142 @@ def test_per_cassette_rows_are_absent_when_the_numbers_are_from_the_ledger():
               'recorded_at': (NOW - timedelta(days=2)).strftime('%Y-%m-%d %H:%M:%S')}]
     out = cf.forecast([], steady_history(), NOW, loads=loads)
     assert out['per_cassette'] == []
+
+
+# ── only real cash movements, and only over a real observation span ───────
+def test_non_cash_transaction_types_are_not_demand():
+    """A deposit or balance inquiry did not take notes out of the cassette.
+
+    The UAT cash card counted every approved positive amount until the SQL was
+    narrowed to cash-dispensing types; a transfer/deposit could inflate the
+    burn rate and trigger a false cash-out warning.
+    """
+    hist = steady_history(n=100, amount=20000, span_days=5)
+    noise = [
+        {'recorded_at': (NOW - timedelta(hours=1)).strftime('%Y-%m-%d %H:%M:%S'),
+         'amount': 50000, 'status': 'APPROVED', 'txn_type': 'DEPOSIT'},
+        {'recorded_at': (NOW - timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S'),
+         'amount': 50000, 'status': 'APPROVED', 'txn_type': 'BALANCE_INQ'},
+    ]
+    clean = cf.burn_rate(hist, NOW)
+    noisy = cf.burn_rate(hist + noise, NOW)
+    assert noisy['per_day'] == clean['per_day']
+    assert noisy['samples'] == clean['samples']
+
+
+def test_a_short_burst_is_not_high_confidence():
+    """13,593 demo rows generated in an afternoon are not a daily pattern."""
+    burst = [tx(0.01, 20000) for _ in range(200)]
+    rate = cf.burn_rate(burst, NOW)
+    assert rate['days_observed'] < 1
+    assert rate['span_label'].endswith('hour(s)')
+    assert rate['confidence'] == 'low'
+
+
+def test_days_observed_is_the_real_span_not_the_calendar_window():
+    rate = cf.burn_rate(steady_history(n=100, amount=20000, span_days=2), NOW)
+    assert 1.9 <= rate['days_observed'] <= 2.1
+    assert rate['rate_days'] == 2.0
+    assert rate['span_label'] == '2.0 day(s)'
+    assert rate['confidence'] == 'medium'
+
+
+def test_three_days_of_history_with_many_samples_is_high_confidence():
+    rate = cf.burn_rate(steady_history(n=200, amount=20000, span_days=3), NOW)
+    assert rate['days_observed'] == 3.0
+    assert rate['confidence'] == 'high'
+
+
+def test_low_confidence_can_come_from_a_short_span_not_a_small_sample():
+    burst = [tx(0.01, 20000) for _ in range(200)]
+    out = cf.forecast([{'cassette': 1, 'notes': 100000}], burst, NOW)
+    assert out['confidence'] == 'low'
+    assert any('history' in action for action in out['actions'])
+
+
+def test_cash_service_filters_to_trusted_cash_transactions(monkeypatch):
+    """Demo rows never reach the burn rate, even while the demo window is open."""
+    import cash_service
+
+    seen = {}
+
+    class Cursor:
+        def execute(self, sql, params):
+            seen['sql'] = sql
+            seen['params'] = params
+
+        def fetchall(self):
+            return []
+
+        def close(self):
+            pass
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(cash_service, '_db', lambda: lambda: Connection())
+    rows, why = cash_service._withdrawals('ATM-1', 14)
+    assert rows == [] and why == ''
+    assert 't.source = ANY(%s)' in seen['sql']
+    assert 'txn_type' in seen['sql']
+    sources = seen['params'][1]
+    assert 'EJ' in sources and 'ISO8583' in sources
+    assert 'ISO8583_SIM' not in sources
+    assert 'WITHDRAWAL' in seen['params'][2]
+
+
+def test_an_unreadable_zabbix_snapshot_is_not_reported_as_no_levels(monkeypatch):
+    """A portal-side read failure must not look like an ATM without telemetry."""
+    import cash_service
+    from blueprints import admin
+
+    monkeypatch.setattr(admin, 'fetch_zabbix_snapshot', lambda atm_id: None)
+    levels, why, level_clock = cash_service._cassette_notes('ATM-1')
+    assert levels == []
+    assert 'Zabbix did not return' in why
+    assert level_clock == 0
+
+
+def test_stale_cassette_levels_are_not_used(monkeypatch):
+    """A stale XFS master must not produce a fresh-looking cash forecast."""
+    import cash_service
+    from blueprints import admin
+
+    clock = int(time.time()) - 600
+    snapshot = {
+        'metrics': {'atm.xfs.cdm': '{}', 'atm.cash.cassette1': '100'},
+        'clocks': {'atm.xfs.cdm': clock},
+        'delays': {'atm.xfs.cdm': '1m'},
+    }
+    monkeypatch.setattr(admin, 'fetch_zabbix_snapshot', lambda atm_id: snapshot)
+    monkeypatch.setattr(cash_service, '_atm_vendor', lambda atm_id: 'GRG')
+    levels, why, level_clock = cash_service._cassette_notes('ATM-1')
+    assert levels == []
+    assert 'min old' in why
+    assert level_clock == clock
+
+
+def test_fresh_cassette_levels_are_used(monkeypatch):
+    import cash_service
+    from blueprints import admin
+
+    clock = int(time.time()) - 30
+    snapshot = {
+        'metrics': {'atm.xfs.cdm': '{}', 'atm.cash.cassette1': '100'},
+        'clocks': {'atm.xfs.cdm': clock},
+        'delays': {'atm.xfs.cdm': '1m'},
+    }
+    monkeypatch.setattr(admin, 'fetch_zabbix_snapshot', lambda atm_id: snapshot)
+    monkeypatch.setattr(cash_service, '_atm_vendor', lambda atm_id: 'GRG')
+    levels, why, level_clock = cash_service._cassette_notes('ATM-1')
+    assert why == ''
+    assert levels == [{'cassette': 1, 'notes': 100,
+                       'denomination': None, 'value': None}]
+    assert level_clock == clock

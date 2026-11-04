@@ -258,9 +258,17 @@ table.txn tbody tr:hover{background:#EEF2FF}
       <div class="card">
         <div class="card-header">
           <h2>Cash outlook</h2>
-          <span class="card-hint">{% if cash_outlook.status == 'ok' %}Based on the last {{ cash_outlook.window_days }} days of withdrawals{% else %}Needs cassette levels and withdrawal history{% endif %}</span>
+          <span class="card-hint">{% if cash_outlook.status == 'ok' %}Based on {{ cash_outlook.samples }} successful withdrawals over {{ cash_outlook.span_label }}{% if cash_outlook.levels_age_seconds is defined %} · cassette reading {{ (cash_outlook.levels_age_seconds / 60)|round|int }} min old{% endif %}{% else %}Needs trusted withdrawals and fresh cassette levels{% endif %}</span>
         </div>
         <div class="card-body">
+          {% if cash_outlook.demo_excluded %}
+            <div class="alert-card info" style="margin-bottom:12px">
+              <i data-lucide="info" class="alert-icon"></i>
+              <div class="alert-content">
+                <div class="alert-message">{{ cash_outlook.demo_excluded }}</div>
+              </div>
+            </div>
+          {% endif %}
           {% if cash_outlook.status == 'ok' %}
             {% set tone = 'error' if cash_outlook.runway_days <= 1 else 'warning' if cash_outlook.runway_days <= 3 else 'success' %}
             {% set unit = cash_outlook.value_unit or 'notes' %}
@@ -277,7 +285,8 @@ table.txn tbody tr:hover{background:#EEF2FF}
                 </div>
                 <div class="alert-message">
                   Burn rate {{ cash_outlook.per_day|round|int }} {{ unit }}/day
-                  ({{ cash_outlook.samples }} withdrawals,
+                  ({{ cash_outlook.samples }} withdrawals over
+                  {{ cash_outlook.span_label }},
                   confidence {{ cash_outlook.confidence }}).
                 </div>
               </div>
@@ -285,7 +294,7 @@ table.txn tbody tr:hover{background:#EEF2FF}
             {% for c in cash_outlook.per_cassette %}
               <div class="kv"><span class="k">Cass {{ c.cassette }}</span><span class="v">
                 {{ c.notes }} notes{% if c.value is not none %} · {{ c.value|int }} ETB{% endif %} ·
-                {% if c.runway_days >= 0.1 %}{{ c.runway_days }} days{% elif c.notes > 0 %}under a day{% else %}empty{% endif %}</span></div>
+                {% if c.runway_days >= 1 %}{{ c.runway_days }} days{% elif c.notes <= 0 %}empty{% elif c.runway_hours >= 1 %}{{ c.runway_hours }} hours{% else %}{{ (c.runway_hours * 60)|round|int }} min{% endif %}</span></div>
             {% endfor %}
             {% for a in cash_outlook.actions %}<div class="check-fix">→ {{ a }}</div>{% endfor %}
           {% else %}
