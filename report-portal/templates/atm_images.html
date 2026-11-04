@@ -26,9 +26,9 @@
 .ev-hero .ev-hero-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .ev-summary-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--ev-muted);margin-top:7px}
 .ev-summary-line b{color:var(--ev-text)}
-.ev-caveat{background:#F8FAFC;border:1px solid var(--ev-border);color:#475569;border-radius:3px;padding:10px 13px;font-size:11.5px;line-height:1.55;margin-bottom:14px}
+.ev-caveat{background:#F8FAFC;border:1px solid var(--ev-border);color:#475569;border-radius:10px;padding:12px 16px;font-size:12px;line-height:1.55;margin-bottom:14px}
 .ev-caveat b{color:var(--ev-text)}
-.ev-group{margin-bottom:18px}
+.ev-group{margin-bottom:18px;scroll-margin-top:16px}
 .ev-group-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .ev-group-head h2{font-size:12.5px;font-weight:750;margin:0}
 .ev-group-head .ev-group-count{font-size:10px;font-weight:700;color:var(--ev-muted);background:none;border-radius:0;padding:0}
@@ -37,10 +37,18 @@
 {% endblock %}
 {% block body %}
 {% set is_ncr = result and result.get('vendor') == 'NCR' %}
-{% set start_n = (result.get('candidates', []) | selectattr('role', 'equalto', 'start') | list | length) if result else 0 %}
-{% set during_n = (result.get('candidates', []) | selectattr('role', 'equalto', 'in_window') | list | length) if result else 0 %}
-{% set end_n = (result.get('candidates', []) | selectattr('role', 'equalto', 'end') | list | length) if result else 0 %}
-{% set near_n = (result.get('candidates', []) | selectattr('role', 'equalto', 'near_window') | list | length) if result else 0 %}
+{% set candidates = result.get('candidates', []) if result else [] %}
+{% set start_items = candidates | selectattr('role', 'equalto', 'start') | sort(attribute='captured_at') | list %}
+{% set during_all = candidates | selectattr('role', 'equalto', 'in_window') | list %}
+{% set video_items = during_all | selectattr('kind', 'equalto', 'video') | list %}
+{% set during_items = during_all | rejectattr('kind', 'equalto', 'video') | sort(attribute='captured_at') | list %}
+{% set end_items = candidates | selectattr('role', 'equalto', 'end') | sort(attribute='captured_at') | list %}
+{% set near_items = candidates | selectattr('role', 'equalto', 'near_window') | sort(attribute='captured_at') | list %}
+{% set service_items = candidates | selectattr('role', 'equalto', 'service') | sort(attribute='captured_at') | list %}
+{% set start_n = start_items | length %}
+{% set during_all_n = during_all | length %}
+{% set end_n = end_items | length %}
+{% set near_n = near_items | length %}
 {% set total_zip_images = namespace(value=0) %}
 {% if is_ncr %}
   {% for c in result.get('candidates', []) %}
@@ -58,10 +66,11 @@
       <span class="sep">/</span>
       <span>Image evidence</span>
     </div>
-    <h1 class="page-title">{{ atm.atm_id }} · ATM image evidence</h1>
-    <p class="page-subtitle">{{ atm.branch or 'Unknown branch' }} · {{ atm.vendor or '—' }} · on demand from the ATM</p>
+    <h1 class="page-title">{{ atm.atm_id }} · Image evidence</h1>
+    <p class="page-subtitle">{{ atm.branch or 'Unknown branch' }} · {{ atm.vendor or '—' }} · {{ day_value }} · on demand from the ATM</p>
     <div class="ev-context">
       <span class="ev-chip">Admin only</span>
+      <span class="ev-chip">Sensitive evidence</span>
       <span class="ev-chip">Not stored centrally</span>
       <span class="ev-chip">Audited views</span>
     </div>
@@ -142,12 +151,15 @@
     {% if searched %}<a class="btn btn-outline" href="{{ url_for('atm_images.atm_images', atm_id=atm.atm_id) }}">Clear</a>{% endif %}
   </div>
 </form>
-<p class="img-preview-note">
-  Tip: open a transaction in EJ Journal and use its <strong>Images</strong> link. That uses the session's
-  card-inserted → card-returned window when the journal has both edges; otherwise it falls back to ±2 minutes around
-  the recorded time. Adjust the window when you have a better session interval. Only the last {{ max_days_back }} days
-  can be requested. Times are ATM local (EAT).
-</p>
+<details class="ev-caveat">
+  <summary style="cursor:pointer;font-weight:700;color:#334155">How to choose a window</summary>
+  <div style="margin-top:6px">
+    Open a transaction in EJ Journal and use its <strong>Images</strong> link. That uses the session's
+    card-inserted → card-returned window when the journal has both edges; otherwise it falls back to ±2 minutes around
+    the recorded time. Adjust the window when you have a better session interval. Only the last {{ max_days_back }} days
+    can be requested. Times are ATM local (EAT).
+  </div>
+</details>
 
 {% if result %}
   {% if result.get('ambiguous') %}
@@ -227,22 +239,44 @@
   </div>
 
   {% else %}
-  <div class="ev-hero">
-    <div>
-      <h2>Session evidence</h2>
-      <p>Images are ranked by capture time and event sequence, never by the card field in the filename.</p>
-      <div class="ev-summary-line">
-        {{ confidence_chip(result.get('confidence')) }}
-        {% if start_n %}<span><b>{{ start_n }}</b> at card insertion</span>{% endif %}
-        {% if during_n %}<span><b>{{ during_n }}</b> during the session</span>{% endif %}
-        {% if end_n %}<span><b>{{ end_n }}</b> at card return</span>{% endif %}
-        {% if near_n %}<span><b>{{ near_n }}</b> near the window</span>{% endif %}
-        {% if not start_n and not during_n and not end_n and not near_n %}<span>No image matched this window.</span>{% endif %}
+  <div class="ev-card">
+    <div class="ev-card-head">
+      <div>
+        <h2>Session evidence</h2>
+        <div class="ev-card-sub">Images are ranked by capture time and event sequence, never by the card field in the filename.</div>
       </div>
-    </div>
-    <div class="ev-hero-actions">
       {% if has_window and result.get('session_start') %}
-      <span class="ev-chip">Window {{ result.get('session_start') }} → {{ result.get('session_end') }}</span>
+      <span class="ev-chip">Requested window {{ result.get('session_start') }} → {{ result.get('session_end') }}</span>
+      {% endif %}
+    </div>
+    <div class="ev-card-body">
+      <div class="ev-session-summary">
+        <div class="ev-summary-item">
+          <span class="ev-summary-label">Match</span>
+          {{ confidence_chip(result.get('confidence')) }}
+          <span class="ev-summary-note">
+            {{ result.get('start_anchor_count', 0) }} start · {{ result.get('end_anchor_count', 0) }} end anchor{% if result.get('start_anchor_count', 0) != 1 or result.get('end_anchor_count', 0) != 1 %}s{% endif %}
+          </span>
+        </div>
+        <a class="ev-summary-item" href="#group-start"{% if not start_n %} style="pointer-events:none"{% endif %}>
+          <span class="ev-summary-value">{{ start_n }}</span>
+          <span class="ev-summary-label">Card inserted</span>
+        </a>
+        <a class="ev-summary-item" href="{{ '#group-during' if during_items else '#group-recording' }}"{% if not during_all_n %} style="pointer-events:none"{% endif %}>
+          <span class="ev-summary-value">{{ during_all_n }}</span>
+          <span class="ev-summary-label">During session</span>
+          {% if video_items %}<span class="ev-summary-note">{{ video_items|length }} video</span>{% endif %}
+        </a>
+        <a class="ev-summary-item" href="#group-end"{% if not end_n %} style="pointer-events:none"{% endif %}>
+          <span class="ev-summary-value">{{ end_n }}</span>
+          <span class="ev-summary-label">Card returned</span>
+        </a>
+      </div>
+      {% if not start_n and not during_all_n and not end_n and not near_n %}
+      <div class="ev-empty" style="padding:12px 0 0">
+        <strong>No image matched this window.</strong>
+        <p>Try another day, or widen the window around the session.</p>
+      </div>
       {% endif %}
     </div>
   </div>
@@ -260,13 +294,46 @@
         <div class="ev-timeline-mark {% if c.role == 'start' %}is-start{% elif c.role == 'end' %}is-end{% elif c.role == 'near_window' %}is-near{% endif %}">
           <span class="ev-timeline-dot" aria-hidden="true"></span>
           <div class="ev-timeline-time">{{ c.captured_at[11:19] if c.captured_at|length >= 19 else c.captured_at }}</div>
-          <div class="ev-timeline-label">CAM {{ c.camera if c.camera is not none else '—' }}{% if c.event %} · {{ c.event }}{% endif %}</div>
+          <div class="ev-timeline-label">CAM {{ c.camera if c.camera is not none else '—' }}{% if c.kind == 'video' %} · Session video{% elif c.event %} · {{ c.event }}{% endif %}</div>
         </div>
         {% endfor %}
       </div>
     </div>
   </div>
   {% endif %}
+
+  {% set end_latest = (end_items | map(attribute='captured_at') | max) if end_items else '' %}
+  {% if end_latest and result.get('session_end') and end_latest > result.get('session_end') %}
+  <div class="ev-inline-note">
+    The card-returned image is timestamped after the requested window. It is still shown as the end anchor because it
+    falls inside the matching tolerance.
+  </div>
+  {% endif %}
+
+  {% if video_items %}<div id="group-recording">{% endif %}
+  {% for c in video_items %}
+  <div class="ev-recording">
+    <div class="ev-recording-main">
+      <div class="ev-recording-icon"><i data-lucide="video"></i></div>
+      <div>
+        <h3>Session recording</h3>
+        <div class="ev-evidence-meta">
+          <span>CAM {{ c.camera if c.camera is not none else '—' }}</span>
+          <span>{{ c.captured_at[11:19] if c.captured_at|length >= 19 else c.captured_at }}{% if c.clip_end %} → {{ c.clip_end[11:19] if c.clip_end|length >= 19 else c.clip_end }}{% endif %}</span>
+          {% if c.clip_duration_s %}<span>{{ c.clip_duration_s }}s clip</span>{% endif %}
+          {% if c.size_label %}<span>{{ c.size_label }}</span>{% endif %}
+        </div>
+      </div>
+    </div>
+    {% if c.fetchable %}
+    <a class="btn btn-primary"
+       href="{{ url_for('atm_images.atm_image_view', atm_id=atm.atm_id, day=day_value, name_hmac=c.name_hmac, kind=c.kind, start=start_value, end=end_value, event=c.event or '', camera=c.camera or '', captured_at=c.captured_at or '', role=c.role or '') }}">
+      <i data-lucide="play" style="width:13px;height:13px"></i> View clip
+    </a>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% if video_items %}</div>{% endif %}
 
   {% if result.get('vendor') == 'NCR' and result.get('candidate_count') %}
   <div class="banner banner-warn">
@@ -311,7 +378,7 @@
     <div class="ev-evidence-actions">
       {% if c.fetchable %}
       <a class="btn btn-primary"
-         href="{{ url_for('atm_images.atm_image_view', atm_id=atm.atm_id, day=day_value, name_hmac=c.name_hmac, kind=c.kind, start=start_value, end=end_value) }}">
+         href="{{ url_for('atm_images.atm_image_view', atm_id=atm.atm_id, day=day_value, name_hmac=c.name_hmac, kind=c.kind, start=start_value, end=end_value, event=c.event or '', camera=c.camera or '', captured_at=c.captured_at or '', role=c.role or '') }}">
         <i data-lucide="{{ 'play' if c.kind == 'video' else 'eye' }}" style="width:13px;height:13px"></i>
         {{ 'View clip' if c.kind == 'video' else 'View image' }}
       </a>
@@ -322,26 +389,20 @@
   </div>
   {% endmacro %}
 
-  {% set start_items = result.get('candidates', []) | selectattr('role', 'equalto', 'start') | list %}
-  {% set during_items = result.get('candidates', []) | selectattr('role', 'equalto', 'in_window') | list %}
-  {% set end_items = result.get('candidates', []) | selectattr('role', 'equalto', 'end') | list %}
-  {% set near_items = result.get('candidates', []) | selectattr('role', 'equalto', 'near_window') | list %}
-  {% set service_items = result.get('candidates', []) | selectattr('role', 'equalto', 'service') | list %}
-
   {% if start_items %}
-  <div class="ev-group">
+  <div class="ev-group" id="group-start">
     <div class="ev-group-head"><h2>Card inserted</h2><span class="ev-group-count">{{ start_items|length }}</span></div>
     <div class="ev-evidence-grid">{% for c in start_items %}{{ candidate_card(c) }}{% endfor %}</div>
   </div>
   {% endif %}
   {% if during_items %}
-  <div class="ev-group">
+  <div class="ev-group" id="group-during">
     <div class="ev-group-head"><h2>During the session</h2><span class="ev-group-count">{{ during_items|length }}</span></div>
     <div class="ev-evidence-grid">{% for c in during_items %}{{ candidate_card(c) }}{% endfor %}</div>
   </div>
   {% endif %}
   {% if end_items %}
-  <div class="ev-group">
+  <div class="ev-group" id="group-end">
     <div class="ev-group-head"><h2>Card returned</h2><span class="ev-group-count">{{ end_items|length }}</span></div>
     <div class="ev-evidence-grid">{% for c in end_items %}{{ candidate_card(c) }}{% endfor %}</div>
   </div>

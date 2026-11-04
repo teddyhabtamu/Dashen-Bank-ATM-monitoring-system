@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% from "_evidence_ui.html" import meta_item %}
-{% block title %}{{ atm.atm_id }} · ATM evidence{% endblock %}
+{% from "_evidence_ui.html" import meta_item, role_chip %}
+{% block title %}{{ atm.atm_id }} · Image evidence{% endblock %}
 {% block extra_style %}
 {% include "_ej_journal_style.html" %}
-.ev-stage{position:relative;background:#0B1220;border:1px solid #1E293B;border-radius:4px;min-height:460px;display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:none}
+.ev-stage{position:relative;background:#0B1220;border:1px solid #1E293B;border-radius:var(--ev-radius);min-height:460px;display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:var(--ev-shadow)}
 .ev-media{max-width:100%;max-height:72vh;display:block;opacity:0;transition:opacity .2s ease}
 .ev-media[hidden]{display:none}
 .ev-media.ready{opacity:1}
@@ -23,6 +23,8 @@
 .ev-stage-note{font-size:11.5px;color:var(--ev-muted);line-height:1.55;margin:10px 0 0}
 .ev-stage-note code{font-size:10.5px}
 .ev-sha{word-break:break-all}
+#ev-stage:fullscreen{min-height:100vh;border:0;border-radius:0}
+#ev-stage:fullscreen .ev-media{max-height:100vh;max-width:100vw}
 @media(max-width:720px){.ev-stage{min-height:300px}.ev-media{max-height:62vh}.ev-error{padding:20px}}
 {% endblock %}
 {% block body %}
@@ -32,14 +34,19 @@
     <div class="ev-breadcrumb">
       <a href="{{ url_for('ej_journal.ej_journal_detail', atm_id=atm.atm_id) }}">EJ Journal</a>
       <span class="sep">/</span>
+      <a href="{{ url_for('atm_images.atm_images', atm_id=atm.atm_id, day=day_value, start=start_value, end=end_value) }}">Image evidence</a>
+      {% if source == 'zip' %}
+      <span class="sep">/</span>
       <a href="{{ back_url }}">{{ back_label }}</a>
+      {% endif %}
       <span class="sep">/</span>
       <span>{{ 'Video clip' if kind == 'video' else 'Still image' }}</span>
     </div>
-    <h1 class="page-title">{{ atm.atm_id }} · ATM evidence</h1>
+    <h1 class="page-title">{{ atm.atm_id }} · Image evidence</h1>
     <p class="page-subtitle">{{ atm.branch or 'Unknown branch' }} · {{ atm.vendor or '—' }} · {{ day_value }} · admin only</p>
     <div class="ev-context">
       <span class="ev-chip">On demand</span>
+      <span class="ev-chip">Sensitive evidence</span>
       <span class="ev-chip">Not stored centrally</span>
       <span class="ev-chip">View audited</span>
     </div>
@@ -52,11 +59,11 @@
 </div>
 
 <div class="page-content">
-  <div class="ev-page-note">
-    <i data-lucide="shield-check"></i>
-    <span><b>Streamed from the ATM for this one view.</b>
-      The host bridge re-lists the allow-listed folder, matches the keyed locator, verifies the file, and relays it
-      through the portal. The response is not cached, written to disk, or stored in the database.</span>
+  <div class="ev-sensitive">
+    <i data-lucide="shield-alert"></i>
+    <span><b>Sensitive evidence.</b> This image may show card data. Do not screenshot, download, or share it.
+      It is streamed from the ATM for this one view, never stored centrally, and every view is audited as
+      <code>IMAGE_VIEW</code>.</span>
   </div>
 
   <div class="ev-viewer-layout">
@@ -100,17 +107,24 @@
         {% endif %}
       </div>
 
+      <div class="ev-stage-caption">
+        <span class="ev-cam"><i data-lucide="camera" style="width:12px;height:12px"></i> CAM {{ camera or '—' }}</span>
+        {% if event %}<span>{{ event }}</span>{% endif %}
+        {% if captured_at %}<span>{{ captured_at }}</span>{% endif %}
+      </div>
+
       <div class="ev-stage-actions">
         <a class="btn btn-outline" href="{{ back_url }}">
           <i data-lucide="arrow-left" style="width:13px;height:13px"></i> {{ back_label }}
         </a>
-        <a class="btn btn-outline" target="_blank" rel="noopener" href="{{ stream_url }}">Open raw stream</a>
+        <button class="btn btn-outline" type="button" id="ev-fullscreen">
+          <i data-lucide="maximize-2" style="width:13px;height:13px"></i> Fullscreen
+        </button>
       </div>
       <p class="ev-stage-note">
-        The raw stream skips the portal chrome and is only useful when you need the browser's own viewer or a direct
-        URL. Every evidence load is audited as <code>IMAGE_VIEW</code>. A 404 with
+        Every evidence load is audited as <code>IMAGE_VIEW</code>. A 404 with
         <code>{{ not_available_text }}</code> means the evidence is gone from the ATM; any other error is a bridge or
-        ATM transport failure.
+        ATM transport failure. The raw stream is available under Technical details.
       </p>
     </div>
 
@@ -119,6 +133,13 @@
       <div class="ev-meta">
         {{ meta_item('ATM', atm.atm_id) }}
         {{ meta_item('Day', day_value) }}
+        {% if captured_at %}{{ meta_item('Captured', captured_at) }}{% endif %}
+        {% if camera %}{{ meta_item('Camera', 'CAM ' ~ camera) }}{% endif %}
+        {% if event %}{{ meta_item('Event', event) }}{% endif %}
+        <span class="ev-meta-item">
+          <small>Role</small>
+          {% if role %}{{ role_chip(role) }}{% else %}<b>—</b>{% endif %}
+        </span>
         {{ meta_item('Source', source_label) }}
         {{ meta_item('Type', 'Video clip' if kind == 'video' else 'Still image') }}
         {% if source == 'file' %}
@@ -138,6 +159,11 @@
           </div>
           <div>Transport <b>Read-only chunks via the host bridge</b></div>
           <div>Retention <b>ATM only; no portal copy</b></div>
+          <div>Raw stream <a href="{{ stream_url }}" target="_blank" rel="noopener">Open raw stream</a></div>
+          <div style="color:#92400E;font-size:10.5px;margin-top:2px">
+            The raw stream bypasses the portal chrome. Use it only when the embedded viewer cannot display the file;
+            the view is still audited.
+          </div>
         </div>
       </details>
     </aside>
@@ -158,6 +184,18 @@
   var shaWrap = document.getElementById('ev-sha-wrap');
   var shaEl = document.getElementById('ev-sha');
   if (!stage || !media) return;
+
+  var fullscreenButton = document.getElementById('ev-fullscreen');
+  if (fullscreenButton) {
+    fullscreenButton.addEventListener('click', function () {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else if (stage.requestFullscreen) {
+        var request = stage.requestFullscreen();
+        if (request && request.catch) request.catch(function () {});
+      }
+    });
+  }
 
   var controller = new AbortController();
   var objectUrl = null;

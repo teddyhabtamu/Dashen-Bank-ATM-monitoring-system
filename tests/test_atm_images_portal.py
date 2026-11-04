@@ -343,8 +343,12 @@ def test_candidate_page_links_to_the_wrapped_viewer(monkeypatch):
     assert response.status_code == 200
     assert '/ej-journal/ATM-TEST-GRG/images/view?' in body
     assert 'name_hmac=' + HMAC in body
+    assert 'event=CardInserted' in body
+    assert 'camera=1' in body
+    assert 'captured_at=' in body
+    assert 'role=start' in body
     assert '112.2 KB' in body
-    assert 'Start anchor' in body
+    assert 'Card inserted' in body
 
 
 def test_viewer_page_wraps_the_stream_and_keeps_the_chrome(monkeypatch):
@@ -359,13 +363,68 @@ def test_viewer_page_wraps_the_stream_and_keeps_the_chrome(monkeypatch):
     body = response.get_data(as_text=True)
     assert response.status_code == 200
     assert response.headers['Cache-Control'] == 'no-store'
-    assert 'ATM evidence' in body
+    assert 'Image evidence' in body
+    assert 'Sensitive evidence' in body
+    assert 'Fullscreen' in body
+    assert 'Open raw stream' in body
     assert '/ej-journal/ATM-TEST-GRG/images/file?' in body
     assert 'name_hmac=' + HMAC in body
     assert 'Not available on ATM' in body
     assert 'CardInserted' not in body
     # Opening the page itself is not a view; the stream route audits the bytes.
     assert calls == []
+
+
+def test_viewer_shows_event_camera_and_capture_time(monkeypatch):
+    app, _calls = _app(monkeypatch)
+    client = app.test_client()
+    _admin(client)
+
+    response = client.get(
+        f'/ej-journal/ATM-TEST-GRG/images/view?day=2026-10-22'
+        f'&name_hmac={HMAC}&kind=image&start=15:34:44&end=15:35:21'
+        f'&event=CardInserted&camera=1&captured_at=2026-10-22%2015:34:44'
+        f'&role=start')
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'CardInserted' in body
+    assert 'CAM 1' in body
+    assert '2026-10-22 15:34:44' in body
+    assert 'Card inserted' in body
+    assert 'ATM file' in body
+
+
+def test_session_page_separates_the_video_from_still_moments(monkeypatch):
+    app, _calls = _app(monkeypatch)
+    result = _result()
+    video = dict(result['candidates'][0])
+    video.update({
+        'name_masked': 'session.mp4',
+        'name_hmac': 'b' * 64,
+        'kind': 'video',
+        'event': '',
+        'role': 'in_window',
+        'captured_at': '2026-10-22 15:34:50',
+        'clip_end': '2026-10-22 15:36:21',
+        'clip_duration_s': 91.0,
+        'size_label': '3.3 MB',
+    })
+    result['candidates'] = result['candidates'] + [video]
+    monkeypatch.setattr(bpmod.bridge, 'candidates', lambda *a, **k: result)
+    client = app.test_client()
+    _admin(client)
+
+    response = client.get(
+        '/ej-journal/ATM-TEST-GRG/images?'
+        'day=2026-10-22&start=15:34:44&end=15:35:21')
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'Session recording' in body
+    assert 'Session video' in body
+    assert '3.3 MB' in body
+    assert '91.0s clip' in body
 
 
 def test_zip_page_links_entries_through_the_indexed_viewer(monkeypatch):
@@ -509,7 +568,7 @@ def test_zip_viewer_uses_the_entry_stream_not_a_file_locator(monkeypatch):
 
     body = response.get_data(as_text=True)
     assert response.status_code == 200
-    assert 'Zip entry 0' in body
+    assert 'Archive entry 0' in body
     assert '/ej-journal/ATM-TEST-GRG/images/zip/file?' in body
     assert 'zip_hmac=' + HMAC in body
     assert 'index=0' in body

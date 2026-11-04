@@ -369,6 +369,15 @@ def atm_image_view(atm_id):
         end_raw = (request.args.get('end') or '').strip()
         start = _parse_time(start_raw, time.min) if start_raw else time.min
         end = _parse_time(end_raw, time.max) if end_raw else time.max
+        # Display-only context from the candidate card. None of it decides
+        # which file is streamed; the HMAC/index locator does that.
+        event = (request.args.get('event') or '').strip()[:80]
+        camera = (request.args.get('camera') or '').strip()[:12]
+        captured_at = (request.args.get('captured_at') or '').strip()[:19]
+        role = (request.args.get('role') or '').strip().lower()
+        if role not in ('start', 'end', 'in_window', 'near_window',
+                        'service', 'other'):
+            role = ''
     except ValueError as exc:
         return _no_store(Response(str(exc), status=400, mimetype='text/plain'))
 
@@ -380,7 +389,7 @@ def atm_image_view(atm_id):
             'atm_images.atm_image_zip', atm_id=atm_id,
             day=day.isoformat(), zip_hmac=zip_hmac)
         back_label = 'Archive entries'
-        source_label = f'Zip entry {index}'
+        source_label = f'Archive entry {index}'
         locator = zip_hmac
     else:
         stream_url = url_for(
@@ -390,7 +399,7 @@ def atm_image_view(atm_id):
             'atm_images.atm_images', atm_id=atm_id, day=day.isoformat(),
             start=start.strftime('%H:%M:%S'), end=end.strftime('%H:%M:%S'))
         back_label = 'Candidate list'
-        source_label = 'Direct file'
+        source_label = 'ATM file'
         locator = name_hmac
 
     response = make_response(render_template(
@@ -402,6 +411,10 @@ def atm_image_view(atm_id):
         source_label=source_label,
         locator=locator,
         kind=kind,
+        event=event,
+        camera=camera,
+        captured_at=captured_at,
+        role=role,
         stream_url=stream_url,
         back_url=back_url,
         back_label=back_label,
