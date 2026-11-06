@@ -100,7 +100,8 @@
       <p>
         <b>{{ '{:,}'.format(reporting) }}</b> of
         <b>{{ '{:,}'.format(health_total) }}</b> active ATM{% if health_total != 1 %}s{% endif %}
-        have a journal in staging.{% if no_data %}
+        have a parseable journal in staging.{% if errors %}
+        <b>{{ '{:,}'.format(errors) }}</b> have parse errors.{% endif %}{% if no_data %}
         <b>{{ '{:,}'.format(no_data) }}</b> have no EJ data yet.{% endif %}
       </p>
     </div>
@@ -410,6 +411,8 @@
     <p><b>Read-only staging.</b> Parsed journals are held for reconciliation and never enter the official
       <span class="mono">atm_transactions</span> table until explicitly promoted.
       <span class="mono">no_receipt</span> sessions are counted as evidence, never turned into transactions.</p>
+    <p><b>Journal coverage</b> — the share of active ATMs with a parseable journal: healthy plus stale.
+      An ATM with a parse error or no data is outside coverage.</p>
     <p><b>Healthy</b> — every file for the newest journal date parsed, and that file date is today or yesterday.</p>
     <p><b>Stale</b> — no parse errors, but the newest file is two or more days old. This uses the file-name date,
       not the last transaction inside it; NCR can keep writing to a file named with an older bank date.</p>

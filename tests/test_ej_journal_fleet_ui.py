@@ -43,15 +43,15 @@ def _row(atm_id, branch, vendor, journal_date, status, sessions=0,
     }
 
 
-def _render(days=30):
+def _render(days=30, health=None):
     app = _app()
     summary = {
         'files': 17, 'parse_errors': 0, 'unmapped_files': 0,
         'reporting_atms': 2, 'staged': 17, 'approved': 13,
         'approved_amount': 800.0, 'dispensed': 404.0,
         'no_cash_evidence': 0, 'unmapped_txns': 0, 'active_atms': 1201,
-        'health': {'total': 1201, 'ok': 1, 'stale': 1, 'error': 0,
-                   'no_data': 1199},
+        'health': health or {'total': 1201, 'ok': 1, 'stale': 1, 'error': 0,
+                             'no_data': 1199},
     }
     rows = [
         _row('ATM-TEST-NCR', '4 Kilo Building', 'NCR', date(2026, 11, 2),
@@ -88,6 +88,16 @@ def test_fleet_page_renders_health_tabs_and_a_bounded_range():
     assert 'ETB 800.00' in html
     assert 'Current state, independent of the activity period' in html
     assert 'Latest journal file per ATM' in html
+
+
+def test_health_summary_names_every_excluded_state():
+    html = _render(health={'total': 1201, 'ok': 1148, 'stale': 39,
+                           'error': 5, 'no_data': 9})
+    assert '98.8%' in html
+    assert 'have a parseable journal in staging' in html
+    assert '<b>5</b> have parse errors.' in html
+    assert '<b>9</b> have no EJ data yet.' in html
+    assert 'Journal coverage</b> — the share of active ATMs' in html
 
 
 def test_health_tabs_link_to_the_same_period_and_page_size():
