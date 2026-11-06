@@ -150,6 +150,7 @@ def main():
         ('fault_type_map', 'vendor fault codes'),
         ('ticket_seen', 'ticket dedupe'),
         ('scheduled_reports', 'report schedules'),
+        ('report_definitions', 'saved custom report definitions'),
         ('txn_source_policy', 'demo/real source policy'),
         ('atm_delete_archive', 'archive of deletions'),
         ('atm_state_history', 'state history'),

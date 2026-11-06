@@ -1168,8 +1168,17 @@ _ROUTE_RE = re.compile(
     r"\s*def\s+(?P<fn>\w+)", re.M)
 
 
+def _route_methods(rest):
+    """HTTP methods declared by a @route, defaulting to Flask's GET."""
+    match = re.search(r"methods\s*=\s*\[([^\]]*)\]", rest)
+    if not match:
+        return frozenset({'GET'})
+    methods = re.findall(r"'([A-Za-z]+)'", match.group(1))
+    return frozenset(methods or {'GET'})
+
+
 def _portal_routes():
-    """(file, full_path, roles, view_name) for every route the portal serves.
+    """(file, full_path, roles, view_name, methods) for every portal route.
 
     Read from source rather than by importing the app: report-portal needs Flask,
     psycopg2 and a database, and the suite is deliberately runnable without any
@@ -1189,7 +1198,8 @@ def _portal_routes():
             rr = re.search(r'role_required\(([^)]*)\)', m.group('decos'))
             if rr:
                 roles = rr.group(1)
-            out.append((f.name, prefix + m.group(1), roles, m.group('fn')))
+            out.append((f.name, prefix + m.group(1), roles, m.group('fn'),
+                        _route_methods(m.group('rest'))))
     return out
 
 
@@ -1216,7 +1226,7 @@ def test_an_admin_url_is_always_admin_gated():
     routes = _portal_routes()
     assert len(routes) > 40, 'route parsing broke, not the routes: %d' % len(routes)
 
-    ungated = [(f, p, r, fn) for f, p, r, fn in routes
+    ungated = [(f, p, r, fn) for f, p, r, fn, _methods in routes
                if p.startswith('/admin')
                and fn not in LEGACY_REDIRECT_VIEWS
                and 'ADMIN' not in r]
@@ -1226,7 +1236,7 @@ def test_an_admin_url_is_always_admin_gated():
         % ' | '.join('%s -> %s (%s)' % (p, fn, r or 'no gate')
                      for _, p, r, fn in ungated))
 
-    viewer_reachable = [(f, p) for f, p, r, fn in routes
+    viewer_reachable = [(f, p) for f, p, r, fn, _methods in routes
                         if p.startswith('/admin') and 'VIEWER' in r
                         and fn not in LEGACY_REDIRECT_VIEWS]
     assert not viewer_reachable, (
@@ -1252,12 +1262,19 @@ def test_no_two_routes_claim_the_same_path():
     Written while making the change above: a scripted rewrite turned the legacy
     /admin/cash redirect into '/cash' pointing at '/cash', an infinite loop that
     would have replaced the real page. Nothing about reading that diff felt
-    wrong, so the check is a test rather than care."""
+    wrong, so the check is a test rather than care.
+
+    GET and POST on one path are a normal REST pair (list + create), so the
+    comparison is by path *and* method. Comparing paths alone would reject the
+    saved-report endpoints and teach the next author to merge two clear views
+    into one branching dispatcher."""
     seen = {}
-    for f, p, r, fn in _portal_routes():
-        seen.setdefault(re.sub(r'<[^>]+>', '<>', p), []).append('%s:%s' % (f, fn))
+    for f, p, r, fn, methods in _portal_routes():
+        path = re.sub(r'<[^>]+>', '<>', p)
+        for method in methods:
+            seen.setdefault((path, method), []).append('%s:%s' % (f, fn))
     dupes = {k: v for k, v in seen.items() if len(v) > 1}
-    assert not dupes, 'two views claim the same path: %s' % dupes
+    assert not dupes, 'two views claim the same path and method: %s' % dupes
 
 
 def test_the_sidebar_renders_collapsed_before_the_first_paint():

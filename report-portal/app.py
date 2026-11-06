@@ -69,10 +69,12 @@ def create_app():
     from blueprints.kpi import bp as kpi_bp
     from blueprints.onboarding import bp as onboarding_bp
     from blueprints.incidents import bp as incidents_bp
+    from blueprints.report_builder import bp as report_builder_bp
     from routes                import bp as report_bp
     from audit                 import init_audit_schema
     from agent_registry        import init_agent_identity_table
     from provision_state       import init_provision_state_table
+    from report_store          import init_report_schema
     from scheduler             import init_scheduler_table, create_scheduler
 
     app.register_blueprint(auth_bp)
@@ -88,6 +90,7 @@ def create_app():
     app.register_blueprint(kpi_bp)
     app.register_blueprint(onboarding_bp)
     app.register_blueprint(incidents_bp)
+    app.register_blueprint(report_builder_bp)
     app.register_blueprint(report_bp)
 
     init_audit_schema()
@@ -95,6 +98,7 @@ def create_app():
     init_provision_state_table()
     init_admin_user()
     init_scheduler_table()
+    init_report_schema()
     app.config['SCHEDULER'] = create_scheduler(app)
 
     @app.before_request

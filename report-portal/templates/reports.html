@@ -153,6 +153,16 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 100px; }
 ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+/* ── CUSTOM REPORT CTA ── */
+/* Shared across breakpoints: the builder entry point must not collapse into
+   unstyled text on desktop just because the report cards become accordions. */
+.builder-cta { display:flex; align-items:center; gap:18px; background:#fff; border:1px solid var(--border); border-left:3px solid var(--dashen-gold); border-radius:var(--radius); padding:18px 22px; margin:0 0 26px; box-shadow:var(--shadow-sm); flex-wrap:wrap; }
+.builder-cta-icon { width:42px; height:42px; border-radius:10px; background:rgba(1,33,105,.06); color:var(--dashen-navy); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.builder-cta-icon i { width:20px; height:20px; }
+.builder-cta-copy { flex:1; min-width:220px; }
+.builder-cta-copy h3 { font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:3px; }
+.builder-cta-copy p { font-size:12px; color:var(--text-secondary); line-height:1.5; }
+.builder-cta .btn { flex:0 0 auto; }
 /* ── ACCORDION (mobile: collapsed by default) ── */
 @media(max-width:768px){
   .report-card .card-body-inner { display:none; }
@@ -174,6 +184,7 @@
     <p class="page-subtitle">Downloadable management and operational reports.</p>
   </div>
   <div class="page-actions">
+    <a href="/reports/builder" class="btn btn-primary"><i data-lucide="sliders-horizontal"></i> Build a report</a>
     <a href="/admin/schedules" class="btn btn-outline"><i data-lucide="calendar"></i> Schedule reports</a>
   </div>
 </div>
@@ -231,6 +242,17 @@
       <div class="loading-bar" style="background:var(--dashen-gold);"></div>
       <div class="loading-text" style="color:rgba(255,255,255,0.7);">Compiling Complete Report...</div>
     </div>
+  </div>
+
+  <!-- Self-service builder -->
+  <div class="builder-cta">
+    <div class="builder-cta-icon"><i data-lucide="sliders-horizontal"></i></div>
+    <div class="builder-cta-copy">
+      <h3>Need a different cut of the data?</h3>
+      <p>Build a report by district, vendor, problem type, ATM or day from the governed catalog. Preview
+        the numbers first, then export to Excel, CSV or PDF, or save the definition for next time.</p>
+    </div>
+    <a href="/reports/builder" class="btn btn-primary"><i data-lucide="arrow-right"></i> Open report builder</a>
   </div>
 
   <!-- Individual Reports -->

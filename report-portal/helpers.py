@@ -251,6 +251,10 @@ def _pdf_kpi_block(story, kpis):
 
 def _pdf_header_block(story, title, days, atm, period=None):
     """Shared PDF header: logo + bank name + gold rule + report title + metadata."""
+    from xml.sax.saxutils import escape as _xml_escape
+    title = _xml_escape(str(title or ''))
+    atm = _xml_escape(str(atm or ''))
+    period = _xml_escape(str(period)) if period else None
     if os.path.exists(LOGO_PATH):
         img = Image(LOGO_PATH, width=5 * cm, height=1.5 * cm, kind='proportional')
         img.hAlign = 'CENTER'
@@ -276,8 +280,13 @@ def _pdf_header_block(story, title, days, atm, period=None):
 
 
 def pdf_send(title, headers, rows, days, atm, name, kpis=None, subtitle='',
-             period=None):
-    """Generate a single-section branded PDF report with optional KPI summary page."""
+             period=None, notes=None):
+    """Generate a single-section branded PDF report with optional KPI summary page.
+
+    ``notes`` is used by the custom-report exporter for data-quality caveats
+    (missing district, unmapped fault codes, truncated rows).  They are printed
+    after the table so a mailed PDF carries the same honesty as the portal.
+    """
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
                             rightMargin=1.5 * cm, leftMargin=1.5 * cm,
@@ -287,7 +296,9 @@ def pdf_send(title, headers, rows, days, atm, name, kpis=None, subtitle='',
     story = []
     _pdf_header_block(story, title, days, atm, period=period)
     if subtitle:
-        story.append(P(f'<font color="#475569"><i>{subtitle}</i></font>',
+        from xml.sax.saxutils import escape as _xml_escape
+        story.append(P(f'<font color="#475569"><i>'
+                       f'{_xml_escape(str(subtitle))}</i></font>',
                        alignment=TA_CENTER))
         story.append(Spacer(1, 0.3 * cm))
 
@@ -298,6 +309,15 @@ def pdf_send(title, headers, rows, days, atm, name, kpis=None, subtitle='',
         _pdf_header_block(story, title, days, atm, period=period)
 
     story.append(mktable(headers, rows))
+    if notes:
+        from xml.sax.saxutils import escape as _xml_escape
+        story.append(Spacer(1, 0.35 * cm))
+        for note in notes:
+            story.append(P(
+                f'<font size="7" color="#92400E">Note: '
+                f'{_xml_escape(str(note))}</font>',
+                alignment=TA_CENTER
+            ))
     story.append(Spacer(1, 0.5 * cm))
     story.append(P(
         f'<font size="7" color="#94A3B8">Dashen Bank ATM Monitoring System  |  Confidential  |  '

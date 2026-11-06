@@ -52,6 +52,7 @@ cash_replenishments
 fault_type_map
 fleet_report_cache
 portal_schema_version
+report_definitions
 scheduled_reports
 ticket_seen
 txn_source_policy
