@@ -235,9 +235,11 @@
 
 /* ── session summary / recording ── */
 .ev-session-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--ev-border);border:1px solid var(--ev-border);border-radius:var(--ev-radius-sm);overflow:hidden;box-shadow:none}
+.ev-session-summary.is-three{grid-template-columns:repeat(3,minmax(0,1fr))}
 .ev-summary-item{background:#fff;padding:14px 18px;display:flex;flex-direction:column;gap:4px;min-width:0;text-decoration:none;color:inherit}
 a.ev-summary-item:hover{background:#F8FAFF}
 .ev-summary-value{font-size:22px;font-weight:800;color:var(--ev-brand);line-height:1.1;letter-spacing:-.3px}
+.ev-summary-value.is-date{font-size:16px;letter-spacing:0;font-variant-numeric:tabular-nums}
 .ev-summary-label{font-size:10.5px;font-weight:700;color:var(--ev-muted);text-transform:uppercase;letter-spacing:.45px}
 .ev-summary-note{font-size:11px;color:var(--ev-muted);margin-top:2px}
 .ev-recording{background:var(--ev-surface);border:1px solid var(--ev-border);border-radius:var(--ev-radius);box-shadow:var(--ev-shadow);padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}

@@ -29,11 +29,21 @@
 .ev-caveat{background:#F8FAFC;border:1px solid var(--ev-border);color:#475569;border-radius:10px;padding:12px 16px;font-size:12px;line-height:1.55;margin-bottom:14px}
 .ev-caveat b{color:var(--ev-text)}
 .ev-group{margin-bottom:18px;scroll-margin-top:16px}
+.ev-archive-list{display:flex;flex-direction:column;gap:10px}
+.ev-archive-row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border:1px solid var(--ev-border);border-radius:var(--ev-radius-sm);padding:14px 16px;background:#fff;box-shadow:0 1px 2px rgba(1,33,105,.03)}
+.ev-archive-main{min-width:0;display:flex;flex-direction:column;gap:6px}
+.ev-archive-date{font-size:15px;font-weight:750;color:var(--ev-text)}
+.ev-archive-action{flex:0 0 auto}
 .ev-group-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .ev-group-head h2{font-size:12.5px;font-weight:750;margin:0}
 .ev-group-head .ev-group-count{font-size:10px;font-weight:700;color:var(--ev-muted);background:none;border-radius:0;padding:0}
 @media(max-width:980px){.fp-field{width:100%;min-width:100%}}
-@media(max-width:720px){.ev-hero{padding:13px}.ev-hero h2{font-size:14px}}
+@media(max-width:720px){
+  .ev-hero{padding:13px}.ev-hero h2{font-size:14px}
+  .ev-archive-row{align-items:flex-start}
+  .ev-archive-action{width:100%}
+  .ev-archive-action .btn{width:100%;justify-content:center}
+}
 {% endblock %}
 {% block body %}
 {% set is_ncr = result and result.get('vendor') == 'NCR' %}
@@ -49,6 +59,7 @@
 {% set during_all_n = during_all | length %}
 {% set end_n = end_items | length %}
 {% set near_n = near_items | length %}
+{% set archive_count = result.get('candidate_count', candidates|length) if result else 0 %}
 {% set total_zip_images = namespace(value=0) %}
 {% if is_ncr %}
   {% for c in result.get('candidates', []) %}
@@ -171,53 +182,69 @@
   {% endif %}
 
   {% if is_ncr %}
-  <div class="ev-hero">
-    <div>
-      <h2>Day archive</h2>
-      <p>The NCR zip is the day container, not a transaction link. Open an archive, then pick the session whose time
-        matches the EJ session. The archive groups entries by their ATM-local session timestamp.</p>
-      <div class="ev-summary-line">
-        <span class="ev-chip">Day container</span>
-        <span><b>{{ result.get('candidate_count', 0) }}</b> archive{% if result.get('candidate_count', 0) != 1 %}s{% endif %}</span>
-        <span><b>{{ total_zip_images.value }}</b> image{% if total_zip_images.value != 1 %}s{% endif %}</span>
-        {% if has_window and result.get('session_start') %}<span>Window <b class="mono">{{ result.get('session_start') }} → {{ result.get('session_end') }}</b></span>{% endif %}
-      </div>
-    </div>
-    <div class="ev-hero-actions">
-      {% if result.get('caveat') %}
-      <details class="ev-details" style="border:0;margin:0;padding:0;max-width:420px">
-        <summary>How matching works</summary>
-        <div class="ev-details-body">{{ result.get('caveat') }}</div>
-      </details>
-      {% endif %}
-    </div>
-  </div>
-
   <div class="ev-card">
     <div class="ev-card-head">
       <div>
-        <h2>Archives for this day</h2>
-        <div class="ev-card-sub">Entries are addressed by archive index, never by name.</div>
+        <h2>Day archive</h2>
+        <div class="ev-card-sub">The NCR zip is the day container, not a transaction link. Open an archive, then pick the session whose time matches the EJ session.</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        {% if has_window and result.get('session_start') %}
+        {{ confidence_chip(result.get('confidence')) }}
+        <span class="ev-chip">Window {{ result.get('session_start') }} → {{ result.get('session_end') }}</span>
+        {% else %}
+        <span class="ev-chip">Full day</span>
+        {% endif %}
+        {% if result.get('caveat') %}
+        <details class="ev-details" style="border:0;margin:0;padding:0;max-width:420px">
+          <summary>How matching works</summary>
+          <div class="ev-details-body">{{ result.get('caveat') }}</div>
+        </details>
+        {% endif %}
       </div>
     </div>
     <div class="ev-card-body">
-      <div class="ev-evidence-grid">
+      <div class="ev-session-summary is-three">
+        <div class="ev-summary-item">
+          <span class="ev-summary-value">{{ archive_count }}</span>
+          <span class="ev-summary-label">Day archive{% if archive_count != 1 %}s{% endif %}</span>
+        </div>
+        <div class="ev-summary-item">
+          <span class="ev-summary-value">{{ total_zip_images.value }}</span>
+          <span class="ev-summary-label">Image{% if total_zip_images.value != 1 %}s{% endif %}</span>
+        </div>
+        <div class="ev-summary-item">
+          <span class="ev-summary-value is-date">{{ day_value }}</span>
+          <span class="ev-summary-label">Selected day</span>
+        </div>
+      </div>
+
+      {% if not has_window %}
+      <div class="banner banner-note" style="margin:16px 0 0">
+        <strong>No session window selected.</strong>
+        Pick a session below, or open this archive from a transaction's <strong>Images</strong> link to rank the entries.
+      </div>
+      {% endif %}
+
+      <div class="ev-archive-list" style="margin-top:16px">
         {% for c in result.get('candidates', []) %}
-        <div class="ev-evidence-card is-anchor">
-          <div class="ev-evidence-head">
-            <span class="ev-cam"><i data-lucide="archive" style="width:12px;height:12px"></i> Day archive</span>
-            <span class="ev-role ev-role-start">NCR zip</span>
+        <article class="ev-archive-row">
+          <div class="ev-archive-main">
+            <div class="ev-evidence-head">
+              <span class="ev-cam"><i data-lucide="archive" style="width:12px;height:12px"></i> Day archive</span>
+              <span class="ev-role ev-role-start">NCR zip</span>
+            </div>
+            <div class="ev-archive-date">{{ c.day or day_value }}</div>
+            <div class="ev-evidence-meta">
+              <span>{{ c.image_count }} image{% if c.image_count != 1 %}s{% endif %}</span>
+              <span>{{ c.size_label or ('{:,}'.format(c.size|int) + ' B') }}</span>
+              {% if c.last_write_time %}
+              <span>Modified {{ c.last_write_time[:16]|replace('T', ' ') }}</span>
+              {% endif %}
+            </div>
+            <div class="ev-evidence-name">{{ c.name_masked }}</div>
           </div>
-          <div class="ev-evidence-time">{{ c.day or day_value }}</div>
-          <div class="ev-evidence-meta">
-            <span>{{ c.image_count }} image{% if c.image_count != 1 %}s{% endif %}</span>
-            <span>{{ c.size_label or ('{:,}'.format(c.size|int) + ' B') }}</span>
-            {% if c.last_write_time %}
-            <span>Modified {{ c.last_write_time[:16]|replace('T', ' ') }}</span>
-            {% endif %}
-          </div>
-          <div class="ev-evidence-name">{{ c.name_masked }}</div>
-          <div class="ev-evidence-actions">
+          <div class="ev-archive-action">
             {% if c.fetchable %}
             <a class="btn btn-primary"
                href="{{ url_for('atm_images.atm_image_zip', atm_id=atm.atm_id, day=day_value, zip_hmac=c.name_hmac) }}{% if searched and has_window %}&start={{ start_value }}&end={{ end_value }}{% endif %}">
@@ -227,9 +254,9 @@
             <span class="btn btn-outline" style="color:#94A3B8">Too large</span>
             {% endif %}
           </div>
-        </div>
+        </article>
         {% else %}
-        <div class="ev-empty" style="grid-column:1/-1">
+        <div class="ev-empty">
           <strong>No day archive in this window.</strong>
           <p>Try another day, or check that the ATM has not rotated its image folder.</p>
         </div>

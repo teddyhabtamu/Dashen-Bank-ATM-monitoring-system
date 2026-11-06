@@ -500,6 +500,44 @@ def test_ncr_full_day_link_is_treated_as_no_session_window(monkeypatch):
     assert '&end=' not in body
 
 
+def test_ncr_page_uses_the_unified_day_archive_layout(monkeypatch):
+    app, _calls = _app(monkeypatch)
+    monkeypatch.setattr(bpmod.bridge, 'candidates',
+                        lambda *a, **k: _ncr_result())
+    client = app.test_client()
+    _admin(client)
+
+    response = client.get(
+        '/ej-journal/ATM-TEST-NCR/images?day=2026-10-22')
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'ev-session-summary is-three' in body
+    assert 'Selected day' in body
+    assert 'Full day' in body
+    assert 'No session window selected' in body
+    assert 'ev-archive-row' in body
+    assert 'Archives for this day' not in body
+
+
+def test_ncr_page_shows_the_requested_session_window(monkeypatch):
+    app, _calls = _app(monkeypatch)
+    monkeypatch.setattr(bpmod.bridge, 'candidates',
+                        lambda *a, **k: _ncr_result())
+    client = app.test_client()
+    _admin(client)
+
+    response = client.get(
+        '/ej-journal/ATM-TEST-NCR/images?'
+        'day=2026-10-22&start=10:33:53&end=10:35:30')
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'Window 2026-10-22 10:33:53 → 2026-10-22 10:35:30' in body
+    assert 'ev-confidence' in body
+    assert 'Full day' not in body
+
+
 def test_zip_page_ignores_a_full_day_window_for_ranking(monkeypatch):
     app, calls = _app(monkeypatch)
     seen = {}
