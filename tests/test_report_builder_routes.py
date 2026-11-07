@@ -414,6 +414,12 @@ def test_builder_exposes_scheduling_for_saved_reports(monkeypatch):
     # A report that already has a schedule opens it in edit mode instead of
     # silently offering a second schedule.
     assert 'if (scheduleRows.length) editSchedule(scheduleRows[0].id);' in body
+    # Recipients use the same directory-backed chip editor as the admin page.
+    assert 'id="scheduleRecipEditor"' in body
+    assert 'id="scheduleRecipInput"' in body
+    assert 'id="scheduleRecipientMatches"' in body
+    assert 'window.createRecipientEditor' in body
+    assert "endpoint: '/api/reports/recipients'" in body
 
 
 def test_saved_reports_expose_a_schedule_badge(monkeypatch):
@@ -468,6 +474,9 @@ class _ScheduleCursor:
                          params[5], None, None, None)
         elif 'SELECT params FROM scheduled_reports' in sql:
             self._rows = [('definition_id=9',)]
+        elif 'SELECT username, email FROM app_users' in sql:
+            self._rows = [('hanna.bekele',
+                           'hanna.bekele@dashenbank.com')]
         else:
             self._row = None
 
@@ -526,6 +535,28 @@ def test_the_owner_can_schedule_a_saved_report(monkeypatch):
     assert insert
     assert 'definition_id=9' in insert[0][1]
     assert insert[0][1][1] == 'excel'
+
+
+def test_recipient_directory_suggests_system_users(monkeypatch):
+    """The builder's recipient picker must work for viewers and operators.
+
+    It deliberately does not reuse the admin-only ``/admin/users/emails``
+    endpoint; this checks the role-safe replacement returns only the two
+    fields the picker needs and ignores one-character queries.
+    """
+    app = _app(monkeypatch)
+    conn = _ScheduleConn()
+    monkeypatch.setattr(rb, 'get_db', lambda: conn)
+    client = app.test_client()
+    _login(client, role='viewer', username='alice')
+
+    response = client.get('/api/reports/recipients?q=han')
+    assert response.status_code == 200
+    assert response.get_json() == [{
+        'username': 'hanna.bekele',
+        'email': 'hanna.bekele@dashenbank.com',
+    }]
+    assert client.get('/api/reports/recipients?q=h').get_json() == []
 
 
 def test_a_viewer_cannot_schedule_someone_elses_report(monkeypatch):

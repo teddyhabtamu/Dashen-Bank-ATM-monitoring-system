@@ -169,6 +169,43 @@ def catalog():
     return jsonify(report_engine.catalog_payload())
 
 
+@bp.route('/api/reports/recipients')
+@login_required
+@role_required(*_ALL_ROLES)
+def recipients():
+    """Directory autocomplete for schedule recipients.
+
+    The admin schedule page has its own admin-only picker; the builder is used
+    by viewers and operators too, so it needs the same suggestions without
+    granting them the user-management page. Only username and email are
+    returned, and free-text addresses remain allowed.
+    """
+    query = (request.args.get('q') or '').strip()
+    if len(query) < 2:
+        return jsonify([])
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    "SELECT username, email FROM app_users "
+                    "WHERE email IS NOT NULL AND email <> '' "
+                    "AND (username ILIKE %s OR email ILIKE %s) "
+                    "ORDER BY username LIMIT 10",
+                    (f'%{query}%', f'%{query}%'))
+                rows = cur.fetchall()
+            finally:
+                try:
+                    cur.close()
+                except Exception:
+                    pass
+        return jsonify([{'username': row[0], 'email': row[1]}
+                        for row in rows])
+    except Exception:
+        logger.exception('Could not load recipient suggestions')
+        return jsonify([])
+
+
 @bp.route('/api/reports/options')
 @login_required
 @role_required(*_ALL_ROLES)

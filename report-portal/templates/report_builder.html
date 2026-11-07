@@ -664,9 +664,14 @@
         <div class="builder-hint" id="scheduleCronHint">Minute hour day month weekday, evaluated in East Africa Time.</div>
       </div>
       <div class="form-group">
-        <label for="scheduleRecipients">Recipients</label>
-        <input id="scheduleRecipients" maxlength="2000" placeholder="ops@dashenbank.com, data@dashenbank.com" autocomplete="off">
-        <div class="builder-hint">Comma-separated email addresses. Delivery uses the portal's configured SMTP relay.</div>
+        <label for="scheduleRecipInput">Recipients</label>
+        <div class="recip-editor" id="scheduleRecipEditor" role="group" aria-labelledby="scheduleRecipInput">
+          <div class="recip-tags" id="scheduleRecipTags"></div>
+          <input type="text" id="scheduleRecipInput" class="recip-input" aria-label="Recipient email address" placeholder="Type an address, then comma or Enter…" autocomplete="off">
+        </div>
+        <input type="hidden" id="scheduleRecipients">
+        <div class="builder-hint" id="scheduleRecipientHints">Type any address, or pick a system user below. Delivery uses the portal's configured SMTP relay.</div>
+        <div class="recip-matches" id="scheduleRecipientMatches"></div>
       </div>
       <label class="builder-schedule-enabled"><input type="checkbox" id="scheduleEnabled" checked> Schedule is enabled</label>
       <p class="builder-help">The saved definition is evaluated at send time, so preset periods such as “Last 7 days” stay current. Fixed custom dates remain fixed.</p>
@@ -725,6 +730,7 @@
   var scheduleDefinitionId = null;
   var scheduleEditingId = null;
   var scheduleRows = [];
+  var scheduleRecipientsEditor = null;
 
   var state = {
     datasetId: 'transactions',
@@ -2877,7 +2883,7 @@
     $('schedulePreset').value = '0 7 * * 1';
     $('scheduleCron').value = '0 7 * * 1';
     $('scheduleFormat').value = 'pdf';
-    $('scheduleRecipients').value = '';
+    if (scheduleRecipientsEditor) scheduleRecipientsEditor.clear();
     $('scheduleEnabled').checked = true;
     $('scheduleError').classList.remove('show');
     $('scheduleError').textContent = '';
@@ -3004,7 +3010,9 @@
     $('scheduleName').value = row.name || '';
     $('scheduleCron').value = row.schedule || '';
     $('scheduleFormat').value = row.format || 'pdf';
-    $('scheduleRecipients').value = row.recipients || '';
+    if (scheduleRecipientsEditor) {
+      scheduleRecipientsEditor.setValue(row.recipients || '');
+    }
     $('scheduleEnabled').checked = !!row.enabled;
     $('scheduleError').classList.remove('show');
     syncSchedulePreset();
@@ -3018,7 +3026,14 @@
     if (!scheduleDefinitionId) return;
     var name = ($('scheduleName').value || '').trim();
     var cron = ($('scheduleCron').value || '').trim();
-    var recipients = ($('scheduleRecipients').value || '').trim();
+    if (scheduleRecipientsEditor
+        && !scheduleRecipientsEditor.commit({quiet: true})) {
+      scheduleError('Check the recipient email address — it is not valid yet.');
+      return;
+    }
+    var recipients = scheduleRecipientsEditor
+      ? scheduleRecipientsEditor.getValue()
+      : ($('scheduleRecipients').value || '').trim();
     var format = $('scheduleFormat').value;
     if (!name) {
       scheduleError('Give the schedule a name.');
@@ -3291,6 +3306,17 @@
         deleteDefinition(remove.getAttribute('data-delete'));
       }
     });
+
+    if (window.createRecipientEditor) {
+      scheduleRecipientsEditor = window.createRecipientEditor({
+        editorId: 'scheduleRecipEditor',
+        inputId: 'scheduleRecipInput',
+        tagsId: 'scheduleRecipTags',
+        hiddenId: 'scheduleRecipients',
+        matchesId: 'scheduleRecipientMatches',
+        endpoint: '/api/reports/recipients'
+      });
+    }
 
     $('closeScheduleModal').addEventListener('click', closeScheduleModal);
     $('cancelScheduleModal').addEventListener('click', closeScheduleModal);

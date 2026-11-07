@@ -29,15 +29,6 @@
 .toggle-switch input:checked+.toggle-slider:before{transform:translateX(16px)}
 .cron-help{font-size:10px;color:#94A3B8;margin-top:4px;line-height:1.5}
 .cron-help code{background:#F1F5F9;padding:1px 5px;border-radius:3px;font-size:10px}
-/* ── Outlook-style recipient tags ── */
-.recip-editor{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid #E4E9F1;border-radius:8px;padding:6px 8px;cursor:text;background:#fff}
-.recip-editor:focus-within{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
-.recip-tags{display:flex;flex-wrap:wrap;gap:6px}
-.recip-tag{display:inline-flex;align-items:center;gap:6px;background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF;border-radius:16px;padding:3px 6px 3px 10px;font-size:12px;max-width:280px}
-.recip-tag span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.recip-tag button{border:none;background:#DBEAFE;color:#1E40AF;border-radius:50%;width:18px;height:18px;line-height:1;cursor:pointer;font-size:13px;font-weight:700;padding:0}
-#recipInput{border:none;outline:none;flex:1;min-width:140px;font-size:13px;font-family:inherit;padding:4px 2px}
-
 /* ── Kebab menu ── */
 .kebab-wrap{position:relative;text-align:center}
 .kebab-btn{background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:4px;color:#94A3B8;transition:.15s;line-height:1}
@@ -281,11 +272,11 @@
           <label for="recipInput">Recipients</label>
           <div class="recip-editor" id="recipEditor" role="group" aria-labelledby="recipInput">
             <div class="recip-tags" id="recipTags"></div>
-            <input type="text" id="recipInput" aria-label="Recipient email address" placeholder="Type an address, then comma or Enter…" autocomplete="off" oninput="suggestRecipients(this.value)">
+            <input type="text" id="recipInput" class="recip-input" aria-label="Recipient email address" placeholder="Type an address, then comma or Enter…" autocomplete="off">
           </div>
           <input type="hidden" name="recipients" id="schedRecipients">
           <div id="recipientHints" style="font-size:11px;color:#64748B;margin-top:4px">Type any address, or pick a system user below.</div>
-          <div id="recipientMatches" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+          <div id="recipientMatches" class="recip-matches"></div>
         </div>
         <div class="form-group" id="schedPeriodWrap">
           <label for="schedDays">Reporting Period</label>
@@ -408,102 +399,27 @@ function syncCustomSelects(){
   });
 }
 
-document.getElementById('recipEditor').addEventListener('click', function(){
-  document.getElementById('recipInput').focus();
+// Shared with the report builder (base.html): address chips plus directory
+// suggestions, so composing a recipient behaves the same in both modals.
+var recipEditor = createRecipientEditor({
+  editorId: 'recipEditor',
+  inputId: 'recipInput',
+  tagsId: 'recipTags',
+  hiddenId: 'schedRecipients',
+  matchesId: 'recipientMatches',
+  endpoint: '/admin/users/emails'
 });
 
-var _recipTimer = null;
-var _recipTags = [];
-function _recipSync(){
-  document.getElementById('schedRecipients').value = _recipTags.join(', ');
-}
-function _recipValid(email){
-  var value = String(email || '').trim();
-  var parts = value.split('@');
-  if(parts.length !== 2 || /\s/.test(value)) return false;
-  return parts[0].length > 0 && parts[1].indexOf('.') > 0 &&
-    parts[1].split('.').every(function(label){ return label.length > 0; });
-}
-function _stripTrailingSeparators(value){
-  var text = String(value || '').trim();
-  var end = text.length;
-  while(end > 0 && (text.charAt(end - 1) === ';' || text.charAt(end - 1) === ',')){
-    end -= 1;
-  }
-  return text.slice(0, end).trim();
-}
-function renderRecipTags(){
-  var box = document.getElementById('recipTags');
-  box.innerHTML = '';
-  _recipTags.forEach(function(email, idx){
-    var chip = document.createElement('span');
-    chip.className = 'recip-tag';
-    var label = document.createElement('span');
-    label.textContent = email;
-    var x = document.createElement('button');
-    x.type = 'button';
-    x.textContent = '×';
-    x.title = 'Remove';
-    x.onclick = function(){ _recipTags.splice(idx, 1); _recipSync(); renderRecipTags(); };
-    chip.appendChild(label);
-    chip.appendChild(x);
-    box.appendChild(chip);
-  });
-}
-function addRecipTag(raw){
-  var email = _stripTrailingSeparators(raw);
-  if(!email) return false;
-  if(!_recipValid(email)){ showToast('"' + email + '" is not a valid email address.', 'error', 5000); return false; }
-  if(_recipTags.indexOf(email) === -1) _recipTags.push(email);
-  _recipSync(); renderRecipTags();
-  return true;
-}
-function commitRecipInput(opts){
-  opts = opts || {};
-  var input = document.getElementById('recipInput');
-  var parts = input.value.split(/[,;\n]+/);
-  var leftover = [];
-  parts.forEach(function(p){
-    var email = _stripTrailingSeparators(p);
-    if(!email) return;
-    if(!_recipValid(email)){
-      if(!opts.quiet) showToast('"' + email + '" is not a valid email address.', 'error', 5000);
-      leftover.push(email);
-    } else if(_recipTags.indexOf(email) === -1){
-      _recipTags.push(email);
-    }
-  });
-  _recipSync(); renderRecipTags();
-  // Keep uncommitted text for fixing; never eat the user's typing.
-  // (The suggestion box is left alone here — clearing it on blur is what
-  // used to destroy suggestion clicks between mousedown and mouseup.)
-  input.value = leftover.join(', ');
-  if(!opts.keepMatches) document.getElementById('recipientMatches').innerHTML = '';
-  return leftover.length === 0;
-}
 document.addEventListener('DOMContentLoaded', function(){
   loadSchedAtms();
-  var input = document.getElementById('recipInput');
-  if(!input) return;
-  input.addEventListener('keydown', function(e){
-    if(e.key === 'Enter' || e.key === ',' || e.key === ';' || e.key === 'Tab'){
-      if(input.value.trim()){ e.preventDefault(); commitRecipInput(); }
-    } else if(e.key === 'Backspace' && !input.value && _recipTags.length){
-      _recipTags.pop(); _recipSync(); renderRecipTags();
-    }
-  });
-  input.addEventListener('paste', function(){
-    setTimeout(commitRecipInput, 0);
-  });
-  input.addEventListener('blur', function(){ if(input.value.trim()) commitRecipInput({quiet: true, keepMatches: true}); });
   var form = document.getElementById('scheduleForm');
   if(form) form.addEventListener('submit', function(e){
     buildSchedParams();
-    commitRecipInput();
-    if(!_recipTags.length){
+    if(recipEditor) recipEditor.commit();
+    if(!recipEditor || recipEditor.isEmpty()){
       e.preventDefault();
       showToast('Add at least one recipient.', 'error', 5000);
-      input.focus();
+      document.getElementById('recipInput').focus();
       return;
     }
     if(document.getElementById('schedType').value === 'custom'
@@ -514,36 +430,6 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   });
 });
-function suggestRecipients(q){
-  clearTimeout(_recipTimer);
-  var box = document.getElementById('recipientMatches');
-  var tail = (q || '').split(',').pop().trim();
-  if(tail.length < 2){ box.innerHTML = ''; return; }
-  _recipTimer = setTimeout(function(){
-    fetch('/admin/users/emails?q=' + encodeURIComponent(tail))
-    .then(function(r){ return r.json(); })
-    .then(function(users){
-      box.innerHTML = '';
-      users.forEach(function(u){
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'btn btn-outline';
-        b.style.cssText = 'padding:4px 10px;font-size:11px';
-        b.textContent = u.username + ' <' + u.email + '>';
-        // mousedown (not click): preventDefault keeps focus in the typing
-        // box, so no blur fires and this button survives to receive the click.
-        b.onmousedown = function(e){ e.preventDefault(); };
-        b.onclick = function(){
-          addRecipTag(u.email);
-          document.getElementById('recipInput').value = '';
-          document.getElementById('recipInput').focus();
-          box.innerHTML = '';
-        };
-        box.appendChild(b);
-      });
-    });
-  }, 250);
-}
 
 function openScheduleModal(data) {  data = data || {};
   currentScheduleData = data;
@@ -557,10 +443,7 @@ function openScheduleModal(data) {  data = data || {};
   document.getElementById('schedCron').value = data.schedule || '';
   document.getElementById('schedPreset').value = '';
   document.getElementById('cronDescription').textContent = describeCron(data.schedule || '');
-  document.getElementById('schedRecipients').value = data.recipients || '';
-  _recipTags = String(data.recipients || '').split(',').map(function(s){ return s.trim(); }).filter(Boolean);
-  renderRecipTags();
-  document.getElementById('recipInput').value = '';
+  if(recipEditor) recipEditor.setValue(data.recipients || '');
   setSchedParams(String(data.params || ''));
   togglePeriodVisibility();
   document.getElementById('scheduleModal').classList.add('show');

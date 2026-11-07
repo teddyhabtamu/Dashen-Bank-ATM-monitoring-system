@@ -240,6 +240,19 @@ button.profile-item{width:100%;background:none;border:0;font-family:inherit;text
 .cust-search input:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
 .cust-empty{padding:10px;font-size:12px;color:#94A3B8;text-align:center;display:none}
 .cust-drop.has-search{max-height:240px}
+/* ── SHARED RECIPIENT EDITOR ── */
+/* Outlook-style address chips with optional directory suggestions. The same
+   component is used by the admin schedule form and the report builder so a
+   recipient is composed identically wherever a schedule is created. */
+.recip-editor{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid #E4E9F1;border-radius:8px;padding:6px 8px;cursor:text;background:#fff;transition:border-color .2s,box-shadow .2s}
+.recip-editor:focus-within{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
+.recip-tags{display:flex;flex-wrap:wrap;gap:6px}
+.recip-tag{display:inline-flex;align-items:center;gap:6px;background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF;border-radius:16px;padding:3px 6px 3px 10px;font-size:12px;max-width:280px}
+.recip-tag span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recip-tag button{border:none;background:#DBEAFE;color:#1E40AF;border-radius:50%;width:18px;height:18px;line-height:1;cursor:pointer;font-size:13px;font-weight:700;padding:0}
+.recip-input{border:none;outline:none;flex:1;min-width:140px;font-size:13px;font-family:inherit;padding:4px 2px;background:transparent}
+.recip-matches{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.recip-match{padding:4px 10px;font-size:11px}
 /* ── FLATPICKR THEME ── */
 .flatpickr-calendar{background:#fff;border:1px solid #E4E9F1;box-shadow:0 8px 32px rgba(1,33,105,.1);border-radius:8px;font-family:'Inter',sans-serif;margin-top:4px}
 .flatpickr-calendar.arrowTop:before,.flatpickr-calendar.arrowTop:after{display:none}
@@ -642,6 +655,193 @@ tbody tr{animation:fadeSlideUp .3s ease both;animation-delay:calc(var(--i,0) * 0
   </div>
 </div>
 {% endif %}
+<script>
+// ── SHARED RECIPIENT EDITOR ──
+// Outlook-style chips plus optional directory suggestions. One factory keeps
+// the admin schedule form and the report builder behaviour identical: typing a
+// name shows matching system users underneath, while a plain address is still
+// accepted. Suggestions are fetched only after two characters; free text is
+// never blocked by the directory.
+function recipValidEmail(email){
+  var value = String(email || '').trim();
+  var parts = value.split('@');
+  if(parts.length !== 2 || /\s/.test(value)) return false;
+  return parts[0].length > 0 && parts[1].indexOf('.') > 0 &&
+    parts[1].split('.').every(function(label){ return label.length > 0; });
+}
+function stripRecipSeparators(value){
+  var text = String(value || '').trim();
+  var end = text.length;
+  while(end > 0 && (text.charAt(end - 1) === ';' || text.charAt(end - 1) === ',')){
+    end -= 1;
+  }
+  return text.slice(0, end).trim();
+}
+function createRecipientEditor(opts){
+  opts = opts || {};
+  var editor = document.getElementById(opts.editorId);
+  var input = document.getElementById(opts.inputId);
+  var tagsBox = document.getElementById(opts.tagsId);
+  var hidden = document.getElementById(opts.hiddenId);
+  var matches = opts.matchesId ? document.getElementById(opts.matchesId) : null;
+  if(!editor || !input || !tagsBox || !hidden) return null;
+
+  var tags = [];
+  var timer = null;
+  var requestSeq = 0;
+  var endpoint = opts.endpoint || '';
+
+  function sync(){
+    hidden.value = tags.join(', ');
+    if(typeof opts.onChange === 'function') opts.onChange(hidden.value);
+  }
+  function render(){
+    tagsBox.innerHTML = '';
+    tags.forEach(function(email, idx){
+      var chip = document.createElement('span');
+      chip.className = 'recip-tag';
+      var label = document.createElement('span');
+      label.textContent = email;
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = '\u00d7';
+      remove.title = 'Remove';
+      remove.setAttribute('aria-label', 'Remove ' + email);
+      remove.onclick = function(event){
+        event.preventDefault();
+        tags.splice(idx, 1);
+        sync();
+        render();
+        input.focus();
+      };
+      chip.appendChild(label);
+      chip.appendChild(remove);
+      tagsBox.appendChild(chip);
+    });
+  }
+  function add(raw, quiet){
+    var email = stripRecipSeparators(raw);
+    if(!email) return false;
+    if(!recipValidEmail(email)){
+      if(!quiet && window.showToast){
+        window.showToast('"' + email + '" is not a valid email address.', 'error', 5000);
+      }
+      return false;
+    }
+    if(tags.indexOf(email) === -1) tags.push(email);
+    sync();
+    render();
+    return true;
+  }
+  function clearMatches(){
+    if(matches) matches.innerHTML = '';
+  }
+  function commit(commitOpts){
+    commitOpts = commitOpts || {};
+    var parts = input.value.split(/[,;\n]+/);
+    var leftover = [];
+    parts.forEach(function(part){
+      var text = stripRecipSeparators(part);
+      if(!text) return;
+      if(recipValidEmail(text)){
+        if(tags.indexOf(text) === -1) tags.push(text);
+      } else {
+        leftover.push(text);
+      }
+    });
+    sync();
+    render();
+    // Keep uncommitted text so the user can correct it; never discard typing.
+    input.value = leftover.join(', ');
+    if(!commitOpts.keepMatches) clearMatches();
+    if(leftover.length && !commitOpts.quiet && window.showToast){
+      window.showToast('"' + leftover[0] + '" is not a valid email address.', 'error', 5000);
+    }
+    return leftover.length === 0;
+  }
+  function suggest(query){
+    if(!endpoint || !matches) return;
+    clearTimeout(timer);
+    var tail = String(query || '').split(/[,;\n]/).pop().trim();
+    if(tail.length < 2){ clearMatches(); return; }
+    timer = setTimeout(function(){
+      var seq = ++requestSeq;
+      var url = endpoint + (endpoint.indexOf('?') > -1 ? '&' : '?')
+        + 'q=' + encodeURIComponent(tail);
+      fetch(url, { credentials: 'same-origin' })
+        .then(function(response){ return response.ok ? response.json() : []; })
+        .then(function(users){
+          if(seq !== requestSeq || !Array.isArray(users)) return;
+          matches.innerHTML = '';
+          users.forEach(function(user){
+            if(!user || !user.email) return;
+            var button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-outline recip-match';
+            button.textContent = (user.username ? user.username + ' ' : '')
+              + '<' + user.email + '>';
+            // mousedown (not click) keeps focus in the input, so the button
+            // still exists to receive the click instead of being blurred away.
+            button.onmousedown = function(event){ event.preventDefault(); };
+            button.onclick = function(){
+              add(user.email, true);
+              input.value = '';
+              input.focus();
+              clearMatches();
+            };
+            matches.appendChild(button);
+          });
+        })
+        .catch(function(){ /* free-text entry must keep working */ });
+    }, 250);
+  }
+
+  editor.addEventListener('click', function(event){
+    if(event.target === editor || event.target === tagsBox) input.focus();
+  });
+  input.addEventListener('keydown', function(event){
+    if(event.key === 'Enter' || event.key === ',' || event.key === ';'
+       || event.key === 'Tab'){
+      if(input.value.trim()){
+        event.preventDefault();
+        commit();
+      }
+    } else if(event.key === 'Backspace' && !input.value && tags.length){
+      tags.pop();
+      sync();
+      render();
+    } else if(event.key === 'Escape'){
+      clearMatches();
+    }
+  });
+  input.addEventListener('paste', function(){
+    setTimeout(function(){ commit({quiet: true}); }, 0);
+  });
+  input.addEventListener('blur', function(){
+    if(input.value.trim()) commit({quiet: true, keepMatches: true});
+  });
+  input.addEventListener('input', function(){ suggest(input.value); });
+
+  return {
+    setValue: function(value){
+      var list = Array.isArray(value)
+        ? value : String(value || '').split(/[,;\n]+/);
+      tags = [];
+      list.forEach(function(item){ add(item, true); });
+      input.value = '';
+      clearMatches();
+    },
+    getValue: function(){ return tags.join(', '); },
+    tags: function(){ return tags.slice(); },
+    isEmpty: function(){ return tags.length === 0; },
+    commit: commit,
+    clear: function(){ tags = []; input.value = ''; sync(); render(); clearMatches(); },
+    clearMatches: clearMatches,
+    focus: function(){ input.focus(); }
+  };
+}
+window.createRecipientEditor = createRecipientEditor;
+</script>
 {% block body %}{% endblock %}
 </div>
 

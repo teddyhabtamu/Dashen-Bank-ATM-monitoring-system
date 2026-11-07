@@ -253,6 +253,14 @@ def test_admin_schedules_can_target_a_saved_custom_report():
     assert 'id="prefillDefinitionId"' in sched_page
     assert 'id="prefillScheduleId"' in sched_page
     assert 'prefill_definition_id' in sched_page
+    # The admin form and the builder share one recipient editor, so a
+    # directory match appears under the typing box in both places.
+    assert 'class="recip-input"' in sched_page
+    assert 'createRecipientEditor({' in sched_page
+    assert "endpoint: '/admin/users/emails'" in sched_page
+    base_page = _read('templates', 'base.html')
+    assert 'function createRecipientEditor(' in base_page
+    assert 'window.createRecipientEditor = createRecipientEditor;' in base_page
     admin_py = _read('blueprints', 'admin.py')
     assert "request.args.get('definition_id')" in admin_py
     assert 'prefill_definition_id=prefill_definition_id' in admin_py
