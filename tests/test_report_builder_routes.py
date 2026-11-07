@@ -409,6 +409,11 @@ def test_builder_exposes_scheduling_for_saved_reports(monkeypatch):
     assert 'data-schedule="' in body
     assert '/api/reports/definitions/' in body
     assert "'/schedules'" in body
+    assert 'id="scheduleManagerLink"' in body
+    assert '/admin/schedules?definition_id=' in body
+    # A report that already has a schedule opens it in edit mode instead of
+    # silently offering a second schedule.
+    assert 'if (scheduleRows.length) editSchedule(scheduleRows[0].id);' in body
 
 
 def test_saved_reports_expose_a_schedule_badge(monkeypatch):

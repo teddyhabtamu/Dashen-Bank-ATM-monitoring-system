@@ -214,6 +214,8 @@
     <form method="post" action="/admin/schedules/save" id="scheduleForm">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="id" id="scheduleId" value="">
+      <input type="hidden" id="prefillDefinitionId" value="{{ prefill_definition_id }}">
+      <input type="hidden" id="prefillScheduleId" value="{{ prefill_schedule_id }}">
       <div class="form-grid">
         <div class="form-group full">
           <label for="schedName">Schedule Name</label>
@@ -564,6 +566,30 @@ function openScheduleModal(data) {  data = data || {};
   document.getElementById('scheduleModal').classList.add('show');
   setTimeout(syncCustomSelects, 10);
 }
+
+// Deep link from the report builder's schedule modal:
+// /admin/schedules?definition_id=9 opens the form with that saved report
+// already selected instead of asking the user to pick it again.
+document.addEventListener('DOMContentLoaded', function(){
+  var prefill = document.getElementById('prefillDefinitionId');
+  if(!prefill || !prefill.value) return;
+  var existing = document.getElementById('prefillScheduleId');
+  if(existing && existing.value){
+    // A schedule already exists for this report: open that exact delivery
+    // for editing instead of starting a duplicate.
+    editSchedule(existing.value);
+    return;
+  }
+  var option = document.querySelector(
+    '#schedDefinition option[value="' + prefill.value + '"]');
+  if(!option) return;
+  openScheduleModal({
+    report_type: 'custom',
+    name: option.textContent.trim() + ' schedule',
+    schedule: '0 7 * * 1',
+    params: 'definition_id=' + prefill.value
+  });
+});
 
 function applyPreset(){
   var el = document.getElementById('schedPreset');

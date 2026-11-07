@@ -114,6 +114,7 @@
 .builder-dialog-close svg{width:16px;height:16px}
 .builder-dialog-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-top:1px solid #EEF1F6;flex:0 0 auto;background:#FBFCFE}
 .builder-dialog-foot .builder-hint{font-size:10.5px}
+.builder-dialog-foot .builder-link{font-size:10.5px;margin-left:5px}
 
 /* field picker */
 .builder-picker{width:620px}
@@ -250,6 +251,7 @@
 .builder-schedule-existing{display:flex;flex-direction:column;gap:8px}
 .builder-schedule-item{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border:1px solid #E4E9F1;border-radius:8px;padding:10px 12px;background:#FBFCFE}
 .builder-schedule-item.off{opacity:.65}
+.builder-schedule-item.editing{border-color:#9DB4D8;background:#F8FAFF}
 .builder-schedule-item-main{display:flex;flex-direction:column;gap:3px;min-width:0}
 .builder-schedule-item-name{font-size:12px;font-weight:700;color:#0F172A;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .builder-schedule-item-meta{font-size:10.5px;color:#64748B;line-height:1.45;overflow-wrap:anywhere}
@@ -670,7 +672,9 @@
       <p class="builder-help">The saved definition is evaluated at send time, so preset periods such as “Last 7 days” stay current. Fixed custom dates remain fixed.</p>
     </div>
     <div class="builder-dialog-foot">
-      <span class="builder-hint">Times are East Africa Time.</span>
+      <span class="builder-hint">Times are East Africa Time.
+        <a class="builder-link" id="scheduleManagerLink" href="/admin/schedules" hidden>All schedules</a>
+      </span>
       <div class="builder-foot-actions">
         <button type="button" class="btn btn-outline" id="cancelScheduleModal">Close</button>
         <button type="button" class="btn btn-primary" id="scheduleSaveBtn">Save schedule</button>
@@ -2880,6 +2884,7 @@
     updateScheduleCronHint();
     refreshSelect('schedulePreset');
     refreshSelect('scheduleFormat');
+    renderScheduleRows();
   }
 
   function renderScheduleRows() {
@@ -2894,8 +2899,10 @@
       return;
     }
     scheduleRows.forEach(function (row) {
+      var editing = String(row.id) === String(scheduleEditingId);
       var item = document.createElement('div');
-      item.className = 'builder-schedule-item' + (row.enabled ? '' : ' off');
+      item.className = 'builder-schedule-item'
+        + (row.enabled ? '' : ' off') + (editing ? ' editing' : '');
       var recipients = row.recipients || 'No recipients';
       var last = row.last_run
         ? 'Last run ' + row.last_run
@@ -2906,6 +2913,7 @@
         + '<span class="builder-badge">' + escapeHtml(String(row.format).toUpperCase())
         + '</span>'
         + (row.enabled ? '' : '<span class="builder-badge">Paused</span>')
+        + (editing ? '<span class="builder-badge schedule">Editing</span>' : '')
         + '</div>'
         + '<div class="builder-schedule-item-meta">'
         + escapeHtml(describeSchedule(row.schedule)) + '</div>'
@@ -2956,12 +2964,23 @@
     $('scheduleSubtitle').textContent = def
       ? def.name + ' · ' + definitionPeriodText(def)
       : 'Email this saved report on a recurring schedule.';
+    var manager = $('scheduleManagerLink');
+    if (manager) {
+      manager.hidden = !CAN_SHARE;
+      manager.href = '/admin/schedules?definition_id='
+        + encodeURIComponent(id);
+    }
     resetScheduleForm();
     scheduleRows = [];
     renderScheduleRows();
     $('scheduleModal').classList.add('show');
     setBodyLock(true);
-    loadSchedules(id);
+    loadSchedules(id).then(function () {
+      // Open the report's existing schedule straight in edit mode: a click on
+      // "Schedule" should manage the exact delivery, not silently start a
+      // second one. "New schedule" still resets the form.
+      if (scheduleRows.length) editSchedule(scheduleRows[0].id);
+    });
     setTimeout(function () { $('scheduleName').focus(); }, 0);
   }
 
@@ -2991,6 +3010,7 @@
     syncSchedulePreset();
     updateScheduleCronHint();
     refreshSelect('scheduleFormat');
+    renderScheduleRows();
     $('scheduleName').focus();
   }
 

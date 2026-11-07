@@ -2183,6 +2183,9 @@ def audit_log():
 @role_required(ROLE_ADMIN)
 def schedule_list():
     custom_reports = []
+    prefill_definition_id = (request.args.get('definition_id') or '').strip()
+    if not prefill_definition_id.isdigit():
+        prefill_definition_id = ''
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -2198,11 +2201,21 @@ def schedule_list():
         rows = [list(r) for r in rows]
         custom_names = {str(report_id): name
                         for report_id, name in custom_reports}
+        prefill_schedule_id = ''
         for r in rows:
+            raw_type = r[2]
+            raw_params = (r[10] or '').strip()
+            if (prefill_definition_id and raw_type == 'custom'
+                    and not prefill_schedule_id
+                    and re.search(
+                        rf'definition_id\s*=\s*'
+                        rf'{re.escape(prefill_definition_id)}\b',
+                        raw_params)):
+                prefill_schedule_id = str(r[0])
             r[7] = to_eat(r[7], '%Y-%m-%d %H:%M')
-            if r[2] == 'custom':
+            if raw_type == 'custom':
                 match = re.search(r'definition_id\s*=\s*(\d+)',
-                                  r[10] or '')
+                                  raw_params)
                 saved_name = custom_names.get(
                     match.group(1)) if match else None
                 r[2] = f'Custom: {saved_name or "saved report"}'
@@ -2210,10 +2223,13 @@ def schedule_list():
         rows = []
         failed = []
         custom_reports = []
+        prefill_schedule_id = ''
     failed = [r for r in rows if len(r) > 8 and r[8] == 'failed']
     return render_template('admin_schedules.html', schedules=rows, failed=failed,
                            type_labels=REPORT_TYPE_LABELS,
-                           custom_reports=custom_reports)
+                           custom_reports=custom_reports,
+                           prefill_definition_id=prefill_definition_id,
+                           prefill_schedule_id=prefill_schedule_id)
 
 
 def _valid_cron(expr):

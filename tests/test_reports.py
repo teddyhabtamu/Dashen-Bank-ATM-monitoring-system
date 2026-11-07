@@ -248,3 +248,12 @@ def test_admin_schedules_can_target_a_saved_custom_report():
     assert 'id="schedDefinition"' in sched_page
     assert 'definition_id=' in sched_page
     assert "type === 'custom'" in sched_page
+    # A builder "All schedules" link carries the definition id; the page
+    # must open its form with that report already selected.
+    assert 'id="prefillDefinitionId"' in sched_page
+    assert 'id="prefillScheduleId"' in sched_page
+    assert 'prefill_definition_id' in sched_page
+    admin_py = _read('blueprints', 'admin.py')
+    assert "request.args.get('definition_id')" in admin_py
+    assert 'prefill_definition_id=prefill_definition_id' in admin_py
+    assert 'prefill_schedule_id=prefill_schedule_id' in admin_py
