@@ -233,6 +233,8 @@ button.profile-item{width:100%;background:none;border:0;font-family:inherit;text
 .cust-opt{padding:8px 10px;font-size:12px;color:#0F172A;cursor:pointer;transition:background .1s}
 .cust-opt:hover{background:#EEF2FF;color:#012169}
 .cust-opt.sel{background:#F0F2F6;color:#012169;font-weight:600}
+.cust-group{padding:7px 10px 3px;font-size:9.5px;font-weight:800;letter-spacing:.55px;text-transform:uppercase;color:#94A3B8;background:#FBFCFE;border-top:1px solid #F1F5F9}
+.cust-group:first-child{border-top:none}
 .cust-search{padding:8px 10px;border-bottom:1px solid #EEF1F6;position:sticky;top:0;background:#fff}
 .cust-search input{width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none;transition:border-color .2s,box-shadow .2s}
 .cust-search input:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
@@ -831,17 +833,31 @@ function custApplyFilter(sel){
     o.style.display = match ? '' : 'none';
     if(match) visible++;
   });
+  // Optgroup headings must disappear with the last visible option in their
+  // group, otherwise a search result shows a stray "Rows" heading above
+  // nothing.
+  c.drop.querySelectorAll('.cust-group').forEach(function(group){
+    var any = false;
+    var node = group.nextElementSibling;
+    while(node && !node.classList.contains('cust-group')){
+      if(node.classList.contains('cust-opt')
+         && node.style.display !== 'none'){ any = true; break; }
+      node = node.nextElementSibling;
+    }
+    group.style.display = any ? '' : 'none';
+  });
   c.empty.style.display = visible ? 'none' : 'block';
 }
 // A dropdown lives inside its card's stacking context. Without raising the
 // card while the list is open, the next card paints over the list as soon as
-// the pointer leaves the trigger (reports grid, 2026-11-02).
+// the pointer leaves the trigger (reports grid, 2026-11-02).  The report
+// builder has several stacked .card sections, so the same rule applies there.
 function custRaise(sel, on){
-  var card = sel && sel.closest && sel.closest('.report-card');
+  var card = sel && sel.closest && sel.closest('.report-card, .card');
   if(card) card.classList.toggle('select-open', !!on);
 }
 function custLowerAll(){
-  document.querySelectorAll('.report-card.select-open')
+  document.querySelectorAll('.report-card.select-open, .card.select-open')
     .forEach(function(c){ c.classList.remove('select-open'); });
 }
 function custEnsureSearch(sel){
@@ -874,33 +890,49 @@ function refreshCustomSelect(sel){
   // A select enhanced while empty (reports load their ATM list afterwards)
   // must gain the search box once it actually has options.
   custEnsureSearch(sel);
-  c.drop.querySelectorAll('.cust-opt').forEach(function(n){ n.remove(); });
+  c.drop.querySelectorAll('.cust-opt, .cust-group').forEach(function(n){ n.remove(); });
   // Empty select (options filled later by the page) must not throw — that used
   // to abort the whole loop and leave later selects half-wrapped and blank.
   c.trig.textContent = sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : '—';
-  for(var i = 0; i < sel.length; i++){
-    (function(idx){
-      var o = document.createElement('div');
-      o.className = 'cust-opt' + (idx === sel.selectedIndex ? ' sel' : '');
-      o.textContent = sel.options[idx].text;
-      o.addEventListener('click', function(){
-        sel.selectedIndex = idx;
-        c.trig.textContent = sel.options[idx].text;
-        c.drop.querySelectorAll('.cust-opt').forEach(function(x){ x.classList.remove('sel'); });
-        o.classList.add('sel');
-        c.trig.classList.remove('open');
-        c.drop.classList.remove('show');
-        custRaise(sel, false);
-        sel.dispatchEvent(new Event('change'));
-      });
-      c.drop.appendChild(o);
-    })(i);
+  function addOption(option){
+    var o = document.createElement('div');
+    o.className = 'cust-opt' + (option.index === sel.selectedIndex ? ' sel' : '');
+    o.dataset.value = option.value;
+    o.setAttribute('role', 'option');
+    o.textContent = option.text;
+    o.addEventListener('click', function(){
+      sel.selectedIndex = option.index;
+      c.trig.textContent = option.text;
+      c.drop.querySelectorAll('.cust-opt').forEach(function(x){ x.classList.remove('sel'); });
+      o.classList.add('sel');
+      c.trig.classList.remove('open');
+      c.drop.classList.remove('show');
+      custRaise(sel, false);
+      sel.dispatchEvent(new Event('change'));
+    });
+    c.drop.appendChild(o);
   }
+  // Preserve optgroup headings (the builder groups sort fields into Rows and
+  // Values).  Iterating sel.options would flatten them and lose that context.
+  Array.prototype.forEach.call(sel.children, function(child){
+    if(child.tagName === 'OPTGROUP'){
+      if(child.label){
+        var heading = document.createElement('div');
+        heading.className = 'cust-group';
+        heading.textContent = child.label;
+        c.drop.appendChild(heading);
+      }
+      Array.prototype.forEach.call(child.children, addOption);
+    } else if(child.tagName === 'OPTION'){
+      addOption(child);
+    }
+  });
   custApplyFilter(sel);
   return true;
 }
 window.refreshCustomSelect = refreshCustomSelect;
 
+var _custDocBound = false;
 function initCustomSelects(){
   document.querySelectorAll('select').forEach(function(sel){
     if(sel.closest('.cust-select'))return;
@@ -947,12 +979,16 @@ function initCustomSelects(){
       if(window.console) console.error('custom select skipped:', sel, err);
     }
   });
-  document.addEventListener('click',function(){
-    document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});
-    document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')});
-    custLowerAll();
-  });
+  if(!_custDocBound){
+    _custDocBound = true;
+    document.addEventListener('click',function(){
+      document.querySelectorAll('.cust-drop.show').forEach(function(d){d.classList.remove('show')});
+      document.querySelectorAll('.cust-trigger.open').forEach(function(t){t.classList.remove('open')});
+      custLowerAll();
+    });
+  }
 }
+window.initCustomSelects = initCustomSelects;
 initCustomSelects();
 
 document.getElementById('overlay').addEventListener('click', closeMobile);

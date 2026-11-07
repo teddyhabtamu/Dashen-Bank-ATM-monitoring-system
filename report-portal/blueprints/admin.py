@@ -13,7 +13,7 @@ from audit import log_action
 from evidence import raw_info
 from state_summary import merge_live_in_service
 from helpers import STATE_ORDER, state_label, state_colour
-from scheduler import REPORT_TYPE_LABELS
+from scheduler import REPORT_TYPE_LABELS, validate_cron
 from zabbix_modules.state_freshness import (
     item_delay_seconds as _item_delay_seconds,
     source_freshness,
@@ -2182,51 +2182,43 @@ def audit_log():
 @login_required
 @role_required(ROLE_ADMIN)
 def schedule_list():
+    custom_reports = []
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT id, name, report_type, format, schedule, recipients, enabled, last_run, last_status, last_error FROM scheduled_reports ORDER BY id")
+            cur.execute(
+                "SELECT id, name, report_type, format, schedule, recipients, "
+                "enabled, last_run, last_status, last_error, params "
+                "FROM scheduled_reports ORDER BY id")
             rows = cur.fetchall()
+            cur.execute(
+                "SELECT id, name FROM report_definitions ORDER BY name")
+            custom_reports = cur.fetchall()
             cur.close()
         rows = [list(r) for r in rows]
+        custom_names = {str(report_id): name
+                        for report_id, name in custom_reports}
         for r in rows:
             r[7] = to_eat(r[7], '%Y-%m-%d %H:%M')
+            if r[2] == 'custom':
+                match = re.search(r'definition_id\s*=\s*(\d+)',
+                                  r[10] or '')
+                saved_name = custom_names.get(
+                    match.group(1)) if match else None
+                r[2] = f'Custom: {saved_name or "saved report"}'
     except Exception:
         rows = []
         failed = []
+        custom_reports = []
     failed = [r for r in rows if len(r) > 8 and r[8] == 'failed']
     return render_template('admin_schedules.html', schedules=rows, failed=failed,
-                           type_labels=REPORT_TYPE_LABELS)
+                           type_labels=REPORT_TYPE_LABELS,
+                           custom_reports=custom_reports)
 
 
 def _valid_cron(expr):
-    """Validate a 5-field cron (minute hour dom month dow). Returns an error
-    string or None. Mirrors scheduler._cron_field semantics so anything saved
-    here can actually fire there."""
-    bounds = [(0, 59), (0, 23), (1, 31), (1, 12), (0, 6)]
-    parts = (expr or '').split()
-    if len(parts) != 5:
-        return 'Cron must have 5 fields: minute hour day month weekday.'
-    for part, (lo, hi) in zip(parts, bounds):
-        if part == '*':
-            continue
-        for item in part.split(','):
-            step = None
-            if '/' in item:
-                item, step = item.split('/', 1)
-                if not step.isdigit() or int(step) < 1:
-                    return f'Bad cron step in {part!r}.'
-            if item in ('*', ''):
-                if not step and item == '':
-                    return f'Bad cron field {part!r}.'
-                continue
-            if '-' in item:
-                a, _, b = item.partition('-')
-                if not (a.isdigit() and b.isdigit() and lo <= int(a) <= int(b) <= hi):
-                    return f'Bad cron range {item!r} (allowed {lo}-{hi}).'
-            elif not item.isdigit() or not (lo <= int(item) <= hi):
-                return f'Bad cron value {item!r} (allowed {lo}-{hi}).'
-    return None
+    """Validate a 5-field cron using the scheduler's own parser."""
+    return validate_cron(expr)
 
 
 @bp.route('/admin/schedules/save', methods=['POST'])
@@ -2239,10 +2231,15 @@ def schedule_save():
     schedule = request.form.get('schedule', '').strip()
     recipients = request.form.get('recipients', '').strip()
     params = request.form.get('params', '').strip()
+    definition_id = request.form.get('definition_id', '').strip()
     schedule_id = request.form.get('id', '').strip()
 
     if not all([name, report_type, schedule, recipients]):
         flash('Name, report type, schedule, and recipients are required.', 'error')
+        return redirect('/admin/schedules')
+
+    if fmt not in ('pdf', 'excel', 'csv'):
+        flash('Choose a valid report format.', 'error')
         return redirect('/admin/schedules')
 
     bad = [r.strip() for r in recipients.split(',') if r.strip() and not _valid_email(r.strip())]
@@ -2254,6 +2251,27 @@ def schedule_save():
     if cron_err:
         flash(f'Invalid schedule: {cron_err}', 'error')
         return redirect('/admin/schedules')
+
+    if report_type == 'custom':
+        if not definition_id.isdigit():
+            flash('Choose a saved custom report for this schedule.', 'error')
+            return redirect('/admin/schedules')
+        try:
+            with get_db() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT id FROM report_definitions WHERE id = %s",
+                    (int(definition_id),))
+                found = cur.fetchone()
+                cur.close()
+            if not found:
+                flash('That saved custom report no longer exists.', 'error')
+                return redirect('/admin/schedules')
+        except Exception as e:
+            flash(f'Database error: {e}', 'error')
+            return redirect('/admin/schedules')
+        # The scheduler reads the saved definition id from params.
+        params = f'definition_id={int(definition_id)}'
 
     try:
         with get_db() as conn:

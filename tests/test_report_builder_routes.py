@@ -376,3 +376,205 @@ def test_saved_definition_names_are_required_and_bounded(monkeypatch):
     too_long = client.post('/api/reports/definitions', json={
         'name': 'x' * 121, 'definition': VALID_DEFINITION})
     assert too_long.status_code == 400
+
+
+# ── Custom dropdowns and scheduled delivery ───────────────────────────────
+
+def test_builder_uses_the_shared_custom_picker(monkeypatch):
+    app = _app(monkeypatch)
+    client = app.test_client()
+    _login(client)
+    body = client.get('/reports/builder').get_data(as_text=True)
+    for select_id in ('datasetSelect', 'periodPreset', 'scopeSelect',
+                      'sortField', 'sortDirection', 'filterOperator',
+                      'saveVisibility'):
+        marker = f'<select id="{select_id}" class="builder-select">'
+        assert marker in body
+        assert f'<select id="{select_id}" class="builder-select" data-native>' \
+            not in body
+    assert "refreshSelect('datasetSelect')" in body
+    assert "refreshSelect('filterOperator')" in body
+    assert '.builder-card.select-open' in body
+
+
+def test_builder_exposes_scheduling_for_saved_reports(monkeypatch):
+    app = _app(monkeypatch)
+    client = app.test_client()
+    _login(client)
+    body = client.get('/reports/builder').get_data(as_text=True)
+    assert 'id="scheduleModal"' in body
+    assert 'Schedule report' in body
+    assert 'id="scheduleCron"' in body
+    assert 'id="scheduleRecipients"' in body
+    assert 'data-schedule="' in body
+    assert '/api/reports/definitions/' in body
+    assert "'/schedules'" in body
+
+
+def test_saved_reports_expose_a_schedule_badge(monkeypatch):
+    app = _app(monkeypatch)
+    monkeypatch.setattr(rb.report_store, 'list_definitions',
+                        lambda conn, username, role: [
+                            {'id': 3, 'name': 'District volume',
+                             'owner': 'alice', 'dataset': 'transactions',
+                             'definition': {}, 'visibility': 'private',
+                             'is_system': False, 'updated_at': ''}])
+    monkeypatch.setattr(rb, '_schedule_counts', lambda conn: {3: 2})
+    client = app.test_client()
+    _login(client, role='viewer', username='alice')
+    payload = client.get('/api/reports/definitions').get_json()
+    assert payload['definitions'][0]['schedule_count'] == 2
+
+
+def test_schedule_payload_validates_cron_recipients_and_format():
+    valid = {
+        'name': 'Weekly districts',
+        'schedule': '0 7 * * 1',
+        'format': 'pdf',
+        'recipients': 'ops@dashenbank.com, data@dashenbank.com',
+    }
+    parsed = rb._schedule_payload(valid)
+    assert parsed['recipients'] == 'ops@dashenbank.com, data@dashenbank.com'
+    assert parsed['enabled'] is True
+
+    for field, value, text in (
+        ('schedule', '0 7 * *', '5 fields'),
+        ('recipients', 'not-an-email', 'Invalid email'),
+        ('format', 'word', 'PDF, Excel or CSV'),
+        ('name', '', 'name'),
+    ):
+        data = dict(valid)
+        data[field] = value
+        with pytest.raises(report_engine.ReportDefinitionError) as exc:
+            rb._schedule_payload(data)
+        assert text.lower() in str(exc.value).lower()
+
+
+class _ScheduleCursor:
+    def __init__(self, conn):
+        self.conn = conn
+        self._row = None
+        self._rows = []
+
+    def execute(self, sql, params=None):
+        self.conn.statements.append((' '.join(sql.split()), params))
+        if 'INSERT INTO scheduled_reports' in sql:
+            self._row = (11, params[0], params[1], params[2], params[3],
+                         params[5], None, None, None)
+        elif 'SELECT params FROM scheduled_reports' in sql:
+            self._rows = [('definition_id=9',)]
+        else:
+            self._row = None
+
+    def fetchone(self):
+        return self._row
+
+    def fetchall(self):
+        return self._rows
+
+    def close(self):
+        pass
+
+
+class _ScheduleConn:
+    def __init__(self):
+        self.statements = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def cursor(self):
+        return _ScheduleCursor(self)
+
+    def commit(self):
+        pass
+
+    def rollback(self):
+        pass
+
+
+def test_the_owner_can_schedule_a_saved_report(monkeypatch):
+    app = _app(monkeypatch)
+    conn = _ScheduleConn()
+    monkeypatch.setattr(rb, 'get_db', lambda: conn)
+    monkeypatch.setattr(rb.report_store, 'get_definition',
+                        lambda c, definition_id: {
+                            'id': definition_id, 'name': 'District volume',
+                            'owner': 'alice', 'visibility': 'private',
+                            'is_system': False,
+                            'definition': VALID_DEFINITION})
+    client = app.test_client()
+    _login(client, role='viewer', username='alice')
+    response = client.post('/api/reports/definitions/9/schedules', json={
+        'name': 'Monday district pack',
+        'schedule': '0 7 * * 1',
+        'format': 'excel',
+        'recipients': 'ops@dashenbank.com',
+    })
+    assert response.status_code == 201
+    assert response.get_json()['id'] == 11
+    insert = [item for item in conn.statements
+              if item[0].startswith('INSERT INTO scheduled_reports')]
+    assert insert
+    assert 'definition_id=9' in insert[0][1]
+    assert insert[0][1][1] == 'excel'
+
+
+def test_a_viewer_cannot_schedule_someone_elses_report(monkeypatch):
+    app = _app(monkeypatch)
+    monkeypatch.setattr(rb.report_store, 'get_definition',
+                        lambda c, definition_id: {
+                            'id': definition_id, 'name': 'Private',
+                            'owner': 'bob', 'visibility': 'private',
+                            'is_system': False})
+    client = app.test_client()
+    _login(client, role='viewer', username='alice')
+    response = client.get('/api/reports/definitions/9/schedules')
+    assert response.status_code == 403
+
+
+def test_the_scheduler_can_generate_a_saved_report_internally(monkeypatch):
+    import blueprints.auth as auth
+    from flask import Response
+
+    app = _app(monkeypatch)
+    monkeypatch.setattr(auth, 'INTERNAL_API_KEY', 'secret-key')
+    monkeypatch.setattr(rb.report_store, 'get_definition',
+                        lambda conn, definition_id: {
+                            'id': definition_id, 'name': 'District volume',
+                            'owner': 'alice', 'visibility': 'private',
+                            'is_system': False,
+                            'definition': VALID_DEFINITION})
+    monkeypatch.setattr(rb.report_engine, 'run_report',
+                        lambda *a, **k: RESULT)
+    seen = {}
+
+    def fake_render(fmt, result):
+        seen.update(fmt=fmt, result=result)
+        return Response(b'file-bytes', mimetype='text/csv')
+
+    monkeypatch.setattr(rb.report_exports, 'render', fake_render)
+    client = app.test_client()
+    response = client.get('/report/custom/9/csv',
+                          headers={'X-Internal-Key': 'secret-key'})
+    assert response.status_code == 200
+    assert response.data == b'file-bytes'
+    assert seen['fmt'] == 'csv'
+    assert seen['result']['title'] == 'Transactions by District'
+
+
+def test_a_private_saved_report_is_not_downloadable_by_another_user(monkeypatch):
+    app = _app(monkeypatch)
+    monkeypatch.setattr(rb.report_store, 'get_definition',
+                        lambda conn, definition_id: {
+                            'id': definition_id, 'name': 'Private',
+                            'owner': 'bob', 'visibility': 'private',
+                            'is_system': False,
+                            'definition': VALID_DEFINITION})
+    client = app.test_client()
+    _login(client, role='viewer', username='alice')
+    response = client.get('/report/custom/9/csv')
+    assert response.status_code == 403

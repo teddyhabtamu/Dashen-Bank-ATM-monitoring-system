@@ -24,6 +24,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from db import get_db
 from audit import log_action
+import report_store
 
 logger = logging.getLogger(__name__)
 
@@ -114,13 +115,20 @@ def _period_slug(period):
 
 
 def _generate_report(report_type, fmt, days=7, atm='all', start=None, end=None,
-                     end_now=False, period_label=None):
+                     end_now=False, period_label=None, definition_id=None,
+                     report_label=None):
     buf = io.BytesIO()
     _headers = {'X-Health-Check': '1'}
     if INTERNAL_API_KEY:
         _headers['X-Internal-Key'] = INTERNAL_API_KEY
     today = datetime.now(EAT).strftime('%Y-%m-%d')
-    label = REPORT_TYPE_LABELS.get(report_type, report_type.title())
+    label = report_label or REPORT_TYPE_LABELS.get(
+        report_type, report_type.title())
+    if report_label:
+        # The name comes from user input.  Keep the attachment filename
+        # predictable without letting slashes or quotes through.
+        label = ''.join(ch if ch.isalnum() or ch in ' _-' else '_'
+                        for ch in label).strip(' _') or 'Custom_Report'
     atm_part = f'_{atm}' if atm and atm != 'all' else ''
     filename = (f'Dashen_Bank_{label.replace(" ", "_")}{atm_part}_{today}'
                 f'{_period_slug(period_label)}.{fmt}')
@@ -140,7 +148,15 @@ def _generate_report(report_type, fmt, days=7, atm='all', start=None, end=None,
             query['end'] = end
     else:
         query['days'] = days
-    url = f'{_INTERNAL_BASE}/report/{report_type}/{fmt}?{urlencode(query)}'
+    if report_type == 'custom':
+        if not definition_id:
+            logger.error('Custom report schedule has no definition id')
+            return None, None, None
+        # The saved definition owns the period and filters.
+        url = f'{_INTERNAL_BASE}/report/custom/{definition_id}/{fmt}'
+    else:
+        url = (f'{_INTERNAL_BASE}/report/{report_type}/{fmt}'
+               f'?{urlencode(query)}')
     try:
         resp = requests.get(url, timeout=timeout, headers=_headers)
         if resp.status_code != 200:
@@ -231,11 +247,17 @@ REPORT_TYPE_LABELS = {
     'availability': 'ATM Availability',
     'outage': 'Daily ATM Outage',
     'full': 'Complete Management Report',
+    # A saved builder definition.  The schedule stores its id in params;
+    # the row label is replaced with the saved report's name on the admin
+    # schedules page, but this keeps every other fallback readable.
+    'custom': 'Custom Report',
 }
 
 
-def _email_body(report_type, fmt, days, atm, period_label=None):
-    label = REPORT_TYPE_LABELS.get(report_type, report_type.title())
+def _email_body(report_type, fmt, days, atm, period_label=None,
+                report_label=None):
+    label = report_label or REPORT_TYPE_LABELS.get(
+        report_type, report_type.title())
     eat = timezone(timedelta(hours=3))  # fixed +3, no DST in Ethiopia
     now = datetime.now(eat).strftime('%Y-%m-%d %H:%M')
     atm_display = atm if atm and atm != 'all' else 'All ATMs'
@@ -353,6 +375,7 @@ def _run_scheduled_report(report_id, report_type, fmt, schedule, recipients, par
     days = 7
     atm = 'all'
     period = None
+    definition_id = None
     if params:
         try:
             for p in params.split(','):
@@ -364,6 +387,8 @@ def _run_scheduled_report(report_id, report_type, fmt, schedule, recipients, par
                         period = v.strip()
                     elif k.strip() == 'atm':
                         atm = v.strip() or 'all'
+                    elif k.strip() == 'definition_id':
+                        definition_id = int(v.strip())
         except (ValueError, AttributeError) as e:
             msg = f'malformed params {params!r}: {e}'
             logger.error('Scheduled report %s bad params: %s', report_id, msg)
@@ -388,13 +413,47 @@ def _run_scheduled_report(report_id, report_type, fmt, schedule, recipients, par
     else:
         period_label = f'Last {days} day{"s" if days != 1 else ""}'
 
-    label = REPORT_TYPE_LABELS.get(report_type, report_type.upper())
+    report_label = None
+    if report_type == 'custom':
+        if not definition_id:
+            msg = 'custom schedule has no definition_id in params'
+            logger.error('Scheduled report %s: %s', report_id, msg)
+            log_action('SCHEDULED_REPORT_FAILED',
+                       f'Report {report_id} ({report_type}/{fmt}) {msg}')
+            _record_run_status(report_id, False, msg, schedule)
+            return
+        try:
+            with get_db() as conn:
+                saved = report_store.get_definition(conn, definition_id)
+        except Exception as e:
+            msg = f'could not load saved report {definition_id}: {e}'
+            logger.error('Scheduled report %s: %s', report_id, msg)
+            log_action('SCHEDULED_REPORT_FAILED',
+                       f'Report {report_id} ({report_type}/{fmt}) {msg}')
+            _record_run_status(report_id, False, msg, schedule)
+            return
+        if not saved:
+            msg = f'saved report {definition_id} no longer exists'
+            logger.error('Scheduled report %s: %s', report_id, msg)
+            log_action('SCHEDULED_REPORT_FAILED',
+                       f'Report {report_id} ({report_type}/{fmt}) {msg}')
+            _record_run_status(report_id, False, msg, schedule)
+            return
+        report_label = saved['name']
+        # The saved definition owns the period; presets resolve at execution
+        # time inside the report engine, so the email says what actually ran.
+        period_label = 'Saved definition'
+
+    label = report_label or REPORT_TYPE_LABELS.get(
+        report_type, report_type.upper())
     subject = f'[ATM Monitor] {label} - {today}'
-    body = _email_body(report_type, fmt, days, atm, period_label=period_label)
+    body = _email_body(report_type, fmt, days, atm,
+                       period_label=period_label, report_label=report_label)
 
     filedata, filename, mimetype = _generate_report(
         report_type, fmt, days, atm, start=start, end=end,
-        end_now=end_now, period_label=period_label)
+        end_now=end_now, period_label=period_label,
+        definition_id=definition_id, report_label=report_label)
     if filedata is None:
         msg = 'report generation failed (portal endpoint unreachable or error)'
         logger.error('Scheduled report %s failed to generate', report_id)
@@ -435,6 +494,41 @@ def _dispatch(report_id, report_type, fmt, cron_expr, recipients, params):
             _running.discard(report_id)
 
 _cron_trigger_cache = {}
+
+
+def validate_cron(expr):
+    """Validate a 5-field cron (minute hour dom month dow).
+
+    Returns an error string or None.  The admin scheduler and the builder's
+    saved-report scheduler share this single implementation, so anything the
+    UI accepts is something the poller can actually fire.
+    """
+    bounds = [(0, 59), (0, 23), (1, 31), (1, 12), (0, 6)]
+    parts = (expr or '').split()
+    if len(parts) != 5:
+        return 'Cron must have 5 fields: minute hour day month weekday.'
+    for part, (lo, hi) in zip(parts, bounds):
+        if part == '*':
+            continue
+        for item in part.split(','):
+            step = None
+            if '/' in item:
+                item, step = item.split('/', 1)
+                if not step.isdigit() or int(step) < 1:
+                    return f'Bad cron step in {part!r}.'
+            if item in ('*', ''):
+                if not step and item == '':
+                    return f'Bad cron field {part!r}.'
+                continue
+            if '-' in item:
+                a, _, b = item.partition('-')
+                if not (a.isdigit() and b.isdigit()
+                        and lo <= int(a) <= int(b) <= hi):
+                    return f'Bad cron range {item!r} (allowed {lo}-{hi}).'
+            elif not item.isdigit() or not (lo <= int(item) <= hi):
+                return f'Bad cron value {item!r} (allowed {lo}-{hi}).'
+    return None
+
 
 def _cron_matches(cron_expr, dt):
     try:

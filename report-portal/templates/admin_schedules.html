@@ -230,6 +230,16 @@
             <option value="availability">ATM Availability</option>
             <option value="outage">Daily ATM Outage</option>
             <option value="full">Complete Management Report</option>
+            <option value="custom">Saved custom report</option>
+          </select>
+        </div>
+        <div class="form-group" id="schedDefinitionWrap" style="display:none">
+          <label for="schedDefinition">Saved custom report</label>
+          <select id="schedDefinition" name="definition_id">
+            <option value="">Choose a saved report…</option>
+            {% for r in custom_reports %}
+            <option value="{{ r[0] }}">{{ r[1] }}</option>
+            {% endfor %}
           </select>
         </div>
         <div class="form-group">
@@ -291,7 +301,7 @@
           </select>
           <div style="font-size:11px;color:#64748B;margin-top:4px">Calendar presets are calculated in EAT each run; &ldquo;so far&rdquo; ends at the current time.</div>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="schedAtmWrap">
           <label for="schedAtm">ATM</label>
           <select id="schedAtm">
             <option value="all" selected>All ATMs</option>
@@ -492,6 +502,13 @@ document.addEventListener('DOMContentLoaded', function(){
       e.preventDefault();
       showToast('Add at least one recipient.', 'error', 5000);
       input.focus();
+      return;
+    }
+    if(document.getElementById('schedType').value === 'custom'
+       && !document.getElementById('schedDefinition').value){
+      e.preventDefault();
+      showToast('Choose a saved custom report.', 'error', 5000);
+      document.getElementById('schedDefinition').focus();
     }
   });
 });
@@ -533,6 +550,8 @@ function openScheduleModal(data) {  data = data || {};
   document.getElementById('schedName').value = data.name || '';
   document.getElementById('schedType').value = data.report_type || 'transaction';
   document.getElementById('schedFormat').value = data.format || 'pdf';
+  document.getElementById('schedDefinition').value =
+    parseSchedParams(data.params || '').definition_id || '';
   document.getElementById('schedCron').value = data.schedule || '';
   document.getElementById('schedPreset').value = '';
   document.getElementById('cronDescription').textContent = describeCron(data.schedule || '');
@@ -586,13 +605,15 @@ function describeCron(cron){
 }
 
 function parseSchedParams(str){
-  var out = {period: null, days: '7', atm: 'all'};
+  var out = {period: null, days: '7', atm: 'all', definition_id: ''};
   var p = String(str || '').match(/period\s*=\s*([a-z_]+)/);
   if(p) out.period = p[1];
   var m = String(str || '').match(/days\s*=\s*(\d+)/);
   if(!out.period && m && ['1', '7', '30', '90'].indexOf(m[1]) !== -1) out.days = m[1];
   var a = String(str || '').match(/atm\s*=\s*([^,\s]+)/);
   if(a && a[1]) out.atm = a[1];
+  var d = String(str || '').match(/definition_id\s*=\s*(\d+)/);
+  if(d) out.definition_id = d[1];
   return out;
 }
 function setSchedParams(str){
@@ -604,11 +625,19 @@ function setSchedParams(str){
     var has = Array.prototype.some.call(atm.options, function(o){ return o.value === p.atm; });
     atm.value = has ? p.atm : 'all';
   }
+  var def = document.getElementById('schedDefinition');
+  if(def) def.value = p.definition_id || '';
   if(typeof syncCustomSelects === 'function') syncCustomSelects();
 }
 function buildSchedParams(){
   var typeEl = document.getElementById('schedType');
   var type = typeEl ? typeEl.value : '';
+  if(type === 'custom'){
+    var def = document.getElementById('schedDefinition');
+    document.getElementById('schedParams').value =
+      def && def.value ? 'definition_id=' + def.value : '';
+    return;
+  }
   var daysEl = document.getElementById('schedDays');
   var atmEl = document.getElementById('schedAtm');
   var value = (daysEl && daysEl.value) || '7';
@@ -622,8 +651,15 @@ function togglePeriodVisibility(){
   var typeEl = document.getElementById('schedType');
   var type = typeEl ? typeEl.value : '';
   var wrap = document.getElementById('schedPeriodWrap');
+  var defWrap = document.getElementById('schedDefinitionWrap');
+  var atmWrap = document.getElementById('schedAtmWrap');
+  if(defWrap) defWrap.style.display = type === 'custom' ? '' : 'none';
+  if(atmWrap) atmWrap.style.display = type === 'custom' ? 'none' : '';
   // Daily Outage is a right-now snapshot — a period picker would be a lie.
-  if(wrap) wrap.style.display = type === 'outage' ? 'none' : '';
+  // A saved custom report already owns its period and ATM population.
+  if(wrap) wrap.style.display =
+    (type === 'outage' || type === 'custom') ? 'none' : '';
+  if(typeof syncCustomSelects === 'function') syncCustomSelects();
 }
 var _schedAtmsLoaded = false;
 function loadSchedAtms(){

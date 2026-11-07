@@ -25,6 +25,15 @@
 .builder-grain b{color:#334155;font-weight:650}
 .builder-select{width:100%;padding:8px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;background:#fff;color:#0F172A;outline:none}
 .builder-select:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
+/* The shared custom picker replaces the native select. Raise the card while
+   its list is open so the next section does not paint over the options. */
+.builder-card.select-open{position:relative;z-index:35}
+.builder-field .cust-select,.builder-period .cust-select{width:100%}
+.builder-scope .cust-select{width:160px;flex:0 0 auto}
+.builder-logic .cust-select{width:auto}
+.builder-logic .cust-trigger{padding:4px 20px 4px 6px;font-size:10.5px;border-radius:5px;line-height:1.3}
+.builder-logic .cust-trigger:after{right:6px;border-top-width:4px}
+.builder-logic .cust-drop{min-width:110px}
 .builder-field{display:flex;flex-direction:column;gap:5px;min-width:0}
 .builder-field label{font-size:10px;font-weight:650;color:#64748B;text-transform:uppercase;letter-spacing:.5px}
 .builder-hint{font-size:10.5px;color:#94A3B8;line-height:1.5}
@@ -84,7 +93,7 @@
 .builder-link{border:none;background:none;color:#012169;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;text-decoration:underline;padding:0;white-space:nowrap}
 
 /* ── options ── */
-.builder-options{display:grid;grid-template-columns:1fr 86px;gap:10px}
+.builder-options{display:grid;grid-template-columns:minmax(0,1fr) minmax(140px,1fr);gap:10px}
 .builder-options .builder-field:first-child{grid-column:1/-1}
 .builder-limit-row{display:flex;align-items:center;gap:8px}
 .builder-limit-row input{width:100%;padding:8px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;background:#fff;color:#0F172A;outline:none;font-variant-numeric:tabular-nums}
@@ -223,6 +232,7 @@
 .builder-badge{display:inline-flex;align-items:center;padding:1px 7px;border-radius:999px;background:#F1F5F9;color:#64748B;font-size:9.5px;font-weight:700;letter-spacing:.2px;text-transform:uppercase}
 .builder-badge.shared{background:#EFF8FF;color:#175CD3}
 .builder-badge.system{background:#F5F3FF;color:#5B21B6}
+.builder-badge.schedule{background:#ECFDF3;color:#027A48}
 
 /* save modal */
 .builder-save-dialog{width:480px}
@@ -234,6 +244,27 @@
 .builder-dialog-foot .builder-foot-actions{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
 .builder-modal-error{display:none;background:#FEF3F2;border:1px solid #FECACA;color:#B42318;border-radius:7px;padding:8px 10px;font-size:11.5px;line-height:1.45}
 .builder-modal-error.show{display:block}
+
+/* schedule modal */
+.builder-schedule-dialog{width:620px}
+.builder-schedule-existing{display:flex;flex-direction:column;gap:8px}
+.builder-schedule-item{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border:1px solid #E4E9F1;border-radius:8px;padding:10px 12px;background:#FBFCFE}
+.builder-schedule-item.off{opacity:.65}
+.builder-schedule-item-main{display:flex;flex-direction:column;gap:3px;min-width:0}
+.builder-schedule-item-name{font-size:12px;font-weight:700;color:#0F172A;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.builder-schedule-item-meta{font-size:10.5px;color:#64748B;line-height:1.45;overflow-wrap:anywhere}
+.builder-schedule-item-actions{display:flex;gap:4px;flex:0 0 auto}
+.builder-schedule-icon{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;border-radius:5px;background:none;color:#94A3B8;cursor:pointer;padding:0}
+.builder-schedule-icon:hover{background:#EEF2FF;color:#012169}
+.builder-schedule-icon.danger:hover{background:#FEF3F2;color:#B42318}
+.builder-schedule-icon svg{width:13px;height:13px}
+.builder-schedule-empty{border:1px dashed #DCE3EF;border-radius:8px;padding:14px;text-align:center;color:#94A3B8;font-size:11px;background:#FBFCFE}
+.builder-schedule-divider{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid #EEF1F6;margin-top:2px;padding-top:14px}
+.builder-schedule-divider span{font-size:10px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.55px}
+.builder-schedule-enabled{display:flex;align-items:center;gap:8px;font-size:12px;color:#334155;cursor:pointer;user-select:none}
+.builder-schedule-enabled input{width:15px;height:15px;accent-color:#012169}
+.builder-schedule-cron{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.builder-dialog .cust-drop{max-height:220px}
 
 @media(max-width:1100px){
   .builder-layout{grid-template-columns:320px minmax(0,1fr)}
@@ -261,7 +292,7 @@
   .builder-dialog-foot{align-items:flex-start;flex-wrap:wrap}
   .builder-dialog-foot .builder-foot-actions{width:100%;margin-left:0}
   .builder-dialog-foot .builder-foot-actions .btn{flex:1;justify-content:center}
-  .builder-options{grid-template-columns:1fr 84px}
+  .builder-options{grid-template-columns:1fr 1fr}
   .builder-actions-bar{grid-template-columns:1fr 1fr}
   .filter-selected-summary{flex-direction:column;align-items:flex-start;gap:2px}
 }
@@ -295,7 +326,7 @@
         <div class="card-body">
           <div class="builder-field">
             <label for="datasetSelect">What do you want to report on?</label>
-            <select id="datasetSelect" class="builder-select" data-native></select>
+            <select id="datasetSelect" class="builder-select"></select>
           </div>
           <p class="builder-help" id="datasetHelp"></p>
           <div class="builder-grain" id="datasetGrain"></div>
@@ -339,7 +370,7 @@
 
           <div class="builder-period" id="periodBlock">
             <label for="periodPreset">Reporting period</label>
-            <select id="periodPreset" class="builder-select" data-native></select>
+            <select id="periodPreset" class="builder-select"></select>
             <div class="builder-custom-dates" id="customDates" hidden>
               <input type="text" id="periodStart" readonly autocomplete="off" aria-label="Start date">
               <span>to</span>
@@ -351,7 +382,7 @@
 
           <div class="builder-scope">
             <label for="scopeSelect">ATM population</label>
-            <select id="scopeSelect" class="builder-select" data-native>
+            <select id="scopeSelect" class="builder-select">
               <option value="active">Active ATMs only</option>
               <option value="all">All ATMs</option>
             </select>
@@ -380,11 +411,11 @@
           <div class="builder-options">
             <div class="builder-field">
               <label for="sortField">Sort by</label>
-              <select id="sortField" class="builder-select" data-native></select>
+              <select id="sortField" class="builder-select"></select>
             </div>
             <div class="builder-field">
               <label for="sortDirection">Order</label>
-              <select id="sortDirection" class="builder-select" data-native>
+              <select id="sortDirection" class="builder-select">
                 <option value="desc">Descending</option>
                 <option value="asc">Ascending</option>
               </select>
@@ -519,7 +550,7 @@
           <div class="filter-config-grid" style="margin-top:12px">
             <div class="builder-field">
               <label for="filterOperator">Operator</label>
-              <select id="filterOperator" class="builder-select" data-native></select>
+              <select id="filterOperator" class="builder-select"></select>
             </div>
             <div class="builder-field">
               <label id="filterValueLabel" for="filterValueInput">Value</label>
@@ -558,7 +589,7 @@
       </div>
       <div class="form-group" id="visibilityGroup" hidden>
         <label for="saveVisibility">Visibility</label>
-        <select id="saveVisibility" class="builder-select" data-native>
+        <select id="saveVisibility" class="builder-select">
           <option value="private">Private — only me</option>
           <option value="shared">Shared — all users</option>
         </select>
@@ -569,6 +600,80 @@
         <button type="button" class="btn btn-outline" id="cancelSaveModal">Cancel</button>
         <button type="button" class="btn btn-gold" id="saveUpdateBtn" hidden>Update current</button>
         <button type="button" class="btn btn-primary" id="saveNewBtn">Save as new</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="scheduleModal" role="dialog" aria-modal="true" aria-labelledby="scheduleModalTitle">
+  <div class="builder-dialog builder-schedule-dialog">
+    <div class="builder-dialog-head">
+      <div>
+        <h2 id="scheduleModalTitle">Schedule report</h2>
+        <p id="scheduleSubtitle">Email this saved report on a recurring schedule.</p>
+      </div>
+      <button type="button" class="builder-dialog-close" id="closeScheduleModal" aria-label="Close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="builder-save-body">
+      <div class="builder-modal-error" id="scheduleError"></div>
+      <div>
+        <div class="builder-schedule-divider" style="border-top:none;margin-top:0;padding-top:0">
+          <span>Existing schedules</span>
+          <button type="button" class="builder-link" id="scheduleNewBtn">New schedule</button>
+        </div>
+        <div class="builder-schedule-existing" id="scheduleExisting"></div>
+      </div>
+      <div class="builder-schedule-divider">
+        <span id="scheduleFormTitle">New schedule</span>
+        <button type="button" class="builder-link" id="scheduleCancelEdit" hidden>Cancel edit</button>
+      </div>
+      <div class="form-group">
+        <label for="scheduleName">Schedule name</label>
+        <input id="scheduleName" maxlength="100" placeholder="e.g. Weekly district performance" autocomplete="off">
+      </div>
+      <div class="builder-options" style="grid-template-columns:1fr 1fr">
+        <div class="builder-field">
+          <label for="schedulePreset">Frequency</label>
+          <select id="schedulePreset" class="builder-select">
+            <option value="">Choose a preset…</option>
+            <option value="0 6 * * *">Daily at 6 AM</option>
+            <option value="0 7 * * *">Daily at 7 AM</option>
+            <option value="0 8 * * *">Daily at 8 AM</option>
+            <option value="0 7 * * 1-5">Weekdays at 7 AM</option>
+            <option value="0 7 * * 1">Weekly on Monday at 7 AM</option>
+            <option value="0 7 * * 5">Weekly on Friday at 7 AM</option>
+            <option value="0 8 1 * *">Monthly on the 1st at 8 AM</option>
+            <option value="*/30 * * * *">Every 30 minutes</option>
+            <option value="custom">Custom…</option>
+          </select>
+        </div>
+        <div class="builder-field">
+          <label for="scheduleFormat">Format</label>
+          <select id="scheduleFormat" class="builder-select">
+            <option value="pdf">PDF</option>
+            <option value="excel">Excel</option>
+            <option value="csv">CSV</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="scheduleCron">Cron expression</label>
+        <input id="scheduleCron" maxlength="50" class="builder-schedule-cron" placeholder="0 7 * * 1" autocomplete="off">
+        <div class="builder-hint" id="scheduleCronHint">Minute hour day month weekday, evaluated in East Africa Time.</div>
+      </div>
+      <div class="form-group">
+        <label for="scheduleRecipients">Recipients</label>
+        <input id="scheduleRecipients" maxlength="2000" placeholder="ops@dashenbank.com, data@dashenbank.com" autocomplete="off">
+        <div class="builder-hint">Comma-separated email addresses. Delivery uses the portal's configured SMTP relay.</div>
+      </div>
+      <label class="builder-schedule-enabled"><input type="checkbox" id="scheduleEnabled" checked> Schedule is enabled</label>
+      <p class="builder-help">The saved definition is evaluated at send time, so preset periods such as “Last 7 days” stay current. Fixed custom dates remain fixed.</p>
+    </div>
+    <div class="builder-dialog-foot">
+      <span class="builder-hint">Times are East Africa Time.</span>
+      <div class="builder-foot-actions">
+        <button type="button" class="btn btn-outline" id="cancelScheduleModal">Close</button>
+        <button type="button" class="btn btn-primary" id="scheduleSaveBtn">Save schedule</button>
       </div>
     </div>
   </div>
@@ -613,6 +718,9 @@
   var editingCondition = -1;
   var filterFieldQuery = '';
   var filterOptionQuery = '';
+  var scheduleDefinitionId = null;
+  var scheduleEditingId = null;
+  var scheduleRows = [];
 
   var state = {
     datasetId: 'transactions',
@@ -633,6 +741,12 @@
 
   // ── Small helpers ─────────────────────────────────────────────────────────
   function $(id) { return document.getElementById(id); }
+  function refreshSelect(id) {
+    var select = $(id);
+    if (select && window.refreshCustomSelect) {
+      window.refreshCustomSelect(select);
+    }
+  }
   function clone(value) { return JSON.parse(JSON.stringify(value)); }
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
@@ -736,10 +850,11 @@
     document.body.style.overflow = locked ? 'hidden' : '';
   }
   function closeAllModals() {
-    ['fieldPickerModal', 'filterModal', 'saveModal'].forEach(function (id) {
-      var el = $(id);
-      if (el) el.classList.remove('show');
-    });
+    ['fieldPickerModal', 'filterModal', 'saveModal', 'scheduleModal']
+      .forEach(function (id) {
+        var el = $(id);
+        if (el) el.classList.remove('show');
+      });
     pendingCondition = null;
     editingCondition = -1;
     setBodyLock(false);
@@ -836,6 +951,7 @@
   function renderSubject() {
     var ds = currentDataset();
     $('datasetSelect').value = state.datasetId;
+    refreshSelect('datasetSelect');
     $('datasetHelp').textContent = ds.description;
     $('datasetGrain').innerHTML = '<b>Grain</b> ' + escapeHtml(ds.grain);
   }
@@ -1200,6 +1316,7 @@
     $('conditionLimit').textContent = state.conditions.length + ' / ' + MAX_CONDITIONS;
     $('conditionLogicWrap').hidden = state.conditions.length < 2;
     $('conditionLogic').value = state.conditionLogic;
+    refreshSelect('conditionLogic');
     $('addFilterBtn').disabled = state.conditions.length >= MAX_CONDITIONS;
     if (window.lucide) window.lucide.createIcons();
   }
@@ -1347,6 +1464,7 @@
       select.appendChild(option);
     });
     select.value = pendingCondition.op;
+    refreshSelect('filterOperator');
     renderFilterValue();
   }
 
@@ -1627,7 +1745,10 @@
       return;
     }
 
-    if (field.data_type === 'enum') {
+    var singleChoice = field.data_type === 'enum'
+      || !!(field.options_source
+            || (field.options && field.options.length));
+    if (singleChoice) {
       var options = optionList(field);
       var enumSourceMissing = field.options_source
         && !(OPTIONS[field.options_source]
@@ -1656,6 +1777,9 @@
         clearFilterValueError();
       });
       wrap.appendChild(select);
+      // This select is built on demand when the operator is "is"/"is not";
+      // enhance it with the same shared picker used by the static controls.
+      if (window.initCustomSelects) window.initCustomSelects();
       return;
     }
 
@@ -1783,6 +1907,7 @@
       option.textContent = dataset.label;
       select.appendChild(option);
     });
+    refreshSelect('datasetSelect');
   }
 
   function populatePeriodPresets() {
@@ -1794,6 +1919,7 @@
       option.textContent = preset.label;
       select.appendChild(option);
     });
+    refreshSelect('periodPreset');
   }
 
   function updatePeriodHint() {
@@ -1841,6 +1967,7 @@
     if (!ds.requires_period) {
       state.period = null;
       $('periodError').classList.remove('show');
+      refreshSelect('periodPreset');
       updatePeriodHint();
       return;
     }
@@ -1869,6 +1996,7 @@
       state.period = { preset: fallback };
       $('customDates').hidden = true;
     }
+    refreshSelect('periodPreset');
     updatePeriodHint();
   }
 
@@ -2229,8 +2357,11 @@
       $('sortDirection').value = state.sort.direction;
     }
     select.disabled = !select.options.length;
+    refreshSelect('sortField');
+    refreshSelect('sortDirection');
 
     $('scopeSelect').value = state.scope;
+    refreshSelect('scopeSelect');
     var limit = parseInt(state.limit, 10);
     if (!isFinite(limit) || limit < 1) limit = CATALOG.limits.default_limit;
     state.limit = Math.min(limit, MAX_EXPORT);
@@ -2318,6 +2449,7 @@
       var ds = datasetById(def.dataset);
       var canDelete = !def.is_system
         && (CAN_SHARE || def.owner === USERNAME);
+      var canSchedule = CAN_SHARE || def.owner === USERNAME;
       var row = document.createElement('div');
       row.className = 'builder-saved';
       row.innerHTML = '<div class="builder-saved-main">'
@@ -2327,6 +2459,8 @@
           : '<span class="builder-badge">Private</span>')
         + (def.is_system
           ? '<span class="builder-badge system">System</span>' : '')
+        + (Number(def.schedule_count) > 0
+          ? '<span class="builder-badge schedule">Scheduled</span>' : '')
         + '</div>'
         + (def.description
           ? '<div class="builder-saved-desc">'
@@ -2340,6 +2474,10 @@
         + '<div class="builder-saved-actions">'
         + '<button type="button" class="btn btn-outline" data-open="'
         + def.id + '">Open</button>'
+        + (canSchedule
+          ? '<button type="button" class="btn btn-outline" data-schedule="'
+            + def.id + '">Schedule</button>'
+          : '')
         + (canDelete
           ? '<button type="button" class="btn btn-outline" data-delete="'
             + def.id + '" style="color:#B42318;border-color:#FECACA">Delete</button>'
@@ -2590,6 +2728,7 @@
     if (CAN_SHARE) {
       $('saveVisibility').value = state.currentVisibility || 'private';
     }
+    refreshSelect('saveVisibility');
     $('saveUpdateBtn').hidden = !(state.currentDefinitionId
       && state.currentCanEdit);
     $('saveModal').classList.add('show');
@@ -2648,6 +2787,282 @@
       $('saveNewBtn').disabled = false;
       $('saveUpdateBtn').disabled = false;
     });
+  }
+
+  // ── Scheduled delivery of saved reports ───────────────────────────────────
+  function definitionById(id) {
+    for (var i = 0; i < savedDefinitions.length; i++) {
+      if (String(savedDefinitions[i].id) === String(id)) {
+        return savedDefinitions[i];
+      }
+    }
+    return null;
+  }
+
+  function cronTime(hour, minute) {
+    if (!/^\d+$/.test(hour) || !/^\d+$/.test(minute)) return '';
+    var h = parseInt(hour, 10);
+    var m = parseInt(minute, 10);
+    var suffix = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    if (h === 0) h = 12;
+    return h + ':' + (m < 10 ? '0' : '') + m + ' ' + suffix;
+  }
+
+  function describeSchedule(cron) {
+    var parts = String(cron || '').trim().split(/\s+/);
+    if (parts.length !== 5) {
+      return 'Five fields: minute hour day month weekday.';
+    }
+    var minute = parts[0], hour = parts[1], dom = parts[2],
+        month = parts[3], dow = parts[4];
+    var days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+                'Friday', 'Saturday'];
+    var months = ['January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November',
+                  'December'];
+    if (cron.trim() === '* * * * *') return 'Every minute.';
+    if (minute === '*/30' && hour === '*') return 'Every 30 minutes.';
+    if (minute === '0' && hour === '*') return 'Every hour, on the hour.';
+    var time = cronTime(hour, minute);
+    var phrase = '';
+    if (time) {
+      if (dow === '*' && dom === '*' && month === '*') {
+        phrase = 'Every day at ' + time;
+      } else if (/^[0-6]$/.test(dow) && dom === '*' && month === '*') {
+        phrase = 'Every ' + days[parseInt(dow, 10)] + ' at ' + time;
+      } else if (dow === '1-5' && dom === '*' && month === '*') {
+        phrase = 'Weekdays at ' + time;
+      } else if (dom !== '*' && dow === '*' && month === '*') {
+        phrase = 'Monthly on day ' + dom + ' at ' + time;
+      } else if (month !== '*' && dow === '*' && dom === '*') {
+        var monthName = /^\d+$/.test(month)
+          ? (months[parseInt(month, 10) - 1] || month) : month;
+        phrase = 'Every day in ' + monthName + ' at ' + time;
+      }
+    }
+    if (!phrase) phrase = 'Runs on cron ' + cron;
+    return phrase + ' (EAT).';
+  }
+
+  function updateScheduleCronHint() {
+    var cron = ($('scheduleCron').value || '').trim();
+    $('scheduleCronHint').textContent = cron
+      ? describeSchedule(cron)
+      : 'Minute hour day month weekday, evaluated in East Africa Time.';
+  }
+
+  function syncSchedulePreset() {
+    var cron = ($('scheduleCron').value || '').trim();
+    var select = $('schedulePreset');
+    var match = '';
+    for (var i = 0; i < select.options.length; i++) {
+      if (select.options[i].value === cron) { match = cron; break; }
+    }
+    select.value = match || (cron ? 'custom' : '');
+    refreshSelect('schedulePreset');
+  }
+
+  function resetScheduleForm() {
+    var def = definitionById(scheduleDefinitionId);
+    scheduleEditingId = null;
+    $('scheduleFormTitle').textContent = 'New schedule';
+    $('scheduleCancelEdit').hidden = true;
+    var baseName = def ? def.name : 'Report';
+    $('scheduleName').value = (baseName + ' schedule').slice(0, 100);
+    $('schedulePreset').value = '0 7 * * 1';
+    $('scheduleCron').value = '0 7 * * 1';
+    $('scheduleFormat').value = 'pdf';
+    $('scheduleRecipients').value = '';
+    $('scheduleEnabled').checked = true;
+    $('scheduleError').classList.remove('show');
+    $('scheduleError').textContent = '';
+    updateScheduleCronHint();
+    refreshSelect('schedulePreset');
+    refreshSelect('scheduleFormat');
+  }
+
+  function renderScheduleRows() {
+    var list = $('scheduleExisting');
+    list.innerHTML = '';
+    if (!scheduleRows.length) {
+      var empty = document.createElement('div');
+      empty.className = 'builder-schedule-empty';
+      empty.textContent = 'No schedules yet. Create one below and the portal '
+        + 'will email this saved report automatically.';
+      list.appendChild(empty);
+      return;
+    }
+    scheduleRows.forEach(function (row) {
+      var item = document.createElement('div');
+      item.className = 'builder-schedule-item' + (row.enabled ? '' : ' off');
+      var recipients = row.recipients || 'No recipients';
+      var last = row.last_run
+        ? 'Last run ' + row.last_run
+          + (row.last_status === 'failed' ? ' · failed' : '')
+        : 'Not run yet';
+      item.innerHTML = '<div class="builder-schedule-item-main">'
+        + '<div class="builder-schedule-item-name">' + escapeHtml(row.name)
+        + '<span class="builder-badge">' + escapeHtml(String(row.format).toUpperCase())
+        + '</span>'
+        + (row.enabled ? '' : '<span class="builder-badge">Paused</span>')
+        + '</div>'
+        + '<div class="builder-schedule-item-meta">'
+        + escapeHtml(describeSchedule(row.schedule)) + '</div>'
+        + '<div class="builder-schedule-item-meta">' + escapeHtml(recipients)
+        + ' · ' + escapeHtml(last)
+        + (row.last_error ? ' · ' + escapeHtml(row.last_error) : '')
+        + '</div></div>'
+        + '<div class="builder-schedule-item-actions">'
+        + '<button type="button" class="builder-schedule-icon" data-schedule-toggle="'
+        + row.id + '" data-enabled="' + (row.enabled ? '1' : '0')
+        + '" title="' + (row.enabled ? 'Pause schedule' : 'Resume schedule')
+        + '" aria-label="' + (row.enabled ? 'Pause schedule' : 'Resume schedule')
+        + '"><i data-lucide="' + (row.enabled ? 'pause' : 'play') + '"></i></button>'
+        + '<button type="button" class="builder-schedule-icon" data-schedule-edit="'
+        + row.id + '" title="Edit schedule" aria-label="Edit schedule">'
+        + '<i data-lucide="pencil"></i></button>'
+        + '<button type="button" class="builder-schedule-icon danger" data-schedule-delete="'
+        + row.id + '" title="Delete schedule" aria-label="Delete schedule">'
+        + '<i data-lucide="trash-2"></i></button>'
+        + '</div>';
+      list.appendChild(item);
+    });
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  function loadSchedules(id) {
+    return fetchJson('/api/reports/definitions/' + id + '/schedules')
+      .then(function (data) {
+        scheduleRows = (data && data.schedules) || [];
+        renderScheduleRows();
+      })
+      .catch(function (err) {
+        scheduleRows = [];
+        renderScheduleRows();
+        scheduleError(err.message);
+      });
+  }
+
+  function scheduleError(message) {
+    $('scheduleError').textContent = message;
+    $('scheduleError').classList.add('show');
+  }
+
+  function openScheduleModal(id) {
+    if (!id) return;
+    scheduleDefinitionId = id;
+    var def = definitionById(id);
+    $('scheduleSubtitle').textContent = def
+      ? def.name + ' · ' + definitionPeriodText(def)
+      : 'Email this saved report on a recurring schedule.';
+    resetScheduleForm();
+    scheduleRows = [];
+    renderScheduleRows();
+    $('scheduleModal').classList.add('show');
+    setBodyLock(true);
+    loadSchedules(id);
+    setTimeout(function () { $('scheduleName').focus(); }, 0);
+  }
+
+  function closeScheduleModal() {
+    $('scheduleModal').classList.remove('show');
+    setBodyLock(false);
+    scheduleDefinitionId = null;
+    scheduleEditingId = null;
+    scheduleRows = [];
+  }
+
+  function editSchedule(id) {
+    var row = null;
+    scheduleRows.forEach(function (item) {
+      if (String(item.id) === String(id)) row = item;
+    });
+    if (!row) return;
+    scheduleEditingId = row.id;
+    $('scheduleFormTitle').textContent = 'Edit schedule';
+    $('scheduleCancelEdit').hidden = false;
+    $('scheduleName').value = row.name || '';
+    $('scheduleCron').value = row.schedule || '';
+    $('scheduleFormat').value = row.format || 'pdf';
+    $('scheduleRecipients').value = row.recipients || '';
+    $('scheduleEnabled').checked = !!row.enabled;
+    $('scheduleError').classList.remove('show');
+    syncSchedulePreset();
+    updateScheduleCronHint();
+    refreshSelect('scheduleFormat');
+    $('scheduleName').focus();
+  }
+
+  function saveSchedule() {
+    if (!scheduleDefinitionId) return;
+    var name = ($('scheduleName').value || '').trim();
+    var cron = ($('scheduleCron').value || '').trim();
+    var recipients = ($('scheduleRecipients').value || '').trim();
+    var format = $('scheduleFormat').value;
+    if (!name) {
+      scheduleError('Give the schedule a name.');
+      return;
+    }
+    if (cron.split(/\s+/).length !== 5) {
+      scheduleError('Cron must have 5 fields: minute hour day month weekday.');
+      return;
+    }
+    if (!recipients) {
+      scheduleError('Add at least one recipient email address.');
+      return;
+    }
+    var payload = {
+      name: name,
+      schedule: cron,
+      recipients: recipients,
+      format: format,
+      enabled: $('scheduleEnabled').checked
+    };
+    var editing = scheduleEditingId;
+    var url = editing
+      ? '/api/reports/schedules/' + editing
+      : '/api/reports/definitions/' + scheduleDefinitionId + '/schedules';
+    $('scheduleSaveBtn').disabled = true;
+    $('scheduleError').classList.remove('show');
+    fetchJson(url, {
+      method: editing ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function () {
+      toast(editing ? 'Schedule updated.' : 'Schedule created.', 'success');
+      resetScheduleForm();
+      return loadSchedules(scheduleDefinitionId);
+    }).then(function () {
+      return loadDefinitions();
+    }).catch(function (err) {
+      scheduleError(err.message);
+    }).finally(function () {
+      $('scheduleSaveBtn').disabled = false;
+    });
+  }
+
+  function deleteSchedule(id) {
+    if (!window.confirm('Delete this schedule? Future emails will stop.')) return;
+    fetchJson('/api/reports/schedules/' + id, { method: 'DELETE' })
+      .then(function () {
+        toast('Schedule deleted.', 'success');
+        if (String(scheduleEditingId) === String(id)) resetScheduleForm();
+        return loadSchedules(scheduleDefinitionId);
+      })
+      .then(function () { return loadDefinitions(); })
+      .catch(function (err) { scheduleError(err.message); });
+  }
+
+  function toggleSchedule(id, enabled) {
+    fetchJson('/api/reports/schedules/' + id + '/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: !enabled })
+    }).then(function () {
+      toast(enabled ? 'Schedule paused.' : 'Schedule resumed.', 'success');
+      return loadSchedules(scheduleDefinitionId);
+    }).catch(function (err) { scheduleError(err.message); });
   }
 
   // ── Exports ───────────────────────────────────────────────────────────────
@@ -2846,11 +3261,75 @@
         openDefinitionById(open.getAttribute('data-open'));
         return;
       }
+      var schedule = event.target.closest('[data-schedule]');
+      if (schedule) {
+        openScheduleModal(schedule.getAttribute('data-schedule'));
+        return;
+      }
       var remove = event.target.closest('[data-delete]');
       if (remove) {
         deleteDefinition(remove.getAttribute('data-delete'));
       }
     });
+
+    $('closeScheduleModal').addEventListener('click', closeScheduleModal);
+    $('cancelScheduleModal').addEventListener('click', closeScheduleModal);
+    $('scheduleModal').addEventListener('click', function (event) {
+      if (event.target === this) closeScheduleModal();
+    });
+    $('scheduleNewBtn').addEventListener('click', resetScheduleForm);
+    $('scheduleCancelEdit').addEventListener('click', resetScheduleForm);
+    $('scheduleSaveBtn').addEventListener('click', saveSchedule);
+    $('schedulePreset').addEventListener('change', function () {
+      if (this.value === 'custom') {
+        $('scheduleCron').focus();
+        updateScheduleCronHint();
+        return;
+      }
+      if (this.value) {
+        $('scheduleCron').value = this.value;
+        updateScheduleCronHint();
+      }
+    });
+    $('scheduleCron').addEventListener('input', function () {
+      syncSchedulePreset();
+      updateScheduleCronHint();
+    });
+    $('scheduleExisting').addEventListener('click', function (event) {
+      var toggle = event.target.closest('[data-schedule-toggle]');
+      if (toggle) {
+        toggleSchedule(toggle.getAttribute('data-schedule-toggle'),
+                       toggle.getAttribute('data-enabled') === '1');
+        return;
+      }
+      var edit = event.target.closest('[data-schedule-edit]');
+      if (edit) {
+        editSchedule(edit.getAttribute('data-schedule-edit'));
+        return;
+      }
+      var remove = event.target.closest('[data-schedule-delete]');
+      if (remove) deleteSchedule(remove.getAttribute('data-schedule-delete'));
+    });
+
+    // Keep dropdowns usable inside the builder's scrolling dialogs: flip a
+    // list upward when it would spill past the dialog's own bottom edge.
+    document.addEventListener('click', function (event) {
+      var trigger = event.target.closest
+        ? event.target.closest('.cust-trigger') : null;
+      if (!trigger) return;
+      var dialog = trigger.closest('.builder-dialog');
+      if (!dialog) return;
+      setTimeout(function () {
+        var wrap = trigger.closest('.cust-select');
+        var drop = wrap ? wrap.querySelector('.cust-drop') : null;
+        if (!drop || !drop.classList.contains('show')) return;
+        var box = dialog.getBoundingClientRect();
+        var list = drop.getBoundingClientRect();
+        var flip = list.bottom > box.bottom - 8 || list.top < box.top + 8;
+        drop.classList.toggle('up', flip);
+        trigger.classList.toggle('up', flip);
+      }, 0);
+    }, true);
 
     document.addEventListener('keydown', function (event) {
       if (event.key !== 'Escape') return;

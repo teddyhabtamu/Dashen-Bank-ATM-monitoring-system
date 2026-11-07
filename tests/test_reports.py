@@ -233,3 +233,18 @@ def test_report_timestamps_are_generated_in_eat():
     assert 'datetime.now(EAT).strftime' in ROUTES
     assert 'EAT = timezone(timedelta(hours=3))' in HELPERS
     assert 'EAT = timezone(timedelta(hours=3))' in ROUTES
+
+
+def test_admin_schedules_can_target_a_saved_custom_report():
+    """The old schedule form only knew the eight fixed report types.
+
+    A custom schedule stores ``report_type='custom'`` with the definition id
+    in ``params``; the admin form must be able to pick that definition rather
+    than silently falling back to Transaction Summary when an admin edits it.
+    """
+    sched_page = _read('templates', 'admin_schedules.html')
+    assert '<option value="custom">Saved custom report</option>' in sched_page
+    assert 'id="schedDefinitionWrap"' in sched_page
+    assert 'id="schedDefinition"' in sched_page
+    assert 'definition_id=' in sched_page
+    assert "type === 'custom'" in sched_page
