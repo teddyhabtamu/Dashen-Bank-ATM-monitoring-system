@@ -134,6 +134,11 @@ class FilterSpec:
     group: str = 'location'  # 'transaction' | 'location' | 'availability'
     options_source: str | None = None
     static_options: tuple[tuple[str, str], ...] = ()
+    # The raw field expression used by the generic condition builder.  It is
+    # deliberately separate from ``expr``: the legacy expression embeds an
+    # operator, while conditions need to choose one safely.
+    field_expr: str = ''
+    data_type: str = 'text'  # 'text' | 'enum' | 'number'
 
 
 @dataclass(frozen=True)
@@ -224,6 +229,16 @@ def _location_dimensions() -> dict[str, Dimension]:
             'model', 'Model',
             "COALESCE(NULLIF(TRIM(l.model), ''), 'Unknown')"),
         'atm_id': Dimension('atm_id', 'ATM', 'l.atm_id'),
+        'atm_name': Dimension(
+            'atm_name', 'ATM name',
+            "COALESCE(NULLIF(TRIM(l.atm_name), ''), l.atm_id)",
+            description='ATM display name from the registry. Falls back to the '
+                        'ATM id when the name is blank.'),
+        'terminal_id': Dimension(
+            'terminal_id', 'Terminal ID',
+            "COALESCE(NULLIF(TRIM(l.terminal_id), ''), 'Unassigned')",
+            description='Terminal identifier from the ATM registry. Missing '
+                        'values are grouped as Unassigned.'),
     }
 
 
@@ -232,36 +247,43 @@ def _location_filters(*, include_status: bool = False) -> dict[str, FilterSpec]:
         'vendor': FilterSpec(
             'vendor', 'Vendor', 'multi',
             "COALESCE(NULLIF(TRIM(l.vendor), ''), 'Unknown') = ANY(%s)",
-            options_source='vendors'),
+            options_source='vendors',
+            field_expr="COALESCE(NULLIF(TRIM(l.vendor), ''), 'Unknown')"),
         'district': FilterSpec(
             'district', 'District', 'multi',
             "COALESCE(NULLIF(TRIM(l.district), ''), 'Unassigned') = ANY(%s)",
-            options_source='districts'),
+            options_source='districts',
+            field_expr="COALESCE(NULLIF(TRIM(l.district), ''), 'Unassigned')"),
         'region': FilterSpec(
             'region', 'Region', 'multi',
             "COALESCE(NULLIF(TRIM(l.region), ''), 'Unassigned') = ANY(%s)",
-            options_source='regions'),
+            options_source='regions',
+            field_expr="COALESCE(NULLIF(TRIM(l.region), ''), 'Unassigned')"),
         'city': FilterSpec(
             'city', 'City', 'multi',
             "COALESCE(NULLIF(TRIM(l.city), ''), 'Unassigned') = ANY(%s)",
-            options_source='cities'),
+            options_source='cities',
+            field_expr="COALESCE(NULLIF(TRIM(l.city), ''), 'Unassigned')"),
         'branch': FilterSpec(
             'branch', 'Branch', 'multi',
             "COALESCE(NULLIF(TRIM(l.branch), ''), 'Unassigned') = ANY(%s)",
-            options_source='branches'),
+            options_source='branches',
+            field_expr="COALESCE(NULLIF(TRIM(l.branch), ''), 'Unassigned')"),
         'model': FilterSpec(
             'model', 'Model', 'multi',
             "COALESCE(NULLIF(TRIM(l.model), ''), 'Unknown') = ANY(%s)",
-            options_source='models'),
+            options_source='models',
+            field_expr="COALESCE(NULLIF(TRIM(l.model), ''), 'Unknown')"),
         'atm_id': FilterSpec(
             'atm_id', 'ATM', 'single', 'l.atm_id = %s',
-            options_source='atms'),
+            options_source='atms', field_expr='l.atm_id'),
     }
     if include_status:
         filters['status'] = FilterSpec(
             'status', 'ATM status', 'multi',
             "COALESCE(NULLIF(TRIM(l.status), ''), 'Unknown') = ANY(%s)",
-            options_source='atm_statuses')
+            options_source='atm_statuses', data_type='enum',
+            field_expr="COALESCE(NULLIF(TRIM(l.status), ''), 'Unknown')")
     return filters
 
 
@@ -324,6 +346,20 @@ def _transaction_measures() -> dict[str, Measure]:
         'errors': Measure(
             'errors', 'Errors',
             "SUM(CASE WHEN t.status = 'ERROR' THEN 1 ELSE 0 END)"),
+        'decline_rate': Measure(
+            'decline_rate', 'Decline rate',
+            "ROUND(100.0 * SUM(CASE WHEN t.status = 'DECLINED' THEN 1 ELSE 0 "
+            "END) / NULLIF(COUNT(*), 0), 2)",
+            type='percent',
+            description='Declined transactions divided by all transactions in '
+                        'the same group. Not an average of ATM rates.'),
+        'error_rate': Measure(
+            'error_rate', 'Error rate',
+            "ROUND(100.0 * SUM(CASE WHEN t.status = 'ERROR' THEN 1 ELSE 0 "
+            "END) / NULLIF(COUNT(*), 0), 2)",
+            type='percent',
+            description='Error transactions divided by all transactions in '
+                        'the same group. Not an average of ATM rates.'),
         'success_rate': Measure(
             'success_rate', 'Success rate',
             "ROUND(100.0 * SUM(CASE WHEN t.status = 'APPROVED' THEN 1 ELSE 0 "
@@ -366,21 +402,32 @@ def _transaction_filters() -> dict[str, FilterSpec]:
         'status': FilterSpec(
             'status', 'Transaction status', 'multi',
             "COALESCE(NULLIF(TRIM(t.status), ''), 'Unknown') = ANY(%s)",
-            group='transaction',
+            group='transaction', data_type='enum',
+            field_expr="COALESCE(NULLIF(TRIM(t.status), ''), 'Unknown')",
             static_options=(('APPROVED', 'Approved'),
                             ('DECLINED', 'Declined'),
                             ('ERROR', 'Error'))),
         'txn_type': FilterSpec(
             'txn_type', 'Transaction type', 'multi',
             "COALESCE(NULLIF(TRIM(t.txn_type), ''), 'Unknown') = ANY(%s)",
-            group='transaction', options_source='txn_types'),
+            group='transaction', options_source='txn_types',
+            data_type='enum',
+            field_expr="COALESCE(NULLIF(TRIM(t.txn_type), ''), 'Unknown')"),
         'problem_type': FilterSpec(
             'problem_type', 'Problem type', 'multi',
             "CASE WHEN t.error_code IS NULL OR TRIM(t.error_code) = '' "
             "THEN 'No fault' ELSE COALESCE(f.display_name, 'Unmapped') END "
             "= ANY(%s)",
             group='transaction', options_source='problem_types',
-            joins=('fault_map',)),
+            data_type='enum', joins=('fault_map',),
+            field_expr="CASE WHEN t.error_code IS NULL OR "
+                       "TRIM(t.error_code) = '' THEN 'No fault' "
+                       "ELSE COALESCE(f.display_name, 'Unmapped') END"),
+        'amount': FilterSpec(
+            'amount', 'Transaction amount (ETB)', 'single', 't.amount = %s',
+            group='transaction', data_type='number', field_expr='t.amount',
+            description='Filter on the transaction amount, before the '
+                        'approved-only measures are applied.'),
     })
     return filters
 
@@ -392,7 +439,8 @@ def _problem_filters() -> dict[str, FilterSpec]:
             'problem_type', 'Problem type', 'multi',
             "COALESCE(f.display_name, 'Unmapped') = ANY(%s)",
             group='transaction', options_source='problem_types',
-            joins=('fault_map',)),
+            data_type='enum', joins=('fault_map',),
+            field_expr="COALESCE(f.display_name, 'Unmapped')"),
     })
     return filters
 
@@ -401,7 +449,7 @@ def _availability_filters() -> dict[str, FilterSpec]:
     filters = _location_filters()
     filters['state'] = FilterSpec(
         'state', 'State', 'multi', 'seg.state = ANY(%s)',
-        group='availability',
+        group='availability', data_type='enum', field_expr='seg.state',
         static_options=tuple((s, STATE_LABELS[s]) for s in STATE_ORDER))
     return filters
 
@@ -604,7 +652,9 @@ def _build_datasets() -> dict[str, Dataset]:
                     value_labels={'active': 'Active', 'inactive': 'Inactive'}),
                 'install_year': Dimension(
                     'install_year', 'Install year',
-                    "TO_CHAR(l.install_date, 'YYYY')"),
+                    "COALESCE(TO_CHAR(l.install_date, 'YYYY'), 'Unknown')",
+                    description='Year the ATM was installed. Missing dates are '
+                                'grouped as Unknown, never dropped.'),
             },
             measures={
                 'atm_count': Measure('atm_count', 'ATMs', 'COUNT(*)'),
@@ -753,6 +803,87 @@ def _validate_values(values: list[str], field_name: str) -> list[str]:
     return values
 
 
+def _condition_text(value: Any, label: str) -> str:
+    text = str(value if value is not None else '').strip()
+    if not text:
+        raise ReportDefinitionError(f'{label} needs a value.')
+    if len(text) > 200:
+        raise ReportDefinitionError(f'A value for {label} is too long.')
+    return text
+
+
+def _condition_number(value: Any, label: str) -> int | float:
+    try:
+        number = Decimal(str(value).strip())
+    except (ArithmeticError, ValueError):
+        raise ReportDefinitionError(
+            f'{label} needs a number.') from None
+    if not number.is_finite():
+        raise ReportDefinitionError(f'{label} needs a finite number.')
+    if number == number.to_integral_value():
+        return int(number)
+    return float(number)
+
+
+def _validate_conditions(dataset: Dataset, raw: Any,
+                         logic: Any) -> tuple[list[dict[str, Any]], str]:
+    if raw in (None, ''):
+        return [], 'and'
+    if not isinstance(raw, list):
+        raise ReportDefinitionError('Filters must be a list of conditions.')
+    if len(raw) > MAX_CONDITIONS:
+        raise ReportDefinitionError(
+            f'Use at most {MAX_CONDITIONS} filter conditions.')
+    logic = str(logic or 'and').strip().lower()
+    if logic not in ('and', 'or'):
+        raise ReportDefinitionError('Filter match must be all or any.')
+    if not raw:
+        return [], logic
+
+    out: list[dict[str, Any]] = []
+    for index, condition in enumerate(raw, start=1):
+        if not isinstance(condition, dict):
+            raise ReportDefinitionError(
+                f'Filter {index} must be an object.')
+        unknown = sorted(set(condition) - {'field', 'op', 'value'})
+        if unknown:
+            raise ReportDefinitionError(
+                f'Unknown condition field: {unknown[0]}.')
+        field_id = str(condition.get('field') or '').strip()
+        spec = condition_spec(dataset, field_id)
+        if spec is None:
+            raise ReportDefinitionError(
+                f'{field_id!r} is not a valid filter for {dataset.label}.')
+        allowed = {code for code, _label in operators_for(spec)}
+        op = str(condition.get('op') or 'in').strip().lower()
+        if op not in allowed:
+            raise ReportDefinitionError(
+                f'{op!r} is not a valid operator for {spec.label}.')
+        value = condition.get('value')
+        if op in ('is_empty', 'not_empty'):
+            value = None
+        elif op in ('in', 'not_in'):
+            values = _validate_values(_as_list(value, spec.label), spec.label)
+            if not values:
+                raise ReportDefinitionError(
+                    f'Choose at least one value for {spec.label}.')
+            value = values
+        elif op == 'between':
+            values = _as_list(value, spec.label)
+            if len(values) != 2:
+                raise ReportDefinitionError(
+                    f'{spec.label} between needs two values.')
+            value = [_condition_number(item, spec.label) for item in values]
+            if value[0] > value[1]:
+                value = [value[1], value[0]]
+        elif spec.data_type == 'number':
+            value = _condition_number(value, spec.label)
+        else:
+            value = _condition_text(value, spec.label)
+        out.append({'field': field_id, 'op': op, 'value': value})
+    return out, logic
+
+
 def validate_definition(raw: Any, *, max_limit: int = MAX_PREVIEW_LIMIT) -> Definition:
     """Validate and normalize a report definition.
 
@@ -801,6 +932,8 @@ def validate_definition(raw: Any, *, max_limit: int = MAX_PREVIEW_LIMIT) -> Defi
         raise ReportDefinitionError('Filters must be an object.')
     # Never mutate the request payload; normalize a private copy instead.
     raw_filters = dict(raw_filters)
+    raw_conditions = raw_filters.pop('conditions', [])
+    condition_logic = raw_filters.pop('condition_logic', 'and')
 
     allowed_filter_keys = set(dataset.filters) | {'date', 'atm_scope'}
     unknown = sorted(set(raw_filters) - allowed_filter_keys)
@@ -817,6 +950,12 @@ def validate_definition(raw: Any, *, max_limit: int = MAX_PREVIEW_LIMIT) -> Defi
                 raise ReportDefinitionError(
                     f'{spec.label} accepts one value.')
         raw_filters[key] = values
+
+    conditions, condition_logic = _validate_conditions(
+        dataset, raw_conditions, condition_logic)
+    if conditions:
+        raw_filters['conditions'] = conditions
+        raw_filters['condition_logic'] = condition_logic
 
     scope = str(raw_filters.get('atm_scope')
                 or dataset.default_atm_scope).strip().lower()
@@ -897,8 +1036,69 @@ def _canonical_date_filter(date_filter: Any, window: ReportWindow) -> dict[str, 
 
 FILTER_ORDER = (
     'vendor', 'district', 'region', 'city', 'branch', 'model',
-    'status', 'txn_type', 'problem_type', 'state', 'atm_id',
+    'status', 'txn_type', 'problem_type', 'state', 'atm_id', 'amount',
 )
+
+MAX_CONDITIONS = 20
+
+# The condition builder exposes only operators whose SQL is generated here.
+# Adding an operator is a code change, never a client-supplied fragment.
+_OPERATORS = {
+    'text': (
+        ('eq', 'is'),
+        ('neq', 'is not'),
+        ('in', 'is any of'),
+        ('not_in', 'is none of'),
+        ('contains', 'contains'),
+        ('starts_with', 'starts with'),
+        ('ends_with', 'ends with'),
+        ('is_empty', 'is empty'),
+        ('not_empty', 'is not empty'),
+    ),
+    'enum': (
+        ('eq', 'is'),
+        ('neq', 'is not'),
+        ('in', 'is any of'),
+        ('not_in', 'is none of'),
+        ('is_empty', 'is empty'),
+        ('not_empty', 'is not empty'),
+    ),
+    'number': (
+        ('eq', '='),
+        ('neq', '≠'),
+        ('gt', '>'),
+        ('gte', '≥'),
+        ('lt', '<'),
+        ('lte', '≤'),
+        ('between', 'between'),
+        ('is_empty', 'is empty'),
+        ('not_empty', 'is not empty'),
+    ),
+}
+
+
+def operators_for(spec: FilterSpec) -> tuple[tuple[str, str], ...]:
+    return _OPERATORS.get(spec.data_type, _OPERATORS['text'])
+
+
+def condition_spec(dataset: Dataset, field_id: str) -> FilterSpec | None:
+    """Resolve a condition field from the explicit filters or a dimension.
+
+    Every dimension is filterable, not just the hand-written FilterSpecs.
+    This is what gives the builder access to fields such as source or
+    error_code without adding a bespoke predicate for each one.
+    """
+    spec = dataset.filters.get(field_id)
+    if spec is not None:
+        return spec
+    dim = dataset.dimensions.get(field_id)
+    if dim is None:
+        return None
+    data_type = 'enum' if dim.value_labels else 'text'
+    return FilterSpec(
+        id=dim.id, label=dim.label, kind='multi', description=dim.description,
+        joins=dim.joins, field_expr=dim.expr, data_type=data_type,
+    )
 
 
 def _base_params(dataset: Dataset, window: ReportWindow | None) -> list[Any]:
@@ -908,6 +1108,69 @@ def _base_params(dataset: Dataset, window: ReportWindow | None) -> list[Any]:
         raise ReportDefinitionError('This report requires a reporting period.')
     return [window.end_utc if marker == 'end' else window.start_utc
             for marker in dataset.base_param_order]
+
+
+def _condition_clause(spec: FilterSpec, op: str, value: Any,
+                      params: list[Any]) -> str:
+    expr = spec.field_expr
+    if not expr:
+        raise ReportDefinitionError(
+            f'{spec.label} cannot be used as a condition.')
+    if op == 'in':
+        params.append(value)
+        return f'{expr} = ANY(%s)'
+    if op == 'not_in':
+        params.append(value)
+        return f'NOT ({expr} = ANY(%s))'
+    if op == 'eq':
+        params.append(value)
+        return f'{expr} = %s'
+    if op == 'neq':
+        params.append(value)
+        return f'{expr} <> %s'
+    if op == 'contains':
+        params.append(value)
+        return f'POSITION(LOWER(%s) IN LOWER({expr})) > 0'
+    if op == 'starts_with':
+        params.extend([value, value])
+        return f'LEFT(LOWER({expr}), LENGTH(%s)) = LOWER(%s)'
+    if op == 'ends_with':
+        params.extend([value, value])
+        return f'RIGHT(LOWER({expr}), LENGTH(%s)) = LOWER(%s)'
+    if op == 'is_empty':
+        return f'({expr} IS NULL OR TRIM({expr}::text) = \'\')'
+    if op == 'not_empty':
+        return f'({expr} IS NOT NULL AND TRIM({expr}::text) <> \'\')'
+    if op in ('gt', 'gte', 'lt', 'lte'):
+        params.append(value)
+        symbol = {'gt': '>', 'gte': '>=', 'lt': '<', 'lte': '<='}[op]
+        return f'{expr} {symbol} %s'
+    if op == 'between':
+        params.extend(value)
+        return f'{expr} BETWEEN %s AND %s'
+    raise ReportDefinitionError(f'Unsupported filter operator: {op}.')
+
+
+def _compile_conditions(definition: Definition,
+                        params: list[Any]) -> tuple[str | None, set[str]]:
+    conditions = definition.filters.get('conditions') or []
+    if not conditions:
+        return None, set()
+    joins: set[str] = set()
+    clauses: list[str] = []
+    for condition in conditions:
+        spec = condition_spec(definition.dataset, condition['field'])
+        if spec is None:
+            raise ReportDefinitionError(
+                f'{condition["field"]!r} is not a valid filter.')
+        joins.update(spec.joins)
+        clauses.append(_condition_clause(
+            spec, condition['op'], condition['value'], params))
+    if len(clauses) == 1:
+        return clauses[0], joins
+    joiner = ' OR ' if definition.filters.get('condition_logic') == 'or' \
+        else ' AND '
+    return '(' + joiner.join(clauses) + ')', joins
 
 
 def compile_report(definition: Definition, *, totals: bool = False,
@@ -952,6 +1215,11 @@ def compile_report(definition: Definition, *, totals: bool = False,
         elif spec.kind == 'single':
             where.append(spec.expr)
             params.append(value[0])
+
+    condition_clause, condition_joins = _compile_conditions(definition, params)
+    if condition_clause is not None:
+        joins.update(condition_joins)
+        where.append(condition_clause)
 
     if dataset.time_column and definition.window is not None:
         where.append(f"{dataset.time_column} >= %s")
@@ -1057,6 +1325,55 @@ def _format_rows(compiled: CompiledReport, rows: Iterable[tuple],
              for i, value in enumerate(row)] for row in rows]
 
 
+def _operator_label(spec: FilterSpec, op: str) -> str:
+    for code, label in operators_for(spec):
+        if code == op:
+            return label
+    return op
+
+
+def _display_filter_value(spec: FilterSpec, value: Any) -> str:
+    for code, label in spec.static_options:
+        if str(code) == str(value):
+            return label
+    return str(value)
+
+
+def _display_filter_values(spec: FilterSpec, values: Iterable[Any],
+                           *, limit: int = 3) -> str:
+    labels = [_display_filter_value(spec, value) for value in values]
+    if len(labels) > limit:
+        return ', '.join(labels[:limit]) + f' +{len(labels) - limit} more'
+    return ', '.join(labels)
+
+
+def _condition_summary(definition: Definition) -> list[str]:
+    conditions = definition.filters.get('conditions') or []
+    parts: list[str] = []
+    for condition in conditions:
+        spec = condition_spec(definition.dataset, condition['field'])
+        if spec is None:
+            continue
+        value = condition.get('value')
+        if isinstance(value, list):
+            if condition['op'] == 'between' and len(value) == 2:
+                shown = (f'{_display_filter_value(spec, value[0])} and '
+                         f'{_display_filter_value(spec, value[1])}')
+            else:
+                shown = _display_filter_values(spec, value)
+        elif value is None:
+            shown = ''
+        else:
+            shown = _display_filter_value(spec, value)
+        text = f'{spec.label} {_operator_label(spec, condition["op"])}'
+        if shown:
+            text += f' {shown}'
+        parts.append(text)
+    if len(parts) > 1 and definition.filters.get('condition_logic') == 'or':
+        return ['(' + ' OR '.join(parts) + ')']
+    return parts
+
+
 def _filter_summary(definition: Definition) -> str:
     parts: list[str] = []
     if definition.window is not None:
@@ -1071,7 +1388,8 @@ def _filter_summary(definition: Definition) -> str:
         if spec is None:
             continue
         values = value if isinstance(value, list) else [value]
-        parts.append(f'{spec.label}: {", ".join(values)}')
+        parts.append(f'{spec.label}: ' + _display_filter_values(spec, values))
+    parts.extend(_condition_summary(definition))
     if not definition.dataset.requires_period:
         parts = ['Current snapshot'] + [p for p in parts if p != 'Current snapshot']
     if len(parts) > 6:
@@ -1203,6 +1521,7 @@ _MISSING_DIMENSIONS = {
     'branch': ('branch', 'Branch', 'Unassigned'),
     'model': ('model', 'Model', 'Unknown'),
     'vendor': ('vendor', 'Vendor', 'Unknown'),
+    'terminal_id': ('terminal_id', 'Terminal ID', 'Unassigned'),
 }
 
 _QUALITY_CACHE: dict[tuple, tuple[float, Any]] = {}
@@ -1245,8 +1564,11 @@ def warnings_for(conn, definition: Definition) -> list[str]:
     warnings: list[str] = []
     dataset = definition.dataset
     used_dims = set(definition.group_by)
+    condition_fields = {condition['field']
+                        for condition in definition.filters.get('conditions', [])}
     for dim_id, (column, label, bucket) in _MISSING_DIMENSIONS.items():
-        if dim_id not in used_dims and dim_id not in definition.filters:
+        if (dim_id not in used_dims and dim_id not in definition.filters
+                and dim_id not in condition_fields):
             continue
 
         def _missing():
@@ -1266,7 +1588,8 @@ def warnings_for(conn, definition: Definition) -> list[str]:
                 f'{label.lower()}; they are grouped as {bucket}.')
 
     problem_used = ('problem_type' in definition.group_by
-                    or 'problem_type' in definition.filters)
+                    or 'problem_type' in definition.filters
+                    or 'problem_type' in condition_fields)
     if problem_used and dataset.id in ('transactions', 'problems') \
             and definition.window is not None:
         scope_sql = ("AND LOWER(COALESCE(l.status, '')) = 'active'"
@@ -1343,6 +1666,77 @@ def warnings_for(conn, definition: Definition) -> list[str]:
                 f'{active - covered} of {active} active ATMs have no state '
                 'history in this period; uptime covers only ATMs with data.')
 
+    fleet_health_needed = (
+        'active_count' in definition.measures
+        or 'with_coordinates' in definition.measures
+        or 'install_year' in used_dims
+        or 'avg_age_years' in definition.measures)
+    if dataset.id == 'fleet' and fleet_health_needed:
+        scope = definition.filters.get('atm_scope', 'all')
+        scope_sql = ("WHERE LOWER(COALESCE(status, '')) = 'active'"
+                     if scope == 'active' else '')
+
+        def _fleet_health():
+            row = None
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    "SELECT COUNT(*), "
+                    "COUNT(*) FILTER "
+                    "(WHERE LOWER(COALESCE(status, '')) = 'active'), "
+                    "COUNT(*) FILTER "
+                    "(WHERE latitude IS NULL OR longitude IS NULL), "
+                    "COUNT(*) FILTER "
+                    "(WHERE install_date IS NULL) "
+                    f"FROM atm_locations {scope_sql}")
+                row = cur.fetchone()
+            except Exception:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                raise
+            finally:
+                try:
+                    cur.close()
+                except Exception:
+                    pass
+            return tuple(int(value or 0) for value in row) if row else (0, 0, 0, 0)
+
+        try:
+            total, active, missing_coords, missing_install = _cached(
+                ('fleet_health', scope), _fleet_health)
+        except Exception:
+            total = active = missing_coords = missing_install = 0
+
+        if total and active == 0 and 'active_count' in definition.measures:
+            warnings.append(
+                'No ATMs in the registry population are marked active; the '
+                'Active measure will be zero. Check the status field.')
+        if total and missing_coords and 'with_coordinates' in definition.measures:
+            if missing_coords == total:
+                warnings.append(
+                    f'None of the {total} ATMs in the registry population '
+                    'have coordinates; With coordinates will be zero.')
+            else:
+                warnings.append(
+                    f'{missing_coords} of {total} ATMs in the registry '
+                    'population have no coordinates; With coordinates counts '
+                    'only mapped ATMs.')
+        if total and missing_install and (
+                'install_year' in used_dims
+                or 'avg_age_years' in definition.measures):
+            if 'install_year' in used_dims:
+                warnings.append(
+                    f'{missing_install} ATM'
+                    f'{"s" if missing_install != 1 else ""} have no install '
+                    'date; they are grouped as Unknown.')
+            else:
+                warnings.append(
+                    f'{missing_install} ATM'
+                    f'{"s" if missing_install != 1 else ""} have no install '
+                    'date; average age uses only ATMs with a date.')
+
     return warnings
 
 
@@ -1353,20 +1747,24 @@ _OPTIONS_TTL = 120
 
 
 def _option_queries() -> dict[str, str]:
-    active = "LOWER(COALESCE(status, '')) = 'active'"
+    # Registry options include inactive ATMs: a user who explicitly chooses
+    # "All ATMs" must still be able to filter on a district, branch or ATM that
+    # currently has no active terminal.  The option list is advisory; the
+    # compiler validates every selected value and the scope control decides
+    # which ATMs can actually contribute rows.
     return {
-        'vendors': f"SELECT DISTINCT COALESCE(NULLIF(TRIM(vendor), ''), "
-                   f"'Unknown') FROM atm_locations WHERE {active} ORDER BY 1",
-        'districts': f"SELECT DISTINCT COALESCE(NULLIF(TRIM(district), ''), "
-                     f"'Unassigned') FROM atm_locations WHERE {active} ORDER BY 1",
-        'regions': f"SELECT DISTINCT COALESCE(NULLIF(TRIM(region), ''), "
-                   f"'Unassigned') FROM atm_locations WHERE {active} ORDER BY 1",
-        'cities': f"SELECT DISTINCT COALESCE(NULLIF(TRIM(city), ''), "
-                  f"'Unassigned') FROM atm_locations WHERE {active} ORDER BY 1",
-        'branches': f"SELECT DISTINCT COALESCE(NULLIF(TRIM(branch), ''), "
-                    f"'Unassigned') FROM atm_locations WHERE {active} ORDER BY 1",
-        'models': f"SELECT DISTINCT COALESCE(NULLIF(TRIM(model), ''), "
-                  f"'Unknown') FROM atm_locations WHERE {active} ORDER BY 1",
+        'vendors': "SELECT DISTINCT COALESCE(NULLIF(TRIM(vendor), ''), "
+                   "'Unknown') FROM atm_locations ORDER BY 1",
+        'districts': "SELECT DISTINCT COALESCE(NULLIF(TRIM(district), ''), "
+                     "'Unassigned') FROM atm_locations ORDER BY 1",
+        'regions': "SELECT DISTINCT COALESCE(NULLIF(TRIM(region), ''), "
+                   "'Unassigned') FROM atm_locations ORDER BY 1",
+        'cities': "SELECT DISTINCT COALESCE(NULLIF(TRIM(city), ''), "
+                  "'Unassigned') FROM atm_locations ORDER BY 1",
+        'branches': "SELECT DISTINCT COALESCE(NULLIF(TRIM(branch), ''), "
+                    "'Unassigned') FROM atm_locations ORDER BY 1",
+        'models': "SELECT DISTINCT COALESCE(NULLIF(TRIM(model), ''), "
+                  "'Unknown') FROM atm_locations ORDER BY 1",
         'txn_types': "SELECT DISTINCT txn_type FROM atm_transactions_visible "
                      "WHERE recorded_at >= NOW() - INTERVAL '90 days' "
                      "AND txn_type IS NOT NULL AND TRIM(txn_type) <> '' "
@@ -1446,9 +1844,7 @@ def filter_options(conn, sources: Iterable[str] | None = None,
             try:
                 cur.execute(
                     "SELECT atm_id, COALESCE(NULLIF(TRIM(branch), ''), "
-                    "'Unknown branch') FROM atm_locations "
-                    "WHERE LOWER(COALESCE(status, '')) = 'active' "
-                    "ORDER BY atm_id")
+                    "'Unknown branch') FROM atm_locations ORDER BY atm_id")
                 rows = cur.fetchall()
             finally:
                 try:
@@ -1470,6 +1866,69 @@ def filter_options(conn, sources: Iterable[str] | None = None,
 
 # ── Catalog payload ─────────────────────────────────────────────────────────
 
+_LOCATION_FIELD_IDS = {
+    'district', 'region', 'city', 'branch', 'vendor', 'model', 'atm_id',
+    'atm_name', 'terminal_id',
+}
+_TIME_FIELD_IDS = {'day', 'week', 'month'}
+_FILTER_GROUP_LABELS = {
+    'transaction': 'Transaction',
+    'location': 'Location',
+    'availability': 'State',
+}
+
+
+def _dimension_category(dataset: Dataset, dim: Dimension) -> str:
+    if dim.id in _TIME_FIELD_IDS:
+        return 'Time'
+    if dim.id in _LOCATION_FIELD_IDS:
+        return 'Location'
+    if dim.id == 'state':
+        return 'State'
+    if dataset.id == 'fleet' and dim.id in ('status', 'install_year'):
+        return 'Fleet'
+    if dataset.id in ('transactions', 'problems'):
+        return 'Transaction'
+    return 'Other'
+
+
+def _measure_category(measure: Measure) -> str:
+    if measure.id in ('success_rate', 'decline_rate', 'error_rate',
+                      'uptime_pct', 'txns_per_atm'):
+        return 'Rates'
+    if measure.type == 'currency':
+        return 'Value'
+    if measure.type in ('hours', 'datetime'):
+        return 'Time'
+    return 'Volume'
+
+
+def _condition_category(dataset: Dataset, spec: FilterSpec) -> str:
+    dim = dataset.dimensions.get(spec.id)
+    if dim is not None:
+        return _dimension_category(dataset, dim)
+    return _FILTER_GROUP_LABELS.get(spec.group, spec.group.title())
+
+
+def _filter_payload(spec: FilterSpec, *,
+                    category: str | None = None) -> dict[str, Any]:
+    return {
+        'id': spec.id, 'label': spec.label, 'kind': spec.kind,
+        'group': spec.group,
+        'group_label': category or _FILTER_GROUP_LABELS.get(
+            spec.group, spec.group.title()),
+        'category': category or _FILTER_GROUP_LABELS.get(
+            spec.group, spec.group.title()),
+        'data_type': spec.data_type,
+        'description': spec.description,
+        'operators': [{'value': code, 'label': label}
+                      for code, label in operators_for(spec)],
+        'options_source': spec.options_source,
+        'options': [{'value': v, 'label': l}
+                    for v, l in spec.static_options],
+    }
+
+
 def catalog_payload() -> dict[str, Any]:
     """JSON-friendly catalog for the builder UI.  Never includes SQL."""
     datasets = []
@@ -1488,22 +1947,32 @@ def catalog_payload() -> dict[str, Any]:
                              'direction': dataset.default_sort_dir},
             'dimensions': [
                 {'id': dim.id, 'label': dim.label, 'type': dim.type,
+                 'category': _dimension_category(dataset, dim),
                  'description': dim.description,
                  'value_labels': dim.value_labels or {}}
                 for dim in dataset.dimensions.values()
             ],
             'measures': [
                 {'id': measure.id, 'label': measure.label,
-                 'type': measure.type, 'description': measure.description}
+                 'type': measure.type, 'category': _measure_category(measure),
+                 'description': measure.description}
                 for measure in dataset.measures.values()
             ],
-            'filters': [
-                {'id': spec.id, 'label': spec.label, 'kind': spec.kind,
-                 'group': spec.group, 'description': spec.description,
-                 'options_source': spec.options_source,
-                 'options': [{'value': v, 'label': l}
-                             for v, l in spec.static_options]}
-                for spec in dataset.filters.values()
+            'filters': [_filter_payload(
+                            spec,
+                            category=_condition_category(dataset, spec))
+                        for spec in dataset.filters.values()],
+            'condition_fields': [
+                _filter_payload(
+                    spec, category=_condition_category(dataset, spec))
+                for spec in (
+                    list(dataset.filters.values())
+                    + [condition_spec(dataset, dim.id)
+                       for dim in dataset.dimensions.values()
+                       if dim.id not in dataset.filters
+                       and dim.id not in TIME_DIMENSIONS]
+                )
+                if spec is not None
             ],
         })
     return {
@@ -1518,5 +1987,7 @@ def catalog_payload() -> dict[str, Any]:
             'preview_rows': PREVIEW_ROW_LIMIT,
             'max_export_limit': MAX_EXPORT_LIMIT,
             'default_limit': DEFAULT_LIMIT,
+            'max_conditions': MAX_CONDITIONS,
+            'max_filter_values': MAX_FILTER_VALUES,
         },
     }

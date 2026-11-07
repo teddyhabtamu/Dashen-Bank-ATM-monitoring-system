@@ -150,6 +150,51 @@ def test_a_statement_timeout_becomes_an_actionable_error():
     assert 'narrow the period' in str(exc.value).lower()
 
 
+def test_fleet_warnings_surface_empty_active_and_coordinate_data():
+    """A zero Active/coordinates column is a data problem, not a result.
+
+    The fleet screen is used to judge registry completeness.  If status or
+    coordinates are empty, the report must say so instead of presenting a
+    table of zeros as if the fleet had no live ATMs.
+    """
+    class _FleetCursor(_Cursor):
+        def execute(self, sql, params=None):
+            self.conn.executed.append((sql, params))
+            if sql.startswith('SET LOCAL'):
+                return
+            if 'COUNT(*) FILTER' in sql:
+                self._one = (10, 0, 10, 4)
+                self._rows = [(10, 0, 10, 4)]
+                return
+            if 'FROM atm_locations' in sql:
+                self._one = (0,)
+                self._rows = [(0,)]
+                return
+            if 'GROUP BY' in sql:
+                self._rows = list(self.conn.main_rows)
+                self._one = self.conn.main_rows[0]
+                return
+            self._one = self.conn.totals_row
+            self._rows = [self.conn.totals_row]
+
+    class _FleetConn(_Conn):
+        def cursor(self):
+            return _FleetCursor(self)
+
+    definition = engine.validate_definition({
+        'dataset': 'fleet',
+        'group_by': ['district', 'install_year'],
+        'measures': ['atm_count', 'active_count', 'with_coordinates'],
+    })
+    result = engine.run_report(
+        _FleetConn([('Bole', 'Unknown', 10, 0, 0)], (10, 0, 0)),
+        definition)
+    warnings = result['warnings']
+    assert any('marked active' in warning for warning in warnings)
+    assert any('None of the 10 ATMs' in warning for warning in warnings)
+    assert any('no install date' in warning for warning in warnings)
+
+
 def test_warnings_explain_missing_location_data():
     class _WarningCursor(_Cursor):
         def execute(self, sql, params=None):

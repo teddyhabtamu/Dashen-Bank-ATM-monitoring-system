@@ -171,6 +171,188 @@ def test_filter_values_are_bound_not_interpolated():
     assert compiled.sql.count('%s') == len(compiled.params)
 
 
+def test_conditions_are_compiled_from_the_catalog_and_bound():
+    hostile = "Bole'); DROP TABLE atm_locations; --"
+    parsed, compiled = compile_definition(filters={
+        'date': {'preset': 'last_7_days'},
+        'conditions': [
+            {'field': 'status', 'op': 'in', 'value': ['APPROVED']},
+            {'field': 'district', 'op': 'contains', 'value': hostile},
+            {'field': 'amount', 'op': 'gte', 'value': 1000},
+        ],
+        'condition_logic': 'and',
+    })
+    assert hostile not in compiled.sql
+    assert hostile in compiled.params
+    assert 'POSITION(LOWER(%s)' in compiled.sql
+    assert 't.amount >= %s' in compiled.sql
+    assert compiled.sql.count('%s') == len(compiled.params)
+    assert parsed.filters['conditions'][2]['value'] == 1000
+
+
+def test_condition_or_logic_is_one_parenthesised_group():
+    parsed, compiled = compile_definition(filters={
+        'date': {'preset': 'last_7_days'},
+        'conditions': [
+            {'field': 'vendor', 'op': 'eq', 'value': 'NCR'},
+            {'field': 'vendor', 'op': 'eq', 'value': 'GRG'},
+        ],
+        'condition_logic': 'or',
+    })
+    assert "(COALESCE(NULLIF(TRIM(l.vendor), ''), 'Unknown') = %s OR " \
+           "COALESCE(NULLIF(TRIM(l.vendor), ''), 'Unknown') = %s)" in \
+        compiled.sql
+    assert parsed.filters['condition_logic'] == 'or'
+
+
+def test_condition_operators_are_type_checked():
+    with pytest.raises(engine.ReportDefinitionError):
+        engine.validate_definition(definition(filters={
+            'date': {'preset': 'last_7_days'},
+            'conditions': [{'field': 'amount', 'op': 'contains',
+                            'value': '100'}],
+        }))
+    with pytest.raises(engine.ReportDefinitionError):
+        engine.validate_definition(definition(filters={
+            'date': {'preset': 'last_7_days'},
+            'conditions': [{'field': 'amount', 'op': 'gte',
+                            'value': 'not-a-number'}],
+        }))
+
+
+def test_any_dimension_can_be_used_as_a_condition():
+    parsed, compiled = compile_definition(filters={
+        'date': {'preset': 'last_7_days'},
+        'conditions': [{'field': 'source', 'op': 'eq', 'value': 'NCR'}],
+    })
+    assert "COALESCE(NULLIF(TRIM(t.source), ''), 'Unknown') = %s" \
+        in compiled.sql
+    assert 'NCR' in compiled.params
+    assert parsed.filters['conditions'][0]['field'] == 'source'
+
+
+def test_conditions_are_capped_and_unknown_keys_rejected():
+    conditions = [{'field': 'vendor', 'op': 'eq', 'value': 'NCR'}] * \
+                 (engine.MAX_CONDITIONS + 1)
+    with pytest.raises(engine.ReportDefinitionError):
+        engine.validate_definition(definition(filters={
+            'date': {'preset': 'last_7_days'}, 'conditions': conditions}))
+    with pytest.raises(engine.ReportDefinitionError):
+        engine.validate_definition(definition(filters={
+            'date': {'preset': 'last_7_days'},
+            'conditions': [{'field': 'vendor', 'op': 'eq',
+                            'value': 'NCR', 'sql': '1=1'}],
+        }))
+
+
+def test_catalog_exposes_condition_metadata_without_sql():
+    payload = engine.catalog_payload()
+    transactions = next(d for d in payload['datasets']
+                        if d['id'] == 'transactions')
+    fields = {f['id']: f for f in transactions['condition_fields']}
+    assert 'source' in fields
+    assert fields['source']['operators']
+    assert fields['amount']['data_type'] == 'number'
+    assert fields['status']['data_type'] == 'enum'
+    categories = {d['category'] for d in transactions['dimensions']}
+    assert {'Location', 'Time', 'Transaction'} <= categories
+    assert fields['district']['category'] == 'Location'
+    assert fields['status']['category'] == 'Transaction'
+    assert not {'day', 'week', 'month'} & set(fields)
+    assert payload['limits']['max_conditions'] == engine.MAX_CONDITIONS
+    assert payload['limits']['max_filter_values'] == engine.MAX_FILTER_VALUES
+
+
+def test_fleet_install_year_keeps_missing_dates_visible():
+    _, compiled = compile_definition(
+        dataset='fleet', group_by=['install_year'], measures=['atm_count'],
+        filters={})
+    assert "COALESCE(TO_CHAR(l.install_date, 'YYYY'), 'Unknown')" \
+        in compiled.sql
+
+
+def test_filter_options_include_inactive_registry_values():
+    """Choosing All ATMs must not leave inactive branches unselectable."""
+    class _Cursor:
+        def __init__(self, conn):
+            self.conn = conn
+            self.rows = []
+
+        def execute(self, sql):
+            self.conn.statements.append(sql)
+            if 'SELECT atm_id,' in sql:
+                self.rows = [('ATM-1', 'Bole Branch')]
+            else:
+                self.rows = [('Bole',)]
+
+        def fetchall(self):
+            return self.rows
+
+        def close(self):
+            pass
+
+    class _Conn:
+        def __init__(self):
+            self.statements = []
+
+        def cursor(self):
+            return _Cursor(self)
+
+    conn = _Conn()
+    engine._OPTIONS_CACHE.clear()
+    try:
+        payload = engine.filter_options(conn, force=True)
+    finally:
+        engine._OPTIONS_CACHE.clear()
+    assert payload['atms'] == [
+        {'value': 'ATM-1', 'label': 'ATM-1 — Bole Branch'}]
+    assert conn.statements
+    assert not any('status' in statement.lower()
+                   for statement in conn.statements)
+
+
+def test_legacy_saved_filters_are_still_supported():
+    """Definitions saved by the chip-based builder must keep their meaning."""
+    parsed, compiled = compile_definition(filters={
+        'date': {'preset': 'last_7_days'},
+        'district': ['Bole', 'Kirkos'],
+        'problem_type': ['Cash jam'],
+    })
+    assert "COALESCE(NULLIF(TRIM(l.district), ''), 'Unassigned') = ANY(%s)" \
+        in compiled.sql
+    assert "'Unmapped') END = ANY(%s)" in compiled.sql
+    assert ['Bole', 'Kirkos'] in compiled.params
+    assert ['Cash jam'] in compiled.params
+    assert parsed.filters['district'] == ['Bole', 'Kirkos']
+
+
+def test_filter_summary_uses_labels_and_limits_long_value_lists():
+    parsed = engine.validate_definition(definition(filters={
+        'date': {'preset': 'last_7_days'},
+        'conditions': [
+            {'field': 'status', 'op': 'in',
+             'value': ['APPROVED', 'DECLINED', 'ERROR']},
+            {'field': 'amount', 'op': 'between', 'value': [1000, 2000]},
+            {'field': 'district', 'op': 'in',
+             'value': ['A', 'B', 'C', 'D', 'E']},
+        ],
+    }))
+    summary = engine._filter_summary(parsed)
+    assert 'Transaction status is any of Approved, Declined, Error' in summary
+    assert 'Transaction amount (ETB) between 1000 and 2000' in summary
+    assert 'District is any of A, B, C +2 more' in summary
+
+
+def test_condition_values_are_capped():
+    values = ['value-' + str(i) for i in range(engine.MAX_FILTER_VALUES + 1)]
+    with pytest.raises(engine.ReportDefinitionError):
+        engine.validate_definition(definition(filters={
+            'date': {'preset': 'last_7_days'},
+            'conditions': [{'field': 'vendor', 'op': 'in',
+                            'value': values}],
+        }))
+
+
 def test_filter_value_length_and_count_are_capped():
     with pytest.raises(engine.ReportDefinitionError):
         engine.validate_definition(definition(filters={

@@ -9,75 +9,170 @@
 .builder-note{display:flex;align-items:flex-start;gap:10px;background:#EFF6FF;border:1px solid #BFDBFE;border-left:3px solid #2563EB;border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:12px;color:#334155;line-height:1.5}
 .builder-note svg{width:16px;height:16px;flex:0 0 auto;margin-top:1px;color:#2563EB}
 .builder-note b{color:#0F172A}
-.builder-layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:20px;align-items:start}
-.builder-controls{position:sticky;top:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.builder-layout{display:grid;grid-template-columns:370px minmax(0,1fr);gap:20px;align-items:start}
+.builder-controls{display:flex;flex-direction:column;gap:14px;min-width:0}
 .builder-preview{min-width:0}
 .builder-card{margin-bottom:0}
-.builder-card .card-header{padding:13px 18px;min-height:0}
-.builder-card .card-header h2{font-size:13px}
-.builder-card .card-body{padding:15px 18px}
-.builder-help{font-size:11px;color:#64748B;line-height:1.55;margin:8px 0 0}
+.builder-card .card-header{padding:12px 16px;min-height:0}
+.builder-card .card-body{padding:14px 16px}
+.builder-step-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.builder-step{display:flex;align-items:center;gap:8px;min-width:0}
+.builder-step-num{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:50%;background:#EEF2FF;color:#012169;font-size:10px;font-weight:800;flex:0 0 auto}
+.builder-step h2{font-size:12.5px;font-weight:750;color:#0F172A;margin:0}
+.builder-limit{font-size:10px;font-weight:700;color:#94A3B8;white-space:nowrap;font-variant-numeric:tabular-nums}
+.builder-help{font-size:10.5px;color:#64748B;line-height:1.5;margin:8px 0 0}
 .builder-grain{display:inline-flex;align-items:center;gap:6px;background:#F8FAFC;border:1px solid #EEF1F6;border-radius:999px;padding:3px 9px;font-size:10.5px;color:#64748B;margin-top:10px}
 .builder-grain b{color:#334155;font-weight:650}
-.builder-limit{font-size:10.5px;font-weight:650;color:#94A3B8;white-space:nowrap}
-.builder-chips{display:flex;flex-wrap:wrap;gap:6px}
-.builder-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid #E4E9F1;background:#fff;color:#475569;border-radius:999px;padding:6px 11px;font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;transition:background .15s,border-color .15s,color .15s,box-shadow .15s;line-height:1.2}
-.builder-chip:hover{background:#EEF2FF;border-color:#C7D2FE;color:#012169}
-.builder-chip.active{background:#012169;border-color:#012169;color:#fff;box-shadow:0 2px 8px rgba(1,33,105,.16)}
-.builder-chip.active:hover{background:#273274;border-color:#273274;color:#fff}
-.builder-chip:focus-visible{outline:2px solid #012169;outline-offset:2px}
-.builder-chip .chip-check{display:none;font-size:10px}
-.builder-chip.active .chip-check{display:inline}
-.builder-chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
-.builder-chip-row:first-child{margin-top:0}
-.builder-filter-group{border-top:1px solid #EEF1F6;padding-top:12px;margin-top:12px}
-.builder-filter-group:first-child{border-top:0;padding-top:0;margin-top:0}
-.builder-filter-group summary{cursor:pointer;list-style:none;font-size:10px;font-weight:750;color:#94A3B8;text-transform:uppercase;letter-spacing:.55px;margin-bottom:9px;display:flex;align-items:center;gap:6px}
-.builder-filter-group summary::-webkit-details-marker{display:none}
-.builder-filter-group summary:before{content:'▸';display:inline-block;color:#CBD5E1;transition:transform .15s}
-.builder-filter-group[open] summary:before{transform:rotate(90deg)}
-.builder-filter-body{display:flex;flex-direction:column;gap:11px}
-.builder-field{display:flex;flex-direction:column;gap:5px;min-width:0}
-.builder-field label{font-size:10px;font-weight:650;color:#64748B;text-transform:uppercase;letter-spacing:.5px}
 .builder-select{width:100%;padding:8px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;background:#fff;color:#0F172A;outline:none}
 .builder-select:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
-.builder-period{display:flex;flex-direction:column;gap:7px;margin-bottom:13px}
-.builder-period label{font-size:10px;font-weight:650;color:#64748B;text-transform:uppercase;letter-spacing:.5px}
+.builder-field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.builder-field label{font-size:10px;font-weight:650;color:#64748B;text-transform:uppercase;letter-spacing:.5px}
+.builder-hint{font-size:10.5px;color:#94A3B8;line-height:1.5}
+.builder-error-text{display:none;font-size:10.5px;color:#B42318;font-weight:600;line-height:1.5}
+.builder-error-text.show{display:block}
+
+/* ── shelves ── */
+.builder-shelf{display:flex;flex-direction:column;gap:6px}
+.builder-shelf-empty{display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px dashed #DCE3EF;border-radius:7px;color:#94A3B8;font-size:11px;line-height:1.45;background:#FBFCFE}
+.builder-shelf-empty svg{width:14px;height:14px;flex:0 0 auto}
+.shelf-item{display:flex;align-items:center;gap:8px;padding:8px 9px;border:1px solid #E4E9F1;border-radius:7px;background:#fff;min-width:0}
+.shelf-item:hover{border-color:#C7D2FE}
+.shelf-item.dragging{opacity:.45}
+.shelf-grip{display:inline-flex;align-items:center;justify-content:center;width:18px;height:22px;border:0;background:none;color:#CBD5E1;cursor:grab;padding:0;flex:0 0 auto}
+.shelf-grip:active{cursor:grabbing}
+.shelf-grip svg{width:13px;height:13px}
+.shelf-main{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
+.shelf-label{font-size:12px;font-weight:650;color:#0F172A;line-height:1.3;overflow-wrap:anywhere}
+.shelf-meta{font-size:10px;color:#94A3B8;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shelf-tag{font-size:9px;font-weight:750;letter-spacing:.25px;text-transform:uppercase;color:#64748B;background:#F1F5F9;border-radius:999px;padding:1px 6px;white-space:nowrap;flex:0 0 auto}
+.shelf-remove{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;border-radius:5px;background:none;color:#94A3B8;cursor:pointer;flex:0 0 auto;padding:0}
+.shelf-remove:hover{background:#FEF3F2;color:#B42318}
+.shelf-remove svg{width:13px;height:13px}
+.builder-add{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:8px;padding:8px 10px;border:1px dashed #C7D2FE;border-radius:7px;background:#FBFDFF;color:#012169;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.builder-add:hover{background:#EEF2FF;border-color:#9DB4D8}
+.builder-add:disabled{opacity:.45;cursor:not-allowed}
+.builder-add svg{width:13px;height:13px}
+
+/* ── filters ── */
+.builder-period{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.builder-period > label{font-size:10px;font-weight:650;color:#64748B;text-transform:uppercase;letter-spacing:.5px}
 .builder-custom-dates{display:flex;align-items:center;gap:7px;margin-top:2px}
 .builder-custom-dates input{width:100%;min-width:0;padding:8px 9px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;background:#fff;color:#0F172A}
 .builder-custom-dates input:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06);outline:none}
 .builder-custom-dates span{font-size:11px;color:#94A3B8;flex:0 0 auto}
-.builder-hint{font-size:10.5px;color:#94A3B8;line-height:1.5}
-.builder-error-text{display:none;font-size:10.5px;color:#B42318;font-weight:600;line-height:1.5}
-.builder-error-text.show{display:block}
-.builder-toggle{display:flex;flex-direction:column;gap:3px;margin-top:14px;padding-top:13px;border-top:1px solid #EEF1F6}
-.builder-toggle label{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#334155;cursor:pointer}
-.builder-toggle input{width:14px;height:14px;accent-color:#012169;cursor:pointer}
-.builder-toggle .builder-help{margin:0 0 0 22px}
-.builder-run{width:100%;justify-content:center;padding:10px 14px}
-.builder-run + .builder-run{margin-top:8px}
+.builder-scope{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0;padding-top:12px;border-top:1px solid #EEF1F6}
+.builder-scope label{font-size:10px;font-weight:650;color:#64748B;text-transform:uppercase;letter-spacing:.5px}
+.builder-scope .builder-select{width:160px;flex:0 0 auto}
+.builder-condition-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid #EEF1F6}
+.builder-condition-head > span{font-size:10px;font-weight:650;color:#64748B;text-transform:uppercase;letter-spacing:.5px}
+.builder-logic{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#64748B}
+.builder-logic select{padding:4px 6px;border:1px solid #E4E9F1;border-radius:5px;background:#fff;color:#334155;font:inherit;font-size:10.5px}
+.condition-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.condition-empty{padding:10px;border:1px dashed #DCE3EF;border-radius:7px;color:#94A3B8;font-size:10.5px;line-height:1.5;background:#FBFCFE}
+.condition-row{display:flex;align-items:flex-start;gap:6px;padding:8px 9px;border:1px solid #E4E9F1;border-radius:7px;background:#FBFCFE}
+.condition-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.condition-main strong{font-size:11px;font-weight:700;color:#334155}
+.condition-main span{font-size:10.5px;color:#64748B;overflow-wrap:anywhere}
+.condition-main em{font-style:normal;color:#0F172A;font-weight:600}
+.condition-actions{display:flex;gap:2px;flex:0 0 auto}
+.condition-actions button{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border:0;border-radius:4px;background:none;color:#94A3B8;cursor:pointer;padding:0}
+.condition-actions button:hover{background:#EEF2FF;color:#012169}
+.condition-actions button[data-remove]:hover{background:#FEF3F2;color:#B42318}
+.condition-actions svg{width:12px;height:12px}
+.builder-filter-add{margin-top:8px}
 .builder-inline-warning{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#FFFAEB;border:1px solid #FDE68A;border-radius:8px;padding:8px 11px;font-size:11px;color:#92400E;margin-bottom:12px;line-height:1.45}
 .builder-link{border:none;background:none;color:#012169;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;text-decoration:underline;padding:0;white-space:nowrap}
 
-/* ── multi-select ── */
-.builder-multi{position:relative;min-width:0}
-.builder-multi-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:8px 10px;border:1px solid #E4E9F1;border-radius:6px;background:#fff;color:#0F172A;font-size:12px;font-family:inherit;text-align:left;cursor:pointer;min-height:34px}
-.builder-multi-trigger:hover{border-color:#C7D2FE}
-.builder-multi.open .builder-multi-trigger{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
-.builder-multi-trigger span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.builder-chevron{color:#94A3B8;font-size:10px;flex:0 0 auto;transition:transform .15s}
-.builder-multi.open .builder-chevron{transform:rotate(180deg)}
-.builder-multi-menu{display:none;position:absolute;z-index:60;left:0;right:0;top:calc(100% + 4px);background:#fff;border:1px solid #E4E9F1;border-radius:8px;box-shadow:0 12px 32px rgba(1,33,105,.14);padding:7px;max-height:260px;overflow:auto}
-.builder-multi.open .builder-multi-menu{display:block}
-.builder-multi-search{width:100%;padding:7px 9px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;margin-bottom:5px;outline:none;position:sticky;top:0;background:#fff;z-index:2}
-.builder-multi-search:focus{border-color:#012169}
-.builder-multi-option{display:flex;align-items:center;gap:8px;padding:6px 7px;border-radius:5px;font-size:12px;color:#334155;cursor:pointer;line-height:1.35}
-.builder-multi-option:hover{background:#EEF2FF}
-.builder-multi-option input{width:13px;height:13px;accent-color:#012169;flex:0 0 auto;cursor:pointer}
-.builder-multi-empty{padding:8px;text-align:center;font-size:11px;color:#94A3B8}
-.builder-multi-clear{border:none;background:none;color:#012169;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;padding:6px 7px 2px;text-align:left;text-decoration:underline}
+/* ── options ── */
+.builder-options{display:grid;grid-template-columns:1fr 86px;gap:10px}
+.builder-options .builder-field:first-child{grid-column:1/-1}
+.builder-limit-row{display:flex;align-items:center;gap:8px}
+.builder-limit-row input{width:100%;padding:8px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;background:#fff;color:#0F172A;outline:none;font-variant-numeric:tabular-nums}
+.builder-limit-row input:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
+.builder-limit-row span{font-size:10px;color:#94A3B8;white-space:nowrap}
+.builder-actions-bar{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 0 2px}
+.builder-run{width:100%;justify-content:center;padding:10px 14px}
+.builder-run + .builder-run{margin-top:0}
 
-/* ── preview ── */
+/* ── modals ── */
+.builder-dialog{background:#fff;border-radius:14px;box-shadow:0 24px 80px rgba(1,33,105,.22);max-width:94vw;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;animation:builder-modal-in .2s ease}
+@keyframes builder-modal-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.builder-dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:17px 20px;border-bottom:1px solid #EEF1F6;flex:0 0 auto}
+.builder-dialog-head h2{font-size:15px;font-weight:750;color:#0F172A;margin:0}
+.builder-dialog-head p{font-size:11px;color:#64748B;margin:3px 0 0;line-height:1.45}
+.builder-dialog-close{width:30px;height:30px;border:none;background:transparent;color:#94A3B8;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.builder-dialog-close:hover{background:#F1F5F9;color:#475569}
+.builder-dialog-close svg{width:16px;height:16px}
+.builder-dialog-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-top:1px solid #EEF1F6;flex:0 0 auto;background:#FBFCFE}
+.builder-dialog-foot .builder-hint{font-size:10.5px}
+
+/* field picker */
+.builder-picker{width:620px}
+.builder-picker-search{position:relative;padding:13px 20px 10px;flex:0 0 auto}
+.builder-picker-search svg{position:absolute;left:31px;top:50%;transform:translateY(-30%);width:14px;height:14px;color:#94A3B8;pointer-events:none}
+.builder-picker-search input{width:100%;padding:9px 11px 9px 33px;border:1px solid #E4E9F1;border-radius:7px;font-size:12px;font-family:inherit;outline:none}
+.builder-picker-search input:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
+.builder-picker-body{padding:0 20px 12px;overflow:auto;min-height:180px;max-height:58vh}
+.picker-empty{padding:32px 12px;text-align:center;color:#94A3B8;font-size:11.5px}
+.picker-group{margin-top:12px}
+.picker-group:first-child{margin-top:2px}
+.picker-group-head{display:flex;align-items:center;gap:6px;padding:0 2px 6px;font-size:9.5px;font-weight:800;letter-spacing:.55px;text-transform:uppercase;color:#94A3B8}
+.picker-option{display:flex;align-items:center;gap:10px;width:100%;padding:8px 9px;border:1px solid transparent;border-radius:7px;background:none;font:inherit;text-align:left;cursor:pointer;min-width:0}
+.picker-option:hover{background:#F8FAFF;border-color:#E4E9F1}
+.picker-option.selected{background:#EEF2FF;border-color:#C7D2FE}
+.picker-option-icon{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:7px;background:#F1F5F9;color:#64748B;flex:0 0 auto}
+.picker-option.selected .picker-option-icon{background:#fff;color:#012169}
+.picker-option-icon svg{width:14px;height:14px}
+.picker-option-copy{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
+.picker-option-copy strong{font-size:12px;font-weight:650;color:#0F172A;line-height:1.3}
+.picker-option-copy span{font-size:10.5px;color:#64748B;line-height:1.35;overflow-wrap:anywhere}
+.picker-option-check{width:18px;height:18px;border-radius:50%;border:1.5px solid #CBD5E1;display:inline-flex;align-items:center;justify-content:center;color:transparent;flex:0 0 auto}
+.picker-option.selected .picker-option-check{border-color:#012169;background:#012169;color:#fff}
+.picker-option-check svg{width:11px;height:11px}
+
+/* filter modal */
+.builder-filter-dialog{width:860px}
+.builder-filter-layout{display:grid;grid-template-columns:300px minmax(0,1fr);min-height:340px;overflow:hidden;flex:1}
+.builder-filter-fields{border-right:1px solid #EEF1F6;display:flex;flex-direction:column;min-height:0}
+.builder-filter-fields .builder-picker-search{padding:12px 14px 8px}
+.builder-filter-fields .builder-picker-search svg{left:25px}
+.builder-filter-fields .builder-picker-search input{font-size:11.5px}
+.filter-field-list{overflow:auto;padding:0 8px 12px;flex:1}
+.filter-field-option{display:flex;align-items:center;gap:8px;width:100%;padding:7px 8px;border:0;border-radius:6px;background:none;font:inherit;text-align:left;cursor:pointer;color:#334155}
+.filter-field-option:hover{background:#F8FAFF}
+.filter-field-option.selected{background:#EEF2FF;color:#012169}
+.filter-field-option span{font-size:11.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filter-field-option small{margin-left:auto;font-size:9px;color:#94A3B8;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
+.filter-field-group{padding:9px 8px 4px;font-size:9px;font-weight:800;letter-spacing:.55px;text-transform:uppercase;color:#94A3B8}
+.builder-filter-config{padding:16px 18px;overflow:auto;min-height:0;display:flex;flex-direction:column;gap:12px}
+.filter-config-empty{margin:auto;text-align:center;color:#94A3B8;font-size:11.5px;line-height:1.6;max-width:260px}
+.filter-config-empty svg{width:26px;height:26px;color:#CBD5E1;margin-bottom:8px}
+.filter-chosen{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid #E4E9F1;border-radius:8px;background:#FBFCFE}
+.filter-chosen strong{font-size:12px;color:#0F172A}
+.filter-chosen span{font-size:10px;color:#94A3B8;text-transform:uppercase;letter-spacing:.35px}
+.filter-config-grid{display:grid;grid-template-columns:155px minmax(0,1fr);gap:10px;align-items:start}
+.filter-value-wrap{display:flex;flex-direction:column;gap:7px;min-width:0}
+.filter-value-wrap > input,.filter-value-wrap > select,.filter-value-wrap textarea{width:100%;padding:8px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;background:#fff;color:#0F172A;outline:none}
+.filter-value-wrap > input:focus,.filter-value-wrap > select:focus,.filter-value-wrap textarea:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
+.filter-value-wrap textarea{min-height:64px;resize:vertical}
+.filter-value-pair{display:flex;align-items:center;gap:6px}
+.filter-value-pair input{width:100%;min-width:0;padding:8px 9px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;outline:none}
+.filter-value-pair span{font-size:10px;color:#94A3B8}
+.filter-value-list{border:1px solid #E4E9F1;border-radius:7px;max-height:190px;overflow:auto;background:#fff}
+.filter-value-option{display:flex;align-items:center;gap:8px;padding:6px 9px;font-size:11.5px;color:#334155;cursor:pointer;border-bottom:1px solid #F1F5F9}
+.filter-value-option:last-child{border-bottom:0}
+.filter-value-option:hover{background:#F8FAFF}
+.filter-value-option input{width:13px;height:13px;accent-color:#012169;flex:0 0 auto}
+.filter-selected-summary{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10.5px;color:#64748B}
+.filter-selected-summary b{color:#012169}
+.filter-value-count{padding:7px 9px;font-size:10px;color:#94A3B8;border-top:1px solid #F1F5F9;background:#FBFCFE}
+.filter-value-empty{padding:14px 10px;text-align:center;color:#94A3B8;font-size:10.5px}
+.filter-value-actions{display:flex;align-items:center;gap:12px}
+.filter-value-actions button{border:0;background:none;padding:0;font:inherit;font-size:10.5px;font-weight:700;color:#012169;cursor:pointer;text-decoration:underline}
+.filter-value-actions button:hover{color:#1D4ED8}
+.filter-value-actions button + button{color:#64748B}
+
+/* preview */
 .builder-preview-card{margin-bottom:18px}
 .builder-preview-head{align-items:flex-start}
 .builder-preview-head h2{font-size:16px}
@@ -111,13 +206,11 @@
 .builder-empty svg{width:30px;height:30px;color:#CBD5E1;margin-bottom:10px}
 .builder-empty strong{font-size:13px;color:#475569;font-weight:700;margin-bottom:3px}
 .builder-empty p{font-size:11.5px;line-height:1.55;max-width:420px;margin:0}
-.builder-empty.small{padding:26px 16px;min-height:0}
-.builder-empty.small svg{width:22px;height:22px;margin-bottom:7px}
 .builder-loading{display:flex;align-items:center;justify-content:center;gap:10px;padding:48px 24px;color:#64748B;font-size:12px;min-height:230px}
 .builder-spinner{width:22px;height:22px;border:2.5px solid #E2E8F0;border-top-color:#012169;border-radius:50%;animation:builder-spin .8s linear infinite}
 @keyframes builder-spin{to{transform:rotate(360deg)}}
 
-/* ── saved reports ── */
+/* saved reports */
 .builder-saved-list{display:flex;flex-direction:column;gap:8px}
 .builder-saved{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;border:1px solid #EEF1F6;border-radius:9px;padding:12px 14px;background:#fff;transition:border-color .15s,background .15s}
 .builder-saved:hover{border-color:#C7D2FE;background:#FBFDFF}
@@ -131,32 +224,28 @@
 .builder-badge.shared{background:#EFF8FF;color:#175CD3}
 .builder-badge.system{background:#F5F3FF;color:#5B21B6}
 
-/* ── save modal ── */
-.builder-modal{background:#fff;border-radius:14px;width:480px;max-width:94vw;max-height:90vh;overflow:auto;box-shadow:0 24px 80px rgba(0,0,0,.2);animation:builder-modal-in .22s ease}
-@keyframes builder-modal-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-.builder-modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 22px;border-bottom:1px solid #EEF1F6}
-.builder-modal-head h2{font-size:15px;font-weight:750;color:#0F172A}
-.builder-modal-close{width:30px;height:30px;border:none;background:transparent;color:#94A3B8;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.builder-modal-close:hover{background:#F1F5F9;color:#475569}
-.builder-modal-close svg{width:16px;height:16px}
-.builder-modal-body{padding:18px 22px;display:flex;flex-direction:column;gap:14px}
-.builder-modal-body .form-group{gap:5px}
-.builder-modal-body textarea{padding:8px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;resize:vertical;min-height:58px;outline:none}
-.builder-modal-body textarea:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
+/* save modal */
+.builder-save-dialog{width:480px}
+.builder-save-body{padding:18px 20px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+.builder-save-body .form-group{gap:5px}
+.builder-save-body textarea{padding:8px 10px;border:1px solid #E4E9F1;border-radius:6px;font-size:12px;font-family:inherit;resize:vertical;min-height:58px;outline:none}
+.builder-save-body textarea:focus{border-color:#012169;box-shadow:0 0 0 3px rgba(1,33,105,.06)}
 .builder-optional{font-size:9.5px;color:#94A3B8;font-weight:500;text-transform:none;letter-spacing:0}
-.builder-modal-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;padding:0 22px 20px}
-.builder-modal-actions .btn{padding:9px 14px;font-size:12px}
+.builder-dialog-foot .builder-foot-actions{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
 .builder-modal-error{display:none;background:#FEF3F2;border:1px solid #FECACA;color:#B42318;border-radius:7px;padding:8px 10px;font-size:11.5px;line-height:1.45}
 .builder-modal-error.show{display:block}
 
 @media(max-width:1100px){
-  .builder-layout{grid-template-columns:300px minmax(0,1fr)}
+  .builder-layout{grid-template-columns:320px minmax(0,1fr)}
 }
 @media(max-width:900px){
   .builder-layout{grid-template-columns:1fr}
   .builder-controls{position:static}
   .builder-preview-head{flex-direction:column;align-items:stretch}
   .builder-actions{justify-content:flex-start}
+  .builder-filter-layout{grid-template-columns:1fr;min-height:0}
+  .builder-filter-fields{border-right:0;border-bottom:1px solid #EEF1F6;flex:0 0 auto;max-height:220px}
+  .builder-filter-config{min-height:240px}
 }
 @media(max-width:640px){
   .builder-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}
@@ -165,7 +254,16 @@
   .builder-saved{flex-direction:column}
   .builder-saved-actions{width:100%}
   .builder-saved-actions .btn{flex:1;justify-content:center}
-  .builder-multi-menu{position:fixed;left:12px;right:12px;top:auto;bottom:12px;max-height:52vh;z-index:2500}
+  .builder-picker{width:94vw}
+  .builder-picker-body{max-height:56vh}
+  .builder-filter-dialog{width:94vw;max-height:92vh}
+  .builder-save-dialog{width:94vw}
+  .builder-dialog-foot{align-items:flex-start;flex-wrap:wrap}
+  .builder-dialog-foot .builder-foot-actions{width:100%;margin-left:0}
+  .builder-dialog-foot .builder-foot-actions .btn{flex:1;justify-content:center}
+  .builder-options{grid-template-columns:1fr 84px}
+  .builder-actions-bar{grid-template-columns:1fr 1fr}
+  .filter-selected-summary{flex-direction:column;align-items:flex-start;gap:2px}
 }
 {% endblock %}
 {% block body %}
@@ -173,7 +271,7 @@
   <div class="page-header-icon"><i data-lucide="sliders-horizontal"></i></div>
   <div>
     <h1 class="page-title">Report Builder</h1>
-    <p class="page-subtitle">Choose a subject, group it, and measure it. Preview first, then export or save.</p>
+    <p class="page-subtitle">Choose fields, shape the rows and values, then preview before exporting or saving.</p>
   </div>
   <div class="page-actions">
     <button type="button" class="btn btn-outline" id="newReportBtn"><i data-lucide="file-plus-2"></i> New report</button>
@@ -184,14 +282,16 @@
 <div class="page-content">
   <div class="builder-note">
     <i data-lucide="shield-check"></i>
-    <span><b>Governed report builder.</b> Only catalog fields are available and every filter is
+    <span><b>Governed report builder.</b> Only catalog fields are available and every value is
       parameterised. Reports never include card data. A saved report stores the definition, not the rows.</span>
   </div>
 
   <div class="builder-layout">
     <aside class="builder-controls" aria-label="Report definition">
       <section class="card builder-card">
-        <div class="card-header"><h2>1. Subject</h2></div>
+        <div class="card-header builder-step-head">
+          <div class="builder-step"><span class="builder-step-num">1</span><h2>Subject</h2></div>
+        </div>
         <div class="card-body">
           <div class="builder-field">
             <label for="datasetSelect">What do you want to report on?</label>
@@ -203,29 +303,34 @@
       </section>
 
       <section class="card builder-card">
-        <div class="card-header">
-          <h2>2. Group by</h2>
-          <span class="builder-limit" id="groupLimit">0 / 3</span>
+        <div class="card-header builder-step-head">
+          <div class="builder-step"><span class="builder-step-num">2</span><h2>Rows</h2></div>
+          <span class="builder-limit" id="rowLimit">0 / 3</span>
         </div>
         <div class="card-body">
-          <div class="builder-chips" id="dimensionChips"></div>
-          <p class="builder-help">Leave all unselected for a single summary row. Choose one date grain at a time.</p>
+          <div class="builder-shelf" id="rowsShelf"></div>
+          <button type="button" class="builder-add" id="addRowBtn"><i data-lucide="plus"></i> Add grouping field</button>
+          <p class="builder-help">Leave empty for a single summary row. One date grain at a time.</p>
         </div>
       </section>
 
       <section class="card builder-card">
-        <div class="card-header">
-          <h2>3. Measures</h2>
-          <span class="builder-limit" id="measureLimit">0 / 6</span>
+        <div class="card-header builder-step-head">
+          <div class="builder-step"><span class="builder-step-num">3</span><h2>Values</h2></div>
+          <span class="builder-limit" id="valueLimit">0 / 8</span>
         </div>
         <div class="card-body">
-          <div class="builder-chips" id="measureChips"></div>
+          <div class="builder-shelf" id="valuesShelf"></div>
+          <button type="button" class="builder-add" id="addValueBtn"><i data-lucide="plus"></i> Add measure</button>
           <p class="builder-help">Rates and averages are recalculated on the totals row, never summed.</p>
         </div>
       </section>
 
       <section class="card builder-card">
-        <div class="card-header"><h2>4. Filters</h2></div>
+        <div class="card-header builder-step-head">
+          <div class="builder-step"><span class="builder-step-num">4</span><h2>Filters</h2></div>
+          <span class="builder-limit" id="conditionLimit">0 / 20</span>
+        </div>
         <div class="card-body">
           <div id="optionsWarning" class="builder-inline-warning" hidden>
             <span id="optionsWarningText">Some filter options could not be loaded.</span>
@@ -244,17 +349,62 @@
             <div class="builder-error-text" id="periodError" role="alert"></div>
           </div>
 
-          <div id="filterFields"></div>
-
-          <div class="builder-toggle">
-            <label><input type="checkbox" id="includeInactive"> Include inactive ATMs</label>
-            <p class="builder-help">Off by default, matching the standard reports. Inactive ATMs remain in the fleet profile.</p>
+          <div class="builder-scope">
+            <label for="scopeSelect">ATM population</label>
+            <select id="scopeSelect" class="builder-select" data-native>
+              <option value="active">Active ATMs only</option>
+              <option value="all">All ATMs</option>
+            </select>
           </div>
+
+          <div class="builder-condition-head">
+            <span>Conditions</span>
+            <label class="builder-logic" id="conditionLogicWrap" hidden>
+              Match
+              <select id="conditionLogic" aria-label="Match all or any conditions">
+                <option value="and">all</option>
+                <option value="or">any</option>
+              </select>
+            </label>
+          </div>
+          <div class="condition-list" id="conditionList"></div>
+          <button type="button" class="builder-add builder-filter-add" id="addFilterBtn"><i data-lucide="plus"></i> Add filter</button>
         </div>
       </section>
 
-      <button type="button" class="btn btn-primary builder-run" id="previewBtn"><i data-lucide="play"></i> Preview report</button>
-      <button type="button" class="btn btn-outline builder-run" id="saveLeftBtn"><i data-lucide="save"></i> Save report</button>
+      <section class="card builder-card">
+        <div class="card-header builder-step-head">
+          <div class="builder-step"><span class="builder-step-num">5</span><h2>Sort &amp; limit</h2></div>
+        </div>
+        <div class="card-body">
+          <div class="builder-options">
+            <div class="builder-field">
+              <label for="sortField">Sort by</label>
+              <select id="sortField" class="builder-select" data-native></select>
+            </div>
+            <div class="builder-field">
+              <label for="sortDirection">Order</label>
+              <select id="sortDirection" class="builder-select" data-native>
+                <option value="desc">Descending</option>
+                <option value="asc">Ascending</option>
+              </select>
+            </div>
+            <div class="builder-field">
+              <label for="limitInput">Row limit</label>
+              <div class="builder-limit-row">
+                <input id="limitInput" type="number" min="1" inputmode="numeric">
+                <span id="limitMaxLabel"></span>
+              </div>
+            </div>
+          </div>
+          <p class="builder-help">The preview shows up to <span id="previewRowLimit">500</span> rows; exports use this limit.</p>
+        </div>
+      </section>
+
+      <div class="builder-actions-bar">
+        <button type="button" class="btn btn-primary builder-run" id="previewBtn"><i data-lucide="play"></i> Preview report</button>
+        <button type="button" class="btn btn-outline builder-run" id="saveLeftBtn"><i data-lucide="save"></i> Save report</button>
+      </div>
     </aside>
 
     <main class="builder-preview" aria-label="Report preview">
@@ -262,7 +412,7 @@
         <div class="card-header builder-preview-head">
           <div>
             <h2 id="previewTitle">Preview</h2>
-            <div class="builder-preview-sub" id="previewSubtitle">Choose a subject and press Preview report.</div>
+            <div class="builder-preview-sub" id="previewSubtitle">Choose fields and press Preview report.</div>
           </div>
           <div class="builder-actions">
             <button type="button" class="btn btn-outline" data-export="excel"><i data-lucide="file-spreadsheet"></i> Excel</button>
@@ -289,8 +439,7 @@
             <i data-lucide="table-2"></i>
             <strong>No preview yet</strong>
             <p>Choose your fields and press <b>Preview report</b>. The table shows the first
-              <span id="previewRowLimit">500</span> rows; exports use the same definition, up to
-              <span id="exportRowLimit">100,000</span> rows.</p>
+              <span id="emptyPreviewRowLimit">500</span> rows; exports use the same definition.</p>
           </div>
           <div class="builder-loading" id="previewLoading" hidden>
             <div class="builder-spinner"></div><span>Building report…</span>
@@ -307,7 +456,7 @@
           <span class="builder-limit" id="savedCount"></span>
         </div>
         <div class="card-body" id="savedReportsList">
-          <div class="builder-empty small">
+          <div class="builder-empty" style="min-height:150px;padding:24px">
             <i data-lucide="bookmark"></i>
             <strong>No saved reports yet</strong>
             <p>Save a report to reuse it next month.</p>
@@ -318,13 +467,86 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="saveModal" role="dialog" aria-modal="true" aria-labelledby="saveModalTitle">
-  <div class="builder-modal">
-    <div class="builder-modal-head">
-      <h2 id="saveModalTitle">Save report</h2>
-      <button type="button" class="builder-modal-close" id="closeSaveModal" aria-label="Close"><i data-lucide="x"></i></button>
+<div class="modal-overlay" id="fieldPickerModal" role="dialog" aria-modal="true" aria-labelledby="fieldPickerTitle">
+  <div class="builder-dialog builder-picker">
+    <div class="builder-dialog-head">
+      <div>
+        <h2 id="fieldPickerTitle">Add field</h2>
+        <p id="fieldPickerSub">Search the governed catalog and add fields to the report.</p>
+      </div>
+      <button type="button" class="builder-dialog-close" data-close-picker aria-label="Close"><i data-lucide="x"></i></button>
     </div>
-    <div class="builder-modal-body">
+    <div class="builder-picker-search">
+      <i data-lucide="search"></i>
+      <input id="fieldSearch" type="search" placeholder="Search fields and measures" autocomplete="off" aria-label="Search fields">
+    </div>
+    <div class="builder-picker-body" id="fieldPickerList"></div>
+    <div class="builder-dialog-foot">
+      <span class="builder-hint" id="fieldPickerHint"></span>
+      <div class="builder-foot-actions">
+        <button type="button" class="btn btn-primary" id="fieldPickerDone">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="filterModal" role="dialog" aria-modal="true" aria-labelledby="filterModalTitle">
+  <div class="builder-dialog builder-filter-dialog">
+    <div class="builder-dialog-head">
+      <div>
+        <h2 id="filterModalTitle">Add filter</h2>
+        <p>Choose a field, then an operator and value. Every value is bound as a parameter.</p>
+      </div>
+      <button type="button" class="builder-dialog-close" data-close-filter aria-label="Close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="builder-filter-layout">
+      <div class="builder-filter-fields">
+        <div class="builder-picker-search">
+          <i data-lucide="search"></i>
+          <input id="filterFieldSearch" type="search" placeholder="Search filter fields" autocomplete="off" aria-label="Search filter fields">
+        </div>
+        <div class="filter-field-list" id="filterFieldList"></div>
+      </div>
+      <div class="builder-filter-config" id="filterConfig">
+        <div class="filter-config-empty" id="filterConfigEmpty">
+          <i data-lucide="mouse-pointer-click"></i>
+          <div>Choose a field on the left to build a condition. Every dimension and raw input measure is filterable, not just the common ones.</div>
+        </div>
+        <div id="filterConfigBody" hidden>
+          <div class="filter-chosen">
+            <div><strong id="filterChosenLabel"></strong><br><span id="filterChosenGroup"></span></div>
+          </div>
+          <div class="filter-config-grid" style="margin-top:12px">
+            <div class="builder-field">
+              <label for="filterOperator">Operator</label>
+              <select id="filterOperator" class="builder-select" data-native></select>
+            </div>
+            <div class="builder-field">
+              <label id="filterValueLabel" for="filterValueInput">Value</label>
+              <div class="filter-value-wrap" id="filterValueWrap"></div>
+            </div>
+          </div>
+          <div class="builder-error-text" id="filterValueError" role="alert"></div>
+        </div>
+      </div>
+    </div>
+    <div class="builder-dialog-foot">
+      <span class="builder-hint" id="filterModalHint"></span>
+      <div class="builder-foot-actions">
+        <button type="button" class="btn btn-outline" data-close-filter>Cancel</button>
+        <button type="button" class="btn btn-primary" id="filterApplyBtn">Add filter</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="saveModal" role="dialog" aria-modal="true" aria-labelledby="saveModalTitle">
+  <div class="builder-dialog builder-save-dialog">
+    <div class="builder-dialog-head">
+      <h2 id="saveModalTitle">Save report</h2>
+      <button type="button" class="builder-dialog-close" id="closeSaveModal" aria-label="Close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="builder-save-body">
       <div class="builder-modal-error" id="saveModalError"></div>
       <div class="form-group">
         <label for="saveName">Report name</label>
@@ -342,10 +564,12 @@
         </select>
       </div>
     </div>
-    <div class="builder-modal-actions">
-      <button type="button" class="btn btn-outline" id="cancelSaveModal">Cancel</button>
-      <button type="button" class="btn btn-gold" id="saveUpdateBtn" hidden>Update current</button>
-      <button type="button" class="btn btn-primary" id="saveNewBtn">Save as new</button>
+    <div class="builder-dialog-foot">
+      <div class="builder-foot-actions">
+        <button type="button" class="btn btn-outline" id="cancelSaveModal">Cancel</button>
+        <button type="button" class="btn btn-gold" id="saveUpdateBtn" hidden>Update current</button>
+        <button type="button" class="btn btn-primary" id="saveNewBtn">Save as new</button>
+      </div>
     </div>
   </div>
 </div>
@@ -365,9 +589,15 @@
   var USERNAME = {{ username|tojson }};
 
   var MAX_GROUP = CATALOG.limits.max_group_by;
-  var MAX_MEASURE = Math.min(6, CATALOG.limits.max_measures);
+  var MAX_MEASURE = CATALOG.limits.max_measures;
+  var MAX_CONDITIONS = CATALOG.limits.max_conditions || 20;
+  var MAX_FILTER_VALUES = CATALOG.limits.max_filter_values || 50;
+  var MAX_VISIBLE_OPTIONS = 100;
+  var MAX_EXPORT = CATALOG.limits.max_export_limit;
   var TIME_DIMS = { day: 1, week: 1, month: 1 };
   var NUMERIC_TYPES = { number: 1, percent: 1, currency: 1, hours: 1 };
+  var CATEGORY_ORDER = ['Location', 'Time', 'Transaction', 'State', 'Fleet',
+                        'Volume', 'Rates', 'Value', 'Other'];
 
   var OPTIONS = {};
   var savedDefinitions = [];
@@ -376,13 +606,22 @@
   var previewAbort = null;
   var startPicker = null;
   var endPicker = null;
-  var openMulti = null;
+  var dragPayload = null;
+  var pickerMode = 'row';
+  var pickerQuery = '';
+  var pendingCondition = null;
+  var editingCondition = -1;
+  var filterFieldQuery = '';
+  var filterOptionQuery = '';
 
   var state = {
     datasetId: 'transactions',
     groupBy: [],
     measures: [],
-    filters: { atm_scope: 'active' },
+    period: null,
+    scope: 'active',
+    conditions: [],
+    conditionLogic: 'and',
     sort: null,
     limit: CATALOG.limits.default_limit,
     currentDefinitionId: null,
@@ -407,20 +646,43 @@
     return null;
   }
   function currentDataset() { return datasetById(state.datasetId) || CATALOG.datasets[0]; }
+  function dimensionById(ds, id) {
+    for (var i = 0; i < ds.dimensions.length; i++) {
+      if (ds.dimensions[i].id === id) return ds.dimensions[i];
+    }
+    return null;
+  }
+  function measureById(ds, id) {
+    for (var i = 0; i < ds.measures.length; i++) {
+      if (ds.measures[i].id === id) return ds.measures[i];
+    }
+    return null;
+  }
+  function conditionFieldById(ds, id) {
+    var fields = ds.condition_fields || ds.filters || [];
+    for (var i = 0; i < fields.length; i++) {
+      if (fields[i].id === id) return fields[i];
+    }
+    return null;
+  }
+  function conditionFieldLabel(fieldId) {
+    var spec = conditionFieldById(currentDataset(), fieldId);
+    return spec ? spec.label : fieldId;
+  }
   function presetLabel(value) {
     for (var i = 0; i < CATALOG.period_presets.length; i++) {
       if (CATALOG.period_presets[i].value === value) return CATALOG.period_presets[i].label;
     }
     return value || 'Custom dates';
   }
-  function optionList(filter) {
+  function optionList(field) {
     var opts = [];
-    if (filter.options && filter.options.length) {
-      opts = filter.options.slice();
-    } else if (filter.options_source && OPTIONS[filter.options_source]) {
-      opts = OPTIONS[filter.options_source].slice();
+    if (field.options && field.options.length) {
+      opts = field.options.slice();
+    } else if (field.options_source && OPTIONS[field.options_source]) {
+      opts = OPTIONS[field.options_source].slice();
     }
-    if (filter.id === 'problem_type') {
+    if (field.id === 'problem_type') {
       if (!opts.some(function (o) { return o.value === 'Unmapped'; })) {
         opts.push({ value: 'Unmapped', label: 'Unmapped' });
       }
@@ -431,16 +693,56 @@
     }
     return opts;
   }
-  function optionLabel(filter, value) {
-    var opts = optionList(filter);
+  function optionLabel(field, value) {
+    var opts = optionList(field);
     for (var i = 0; i < opts.length; i++) {
-      if (opts[i].value === value) return opts[i].label;
+      if (String(opts[i].value) === String(value)) return opts[i].label;
     }
     return value;
   }
-  function allLabel(filter) {
-    if (filter.id === 'atm_id') return 'All ATMs';
-    return 'Any ' + filter.label.toLowerCase();
+  function operatorLabel(field, code) {
+    var ops = field.operators || [];
+    for (var i = 0; i < ops.length; i++) {
+      if (ops[i].value === code) return ops[i].label;
+    }
+    return code;
+  }
+  function categoryRank(category) {
+    var index = CATEGORY_ORDER.indexOf(category);
+    return index === -1 ? CATEGORY_ORDER.length : index;
+  }
+  function fieldIcon(category) {
+    return ({
+      Location: 'map-pin',
+      Time: 'calendar-days',
+      Transaction: 'list-filter',
+      State: 'activity',
+      Fleet: 'building-2',
+      Volume: 'sigma',
+      Rates: 'percent',
+      Value: 'coins',
+      Other: 'circle-dot'
+    })[category] || 'circle-dot';
+  }
+  function typeLabel(type) {
+    return ({ text: 'Text', enum: 'Choice', number: 'Number', date: 'Date',
+              datetime: 'Date & time', percent: 'Percent',
+              currency: 'Currency', hours: 'Hours' })[type] || type;
+  }
+  function toast(message, type) {
+    if (window.showToast) window.showToast(message, type || 'error', 6500);
+  }
+  function setBodyLock(locked) {
+    document.body.style.overflow = locked ? 'hidden' : '';
+  }
+  function closeAllModals() {
+    ['fieldPickerModal', 'filterModal', 'saveModal'].forEach(function (id) {
+      var el = $(id);
+      if (el) el.classList.remove('show');
+    });
+    pendingCondition = null;
+    editingCondition = -1;
+    setBodyLock(false);
   }
 
   function fetchJson(url, opts) {
@@ -464,10 +766,6 @@
     });
   }
 
-  function toast(message, type) {
-    if (window.showToast) window.showToast(message, type || 'error', 6500);
-  }
-
   // ── Defaults and state transitions ───────────────────────────────────────
   function defaultSort(ds) {
     if (!ds) return null;
@@ -487,94 +785,218 @@
 
   function applyDefaults(ds, keepPeriod) {
     state.datasetId = ds.id;
-    state.groupBy = (ds.default_group_by || []).slice();
-    state.measures = (ds.default_measures || []).slice();
-    // Filters are per-subject.  Carrying a transaction filter into the
-    // availability subject would send an unknown key and fail server-side.
-    var allowed = {};
-    (ds.filters || []).forEach(function (f) { allowed[f.id] = 1; });
-    Object.keys(state.filters || {}).forEach(function (key) {
-      if (key !== 'date' && key !== 'atm_scope' && !allowed[key]) {
-        delete state.filters[key];
-      }
+    state.groupBy = (ds.default_group_by || []).filter(function (id) {
+      return !!dimensionById(ds, id);
     });
+    state.measures = (ds.default_measures || []).filter(function (id) {
+      return !!measureById(ds, id);
+    });
+    state.scope = ds.default_atm_scope || 'active';
     if (ds.requires_period) {
-      if (!keepPeriod || !state.filters.date) {
-        state.filters.date = { preset: ds.default_period || 'last_30_days' };
+      if (!keepPeriod || !state.period) {
+        state.period = { preset: ds.default_period || 'last_30_days' };
       }
     } else {
-      delete state.filters.date;
+      state.period = null;
     }
-    // The fleet profile is about the whole registry; the historical subjects
-    // follow the standard reports and count active ATMs unless asked not to.
-    state.filters.atm_scope = ds.default_atm_scope || 'active';
     state.sort = defaultSort(ds);
+    if (!state.limit) state.limit = CATALOG.limits.default_limit;
   }
 
   function resetToDefaults() {
     var ds = currentDataset();
-    var period = state.filters.date;
+    var period = state.period ? clone(state.period) : null;
     state.currentDefinitionId = null;
     state.currentDefinitionName = '';
     state.currentDescription = '';
     state.currentVisibility = 'private';
     state.currentCanEdit = false;
-    state.filters = { atm_scope: state.filters.atm_scope || 'active' };
-    if (ds.requires_period) {
-      state.filters.date = period && (period.preset || (period.start && period.end))
-        ? period : { preset: ds.default_period || 'last_30_days' };
-    }
+    state.conditions = [];
+    state.conditionLogic = 'and';
+    state.limit = CATALOG.limits.default_limit;
     applyDefaults(ds, true);
-    syncPeriodUI();
-    renderControls();
+    if (ds.requires_period && period
+        && (period.preset || (period.start && period.end))) {
+      state.period = period;
+    }
+    renderAll();
     schedulePreview(0);
   }
 
-  // ── Dataset and chips ─────────────────────────────────────────────────────
-  function populateDatasetSelect() {
-    var sel = $('datasetSelect');
-    sel.innerHTML = '';
-    CATALOG.datasets.forEach(function (ds) {
-      var opt = document.createElement('option');
-      opt.value = ds.id;
-      opt.textContent = ds.label;
-      sel.appendChild(opt);
-    });
-    sel.value = state.datasetId;
+  function ensureSort() {
+    var ds = currentDataset();
+    var allowed = state.groupBy.concat(state.measures);
+    if (!state.sort || allowed.indexOf(state.sort.id) === -1) {
+      state.sort = defaultSort(ds);
+    }
+    if (state.sort && !state.sort.direction) state.sort.direction = 'desc';
   }
 
-  function renderDatasetHelp() {
+  // ── Rendering: subject, shelves, options ──────────────────────────────────
+  function renderSubject() {
     var ds = currentDataset();
+    $('datasetSelect').value = state.datasetId;
     $('datasetHelp').textContent = ds.description;
     $('datasetGrain').innerHTML = '<b>Grain</b> ' + escapeHtml(ds.grain);
   }
 
-  function renderChips(container, items, selected, max, mode) {
-    container.innerHTML = '';
-    items.forEach(function (item) {
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'builder-chip' + (selected.indexOf(item.id) !== -1 ? ' active' : '');
-      button.setAttribute('aria-pressed', selected.indexOf(item.id) !== -1 ? 'true' : 'false');
-      button.title = item.description || item.label;
-      button.innerHTML = '<span class="chip-check">✓</span>' + escapeHtml(item.label);
-      button.addEventListener('click', function () {
-        if (mode === 'dimension') toggleDimension(item.id);
-        else toggleMeasure(item.id);
-      });
-      container.appendChild(button);
-    });
-    if (mode === 'dimension') {
-      $('groupLimit').textContent = selected.length + ' / ' + max;
-    } else {
-      $('measureLimit').textContent = selected.length + ' / ' + max;
+  function shelfEmpty(message, icon) {
+    var div = document.createElement('div');
+    div.className = 'builder-shelf-empty';
+    div.innerHTML = '<i data-lucide="' + icon + '"></i><span>'
+      + escapeHtml(message) + '</span>';
+    return div;
+  }
+
+  function makeShelfItem(options) {
+    var item = document.createElement('div');
+    item.className = 'shelf-item';
+    item.draggable = true;
+    item.dataset.index = options.index;
+    item.dataset.kind = options.kind;
+
+    var grip = document.createElement('span');
+    grip.className = 'shelf-grip';
+    grip.title = 'Drag to reorder';
+    grip.innerHTML = '<i data-lucide="grip-vertical"></i>';
+    item.appendChild(grip);
+
+    var main = document.createElement('div');
+    main.className = 'shelf-main';
+    var label = document.createElement('span');
+    label.className = 'shelf-label';
+    label.textContent = options.label;
+    main.appendChild(label);
+    if (options.meta) {
+      var meta = document.createElement('span');
+      meta.className = 'shelf-meta';
+      meta.textContent = options.meta;
+      main.appendChild(meta);
     }
+    item.appendChild(main);
+
+    if (options.tag) {
+      var tag = document.createElement('span');
+      tag.className = 'shelf-tag';
+      tag.textContent = options.tag;
+      item.appendChild(tag);
+    }
+
+    var remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'shelf-remove';
+    remove.title = 'Remove ' + options.label;
+    remove.setAttribute('aria-label', 'Remove ' + options.label);
+    remove.innerHTML = '<i data-lucide="x"></i>';
+    remove.addEventListener('click', function () {
+      removeSelection(options.kind, options.index);
+    });
+    item.appendChild(remove);
+
+    item.addEventListener('dragstart', function (event) {
+      dragPayload = { kind: options.kind, index: options.index };
+      item.classList.add('dragging');
+      try {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', String(options.index));
+      } catch (e) {}
+    });
+    item.addEventListener('dragend', function () {
+      item.classList.remove('dragging');
+      dragPayload = null;
+    });
+    item.addEventListener('dragover', function (event) {
+      if (dragPayload && dragPayload.kind === options.kind) {
+        event.preventDefault();
+        try { event.dataTransfer.dropEffect = 'move'; } catch (e) {}
+      }
+    });
+    item.addEventListener('drop', function (event) {
+      if (!dragPayload || dragPayload.kind !== options.kind) return;
+      event.preventDefault();
+      reorderSelection(options.kind, dragPayload.index, options.index);
+      dragPayload = null;
+    });
+    return item;
+  }
+
+  function renderRows() {
+    var ds = currentDataset();
+    var shelf = $('rowsShelf');
+    shelf.innerHTML = '';
+    if (!state.groupBy.length) {
+      shelf.appendChild(shelfEmpty('No grouping — the report will return one summary row.', 'rows-3'));
+    }
+    state.groupBy.forEach(function (id, index) {
+      var dim = dimensionById(ds, id);
+      if (!dim) return;
+      shelf.appendChild(makeShelfItem({
+        kind: 'row', index: index, label: dim.label,
+        meta: dim.category + ' · ' + typeLabel(dim.type),
+        tag: 'Group'
+      }));
+    });
+    $('rowLimit').textContent = state.groupBy.length + ' / ' + MAX_GROUP;
+    $('addRowBtn').disabled = state.groupBy.length >= MAX_GROUP;
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  function renderValues() {
+    var ds = currentDataset();
+    var shelf = $('valuesShelf');
+    shelf.innerHTML = '';
+    if (!state.measures.length) {
+      shelf.appendChild(shelfEmpty('Choose at least one measure to run the report.', 'sigma'));
+    }
+    state.measures.forEach(function (id, index) {
+      var measure = measureById(ds, id);
+      if (!measure) return;
+      shelf.appendChild(makeShelfItem({
+        kind: 'value', index: index, label: measure.label,
+        meta: measure.description || measure.category,
+        tag: measure.category
+      }));
+    });
+    $('valueLimit').textContent = state.measures.length + ' / ' + MAX_MEASURE;
+    $('addValueBtn').disabled = state.measures.length >= MAX_MEASURE;
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  function removeSelection(kind, index) {
+    if (kind === 'row') {
+      state.groupBy.splice(index, 1);
+      ensureSort();
+      renderRows();
+      renderOptions();
+      schedulePreview();
+      return;
+    }
+    if (state.measures.length === 1) {
+      toast('Choose at least one measure.', 'warning');
+      return;
+    }
+    state.measures.splice(index, 1);
+    ensureSort();
+    renderValues();
+    renderOptions();
+    schedulePreview();
+  }
+
+  function reorderSelection(kind, from, to) {
+    if (from === to || from == null || to == null) return;
+    var list = kind === 'row' ? state.groupBy : state.measures;
+    if (from < 0 || to < 0 || from >= list.length || to >= list.length) return;
+    var moved = list.splice(from, 1)[0];
+    list.splice(to, 0, moved);
+    if (kind === 'row') renderRows(); else renderValues();
+    renderOptions();
+    schedulePreview();
   }
 
   function toggleDimension(id) {
-    var idx = state.groupBy.indexOf(id);
-    if (idx !== -1) {
-      state.groupBy.splice(idx, 1);
+    var index = state.groupBy.indexOf(id);
+    if (index !== -1) {
+      state.groupBy.splice(index, 1);
     } else {
       if (state.groupBy.length >= MAX_GROUP) {
         toast('Group by at most ' + MAX_GROUP + ' fields.', 'warning');
@@ -585,25 +1007,20 @@
       }
       state.groupBy.push(id);
     }
-    if (state.sort && (state.groupBy.indexOf(state.sort.id) === -1
-        && state.measures.indexOf(state.sort.id) === -1)) {
-      state.sort = null;
-    }
-    if (!state.sort) state.sort = defaultSort(currentDataset());
-    // Only the selection changed; do not rebuild the filter panel and lose
-    // an open multi-select or a collapsed <details>.
-    renderSelection();
+    ensureSort();
+    renderRows();
+    renderOptions();
     schedulePreview();
   }
 
   function toggleMeasure(id) {
-    var idx = state.measures.indexOf(id);
-    if (idx !== -1) {
+    var index = state.measures.indexOf(id);
+    if (index !== -1) {
       if (state.measures.length === 1) {
         toast('Choose at least one measure.', 'warning');
         return;
       }
-      state.measures.splice(idx, 1);
+      state.measures.splice(index, 1);
     } else {
       if (state.measures.length >= MAX_MEASURE) {
         toast('Choose at most ' + MAX_MEASURE + ' measures.', 'warning');
@@ -611,330 +1028,795 @@
       }
       state.measures.push(id);
     }
-    if (state.sort && (state.groupBy.indexOf(state.sort.id) === -1
-        && state.measures.indexOf(state.sort.id) === -1)) {
-      state.sort = null;
-    }
-    if (!state.sort) state.sort = defaultSort(currentDataset());
-    renderSelection();
+    ensureSort();
+    renderValues();
+    renderOptions();
     schedulePreview();
   }
 
-  // ── Filters ───────────────────────────────────────────────────────────────
-  function renderFilters() {
-    var container = $('filterFields');
-    container.innerHTML = '';
+  // ── Field picker ──────────────────────────────────────────────────────────
+  function openFieldPicker(mode) {
+    pickerMode = mode;
+    pickerQuery = '';
+    $('fieldPickerTitle').textContent = mode === 'row' ? 'Add grouping field' : 'Add measure';
+    $('fieldPickerSub').textContent = mode === 'row'
+      ? 'Search dimensions by name, category or description. Dates can be grouped by day, week or month.'
+      : 'Search governed measures. Rates and averages use their defined formula and are never summed from other rows.';
+    $('fieldSearch').placeholder = mode === 'row'
+      ? 'Search grouping fields' : 'Search measures';
+    $('fieldSearch').value = '';
+    renderFieldPicker();
+    $('fieldPickerModal').classList.add('show');
+    setBodyLock(true);
+    setTimeout(function () { $('fieldSearch').focus(); }, 0);
+  }
+
+  function closeFieldPicker() {
+    $('fieldPickerModal').classList.remove('show');
+    setBodyLock(false);
+  }
+
+  function renderFieldPicker() {
     var ds = currentDataset();
-    var groups = [
-      ['transaction', 'Transaction filters'],
-      ['location', 'Location filters'],
-      ['availability', 'State filters']
-    ];
-    groups.forEach(function (group) {
-      var filters = ds.filters.filter(function (f) {
-        return f.group === group[0] && f.id !== 'atm_scope';
-      });
-      if (!filters.length) return;
-      var details = document.createElement('details');
-      details.className = 'builder-filter-group';
-      details.open = true;
-      var summary = document.createElement('summary');
-      summary.textContent = group[1];
-      details.appendChild(summary);
-      var body = document.createElement('div');
-      body.className = 'builder-filter-body';
-      filters.forEach(function (filter) {
-        body.appendChild(buildFilter(filter));
-      });
-      details.appendChild(body);
-      container.appendChild(details);
+    var list = $('fieldPickerList');
+    var items = pickerMode === 'row' ? ds.dimensions : ds.measures;
+    var selected = pickerMode === 'row' ? state.groupBy : state.measures;
+    var query = pickerQuery.trim().toLowerCase();
+    list.innerHTML = '';
+    var visible = items.filter(function (item) {
+      if (!query) return true;
+      return (item.label + ' ' + (item.category || '') + ' '
+        + (item.description || '')).toLowerCase().indexOf(query) !== -1;
     });
-    if (!container.children.length) {
-      container.innerHTML = '<p class="builder-help">No extra filters for this subject.</p>';
+    if (!visible.length) {
+      list.innerHTML = '<div class="picker-empty">No fields match “'
+        + escapeHtml(pickerQuery) + '”.</div>';
+      updatePickerHint(selected, pickerMode === 'row' ? MAX_GROUP : MAX_MEASURE);
+      return;
     }
+    var groups = {};
+    visible.forEach(function (item) {
+      var key = item.category || 'Other';
+      (groups[key] = groups[key] || []).push(item);
+    });
+    Object.keys(groups).sort(function (a, b) {
+      return categoryRank(a) - categoryRank(b) || a.localeCompare(b);
+    }).forEach(function (category) {
+      var group = document.createElement('div');
+      group.className = 'picker-group';
+      group.innerHTML = '<div class="picker-group-head">' + escapeHtml(category) + '</div>';
+      groups[category].forEach(function (item) {
+        var isSelected = selected.indexOf(item.id) !== -1;
+        var option = document.createElement('button');
+        option.type = 'button';
+        option.className = 'picker-option' + (isSelected ? ' selected' : '');
+        option.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+        option.innerHTML = '<span class="picker-option-icon"><i data-lucide="'
+          + fieldIcon(item.category) + '"></i></span>'
+          + '<span class="picker-option-copy"><strong>' + escapeHtml(item.label)
+          + '</strong><span>' + escapeHtml(item.description || typeLabel(item.type))
+          + '</span></span><span class="picker-option-check"><i data-lucide="check"></i></span>';
+        option.addEventListener('click', function () {
+          if (pickerMode === 'row') toggleDimension(item.id);
+          else toggleMeasure(item.id);
+          renderFieldPicker();
+        });
+        group.appendChild(option);
+      });
+      list.appendChild(group);
+    });
+    updatePickerHint(selected, pickerMode === 'row' ? MAX_GROUP : MAX_MEASURE);
     if (window.lucide) window.lucide.createIcons();
   }
 
-  function buildFilter(filter) {
-    var field = document.createElement('div');
-    field.className = 'builder-field';
-    var label = document.createElement('label');
-    label.textContent = filter.label;
-    field.appendChild(label);
-    if (filter.kind === 'single' || optionList(filter).length > 8) {
-      field.appendChild(buildMultiSelect(filter));
-    } else {
-      field.appendChild(buildChipFilter(filter));
+  function updatePickerHint(selected, max) {
+    var count = selected.length;
+    $('fieldPickerHint').textContent = count + ' of ' + max
+      + (pickerMode === 'row' ? ' grouping fields selected' : ' measures selected');
+  }
+  // ── Condition builder ─────────────────────────────────────────────────────
+  function conditionDisplayValue(field, item) {
+    if (field.data_type === 'enum' || field.options_source
+        || (field.options && field.options.length)) {
+      return optionLabel(field, item);
     }
-    return field;
+    return String(item);
   }
 
-  function updateChipRow(row, filter) {
-    var selected = state.filters[filter.id] || [];
-    row.querySelectorAll('[data-value]').forEach(function (button) {
-      var value = button.getAttribute('data-value');
-      var on = value ? selected.indexOf(value) !== -1 : selected.length === 0;
-      button.classList.toggle('active', on);
-      button.setAttribute('aria-pressed', on ? 'true' : 'false');
-    });
-  }
-
-  function buildChipFilter(filter) {
-    var wrap = document.createElement('div');
-    wrap.className = 'builder-chip-row';
-    var all = document.createElement('button');
-    all.type = 'button';
-    all.className = 'builder-chip';
-    all.setAttribute('data-value', '');
-    all.textContent = 'All';
-    all.addEventListener('click', function () {
-      delete state.filters[filter.id];
-      updateChipRow(wrap, filter);
-      schedulePreview();
-    });
-    wrap.appendChild(all);
-    optionList(filter).forEach(function (option) {
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'builder-chip';
-      button.setAttribute('data-value', option.value);
-      button.title = option.label;
-      button.innerHTML = '<span class="chip-check">✓</span>' + escapeHtml(option.label);
-      button.addEventListener('click', function () {
-        var current = (state.filters[filter.id] || []).slice();
-        var idx = current.indexOf(option.value);
-        if (idx === -1) current.push(option.value); else current.splice(idx, 1);
-        if (current.length) state.filters[filter.id] = current;
-        else delete state.filters[filter.id];
-        updateChipRow(wrap, filter);
-        schedulePreview();
+  function conditionValueText(field, condition) {
+    if (!field) return '';
+    var value = condition.value;
+    if (condition.op === 'is_empty' || condition.op === 'not_empty') return '';
+    if (condition.op === 'between' && Array.isArray(value)) {
+      return String(value[0]) + ' and ' + String(value[1]);
+    }
+    if (Array.isArray(value)) {
+      var labels = value.map(function (item) {
+        return conditionDisplayValue(field, item);
       });
-      wrap.appendChild(button);
-    });
-    updateChipRow(wrap, filter);
-    return wrap;
+      if (labels.length <= 3) return labels.join(', ');
+      return labels.slice(0, 3).join(', ') + ' +' + (labels.length - 3) + ' more';
+    }
+    if (value == null || value === '') return '';
+    return conditionDisplayValue(field, value);
   }
 
-  function buildMultiSelect(filter) {
-    var single = filter.kind === 'single';
-    var wrap = document.createElement('div');
-    wrap.className = 'builder-multi';
-    wrap.setAttribute('data-filter', filter.id);
-
-    var trigger = document.createElement('button');
-    trigger.type = 'button';
-    trigger.className = 'builder-multi-trigger';
-    trigger.setAttribute('aria-haspopup', 'listbox');
-    trigger.setAttribute('aria-expanded', 'false');
-    trigger.innerHTML = '<span></span><span class="builder-chevron">▾</span>';
-    wrap.appendChild(trigger);
-
-    var menu = document.createElement('div');
-    menu.className = 'builder-multi-menu';
-    wrap.appendChild(menu);
-
-    var search = null;
-    if (optionList(filter).length > 8) {
-      search = document.createElement('input');
-      search.type = 'text';
-      search.className = 'builder-multi-search';
-      search.placeholder = 'Search…';
-      search.autocomplete = 'off';
-      search.addEventListener('click', function (e) { e.stopPropagation(); });
-      search.addEventListener('input', function () {
-        var q = search.value.trim().toLowerCase();
-        menu.querySelectorAll('[data-option]').forEach(function (row) {
-          row.style.display = row.textContent.toLowerCase().indexOf(q) === -1 ? 'none' : '';
-        });
-      });
-      menu.appendChild(search);
-    }
-
-    function refreshTrigger() {
-      var values = state.filters[filter.id] || [];
-      var text;
-      if (!values.length) {
-        text = allLabel(filter);
-      } else if (values.length === 1) {
-        text = optionLabel(filter, values[0]);
-      } else if (values.length <= 3) {
-        text = values.map(function (v) { return optionLabel(filter, v); }).join(', ');
-      } else {
-        text = values.length + ' selected';
-      }
-      trigger.querySelector('span').textContent = text;
-      trigger.title = text;
-    }
-
-    function optionRow(option) {
-      var row = document.createElement('label');
-      row.className = 'builder-multi-option';
-      row.setAttribute('data-option', '1');
-      var input = document.createElement('input');
-      input.type = single ? 'radio' : 'checkbox';
-      input.name = 'ms-' + filter.id;
-      input.value = option.value;
-      var values = state.filters[filter.id] || [];
-      input.checked = values.indexOf(option.value) !== -1;
-      input.addEventListener('change', function () {
-        if (single) {
-          if (input.checked) state.filters[filter.id] = [option.value];
-          else delete state.filters[filter.id];
-          refreshTrigger();
-          closeAllMulti();
-          schedulePreview();
-          return;
-        }
-        var current = (state.filters[filter.id] || []).slice();
-        var idx = current.indexOf(option.value);
-        if (input.checked && idx === -1) current.push(option.value);
-        if (!input.checked && idx !== -1) current.splice(idx, 1);
-        if (current.length) state.filters[filter.id] = current;
-        else delete state.filters[filter.id];
-        refreshTrigger();
-        schedulePreview();
-      });
-      row.appendChild(input);
-      var text = document.createElement('span');
-      text.textContent = option.label;
-      row.appendChild(text);
-      return row;
-    }
-
-    if (single) {
-      var allRow = document.createElement('label');
-      allRow.className = 'builder-multi-option';
-      var allInput = document.createElement('input');
-      allInput.type = 'radio';
-      allInput.name = 'ms-' + filter.id;
-      allInput.value = '';
-      allInput.checked = !(state.filters[filter.id] || []).length;
-      allInput.addEventListener('change', function () {
-        if (allInput.checked) delete state.filters[filter.id];
-        refreshTrigger();
-        closeAllMulti();
-        schedulePreview();
-      });
-      allRow.appendChild(allInput);
-      var allText = document.createElement('span');
-      allText.textContent = allLabel(filter);
-      allRow.appendChild(allText);
-      menu.appendChild(allRow);
-    }
-
-    optionList(filter).forEach(function (option) {
-      menu.appendChild(optionRow(option));
-    });
-
-    if (!single) {
-      var clear = document.createElement('button');
-      clear.type = 'button';
-      clear.className = 'builder-multi-clear';
-      clear.textContent = 'Clear selection';
-      clear.addEventListener('click', function () {
-        delete state.filters[filter.id];
-        menu.querySelectorAll('input[type=checkbox]').forEach(function (i) { i.checked = false; });
-        refreshTrigger();
-        schedulePreview();
-      });
-      menu.appendChild(clear);
-    }
-
-    trigger.addEventListener('click', function (e) {
-      e.stopPropagation();
-      var isOpen = wrap.classList.contains('open');
-      closeAllMulti();
-      if (!isOpen) {
-        wrap.classList.add('open');
-        trigger.setAttribute('aria-expanded', 'true');
-        openMulti = wrap;
-        if (search) {
-          search.value = '';
-          menu.querySelectorAll('[data-option]').forEach(function (row) { row.style.display = ''; });
-          setTimeout(function () { search.focus(); }, 0);
-        }
-      }
-    });
-
-    refreshTrigger();
-    return wrap;
-  }
-
-  function closeAllMulti() {
-    document.querySelectorAll('.builder-multi.open').forEach(function (el) {
-      el.classList.remove('open');
-      var trigger = el.querySelector('.builder-multi-trigger');
-      if (trigger) trigger.setAttribute('aria-expanded', 'false');
-    });
-    openMulti = null;
-  }
-
-  // ── Period ────────────────────────────────────────────────────────────────
-  function populatePeriodPresets() {
-    var sel = $('periodPreset');
-    sel.innerHTML = '';
-    CATALOG.period_presets.forEach(function (preset) {
-      var opt = document.createElement('option');
-      opt.value = preset.value;
-      opt.textContent = preset.label;
-      sel.appendChild(opt);
-    });
-  }
-
-  function syncPeriodUI() {
+  function renderConditions() {
     var ds = currentDataset();
-    var block = $('periodBlock');
-    block.hidden = !ds.requires_period;
-    if (!ds.requires_period) {
-      $('periodHint').textContent = 'Current snapshot — the reporting period does not apply.';
-      $('periodError').classList.remove('show');
+    var list = $('conditionList');
+    list.innerHTML = '';
+    if (!state.conditions.length) {
+      var empty = document.createElement('div');
+      empty.className = 'condition-empty';
+      empty.textContent = 'No conditions. The report includes every record in the '
+        + 'selected period and ATM population.';
+      list.appendChild(empty);
+    }
+    state.conditions.forEach(function (condition, index) {
+      var field = conditionFieldById(ds, condition.field);
+      var row = document.createElement('div');
+      row.className = 'condition-row';
+      row.dataset.index = index;
+
+      var main = document.createElement('div');
+      main.className = 'condition-main';
+      var label = document.createElement('strong');
+      label.textContent = field ? field.label : condition.field;
+      main.appendChild(label);
+      var detail = document.createElement('span');
+      var opText = field ? operatorLabel(field, condition.op) : condition.op;
+      var valueText = field ? conditionValueText(field, condition) : '';
+      detail.textContent = opText + (valueText ? ' ' : '');
+      if (valueText) {
+        var value = document.createElement('em');
+        value.textContent = valueText;
+        detail.appendChild(value);
+      }
+      main.appendChild(detail);
+      row.appendChild(main);
+
+      var actions = document.createElement('div');
+      actions.className = 'condition-actions';
+      var edit = document.createElement('button');
+      edit.type = 'button';
+      edit.title = 'Edit condition';
+      edit.setAttribute('aria-label', 'Edit condition for '
+        + (field ? field.label : condition.field));
+      edit.dataset.edit = index;
+      edit.innerHTML = '<i data-lucide="pencil"></i>';
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.title = 'Remove condition';
+      remove.setAttribute('aria-label', 'Remove condition for '
+        + (field ? field.label : condition.field));
+      remove.dataset.remove = index;
+      remove.innerHTML = '<i data-lucide="trash-2"></i>';
+      actions.appendChild(edit);
+      actions.appendChild(remove);
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
+
+    $('conditionLimit').textContent = state.conditions.length + ' / ' + MAX_CONDITIONS;
+    $('conditionLogicWrap').hidden = state.conditions.length < 2;
+    $('conditionLogic').value = state.conditionLogic;
+    $('addFilterBtn').disabled = state.conditions.length >= MAX_CONDITIONS;
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  function removeCondition(index) {
+    if (index < 0 || index >= state.conditions.length) return;
+    state.conditions.splice(index, 1);
+    if (state.conditions.length < 2) state.conditionLogic = 'and';
+    renderConditions();
+    schedulePreview();
+  }
+
+  function defaultOperator(field) {
+    if (field.data_type === 'number') return 'eq';
+    if (field.data_type === 'enum' || field.options_source
+        || (field.options && field.options.length)) {
+      return 'in';
+    }
+    return 'contains';
+  }
+
+  function blankValueFor(op) {
+    if (op === 'is_empty' || op === 'not_empty') return null;
+    if (op === 'between') return ['', ''];
+    if (op === 'in' || op === 'not_in') return [];
+    return '';
+  }
+
+  function openFilterModal(index) {
+    var ds = currentDataset();
+    editingCondition = typeof index === 'number' ? index : -1;
+    pendingCondition = editingCondition >= 0
+      ? clone(state.conditions[editingCondition]) : null;
+    filterFieldQuery = '';
+    filterOptionQuery = '';
+    $('filterFieldSearch').value = '';
+    $('filterModalTitle').textContent = editingCondition >= 0
+      ? 'Edit filter' : 'Add filter';
+    $('filterApplyBtn').textContent = editingCondition >= 0
+      ? 'Save filter' : 'Add filter';
+    $('filterValueError').classList.remove('show');
+    $('filterValueError').textContent = '';
+    renderFilterFieldList();
+    renderFilterConfig();
+    $('filterModal').classList.add('show');
+    setBodyLock(true);
+    setTimeout(function () { $('filterFieldSearch').focus(); }, 0);
+  }
+
+  function closeFilterModal() {
+    $('filterModal').classList.remove('show');
+    pendingCondition = null;
+    editingCondition = -1;
+    setBodyLock(false);
+  }
+
+  function renderFilterFieldList() {
+    var ds = currentDataset();
+    var fields = (ds.condition_fields || []).slice();
+    var list = $('filterFieldList');
+    var query = filterFieldQuery.trim().toLowerCase();
+    list.innerHTML = '';
+    var visible = fields.filter(function (field) {
+      if (!query) return true;
+      return (field.label + ' ' + (field.category || field.group_label || '')
+        + ' ' + (field.description || '')).toLowerCase().indexOf(query) !== -1;
+    });
+    if (!visible.length) {
+      list.innerHTML = '<div class="filter-value-empty">No fields match “'
+        + escapeHtml(filterFieldQuery) + '”.</div>';
+      $('filterModalHint').textContent = 'No matching fields';
       return;
     }
-    var date = state.filters.date || {};
-    if (date.preset && date.preset !== 'custom') {
-      $('periodPreset').value = date.preset;
-      $('customDates').hidden = true;
-    } else if (date.start && date.end) {
-      $('periodPreset').value = 'custom';
-      $('customDates').hidden = false;
-      $('periodStart').value = date.start;
-      $('periodEnd').value = date.end;
-      // Bounds must move before the values: flatpickr filters a date against
-      // the old bounds and rewrites the input when it falls outside.
-      var today = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Africa/Addis_Ababa'
-      }).format(new Date());
-      if (startPicker) startPicker.set('maxDate', date.end || today);
-      if (endPicker) {
-        endPicker.set('minDate', date.start || null);
-        endPicker.set('maxDate', today);
-      }
-      if (startPicker) startPicker.setDate(date.start, false);
-      if (endPicker) endPicker.setDate(date.end, false);
-    } else {
-      $('periodPreset').value = ds.default_period || 'last_30_days';
-      state.filters.date = { preset: $('periodPreset').value };
-      $('customDates').hidden = true;
+    var groups = {};
+    visible.forEach(function (field) {
+      var key = field.category || field.group_label || 'Other';
+      (groups[key] = groups[key] || []).push(field);
+    });
+    Object.keys(groups).sort(function (a, b) {
+      return categoryRank(a) - categoryRank(b) || a.localeCompare(b);
+    }).forEach(function (category) {
+      var head = document.createElement('div');
+      head.className = 'filter-field-group';
+      head.textContent = category;
+      list.appendChild(head);
+      groups[category].sort(function (a, b) {
+        return a.label.localeCompare(b.label);
+      }).forEach(function (field) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        var selected = pendingCondition && pendingCondition.field === field.id;
+        button.className = 'filter-field-option' + (selected ? ' selected' : '');
+        button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        var label = document.createElement('span');
+        label.textContent = field.label;
+        var type = document.createElement('small');
+        type.textContent = (field.options_source
+          || (field.options && field.options.length))
+          ? 'Choice' : typeLabel(field.data_type);
+        button.appendChild(label);
+        button.appendChild(type);
+        button.addEventListener('click', function () {
+          chooseFilterField(field.id);
+        });
+        list.appendChild(button);
+      });
+    });
+    $('filterModalHint').textContent = visible.length + ' of ' + fields.length
+      + ' filterable fields';
+  }
+
+  function chooseFilterField(fieldId) {
+    var field = conditionFieldById(currentDataset(), fieldId);
+    if (!field) return;
+    if (!pendingCondition || pendingCondition.field !== fieldId) {
+      var op = defaultOperator(field);
+      pendingCondition = {
+        field: fieldId,
+        op: op,
+        value: blankValueFor(op)
+      };
+      filterOptionQuery = '';
     }
-    updatePeriodHint();
+    renderFilterFieldList();
+    renderFilterConfig();
+  }
+
+  function renderFilterConfig() {
+    var field = pendingCondition
+      ? conditionFieldById(currentDataset(), pendingCondition.field) : null;
+    $('filterConfigEmpty').hidden = !!field;
+    $('filterConfigBody').hidden = !field;
+    if (!field) return;
+    $('filterChosenLabel').textContent = field.label;
+    var category = field.category || field.group_label || '';
+    $('filterChosenGroup').textContent = category
+      + (field.description ? ' · ' + field.description : '');
+
+    var select = $('filterOperator');
+    select.innerHTML = '';
+    (field.operators || []).forEach(function (operator) {
+      var option = document.createElement('option');
+      option.value = operator.value;
+      option.textContent = operator.label;
+      select.appendChild(option);
+    });
+    select.value = pendingCondition.op;
+    renderFilterValue();
+  }
+
+  function onFilterOperatorChange() {
+    if (!pendingCondition) return;
+    var field = conditionFieldById(currentDataset(), pendingCondition.field);
+    if (!field) return;
+    var next = $('filterOperator').value;
+    var current = pendingCondition.value;
+    pendingCondition.op = next;
+    if (next === 'is_empty' || next === 'not_empty') {
+      pendingCondition.value = null;
+    } else if (next === 'between') {
+      pendingCondition.value = Array.isArray(current) && current.length === 2
+        ? current : ['', ''];
+    } else if (next === 'in' || next === 'not_in') {
+      pendingCondition.value = Array.isArray(current) ? current
+        : (current == null || current === '' ? [] : [current]);
+    } else {
+      pendingCondition.value = Array.isArray(current)
+        ? (current.length ? current[0] : '') : (current == null ? '' : current);
+    }
+    filterOptionQuery = '';
+    renderFilterValue();
+  }
+
+  function updatePendingValue(value) {
+    if (!pendingCondition) return;
+    pendingCondition.value = value;
+  }
+
+  function filterValueError(message) {
+    $('filterValueError').textContent = message;
+    $('filterValueError').classList.add('show');
+  }
+
+  function clearFilterValueError() {
+    $('filterValueError').classList.remove('show');
+    $('filterValueError').textContent = '';
+  }
+
+  function showManualValueInput(wrap, field, placeholder) {
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'filterValueInput';
+    input.placeholder = placeholder;
+    input.value = Array.isArray(pendingCondition.value)
+      ? pendingCondition.value.join(', ') : (pendingCondition.value || '');
+    input.addEventListener('input', function () {
+      updatePendingValue(input.value);
+      clearFilterValueError();
+    });
+    wrap.appendChild(input);
+    var hint = document.createElement('div');
+    hint.className = 'builder-hint';
+    if (field.options_source) {
+      hint.textContent = pendingCondition.op === 'in'
+        || pendingCondition.op === 'not_in'
+        ? 'The option list is unavailable. Enter one value, or several '
+          + 'separated by commas.'
+        : 'The option list is unavailable. Enter a value below.';
+    } else {
+      hint.textContent = 'All values are bound as query parameters.';
+    }
+    wrap.appendChild(hint);
+  }
+
+  function renderEnumMultiValue(wrap, field) {
+    var sourceMissing = field.options_source
+      && !(OPTIONS[field.options_source]
+           && OPTIONS[field.options_source].length);
+    if (sourceMissing && !(field.options && field.options.length)) {
+      showManualValueInput(wrap, field, 'Type values, separated by commas');
+      return;
+    }
+    var options = optionList(field);
+    if (!options.length) {
+      showManualValueInput(wrap, field, 'Type values, separated by commas');
+      return;
+    }
+    if (!Array.isArray(pendingCondition.value)) {
+      pendingCondition.value = pendingCondition.value
+        ? [pendingCondition.value] : [];
+    }
+    var summary = document.createElement('div');
+    summary.className = 'filter-selected-summary';
+    var summaryText = document.createElement('span');
+    var summaryCount = document.createElement('b');
+    summary.appendChild(summaryText);
+    summary.appendChild(summaryCount);
+
+    var search = null;
+    if (options.length > 8) {
+      search = document.createElement('input');
+      search.type = 'search';
+      search.placeholder = 'Search values';
+      search.setAttribute('aria-label', 'Search filter values');
+      search.value = filterOptionQuery;
+      wrap.appendChild(search);
+    }
+
+    var list = document.createElement('div');
+    list.className = 'filter-value-list';
+    list.setAttribute('role', 'group');
+    list.setAttribute('aria-label', field.label + ' values');
+    var count = document.createElement('div');
+    count.className = 'filter-value-count';
+
+    function drawOptions() {
+      list.innerHTML = '';
+      var q = filterOptionQuery.trim().toLowerCase();
+      var shown = options.filter(function (option) {
+        if (!q) return true;
+        return (String(option.label) + ' ' + String(option.value))
+          .toLowerCase().indexOf(q) !== -1;
+      });
+      if (!shown.length) {
+        list.innerHTML = '<div class="filter-value-empty">No values match '
+          + 'this search.</div>';
+      }
+      var truncated = false;
+      if (shown.length > MAX_VISIBLE_OPTIONS) {
+        var selectedBeyond = shown.filter(function (option, index) {
+          return index >= MAX_VISIBLE_OPTIONS
+            && pendingCondition.value.indexOf(option.value) !== -1;
+        });
+        shown = shown.slice(0, MAX_VISIBLE_OPTIONS).concat(selectedBeyond);
+        truncated = true;
+      }
+      shown.forEach(function (option) {
+        var row = document.createElement('label');
+        row.className = 'filter-value-option';
+        var input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = option.value;
+        input.checked = pendingCondition.value.indexOf(option.value) !== -1;
+        input.addEventListener('change', function () {
+          var values = pendingCondition.value.slice();
+          var index = values.indexOf(option.value);
+          if (input.checked && index === -1) {
+            if (values.length >= MAX_FILTER_VALUES) {
+              input.checked = false;
+              toast('Select at most ' + MAX_FILTER_VALUES + ' values.', 'warning');
+              return;
+            }
+            values.push(option.value);
+          }
+          if (!input.checked && index !== -1) values.splice(index, 1);
+          updatePendingValue(values);
+          refreshSummary();
+          clearFilterValueError();
+        });
+        var text = document.createElement('span');
+        text.textContent = option.label;
+        row.appendChild(input);
+        row.appendChild(text);
+        list.appendChild(row);
+      });
+      count.textContent = truncated
+        ? 'Showing ' + shown.length + ' of ' + options.length
+          + ' values — search to narrow'
+        : shown.length + ' of ' + options.length + ' values shown';
+    }
+
+    function refreshSummary() {
+      var selected = pendingCondition.value || [];
+      summaryCount.textContent = selected.length
+        ? selected.length + ' selected' : 'None selected';
+      var labels = selected.map(function (value) {
+        return optionLabel(field, value);
+      });
+      summaryText.textContent = labels.length
+        ? labels.slice(0, 2).join(', ')
+          + (labels.length > 2 ? ' +' + (labels.length - 2) + ' more' : '')
+        : 'Choose one or more values.';
+    }
+
+    if (search) {
+      search.addEventListener('input', function () {
+        filterOptionQuery = search.value;
+        drawOptions();
+      });
+    }
+    drawOptions();
+    refreshSummary();
+
+    var actions = document.createElement('div');
+    actions.className = 'filter-value-actions';
+    var selectAll = document.createElement('button');
+    selectAll.type = 'button';
+    selectAll.textContent = 'Select all';
+    selectAll.addEventListener('click', function () {
+      var values = options.slice(0, MAX_FILTER_VALUES).map(function (option) {
+        return option.value;
+      });
+      updatePendingValue(values);
+      drawOptions();
+      refreshSummary();
+      clearFilterValueError();
+      if (options.length > MAX_FILTER_VALUES) {
+        toast('Selected the first ' + MAX_FILTER_VALUES
+          + ' values. Search to choose a different set.', 'warning');
+      }
+    });
+    var clear = document.createElement('button');
+    clear.type = 'button';
+    clear.textContent = 'Clear';
+    clear.addEventListener('click', function () {
+      updatePendingValue([]);
+      drawOptions();
+      refreshSummary();
+      clearFilterValueError();
+    });
+    actions.appendChild(selectAll);
+    actions.appendChild(clear);
+    wrap.appendChild(summary);
+    wrap.appendChild(list);
+    wrap.appendChild(count);
+    wrap.appendChild(actions);
+    refreshSummary();
+  }
+
+  function renderFilterValue() {
+    if (!pendingCondition) return;
+    var field = conditionFieldById(currentDataset(), pendingCondition.field);
+    if (!field) return;
+    var wrap = $('filterValueWrap');
+    var label = $('filterValueLabel');
+    var op = pendingCondition.op;
+    wrap.innerHTML = '';
+    clearFilterValueError();
+    label.textContent = (op === 'in' || op === 'not_in' || op === 'between')
+      ? 'Values' : 'Value';
+
+    if (op === 'is_empty' || op === 'not_empty') {
+      var hint = document.createElement('div');
+      hint.className = 'builder-hint';
+      hint.textContent = 'This operator does not need a value.';
+      wrap.appendChild(hint);
+      return;
+    }
+
+    if (op === 'between') {
+      var pair = document.createElement('div');
+      pair.className = 'filter-value-pair';
+      var first = document.createElement('input');
+      first.type = field.data_type === 'number' ? 'number' : 'text';
+      first.step = 'any';
+      first.id = 'filterValueInput';
+      first.placeholder = 'From';
+      first.setAttribute('aria-label', field.label + ' lower bound');
+      first.value = Array.isArray(pendingCondition.value)
+        ? (pendingCondition.value[0] == null ? '' : pendingCondition.value[0]) : '';
+      var and = document.createElement('span');
+      and.textContent = 'and';
+      var second = document.createElement('input');
+      second.type = field.data_type === 'number' ? 'number' : 'text';
+      second.step = 'any';
+      second.placeholder = 'To';
+      second.setAttribute('aria-label', field.label + ' upper bound');
+      second.value = Array.isArray(pendingCondition.value)
+        ? (pendingCondition.value[1] == null ? '' : pendingCondition.value[1]) : '';
+      function sync() {
+        updatePendingValue([first.value, second.value]);
+        clearFilterValueError();
+      }
+      first.addEventListener('input', sync);
+      second.addEventListener('input', sync);
+      pair.appendChild(first);
+      pair.appendChild(and);
+      pair.appendChild(second);
+      wrap.appendChild(pair);
+      return;
+    }
+
+    if (op === 'in' || op === 'not_in') {
+      renderEnumMultiValue(wrap, field);
+      return;
+    }
+
+    if (field.data_type === 'enum') {
+      var options = optionList(field);
+      var enumSourceMissing = field.options_source
+        && !(OPTIONS[field.options_source]
+             && OPTIONS[field.options_source].length);
+      if ((enumSourceMissing && !(field.options && field.options.length))
+          || !options.length) {
+        showManualValueInput(wrap, field, 'Enter a value');
+        return;
+      }
+      var select = document.createElement('select');
+      select.id = 'filterValueInput';
+      var placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Choose a value';
+      select.appendChild(placeholder);
+      options.forEach(function (option) {
+        var opt = document.createElement('option');
+        opt.value = option.value;
+        opt.textContent = option.label;
+        select.appendChild(opt);
+      });
+      select.value = Array.isArray(pendingCondition.value)
+        ? (pendingCondition.value[0] || '') : (pendingCondition.value || '');
+      select.addEventListener('change', function () {
+        updatePendingValue(select.value);
+        clearFilterValueError();
+      });
+      wrap.appendChild(select);
+      return;
+    }
+
+    var input = document.createElement('input');
+    input.type = field.data_type === 'number' ? 'number' : 'text';
+    if (field.data_type === 'number') {
+      input.step = 'any';
+      input.inputMode = 'decimal';
+      input.placeholder = 'Enter a number';
+    } else {
+      input.placeholder = field.id === 'atm_id'
+        ? 'e.g. ATM-001' : 'Enter a value';
+    }
+    input.id = 'filterValueInput';
+    input.value = Array.isArray(pendingCondition.value)
+      ? (pendingCondition.value[0] || '') : (pendingCondition.value || '');
+    input.addEventListener('input', function () {
+      updatePendingValue(input.value);
+      clearFilterValueError();
+    });
+    wrap.appendChild(input);
+  }
+
+  function validateConditionDraft() {
+    if (!pendingCondition) {
+      filterValueError('Choose a field first.');
+      return null;
+    }
+    var field = conditionFieldById(currentDataset(), pendingCondition.field);
+    if (!field) {
+      filterValueError('That field is no longer available for this subject.');
+      return null;
+    }
+    var op = pendingCondition.op;
+    var allowed = (field.operators || []).some(function (operator) {
+      return operator.value === op;
+    });
+    if (!allowed) {
+      filterValueError('Choose an operator.');
+      return null;
+    }
+    var value = pendingCondition.value;
+    if (op === 'is_empty' || op === 'not_empty') {
+      value = null;
+    } else if (op === 'between') {
+      var first = String(Array.isArray(value) ? value[0] : '').trim();
+      var second = String(Array.isArray(value) ? value[1] : '').trim();
+      var low = Number(first);
+      var high = Number(second);
+      if (!first || !second || !isFinite(low) || !isFinite(high)) {
+        filterValueError('Enter two numbers for the range.');
+        return null;
+      }
+      value = low <= high ? [low, high] : [high, low];
+    } else if (op === 'in' || op === 'not_in') {
+      var values = Array.isArray(value)
+        ? value.slice()
+        : String(value || '').split(',').map(function (item) { return item.trim(); });
+      var cleaned = [];
+      values.forEach(function (item) {
+        var text = String(item == null ? '' : item).trim();
+        if (text && cleaned.indexOf(text) === -1) cleaned.push(text);
+      });
+      if (!cleaned.length) {
+        filterValueError('Choose at least one value.');
+        return null;
+      }
+      if (cleaned.length > MAX_FILTER_VALUES) {
+        filterValueError('Choose at most ' + MAX_FILTER_VALUES + ' values.');
+        return null;
+      }
+      value = cleaned;
+    } else if (field.data_type === 'number') {
+      var raw = Array.isArray(value) ? value[0] : value;
+      if (String(raw == null ? '' : raw).trim() === ''
+          || !isFinite(Number(raw))) {
+        filterValueError('Enter a number.');
+        return null;
+      }
+      value = Number(raw);
+    } else {
+      var text = String(Array.isArray(value) ? (value[0] || '') : (value || '')).trim();
+      if (!text) {
+        filterValueError('Enter a value.');
+        return null;
+      }
+      if (text.length > 200) {
+        filterValueError('Values must be 200 characters or fewer.');
+        return null;
+      }
+      value = text;
+    }
+    pendingCondition.value = value;
+    clearFilterValueError();
+    return {
+      field: field.id,
+      op: op,
+      value: value
+    };
+  }
+
+  function applyFilter() {
+    var condition = validateConditionDraft();
+    if (!condition) return;
+    if (editingCondition >= 0) {
+      state.conditions[editingCondition] = condition;
+    } else {
+      if (state.conditions.length >= MAX_CONDITIONS) {
+        toast('Use at most ' + MAX_CONDITIONS + ' conditions.', 'warning');
+        return;
+      }
+      state.conditions.push(condition);
+    }
+    closeFilterModal();
+    renderConditions();
+    schedulePreview();
+  }
+  // ── Period ────────────────────────────────────────────────────────────────
+  function populateDatasetSelect() {
+    var select = $('datasetSelect');
+    select.innerHTML = '';
+    CATALOG.datasets.forEach(function (dataset) {
+      var option = document.createElement('option');
+      option.value = dataset.id;
+      option.textContent = dataset.label;
+      select.appendChild(option);
+    });
+  }
+
+  function populatePeriodPresets() {
+    var select = $('periodPreset');
+    select.innerHTML = '';
+    CATALOG.period_presets.forEach(function (preset) {
+      var option = document.createElement('option');
+      option.value = preset.value;
+      option.textContent = preset.label;
+      select.appendChild(option);
+    });
   }
 
   function updatePeriodHint() {
-    var date = state.filters.date || {};
+    var ds = currentDataset();
     var hint = $('periodHint');
     var error = $('periodError');
     error.classList.remove('show');
-    if (currentDataset().requires_period === false) return;
-    if (date.preset && date.preset !== 'custom') {
-      hint.textContent = presetLabel(date.preset)
-        + ' · EAT, end date inclusive · maximum ' + CATALOG.limits.max_range_days + ' days.';
+    if (!ds.requires_period) {
+      hint.textContent = 'Current snapshot — the reporting period does not apply.';
       return;
     }
-    if (!date.start || !date.end) {
+    var period = state.period || {};
+    if (period.preset && period.preset !== 'custom') {
+      hint.textContent = presetLabel(period.preset)
+        + ' · EAT, end date inclusive · maximum '
+        + CATALOG.limits.max_range_days + ' days.';
+      return;
+    }
+    if (!period.start || !period.end) {
       hint.textContent = 'Choose both dates. EAT, end date inclusive.';
       return;
     }
-    var days = daysBetween(date.start, date.end);
+    var days = daysBetween(period.start, period.end);
     if (days < 1) {
       error.textContent = 'The end date must be on or after the start date.';
       error.classList.add('show');
@@ -950,6 +1832,44 @@
     }
     hint.textContent = days + ' day' + (days === 1 ? '' : 's')
       + ' · EAT, end date inclusive.';
+  }
+
+  function syncPeriodUI() {
+    var ds = currentDataset();
+    var block = $('periodBlock');
+    block.hidden = !ds.requires_period;
+    if (!ds.requires_period) {
+      state.period = null;
+      $('periodError').classList.remove('show');
+      updatePeriodHint();
+      return;
+    }
+    var period = state.period || {};
+    if (period.preset && period.preset !== 'custom') {
+      $('periodPreset').value = period.preset;
+      $('customDates').hidden = true;
+    } else if (period.start && period.end) {
+      $('periodPreset').value = 'custom';
+      $('customDates').hidden = false;
+      $('periodStart').value = period.start;
+      $('periodEnd').value = period.end;
+      var today = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Africa/Addis_Ababa'
+      }).format(new Date());
+      if (startPicker) startPicker.set('maxDate', period.end || today);
+      if (endPicker) {
+        endPicker.set('minDate', period.start || null);
+        endPicker.set('maxDate', today);
+      }
+      if (startPicker) startPicker.setDate(period.start, false);
+      if (endPicker) endPicker.setDate(period.end, false);
+    } else {
+      var fallback = ds.default_period || 'last_30_days';
+      $('periodPreset').value = fallback;
+      state.period = { preset: fallback };
+      $('customDates').hidden = true;
+    }
+    updatePeriodHint();
   }
 
   function daysBetween(start, end) {
@@ -981,19 +1901,19 @@
     if (value === 'custom') {
       $('customDates').hidden = false;
       if ($('periodStart').value && $('periodEnd').value) {
-        state.filters.date = {
+        state.period = {
           start: $('periodStart').value,
           end: $('periodEnd').value
         };
       } else {
-        state.filters.date = {};
+        state.period = {};
       }
       updatePeriodHint();
-      if (state.filters.date.start && state.filters.date.end) schedulePreview();
+      if (state.period.start && state.period.end) schedulePreview();
       return;
     }
     $('customDates').hidden = true;
-    state.filters.date = { preset: value };
+    state.period = { preset: value };
     updatePeriodHint();
     schedulePreview();
   }
@@ -1002,13 +1922,13 @@
     var start = $('periodStart').value;
     var end = $('periodEnd').value;
     if (start && end) {
-      state.filters.date = { start: start, end: end };
+      state.period = { start: start, end: end };
       if (start <= end) {
         if (startPicker) startPicker.set('maxDate', end);
         if (endPicker) endPicker.set('minDate', start);
       }
     } else {
-      state.filters.date = {};
+      state.period = {};
     }
     updatePeriodHint();
     if (start && end) schedulePreview();
@@ -1016,14 +1936,14 @@
 
   function validatePeriod() {
     if (!currentDataset().requires_period) return true;
-    var date = state.filters.date || {};
-    if (date.preset && date.preset !== 'custom') return true;
-    if (!date.start || !date.end) {
+    var period = state.period || {};
+    if (period.preset && period.preset !== 'custom') return true;
+    if (!period.start || !period.end) {
       $('periodError').textContent = 'Choose both a start date and an end date.';
       $('periodError').classList.add('show');
       return false;
     }
-    var days = daysBetween(date.start, date.end);
+    var days = daysBetween(period.start, period.end);
     if (days < 1) {
       $('periodError').textContent = 'The end date must be on or after the start date.';
       $('periodError').classList.add('show');
@@ -1041,25 +1961,37 @@
 
   // ── Definition building ───────────────────────────────────────────────────
   function buildDefinition() {
-    var filters = clone(state.filters || {});
-    Object.keys(filters).forEach(function (key) {
-      var value = filters[key];
-      if (value === '' || value == null) delete filters[key];
-      if (Array.isArray(value) && !value.length) delete filters[key];
-      if (key === 'date' && typeof value === 'object' && !Array.isArray(value)) {
-        if (!value.preset && !(value.start && value.end)) delete filters[key];
-        if (value.preset === 'custom' && !(value.start && value.end)) delete filters[key];
+    var ds = currentDataset();
+    var filters = { atm_scope: state.scope };
+    if (ds.requires_period && state.period) {
+      if (state.period.preset) {
+        filters.date = { preset: state.period.preset };
+      } else if (state.period.start && state.period.end) {
+        filters.date = {
+          start: state.period.start,
+          end: state.period.end
+        };
       }
-    });
+    }
+    if (state.conditions.length) {
+      filters.conditions = clone(state.conditions);
+      filters.condition_logic = state.conditionLogic;
+    }
+    var limit = parseInt(state.limit, 10);
+    if (!isFinite(limit) || limit < 1) limit = CATALOG.limits.default_limit;
+    limit = Math.min(limit, MAX_EXPORT);
     var definition = {
       dataset: state.datasetId,
       group_by: state.groupBy.slice(),
       measures: state.measures.slice(),
       filters: filters,
-      limit: state.limit || CATALOG.limits.default_limit
+      limit: limit
     };
     if (state.sort) {
-      definition.sort = { id: state.sort.id, direction: state.sort.direction };
+      definition.sort = {
+        id: state.sort.id,
+        direction: state.sort.direction
+      };
     }
     return definition;
   }
@@ -1077,6 +2009,7 @@
       $('previewError').hidden = true;
       $('previewEmpty').hidden = true;
       $('previewTableWrap').hidden = true;
+      $('previewWarnings').innerHTML = '';
     }
   }
 
@@ -1158,8 +2091,8 @@
       '<span>' + escapeHtml(result.generated_at) + '</span>'
     ];
     if (result.truncated) {
-      meta.push('<span><b>Preview limited to ' + Number(result.limit).toLocaleString()
-        + ' rows</b></span>');
+      meta.push('<span><b>Preview limited to '
+        + Number(result.limit).toLocaleString() + ' rows</b></span>');
     }
     $('previewMeta').innerHTML = meta.join('');
 
@@ -1190,7 +2123,7 @@
       $('previewEmpty').hidden = false;
       $('previewEmpty').innerHTML = '<i data-lucide="search-x"></i>'
         + '<strong>No rows matched this definition</strong>'
-        + '<p>Try a wider period, remove a filter, or choose a different grouping.</p>';
+        + '<p>Try a wider period, remove a condition, or choose a different grouping.</p>';
       if (window.lucide) window.lucide.createIcons();
       return;
     }
@@ -1203,10 +2136,11 @@
       button.type = 'button';
       button.className = 'builder-sort';
       var active = state.sort && state.sort.id === column.id;
-      var indicator = active ? (state.sort.direction === 'asc' ? '▲' : '▼') : '↕';
+      var indicator = active
+        ? (state.sort.direction === 'asc' ? '▲' : '▼') : '↕';
       button.innerHTML = escapeHtml(column.label)
-        + ' <span class="builder-sort-ind' + (active ? ' active' : '') + '">'
-        + indicator + '</span>';
+        + ' <span class="builder-sort-ind' + (active ? ' active' : '')
+        + '">' + indicator + '</span>';
       button.title = column.description || ('Sort by ' + column.label);
       button.addEventListener('click', function () {
         if (state.sort && state.sort.id === column.id) {
@@ -1217,6 +2151,7 @@
             direction: NUMERIC_TYPES[column.type] ? 'desc' : 'asc'
           };
         }
+        renderOptions();
         schedulePreview(0);
       });
       th.appendChild(button);
@@ -1237,7 +2172,8 @@
       tbody.appendChild(tr);
     });
 
-    if (result.totals && result.columns.some(function (c) { return c.kind === 'dimension'; })) {
+    if (result.totals
+        && result.columns.some(function (column) { return column.kind === 'dimension'; })) {
       var totalRow = document.createElement('tr');
       result.columns.forEach(function (column, index) {
         var td = document.createElement('td');
@@ -1256,30 +2192,70 @@
 
     if (window.lucide) window.lucide.createIcons();
   }
-
-  // ── Rendering controls ────────────────────────────────────────────────────
-  function renderSelection() {
+  // ── Sort, limit and full render ───────────────────────────────────────────
+  function renderOptions() {
     var ds = currentDataset();
-    renderChips($('dimensionChips'), ds.dimensions, state.groupBy, MAX_GROUP, 'dimension');
-    renderChips($('measureChips'), ds.measures, state.measures, MAX_MEASURE, 'measure');
-    $('groupLimit').textContent = state.groupBy.length + ' / ' + MAX_GROUP;
-    $('measureLimit').textContent = state.measures.length + ' / ' + MAX_MEASURE;
+    ensureSort();
+    var select = $('sortField');
+    select.innerHTML = '';
+    if (state.groupBy.length) {
+      var rowsGroup = document.createElement('optgroup');
+      rowsGroup.label = 'Rows';
+      state.groupBy.forEach(function (id) {
+        var dim = dimensionById(ds, id);
+        if (!dim) return;
+        var option = document.createElement('option');
+        option.value = id;
+        option.textContent = dim.label;
+        rowsGroup.appendChild(option);
+      });
+      select.appendChild(rowsGroup);
+    }
+    if (state.measures.length) {
+      var valuesGroup = document.createElement('optgroup');
+      valuesGroup.label = 'Values';
+      state.measures.forEach(function (id) {
+        var measure = measureById(ds, id);
+        if (!measure) return;
+        var option = document.createElement('option');
+        option.value = id;
+        option.textContent = measure.label;
+        valuesGroup.appendChild(option);
+      });
+      select.appendChild(valuesGroup);
+    }
+    if (state.sort) {
+      select.value = state.sort.id;
+      $('sortDirection').value = state.sort.direction;
+    }
+    select.disabled = !select.options.length;
+
+    $('scopeSelect').value = state.scope;
+    var limit = parseInt(state.limit, 10);
+    if (!isFinite(limit) || limit < 1) limit = CATALOG.limits.default_limit;
+    state.limit = Math.min(limit, MAX_EXPORT);
+    $('limitInput').value = state.limit;
+    $('limitInput').max = MAX_EXPORT;
+    $('limitMaxLabel').textContent = 'max '
+      + Number(MAX_EXPORT).toLocaleString();
+    $('previewRowLimit').textContent = Number(
+      CATALOG.limits.preview_rows).toLocaleString();
+    $('emptyPreviewRowLimit').textContent = Number(
+      CATALOG.limits.preview_rows).toLocaleString();
     if (window.lucide) window.lucide.createIcons();
   }
 
-  function renderControls() {
-    var ds = currentDataset();
-    populateDatasetSelect();
-    $('datasetSelect').value = state.datasetId;
-    renderDatasetHelp();
-    renderSelection();
-    $('includeInactive').checked = state.filters.atm_scope === 'all';
-    renderFilters();
+  function renderAll() {
+    renderSubject();
+    renderRows();
+    renderValues();
+    renderConditions();
+    renderOptions();
     syncPeriodUI();
     if (window.lucide) window.lucide.createIcons();
   }
 
-  // ── Options ───────────────────────────────────────────────────────────────
+  // ── Filter options ────────────────────────────────────────────────────────
   function loadOptions(force) {
     var url = '/api/reports/options' + (force ? '?force=1' : '');
     return fetchJson(url).then(function (data) {
@@ -1291,12 +2267,18 @@
       } else {
         $('optionsWarning').hidden = true;
       }
-      renderFilters();
+      if (state.conditions.length) renderConditions();
+      if ($('filterModal').classList.contains('show') && pendingCondition) {
+        renderFilterConfig();
+      }
     }).catch(function (err) {
       $('optionsWarning').hidden = false;
       $('optionsWarningText').textContent = err.message;
       OPTIONS = {};
-      renderFilters();
+      if (state.conditions.length) renderConditions();
+      if ($('filterModal').classList.contains('show') && pendingCondition) {
+        renderFilterConfig();
+      }
     });
   }
 
@@ -1311,7 +2293,8 @@
   }
 
   function definitionPeriodText(def) {
-    var date = (def.definition && def.definition.filters && def.definition.filters.date) || {};
+    var filters = (def.definition && def.definition.filters) || {};
+    var date = filters.date || {};
     if (date.preset && date.preset !== 'custom') return presetLabel(date.preset);
     if (date.start && date.end) return date.start + ' → ' + date.end;
     return 'Current snapshot';
@@ -1322,7 +2305,7 @@
     $('savedCount').textContent = savedDefinitions.length
       ? savedDefinitions.length + ' saved' : '';
     if (!savedDefinitions.length) {
-      list.innerHTML = '<div class="builder-empty small">'
+      list.innerHTML = '<div class="builder-empty" style="min-height:150px;padding:24px">'
         + '<i data-lucide="bookmark"></i>'
         + '<strong>No saved reports yet</strong>'
         + '<p>Save a report to reuse it next month.</p></div>';
@@ -1333,7 +2316,8 @@
     wrap.className = 'builder-saved-list';
     savedDefinitions.forEach(function (def) {
       var ds = datasetById(def.dataset);
-      var canDelete = !def.is_system && (CAN_SHARE || def.owner === USERNAME);
+      var canDelete = !def.is_system
+        && (CAN_SHARE || def.owner === USERNAME);
       var row = document.createElement('div');
       row.className = 'builder-saved';
       row.innerHTML = '<div class="builder-saved-main">'
@@ -1341,11 +2325,12 @@
         + (def.visibility === 'shared'
           ? '<span class="builder-badge shared">Shared</span>'
           : '<span class="builder-badge">Private</span>')
-        + (def.is_system ? '<span class="builder-badge system">System</span>' : '')
+        + (def.is_system
+          ? '<span class="builder-badge system">System</span>' : '')
         + '</div>'
         + (def.description
-          ? '<div class="builder-saved-desc">' + escapeHtml(def.description) + '</div>'
-          : '')
+          ? '<div class="builder-saved-desc">'
+            + escapeHtml(def.description) + '</div>' : '')
         + '<div class="builder-saved-meta">'
         + '<span>' + escapeHtml(ds ? ds.label : def.dataset) + '</span>'
         + '<span>' + escapeHtml(definitionPeriodText(def)) + '</span>'
@@ -1353,10 +2338,11 @@
         + '<span>Updated ' + escapeHtml(def.updated_at || '') + '</span>'
         + '</div></div>'
         + '<div class="builder-saved-actions">'
-        + '<button type="button" class="btn btn-outline" data-open="' + def.id + '">Open</button>'
+        + '<button type="button" class="btn btn-outline" data-open="'
+        + def.id + '">Open</button>'
         + (canDelete
-          ? '<button type="button" class="btn btn-outline" data-delete="' + def.id
-            + '" style="color:#B42318;border-color:#FECACA">Delete</button>'
+          ? '<button type="button" class="btn btn-outline" data-delete="'
+            + def.id + '" style="color:#B42318;border-color:#FECACA">Delete</button>'
           : '')
         + '</div>';
       wrap.appendChild(row);
@@ -1366,10 +2352,140 @@
     if (window.lucide) window.lucide.createIcons();
   }
 
+  function normalizePeriod(ds, raw) {
+    if (!ds.requires_period) return null;
+    var fallback = ds.default_period || 'last_30_days';
+    if (!raw || typeof raw !== 'object') return { preset: fallback };
+    if (raw.preset && raw.preset !== 'custom') {
+      var known = CATALOG.period_presets.some(function (preset) {
+        return preset.value === raw.preset;
+      });
+      return known ? { preset: raw.preset } : { preset: fallback };
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw.start || '')
+        && /^\d{4}-\d{2}-\d{2}$/.test(raw.end || '')) {
+      var days = daysBetween(raw.start, raw.end);
+      if (days >= 1 && days <= CATALOG.limits.max_range_days) {
+        return { start: raw.start, end: raw.end };
+      }
+    }
+    return { preset: fallback };
+  }
+
+  function legacyCondition(fieldId, value) {
+    var field = conditionFieldById(currentDataset(), fieldId);
+    if (!field) return null;
+    var values = Array.isArray(value) ? value : [value];
+    values = values.filter(function (item) {
+      return item != null && String(item).trim() !== '';
+    }).map(function (item) { return String(item); });
+    if (!values.length) return null;
+    if (field.data_type === 'number') {
+      var number = Number(values[0]);
+      return isFinite(number)
+        ? { field: fieldId, op: 'eq', value: number } : null;
+    }
+    return { field: fieldId, op: 'in', value: values };
+  }
+
+  function migrateLegacyFilters(filters) {
+    var conditions = [];
+    Object.keys(filters || {}).forEach(function (key) {
+      if (['date', 'atm_scope', 'conditions', 'condition_logic'].indexOf(key) !== -1) {
+        return;
+      }
+      var condition = legacyCondition(key, filters[key]);
+      if (condition) conditions.push(condition);
+    });
+    return conditions;
+  }
+
+  function conditionValuesCompatible(field, op, value) {
+    if (op === 'is_empty' || op === 'not_empty') return true;
+    if (op === 'between') {
+      return Array.isArray(value) && value.length === 2
+        && value[0] !== '' && value[1] !== ''
+        && isFinite(Number(value[0])) && isFinite(Number(value[1]));
+    }
+    var choices = [];
+    if (field.options && field.options.length) {
+      choices = field.options.slice();
+    } else if (field.options_source && OPTIONS[field.options_source]) {
+      choices = OPTIONS[field.options_source].slice();
+    }
+    if (field.id === 'problem_type' && choices.length) {
+      if (!choices.some(function (option) {
+        return String(option.value) === 'Unmapped';
+      })) choices.push({value: 'Unmapped', label: 'Unmapped'});
+      if (state.datasetId === 'transactions'
+          && !choices.some(function (option) {
+            return String(option.value) === 'No fault';
+          })) choices.push({value: 'No fault', label: 'No fault'});
+    }
+    if (op === 'in' || op === 'not_in') {
+      if (!Array.isArray(value) || !value.length
+          || value.length > MAX_FILTER_VALUES) return false;
+      if (value.some(function (item) {
+        return item == null || String(item).trim() === ''
+          || String(item).length > 200;
+      })) return false;
+      if (choices.length) {
+        var allowed = choices.map(function (option) {
+          return String(option.value);
+        });
+        return value.every(function (item) {
+          return allowed.indexOf(String(item)) !== -1;
+        });
+      }
+      return true;
+    }
+    if (field.data_type === 'number') {
+      return value !== '' && value != null && isFinite(Number(value));
+    }
+    if (value == null || String(value).trim() === ''
+        || String(value).length > 200) return false;
+    if (op === 'eq' || op === 'neq') {
+      if (choices.length) {
+        return choices.some(function (option) {
+          return String(option.value) === String(value);
+        });
+      }
+    }
+    return true;
+  }
+
+  function sanitizeConditions(ds, conditions) {
+    var dropped = 0;
+    var kept = (conditions || []).filter(function (condition) {
+      if (!condition || typeof condition !== 'object') {
+        dropped += 1;
+        return false;
+      }
+      var field = conditionFieldById(ds, condition.field);
+      if (!field) {
+        dropped += 1;
+        return false;
+      }
+      var allowed = (field.operators || []).some(function (operator) {
+        return operator.value === condition.op;
+      });
+      if (!allowed
+          || !conditionValuesCompatible(field, condition.op, condition.value)) {
+        dropped += 1;
+        return false;
+      }
+      return true;
+    });
+    return {conditions: kept, dropped: dropped};
+  }
+
   function openDefinitionById(id) {
     var def = null;
     for (var i = 0; i < savedDefinitions.length; i++) {
-      if (String(savedDefinitions[i].id) === String(id)) { def = savedDefinitions[i]; break; }
+      if (String(savedDefinitions[i].id) === String(id)) {
+        def = savedDefinitions[i];
+        break;
+      }
     }
     if (!def) return false;
     var ds = datasetById(def.dataset);
@@ -1378,22 +2494,53 @@
       return false;
     }
     var body = def.definition || {};
+    var filters = clone(body.filters || {});
     state.datasetId = def.dataset;
-    state.groupBy = (body.group_by || ds.default_group_by || []).slice();
-    state.measures = (body.measures || ds.default_measures || []).slice();
-    state.filters = clone(body.filters || {});
-    state.filters.atm_scope = state.filters.atm_scope || 'active';
-    if (ds.requires_period && !state.filters.date) {
-      state.filters.date = { preset: ds.default_period || 'last_30_days' };
+    state.groupBy = (body.group_by || []).filter(function (fieldId) {
+      return !!dimensionById(ds, fieldId);
+    });
+    state.measures = (body.measures || []).filter(function (measureId) {
+      return !!measureById(ds, measureId);
+    });
+    if (!state.groupBy.length) {
+      state.groupBy = (ds.default_group_by || []).slice();
     }
-    state.sort = body.sort || defaultSort(ds);
-    state.limit = body.limit || CATALOG.limits.default_limit;
+    if (!state.measures.length) {
+      state.measures = (ds.default_measures || []).slice();
+    }
+    state.scope = filters.atm_scope || ds.default_atm_scope || 'active';
+    state.period = normalizePeriod(ds, filters.date);
+    var conditions = Array.isArray(filters.conditions)
+      ? clone(filters.conditions) : [];
+    var sanitized = sanitizeConditions(
+      ds, conditions.concat(migrateLegacyFilters(filters)));
+    state.conditions = sanitized.conditions;
+    state.conditionLogic = filters.condition_logic === 'or' ? 'or' : 'and';
+    if (state.conditions.length < 2) state.conditionLogic = 'and';
+    if (sanitized.dropped) {
+      toast(sanitized.dropped + ' saved filter'
+        + (sanitized.dropped === 1 ? ' was' : 's were')
+        + ' removed because the field or operator is no longer available.',
+        'warning');
+    }
+    state.sort = body.sort && body.sort.id ? {
+      id: body.sort.id,
+      direction: body.sort.direction === 'asc' ? 'asc' : 'desc'
+    } : defaultSort(ds);
+    var allowedSort = state.groupBy.concat(state.measures);
+    if (!state.sort || allowedSort.indexOf(state.sort.id) === -1) {
+      state.sort = defaultSort(ds);
+    }
+    var limit = parseInt(body.limit, 10);
+    state.limit = isFinite(limit) && limit > 0
+      ? Math.min(limit, MAX_EXPORT) : CATALOG.limits.default_limit;
     state.currentDefinitionId = def.id;
     state.currentDefinitionName = def.name;
     state.currentDescription = def.description || '';
     state.currentVisibility = def.visibility || 'private';
-    state.currentCanEdit = !def.is_system && (CAN_SHARE || def.owner === USERNAME);
-    renderControls();
+    state.currentCanEdit = !def.is_system
+      && (CAN_SHARE || def.owner === USERNAME);
+    renderAll();
     schedulePreview(0);
     window.scrollTo({ top: 0, behavior: 'smooth' });
     return true;
@@ -1402,7 +2549,10 @@
   function deleteDefinition(id) {
     var def = null;
     for (var i = 0; i < savedDefinitions.length; i++) {
-      if (String(savedDefinitions[i].id) === String(id)) { def = savedDefinitions[i]; break; }
+      if (String(savedDefinitions[i].id) === String(id)) {
+        def = savedDefinitions[i];
+        break;
+      }
     }
     if (!def) return;
     if (!window.confirm('Delete "' + def.name + '"? This cannot be undone.')) return;
@@ -1420,7 +2570,6 @@
       })
       .catch(function (err) { toast(err.message, 'error'); });
   }
-
   // ── Save modal ────────────────────────────────────────────────────────────
   function openSaveModal() {
     if (!state.measures.length) {
@@ -1441,13 +2590,16 @@
     if (CAN_SHARE) {
       $('saveVisibility').value = state.currentVisibility || 'private';
     }
-    $('saveUpdateBtn').hidden = !(state.currentDefinitionId && state.currentCanEdit);
+    $('saveUpdateBtn').hidden = !(state.currentDefinitionId
+      && state.currentCanEdit);
     $('saveModal').classList.add('show');
+    setBodyLock(true);
     setTimeout(function () { $('saveName').focus(); }, 0);
   }
 
   function closeSaveModal() {
     $('saveModal').classList.remove('show');
+    setBodyLock(false);
   }
 
   function saveReport(mode) {
@@ -1457,13 +2609,19 @@
       $('saveModalError').classList.add('show');
       return;
     }
+    if (!validatePeriod()) {
+      $('saveModalError').textContent = 'Fix the reporting period first.';
+      $('saveModalError').classList.add('show');
+      return;
+    }
     var payload = {
       name: name,
       description: ($('saveDescription').value || '').trim(),
       visibility: CAN_SHARE ? $('saveVisibility').value : 'private',
       definition: buildDefinition()
     };
-    var update = mode === 'update' && state.currentDefinitionId;
+    var update = mode === 'update' && state.currentDefinitionId
+      && state.currentCanEdit;
     var url = update
       ? '/api/reports/definitions/' + state.currentDefinitionId
       : '/api/reports/definitions';
@@ -1503,7 +2661,7 @@
       return;
     }
     var buttons = document.querySelectorAll('[data-export]');
-    buttons.forEach(function (b) { b.disabled = true; });
+    buttons.forEach(function (button) { button.disabled = true; });
     fetch('/api/reports/export/' + fmt, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1538,7 +2696,7 @@
     }).catch(function (err) {
       toast(err.message || 'The export failed.', 'error');
     }).finally(function () {
-      buttons.forEach(function (b) { b.disabled = false; });
+      buttons.forEach(function (button) { button.disabled = false; });
     });
   }
 
@@ -1547,9 +2705,19 @@
     if (DEFAULT_START && DEFAULT_END
         && /^\d{4}-\d{2}-\d{2}$/.test(DEFAULT_START)
         && /^\d{4}-\d{2}-\d{2}$/.test(DEFAULT_END)) {
-      return { start: DEFAULT_START, end: DEFAULT_END };
+      var days = daysBetween(DEFAULT_START, DEFAULT_END);
+      if (days >= 1 && days <= CATALOG.limits.max_range_days) {
+        return { start: DEFAULT_START, end: DEFAULT_END };
+      }
     }
     return null;
+  }
+
+  function pruneConditionsFor(ds) {
+    var sanitized = sanitizeConditions(ds, state.conditions);
+    state.conditions = sanitized.conditions;
+    if (state.conditions.length < 2) state.conditionLogic = 'and';
+    return sanitized.dropped;
   }
 
   function wire() {
@@ -1562,25 +2730,111 @@
       state.currentVisibility = 'private';
       state.currentCanEdit = false;
       applyDefaults(ds, true);
-      renderControls();
-      syncPeriodUI();
+      var dropped = pruneConditionsFor(ds);
+      if (dropped) {
+        toast(dropped + ' condition' + (dropped === 1 ? ' was' : 's were')
+          + ' removed because the field or value does not apply to this '
+          + 'subject.', 'warning');
+      }
+      renderAll();
       schedulePreview(0);
     });
+
     $('periodPreset').addEventListener('change', onPeriodPresetChange);
-    $('includeInactive').addEventListener('change', function () {
-      if (this.checked) state.filters.atm_scope = 'all';
-      else state.filters.atm_scope = 'active';
+    $('scopeSelect').addEventListener('change', function () {
+      state.scope = this.value === 'all' ? 'all' : 'active';
       schedulePreview();
     });
-    $('previewBtn').addEventListener('click', function () { schedulePreview(0); });
+    $('sortField').addEventListener('change', function () {
+      if (!this.value) return;
+      state.sort = {
+        id: this.value,
+        direction: $('sortDirection').value === 'asc' ? 'asc' : 'desc'
+      };
+      schedulePreview();
+    });
+    $('sortDirection').addEventListener('change', function () {
+      if (!state.sort) return;
+      state.sort.direction = this.value === 'asc' ? 'asc' : 'desc';
+      schedulePreview();
+    });
+    $('limitInput').addEventListener('change', function () {
+      var value = parseInt(this.value, 10);
+      if (!isFinite(value) || value < 1) value = CATALOG.limits.default_limit;
+      value = Math.min(value, MAX_EXPORT);
+      state.limit = value;
+      this.value = value;
+      schedulePreview();
+    });
+
+    $('addRowBtn').addEventListener('click', function () {
+      openFieldPicker('row');
+    });
+    $('addValueBtn').addEventListener('click', function () {
+      openFieldPicker('value');
+    });
+    $('fieldSearch').addEventListener('input', function () {
+      pickerQuery = this.value;
+      renderFieldPicker();
+    });
+    document.querySelectorAll('[data-close-picker]').forEach(function (button) {
+      button.addEventListener('click', closeFieldPicker);
+    });
+    $('fieldPickerDone').addEventListener('click', closeFieldPicker);
+    $('fieldPickerModal').addEventListener('click', function (event) {
+      if (event.target === this) closeFieldPicker();
+    });
+
+    $('addFilterBtn').addEventListener('click', function () {
+      openFilterModal(-1);
+    });
+    $('filterFieldSearch').addEventListener('input', function () {
+      filterFieldQuery = this.value;
+      renderFilterFieldList();
+    });
+    $('filterOperator').addEventListener('change', onFilterOperatorChange);
+    $('filterApplyBtn').addEventListener('click', applyFilter);
+    document.querySelectorAll('[data-close-filter]').forEach(function (button) {
+      button.addEventListener('click', closeFilterModal);
+    });
+    $('filterModal').addEventListener('click', function (event) {
+      if (event.target === this) closeFilterModal();
+    });
+    $('conditionLogic').addEventListener('change', function () {
+      state.conditionLogic = this.value === 'or' ? 'or' : 'and';
+      schedulePreview();
+    });
+    $('conditionList').addEventListener('click', function (event) {
+      var edit = event.target.closest('[data-edit]');
+      if (edit) {
+        openFilterModal(Number(edit.getAttribute('data-edit')));
+        return;
+      }
+      var remove = event.target.closest('[data-remove]');
+      if (remove) removeCondition(Number(remove.getAttribute('data-remove')));
+    });
+
+    $('previewBtn').addEventListener('click', function () {
+      schedulePreview(0);
+    });
     $('newReportBtn').addEventListener('click', resetToDefaults);
     $('saveLeftBtn').addEventListener('click', openSaveModal);
     $('saveReportBtn').addEventListener('click', openSaveModal);
     $('closeSaveModal').addEventListener('click', closeSaveModal);
     $('cancelSaveModal').addEventListener('click', closeSaveModal);
-    $('saveNewBtn').addEventListener('click', function () { saveReport('new'); });
-    $('saveUpdateBtn').addEventListener('click', function () { saveReport('update'); });
-    $('retryOptions').addEventListener('click', function () { loadOptions(true); });
+    $('saveModal').addEventListener('click', function (event) {
+      if (event.target === this) closeSaveModal();
+    });
+    $('saveNewBtn').addEventListener('click', function () {
+      saveReport('new');
+    });
+    $('saveUpdateBtn').addEventListener('click', function () {
+      saveReport('update');
+    });
+    $('retryOptions').addEventListener('click', function () {
+      loadOptions(true);
+    });
+
     document.querySelectorAll('[data-export]').forEach(function (button) {
       button.addEventListener('click', function () {
         exportReport(button.getAttribute('data-export'));
@@ -1588,61 +2842,52 @@
     });
     $('savedReportsList').addEventListener('click', function (event) {
       var open = event.target.closest('[data-open]');
-      if (open) { openDefinitionById(open.getAttribute('data-open')); return; }
-      var del = event.target.closest('[data-delete]');
-      if (del) { deleteDefinition(del.getAttribute('data-delete')); }
-    });
-    $('saveModal').addEventListener('click', function (event) {
-      if (event.target === this) closeSaveModal();
-    });
-    document.addEventListener('click', function (event) {
-      if (event.target.closest('.builder-multi')) return;
-      closeAllMulti();
-    });
-    document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape') {
-        closeAllMulti();
-        closeSaveModal();
+      if (open) {
+        openDefinitionById(open.getAttribute('data-open'));
+        return;
       }
+      var remove = event.target.closest('[data-delete]');
+      if (remove) {
+        deleteDefinition(remove.getAttribute('data-delete'));
+      }
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape') return;
+      var openModal = document.querySelector('.modal-overlay.show');
+      if (openModal) closeAllModals();
     });
   }
 
   function init() {
-    if ($('previewRowLimit')) {
-      $('previewRowLimit').textContent = Number(CATALOG.limits.preview_rows).toLocaleString();
-    }
-    if ($('exportRowLimit')) {
-      $('exportRowLimit').textContent = Number(CATALOG.limits.default_limit).toLocaleString();
-    }
     populateDatasetSelect();
     populatePeriodPresets();
     initPickers();
     wire();
 
     var ds = currentDataset();
+    state.limit = CATALOG.limits.default_limit;
     applyDefaults(ds, false);
     var period = initialPeriod();
-    if (period) {
-      state.filters.date = period;
-    } else {
-      state.filters.date = { preset: ds.default_period || 'last_30_days' };
+    if (ds.requires_period) {
+      state.period = period || {
+        preset: ds.default_period || 'last_30_days'
+      };
     }
-    state.currentDefinitionId = null;
+    renderAll();
+    schedulePreview(0);
 
-    loadOptions(false).then(function () {
-      renderControls();
-      if (DEFAULT_DEFINITION_ID) {
-        return loadDefinitions().then(function () {
-          if (!openDefinitionById(DEFAULT_DEFINITION_ID)) {
-            renderControls();
-            schedulePreview(0);
-          }
-        });
-      }
-      renderControls();
+    loadOptions(false);
+    if (DEFAULT_DEFINITION_ID) {
+      loadDefinitions().then(function () {
+        if (!openDefinitionById(DEFAULT_DEFINITION_ID)) {
+          renderAll();
+          schedulePreview(0);
+        }
+      });
+    } else {
       loadDefinitions();
-      schedulePreview(0);
-    });
+    }
 
     if (window.lucide) window.lucide.createIcons();
   }

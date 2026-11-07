@@ -96,6 +96,11 @@ def test_builder_page_renders_the_catalog(monkeypatch):
     body = response.get_data(as_text=True)
     assert 'Report Builder' in body
     assert 'Governed report builder.' in body
+    assert 'id="fieldPickerModal"' in body
+    assert 'id="filterModal"' in body
+    assert 'id="conditionList"' in body
+    assert 'Search fields and measures' in body
+    assert 'BUILDER_JS' not in body
 
 
 def test_builder_hidden_states_are_not_beaten_by_display_rules(monkeypatch):
