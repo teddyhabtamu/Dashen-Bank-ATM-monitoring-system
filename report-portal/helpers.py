@@ -201,18 +201,50 @@ def csv_send(headers, rows, name, title='', days=0, atm='all', subtitle='',
 
 # ─── PDF HELPERS ───────────────────────────────────────────────────────────────
 
+def _kpi_value_metrics(value):
+    """Pick a font size and line-height that fit one KPI card.
+
+    The period KPI can be a full label such as
+    ``2026-10-09 to 2026-11-07 (EAT)``.  Setting only ``<font size="22">``
+    left ReportLab's default 12pt leading in place, so the two wrapped lines
+    printed on top of each other.  Long values now shrink and always carry a
+    leading larger than their font size.
+    """
+    length = len(str(value))
+    if length > 22:
+        return 11, 14
+    if length > 14:
+        return 15, 19
+    return 22, 26
+
+
 def _pdf_kpi_block(story, kpis):
     """Append a premium KPI card section with Dashen Bank branding."""
+    from xml.sax.saxutils import escape as _xml_escape
+
+    kpis = list(kpis)[:4]
     ncols = min(len(kpis), 4)
     page_w = landscape(A4)[0] - 3 * cm
     cw = page_w / ncols
 
+    label_style = ParagraphStyle('kl', fontName='Helvetica-Bold',
+                                 fontSize=9, leading=11,
+                                 alignment=TA_CENTER)
     Kl = lambda txt: Paragraph(
-        f'<font color="white" size="9"><b>{txt}</b></font>',
-        ParagraphStyle('kl', alignment=TA_CENTER))
-    Kv = lambda txt: Paragraph(
-        f'<font color="#012169" size="22"><b>{txt}</b></font>',
-        ParagraphStyle('kv', alignment=TA_CENTER))
+        f'<font color="white">{_xml_escape(str(txt))}</font>',
+        label_style)
+    value_styles = {}
+
+    def Kv(txt):
+        size, leading = _kpi_value_metrics(txt)
+        style = value_styles.get(size)
+        if style is None:
+            style = ParagraphStyle(f'kv{size}', fontName='Helvetica-Bold',
+                                   fontSize=size, leading=leading,
+                                   alignment=TA_CENTER)
+            value_styles[size] = style
+        return Paragraph(
+            f'<font color="#012169">{_xml_escape(str(txt))}</font>', style)
 
     labels_row = [Kl(label) for label, _ in kpis]
     values_row = [Kv(value) for _, value in kpis]
@@ -234,10 +266,9 @@ def _pdf_kpi_block(story, kpis):
         ('BOTTOMPADDING', (0, 1), (-1,  1), 20),
         ('LINEABOVE',   (0, 1), (-1,  1), 3, colors.HexColor('#FDD79A')),
         ('INNERGRID',   (0, 0), (-1, -1), 0, colors.white),
-        ('BOX',         (0, 0), (0,  1), 0.5, colors.HexColor('#E2E8F0')),
-        ('BOX',         (1, 0), (1,  1), 0.5, colors.HexColor('#E2E8F0')),
-        ('BOX',         (2, 0), (2,  1), 0.5, colors.HexColor('#E2E8F0')),
-        ('BOX',         (3, 0), (3,  1), 0.5, colors.HexColor('#E2E8F0')),
+    ] + [
+        ('BOX', (col, 0), (col, 1), 0.5, colors.HexColor('#E2E8F0'))
+        for col in range(ncols)
     ]))
     story.append(Spacer(1, 0.4 * cm))
     story.append(Paragraph(

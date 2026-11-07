@@ -223,6 +223,25 @@ def test_pdf_export_renders_data_quality_notes(monkeypatch):
     assert response.data[:4] == b'%PDF'
 
 
+def test_pdf_kpi_long_period_does_not_overlap_its_lines():
+    """A full period label must shrink, not print two lines on top of itself.
+
+    The KPI value used ``<font size="22">`` inside a paragraph whose leading
+    stayed at ReportLab's 12pt default.  A wrapped period label therefore
+    painted its second line over the first in the mailed PDF.
+    """
+    import helpers
+
+    period = '2026-10-09 to 2026-11-07 (EAT)'
+    size, leading = helpers._kpi_value_metrics(period)
+    assert size < 22
+    assert leading > size
+
+    short_size, short_leading = helpers._kpi_value_metrics('1,201')
+    assert (short_size, short_leading) == (22, 26)
+    assert short_leading > short_size
+
+
 def test_unknown_export_format_is_a_404(monkeypatch):
     app = _app(monkeypatch)
     client = app.test_client()
